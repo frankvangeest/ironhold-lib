@@ -166,13 +166,18 @@ impl GameSceneV2 {
             }
         }
         let mut ui_ids = std::collections::HashSet::new(); // det: lookup-only
-        for elem in &self.ui {
+        // Walks nested nodes too: ids are unique per scene across every node that has one.
+        // A `Group` is a pure layout wrapper, so it may have no id; "" is never a duplicate.
+        for (path, elem) in walk_ui_nodes_pathed(&self.ui) {
             let id = elem.id();
             if id.is_empty() {
-                return Err("UI element has empty id".to_string());
+                if matches!(elem, UiNodeDef::Group(_)) {
+                    continue;
+                }
+                return Err(format!("UI element at {path} has empty id"));
             }
             if !ui_ids.insert(id) {
-                return Err(format!("Duplicate UI element id: \"{}\"", id));
+                return Err(format!("Duplicate UI element id: \"{id}\" (at {path})"));
             }
         }
         let mut wl_ids = std::collections::HashSet::new(); // det: lookup-only
@@ -372,9 +377,303 @@ pub enum UiNodeDef {
     InventoryPanel(InventoryPanelDef),
     ShopPanel(ShopPanelDef),
     ContainerPanel(ContainerPanelDef),
+    /// Nestable flexbox layout node; holds its own `children`.
+    Group(GroupDef),
+}
+
+/// Maximum nesting depth of `ui:` nodes (a top-level node is depth 1). The spawner and every
+/// `scene.ui` walker share this one cap, so diagnostics cover exactly the nodes that spawn.
+pub const MAX_UI_DEPTH: usize = 16;
+
+/// Location of a UI node inside `scene.ui`, for diagnostics: `ui[2]`, `ui[2].children[0]`, ...
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UiPath(pub Vec<usize>);
+
+impl std::fmt::Display for UiPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (depth, index) in self.0.iter().enumerate() {
+            if depth == 0 {
+                write!(f, "ui[{index}]")?;
+            } else {
+                write!(f, ".children[{index}]")?;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Pre-order, depth-capped (`MAX_UI_DEPTH`) walk over a `ui:` node list: a node is yielded before
+/// its children. Uses an explicit stack (no recursion, deterministic order). Every consumer of
+/// `scene.ui` must go through this instead of iterating the top-level `Vec` flat, or it silently
+/// under-covers nested nodes.
+pub struct UiNodeWalk<'a> {
+    /// One entry per open nesting level: the nodes at that level and the index of the next to yield.
+    stack: Vec<(&'a [UiNodeDef], usize)>,
+    /// Children of the node yielded last, pushed on the next call to `next` (after the caller has
+    /// had a chance to read `current_path`).
+    pending: Option<&'a [UiNodeDef]>,
+}
+
+impl<'a> UiNodeWalk<'a> {
+    /// Path of the node most recently yielded by `next`. Only meaningful after `next` has
+    /// returned `Some`; before the first call (or once exhausted) it is an empty path.
+    pub fn current_path(&self) -> UiPath {
+        // Every open level has yielded at least one node once `next` has returned `Some`, so a
+        // level still at index 0 means no node has been yielded yet.
+        if self.stack.iter().any(|(_, next)| *next == 0) {
+            return UiPath(Vec::new());
+        }
+        UiPath(self.stack.iter().map(|(_, next)| next - 1).collect())
+    }
+}
+
+impl<'a> Iterator for UiNodeWalk<'a> {
+    type Item = &'a UiNodeDef;
+
+    fn next(&mut self) -> Option<&'a UiNodeDef> {
+        if let Some(children) = self.pending.take() {
+            self.stack.push((children, 0));
+        }
+        loop {
+            let (nodes, next) = self.stack.last_mut()?;
+            if let Some(node) = nodes.get(*next) {
+                *next += 1;
+                let children = node.children();
+                if !children.is_empty() && self.stack.len() < MAX_UI_DEPTH {
+                    self.pending = Some(children);
+                }
+                return Some(node);
+            }
+            self.stack.pop();
+        }
+    }
+}
+
+/// See [`UiNodeWalk`]. Callers that need a unique-per-node tag `.enumerate()` the iterator.
+pub fn walk_ui_nodes(nodes: &[UiNodeDef]) -> UiNodeWalk<'_> {
+    UiNodeWalk { stack: vec![(nodes, 0)], pending: None }
+}
+
+/// Same traversal as [`walk_ui_nodes`], also yielding each node's [`UiPath`] for diagnostics.
+pub fn walk_ui_nodes_pathed(nodes: &[UiNodeDef]) -> impl Iterator<Item = (UiPath, &UiNodeDef)> {
+    let mut walk = walk_ui_nodes(nodes);
+    std::iter::from_fn(move || {
+        let node = walk.next()?;
+        Some((walk.current_path(), node))
+    })
+}
+
+// ── Layout diagnostics for `Group` ───────────────────────────────────────────────────────────
+//
+// One pure function shared by the engine (scene-load `warn!`) and `ironhold validate`, so both
+// report the same things with the same wording. It needs parent context (is the parent's axis
+// definite?), which the flat `walk_ui_nodes` iterator does not carry, so it recurses structurally
+// under the same `MAX_UI_DEPTH` cap.
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UiDiagnosticSeverity {
+    /// Definitely wrong (invalid value, content that will never spawn).
+    Error,
+    /// Legal but the setting does nothing / surprises the author.
+    Warning,
+}
+
+#[derive(Debug, Clone)]
+pub struct UiDiagnostic {
+    pub path: UiPath,
+    pub severity: UiDiagnosticSeverity,
+    /// Stable machine-readable kind, e.g. `inert_justify_content`.
+    pub kind: &'static str,
+    pub message: String,
+}
+
+/// What a node's parent looks like for percentage-size resolution.
+#[derive(Clone, Copy)]
+enum UiParentBox {
+    /// Scene root in absolute mode: the window, always definite.
+    Window,
+    /// `ui_panel:` box; each axis is definite only when `width`/`height` is set.
+    Panel { width: bool, height: bool },
+    /// Another `Group`.
+    Group { width: UiSizeDef, height: UiSizeDef },
+}
+
+fn describe_ui_node(node: &UiNodeDef, path: &UiPath) -> String {
+    let kind = match node {
+        UiNodeDef::Group(_) => "Group",
+        UiNodeDef::ActionBar(_) => "ActionBar",
+        UiNodeDef::DialoguePanel(_) => "DialoguePanel",
+        UiNodeDef::InventoryPanel(_) => "InventoryPanel",
+        UiNodeDef::ShopPanel(_) => "ShopPanel",
+        UiNodeDef::ContainerPanel(_) => "ContainerPanel",
+        _ => "UI node",
+    };
+    if node.id().is_empty() {
+        format!("{kind} at {path}")
+    } else {
+        format!("{kind} {:?} ({path})", node.id())
+    }
+}
+
+fn size_is_valid(size: UiSizeDef) -> bool {
+    match size {
+        UiSizeDef::Auto => true,
+        UiSizeDef::Px(v) | UiSizeDef::Percent(v) => v.is_finite() && v >= 0.0,
+    }
+}
+
+/// All `Group` layout diagnostics for a scene's `ui:` tree. Empty when the scene has no `Group`s.
+pub fn ui_layout_diagnostics(scene: &GameSceneV2) -> Vec<UiDiagnostic> {
+    let parent = match &scene.ui_panel {
+        Some(panel) => UiParentBox::Panel { width: panel.width.is_some(), height: panel.height.is_some() },
+        None => UiParentBox::Window,
+    };
+    let mut out = Vec::new();
+    diagnose_ui_level(&scene.ui, &mut Vec::new(), parent, 1, &mut out);
+    out
+}
+
+fn diagnose_ui_level(
+    nodes: &[UiNodeDef],
+    prefix: &mut Vec<usize>,
+    parent: UiParentBox,
+    depth: usize,
+    out: &mut Vec<UiDiagnostic>,
+) {
+    for (index, node) in nodes.iter().enumerate() {
+        prefix.push(index);
+        let path = UiPath(prefix.clone());
+        if let UiNodeDef::Group(g) = node {
+            diagnose_group(node, g, &path, parent, out);
+            if depth >= MAX_UI_DEPTH {
+                if !g.children.is_empty() {
+                    out.push(UiDiagnostic {
+                        path: path.clone(),
+                        severity: UiDiagnosticSeverity::Error,
+                        kind: "ui_depth_exceeded",
+                        message: format!(
+                            "{} is at the maximum UI nesting depth ({MAX_UI_DEPTH}); its {} children are never spawned. Flatten the nesting (move these children up a level)",
+                            describe_ui_node(node, &path),
+                            g.children.len()
+                        ),
+                    });
+                }
+            } else {
+                diagnose_ui_level(
+                    &g.children,
+                    prefix,
+                    UiParentBox::Group { width: g.width, height: g.height },
+                    depth + 1,
+                    out,
+                );
+            }
+        }
+        // Panels/bars are hard-coded `absolute`; nested in a Group their `position:` silently
+        // becomes relative to the group's box, and the panel types are singletons.
+        if matches!(parent, UiParentBox::Group { .. })
+            && matches!(
+                node,
+                UiNodeDef::ActionBar(_)
+                    | UiNodeDef::DialoguePanel(_)
+                    | UiNodeDef::InventoryPanel(_)
+                    | UiNodeDef::ShopPanel(_)
+                    | UiNodeDef::ContainerPanel(_)
+            )
+        {
+            out.push(UiDiagnostic {
+                path: path.clone(),
+                severity: UiDiagnosticSeverity::Warning,
+                kind: "panel_nested_in_group",
+                message: format!(
+                    "{} is nested inside a Group: it always positions absolutely, so its position: is measured from the group's box, not the screen. Move it to the top-level ui: list",
+                    describe_ui_node(node, &path)
+                ),
+            });
+        }
+        prefix.pop();
+    }
+}
+
+fn diagnose_group(node: &UiNodeDef, g: &GroupDef, path: &UiPath, parent: UiParentBox, out: &mut Vec<UiDiagnostic>) {
+    let name = describe_ui_node(node, path);
+    let mut push = |severity, kind, message: String| {
+        out.push(UiDiagnostic { path: path.clone(), severity, kind, message });
+    };
+
+    for (field, value) in [("gap", g.gap), ("padding", g.padding)] {
+        if !value.is_finite() || value < 0.0 {
+            push(UiDiagnosticSeverity::Error, "invalid_group_value",
+                format!("{name}: {field} must be a finite number >= 0 (got {value})"));
+        }
+    }
+    for (field, size) in [("width", g.width), ("height", g.height)] {
+        if !size_is_valid(size) {
+            push(UiDiagnosticSeverity::Error, "invalid_group_value",
+                format!("{name}: {field} must be a finite number >= 0 (got {size:?})"));
+        }
+    }
+
+    let row = matches!(g.flex_direction, FlexDirectionDef::Row | FlexDirectionDef::RowReverse);
+    let main_is_auto = if row { g.width == UiSizeDef::Auto } else { g.height == UiSizeDef::Auto };
+    if main_is_auto
+        && matches!(
+            g.justify_content,
+            JustifyContentDef::SpaceBetween | JustifyContentDef::SpaceAround | JustifyContentDef::SpaceEvenly
+        )
+    {
+        push(UiDiagnosticSeverity::Warning, "inert_justify_content", format!(
+            "{name}: {:?} distributes free space, but this group's {} is Auto (it sizes to its content, so there is none). Give it a Px or Percent {}",
+            g.justify_content,
+            if row { "width" } else { "height" },
+            if row { "width" } else { "height" },
+        ));
+    }
+
+    let both_auto = g.width == UiSizeDef::Auto && g.height == UiSizeDef::Auto;
+    if g.clip && both_auto {
+        push(UiDiagnosticSeverity::Warning, "inert_clip", format!(
+            "{name}: clip: true has no effect while width and height are both Auto (the box grows to fit its children)"));
+    }
+    if both_auto && g.padding == 0.0 && !g.children.is_empty() && g.children.iter().all(UiNodeDef::absolute) {
+        push(UiDiagnosticSeverity::Warning, "collapsed_group", format!(
+            "{name}: every child is absolute: true and width/height are Auto, so the group collapses to a zero-size box (absolute children do not contribute to content size). Set a width/height"));
+    }
+
+    for (field, size, definite) in [
+        ("width", g.width, match parent {
+            UiParentBox::Window => true,
+            UiParentBox::Panel { width, .. } => width,
+            UiParentBox::Group { width, .. } => width != UiSizeDef::Auto,
+        }),
+        ("height", g.height, match parent {
+            UiParentBox::Window => true,
+            UiParentBox::Panel { height, .. } => height,
+            UiParentBox::Group { height, .. } => height != UiSizeDef::Auto,
+        }),
+    ] {
+        // An absolute child resolves percentages against the parent's final, already laid-out
+        // box, so it works even under an Auto parent.
+        if matches!(size, UiSizeDef::Percent(_)) && !definite && !g.absolute {
+            let fix = if matches!(parent, UiParentBox::Panel { .. }) {
+                format!("Set {field}: <number> on ui_panel: (a bare number, not Px(..))")
+            } else {
+                format!("Give the parent group a Px or Percent {field}")
+            };
+            push(UiDiagnosticSeverity::Warning, "percent_under_auto", format!(
+                "{name}: {field}: Percent(..) is measured against the parent's {field}, which is Auto here (or a ui_panel: without {field}:), so it resolves against the parent's content size instead of a fixed box. {fix}"));
+        }
+    }
 }
 
 impl UiNodeDef {
+    /// Child nodes laid out inside this node. This is the single place the walkers learn about
+    /// nesting.
+    pub fn children(&self) -> &[UiNodeDef] {
+        match self {
+            UiNodeDef::Group(d) => &d.children,
+            _ => &[],
+        }
+    }
     pub fn id(&self) -> &str {
         match self {
             UiNodeDef::Button(d) => &d.id,
@@ -389,6 +688,7 @@ impl UiNodeDef {
             UiNodeDef::InventoryPanel(d) => &d.id,
             UiNodeDef::ShopPanel(d) => &d.id,
             UiNodeDef::ContainerPanel(d) => &d.id,
+            UiNodeDef::Group(d) => &d.id,
         }
     }
     pub fn size(&self) -> (f32, f32) {
@@ -422,6 +722,9 @@ impl UiNodeDef {
                 let h = d.rows as f32 * (d.slot_size + d.slot_gap) + d.slot_gap + 72.0;
                 (w, h)
             }
+            // Unused for groups: the spawner overwrites width/height from `GroupDef` (which may be
+            // `Auto`/`Percent`, not representable as a pixel tuple).
+            UiNodeDef::Group(_) => (0.0, 0.0),
         }
     }
     pub fn position(&self) -> (f32, f32) {
@@ -438,6 +741,7 @@ impl UiNodeDef {
             UiNodeDef::InventoryPanel(d) => d.position,
             UiNodeDef::ShopPanel(d) => d.position,
             UiNodeDef::ContainerPanel(d) => d.position,
+            UiNodeDef::Group(d) => d.position,
         }
     }
     pub fn absolute(&self) -> bool {
@@ -449,6 +753,7 @@ impl UiNodeDef {
             UiNodeDef::StatBar(d) => d.absolute,
             UiNodeDef::StatSpread(d) => d.absolute,
             UiNodeDef::StatRadar(d) => d.absolute,
+            UiNodeDef::Group(d) => d.absolute,
             UiNodeDef::ActionBar(_) => true,
             UiNodeDef::DialoguePanel(_) => true,
             UiNodeDef::InventoryPanel(_) => true,
@@ -470,6 +775,8 @@ impl UiNodeDef {
             UiNodeDef::InventoryPanel(_) => UiTextAlign::Left,
             UiNodeDef::ShopPanel(_) => UiTextAlign::Left,
             UiNodeDef::ContainerPanel(_) => UiTextAlign::Left,
+            // Unused for groups; kept only so the shared match stays exhaustive.
+            UiNodeDef::Group(_) => UiTextAlign::Center,
         }
     }
 }
@@ -483,7 +790,8 @@ pub struct ButtonDef {
     /// Trigger string; `"ui."` prefix is stripped when firing (e.g. `"ui.dance"` → `"dance"`).
     #[serde(default)]
     pub action: String,
-    /// Top-left corner in pixels. Ignored in panel mode unless `absolute: true`.
+    /// Top-left corner in pixels. Ignored inside `ui_panel:` or a `Group` unless `absolute: true` (then measured from that
+    /// container's box, not the screen).
     #[serde(default)]
     pub position: (f32, f32),
     /// Width and height in pixels. Default: `(120.0, 32.0)`.
@@ -495,8 +803,8 @@ pub struct ButtonDef {
     /// Horizontal text alignment. Default: `Center`.
     #[serde(default)]
     pub align: UiTextAlign,
-    /// In panel mode: position this element absolutely relative to the panel's
-    /// top-left corner using its `position` field instead of flowing in the column.
+    /// Inside `ui_panel:` or a `Group`: position this element absolutely, relative to that
+    /// container's top-left corner using its `position` field, instead of flowing.
     #[serde(default)]
     pub absolute: bool,
     /// Font size in screen pixels. `size:` sets this button's layout box only — it does NOT
@@ -536,14 +844,15 @@ pub struct IconButtonDef {
     pub icon_off: String,
     /// `GameVariables` key holding `"true"`/`"false"`. Re-evaluated every frame.
     pub bind: String,
-    /// Top-left corner in pixels. Ignored in panel mode unless `absolute: true`.
+    /// Top-left corner in pixels. Ignored inside `ui_panel:` or a `Group` unless `absolute: true` (then measured from that
+    /// container's box, not the screen).
     #[serde(default)]
     pub position: (f32, f32),
     /// Width and height in pixels. Default: `(36.0, 36.0)`.
     #[serde(default = "default_icon_button_size")]
     pub size: (f32, f32),
-    /// In panel mode: position this element absolutely relative to the panel's
-    /// top-left corner using its `position` field instead of flowing in the column.
+    /// Inside `ui_panel:` or a `Group`: position this element absolutely, relative to that
+    /// container's top-left corner using its `position` field, instead of flowing.
     #[serde(default)]
     pub absolute: bool,
     /// RGBA replacement color for the icon in its normal state (same convention as
@@ -584,7 +893,8 @@ pub struct LabelDef {
     pub id: String,
     #[serde(default)]
     pub text: String,
-    /// Top-left corner in pixels. Ignored in panel mode unless `absolute: true`.
+    /// Top-left corner in pixels. Ignored inside `ui_panel:` or a `Group` unless `absolute: true` (then measured from that
+    /// container's box, not the screen).
     #[serde(default)]
     pub position: (f32, f32),
     /// Width and height in pixels. Default: `(120.0, 32.0)`.
@@ -601,8 +911,8 @@ pub struct LabelDef {
     /// (e.g. `"Score: {}"`). Defaults to the raw value when omitted.
     #[serde(default)]
     pub format: Option<String>,
-    /// In panel mode: position this element absolutely relative to the panel's
-    /// top-left corner using its `position` field instead of flowing in the column.
+    /// Inside `ui_panel:` or a `Group`: position this element absolutely, relative to that
+    /// container's top-left corner using its `position` field, instead of flowing.
     #[serde(default)]
     pub absolute: bool,
     /// Font size in screen pixels. `size:` sets this label's layout box only — it does NOT
@@ -624,12 +934,109 @@ pub struct LabelDef {
 
 fn default_label_font_size() -> f32 { 22.0 }
 
+/// Per-axis size of a [`GroupDef`]. `Auto` sizes to content.
+#[derive(Deserialize, Debug, Clone, Copy, Default, PartialEq)]
+pub enum UiSizeDef {
+    #[default]
+    Auto,
+    /// Logical pixels.
+    Px(f32),
+    /// Percentage of the parent box (0.0-100.0).
+    Percent(f32),
+}
+
+/// Main-axis direction of a [`GroupDef`]'s children. Default: `Row`.
+#[derive(Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum FlexDirectionDef {
+    #[default]
+    Row,
+    Column,
+    RowReverse,
+    ColumnReverse,
+}
+
+/// Main-axis distribution. `Start`/`End` map to CSS `flex-start`/`flex-end` (they follow the
+/// reversed directions). Distributing variants need a `Px`/`Percent` main-axis size to do anything.
+#[derive(Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum JustifyContentDef {
+    #[default]
+    Start,
+    Center,
+    End,
+    SpaceBetween,
+    SpaceAround,
+    SpaceEvenly,
+}
+
+/// Cross-axis alignment of a [`GroupDef`]'s children. `Start`/`End` map to CSS
+/// `flex-start`/`flex-end`.
+#[derive(Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum AlignItemsDef {
+    #[default]
+    Start,
+    Center,
+    End,
+}
+
+#[derive(Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum FlexWrapDef {
+    #[default]
+    NoWrap,
+    Wrap,
+    WrapReverse,
+}
+
+/// Nestable flexbox layout node. Holds its own `children`; groups nest arbitrarily (depth is
+/// capped at [`MAX_UI_DEPTH`]). A pure layout wrapper: it never blocks pointer input.
+/// See `planning/features/ui_flex_group.md`.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct GroupDef {
+    /// Optional: a pure layout wrapper needs no meaningful id. Ids that are set must be unique
+    /// per scene across all nodes.
+    #[serde(default)]
+    pub id: String,
+    pub children: Vec<UiNodeDef>,
+    #[serde(default)]
+    pub flex_direction: FlexDirectionDef,
+    #[serde(default)]
+    pub justify_content: JustifyContentDef,
+    #[serde(default)]
+    pub align_items: AlignItemsDef,
+    #[serde(default)]
+    pub flex_wrap: FlexWrapDef,
+    /// Gap between children in pixels; sets both the row and column gap (like CSS `gap`).
+    #[serde(default)]
+    pub gap: f32,
+    /// Inner padding on all four sides, in pixels.
+    #[serde(default)]
+    pub padding: f32,
+    #[serde(default)]
+    pub width: UiSizeDef,
+    #[serde(default)]
+    pub height: UiSizeDef,
+    /// Background colour as sRGB RGBA (0.0-1.0). `None` = transparent (pure layout wrapper).
+    #[serde(default)]
+    pub background_color: Option<(f32, f32, f32, f32)>,
+    /// Clip children to this box. Only meaningful when `width`/`height` are not both `Auto`.
+    #[serde(default)]
+    pub clip: bool,
+    /// Top-left corner in pixels (screen for a top-level group, the parent's box otherwise).
+    /// Ignored inside `ui_panel:` or a `Group` unless `absolute: true` (then measured from that
+    /// container's box, not the screen).
+    #[serde(default)]
+    pub position: (f32, f32),
+    #[serde(default)]
+    pub absolute: bool,
+}
+
 /// Non-interactive coloured rectangle. Used for decorative backgrounds, dividers, and map tiles.
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct RectDef {
     pub id: String,
-    /// Top-left corner in pixels. Ignored in panel mode unless `absolute: true`.
+    /// Top-left corner in pixels. Ignored inside `ui_panel:` or a `Group` unless `absolute: true` (then measured from that
+    /// container's box, not the screen).
     #[serde(default)]
     pub position: (f32, f32),
     /// Width and height in pixels. Default: `(120.0, 32.0)`.
@@ -638,8 +1045,8 @@ pub struct RectDef {
     /// Fill colour as linear RGBA (0.0–1.0). Default: dark grey.
     #[serde(default = "default_ui_dark_color")]
     pub color: (f32, f32, f32, f32),
-    /// In panel mode: position this element absolutely relative to the panel's
-    /// top-left corner using its `position` field instead of flowing in the column.
+    /// Inside `ui_panel:` or a `Group`: position this element absolutely, relative to that
+    /// container's top-left corner using its `position` field, instead of flowing.
     #[serde(default)]
     pub absolute: bool,
 }
@@ -840,7 +1247,8 @@ pub struct StatBarDef {
     pub stat_key: String,
     #[serde(default)]
     pub orientation: BarOrientation,
-    /// Top-left corner in pixels. Ignored in panel mode unless `absolute: true`.
+    /// Top-left corner in pixels. Ignored inside `ui_panel:` or a `Group` unless `absolute: true` (then measured from that
+    /// container's box, not the screen).
     #[serde(default)]
     pub position: (f32, f32),
     /// Width and height in pixels. Default: `(200.0, 20.0)`.
@@ -873,7 +1281,8 @@ pub struct StatSpreadDef {
     pub stats: Vec<String>,
     #[serde(default)]
     pub layout: StatSpreadLayout,
-    /// Top-left corner in pixels. Ignored in panel mode unless `absolute: true`.
+    /// Top-left corner in pixels. Ignored inside `ui_panel:` or a `Group` unless `absolute: true` (then measured from that
+    /// container's box, not the screen).
     #[serde(default)]
     pub position: (f32, f32),
     /// Width of the stat-name label column in pixels. Default: 80.0.
@@ -930,7 +1339,8 @@ pub struct StatRadarDef {
     /// Width and height of the bounding square in pixels. Default: `(240.0, 240.0)`.
     #[serde(default = "default_radar_size")]
     pub size: (f32, f32),
-    /// Top-left corner in pixels. Ignored in panel mode unless `absolute: true`.
+    /// Top-left corner in pixels. Ignored inside `ui_panel:` or a `Group` unless `absolute: true` (then measured from that
+    /// container's box, not the screen).
     #[serde(default)]
     pub position: (f32, f32),
     /// Number of concentric grid rings drawn inside the polygon. Default: 3.

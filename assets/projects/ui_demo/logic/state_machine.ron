@@ -1,0 +1,12 @@
+(
+    schema_version: 1,
+    // Every Button in scenes/main.scene.ron needs a handler here: a button whose
+    // `ui.button_pressed:<trigger>` event is never bound renders but does nothing
+    // (`ironhold validate` reports it as `unreachable_trigger`).
+    global_on: [
+        ( event: "scene.ready:main", do_actions: [ SetVariable("count", "0") ] ),
+        ( event: "ui.button_pressed:add",   do_actions: [ IncrementVariable("count", 1) ] ),
+        ( event: "ui.button_pressed:reset", do_actions: [ SetVariable("count", "0") ] ),
+        ( event: "ui.button_pressed:add_ten", do_actions: [ IncrementVariable("count", 10) ] ),
+    ],
+)

@@ -1,6 +1,6 @@
 # Feature: Nestable flexbox `Group` UI node
 
-_Status: Ready (v1) — two plan-review passes (system-architect incl. a Bevy 0.18/taffy 0.9.2 source check, and ux-gamedesigner-reviewer) completed 2026-10-05; second-pass findings folded in as R14-R22, not re-reviewed a third time_
+_Status: In Progress (v1 Done 2026-10-06, v2 Queued) — v1 shipped on `feature/ui_flex_group`; v2 (portrait / touch-first) is queued in `planning/backlog.md`_
 _Planned at: `8baeac7` (2026-08-28)_
 _Drift refreshed at: `f34dd16` (2026-10-05)_
 
@@ -421,44 +421,44 @@ with its own risk/reward, not a dependency of this feature — logged to
 
 | Phase | Scope | Status | Backlog dependencies |
 |---|---|---|---|
-| **v1 - landscape** | Everything in this file: `Group`, `UiSizeDef` (`Auto`/`Px`/`Percent`), walker, diagnostics, `ui_demo` showcase, `options.scene.ron` retrofit | Ready | none (touch input is NOT required: a landscape layout demo can be keyboard/mouse) |
-| **v2 - portrait / touch-first** | `Percent` (or `max_width`) on leaf `size:`, runtime show/hide of a `Group` by UI id (touch-only controls), safe-area insets, optionally `flex_grow` + margin | Queued (backlog entries to be added when v1 ships) | v1; a UI-id-based visibility action (today `Action::SetEntityVisible` resolves `SpawnRegistry` entities only); confirmed touch input in the web build (`action_bar_mouse_click.md` declines to promise it) |
+| **v1 - landscape** | Everything in this file: `Group`, `UiSizeDef` (`Auto`/`Px`/`Percent`), walker, diagnostics, `ui_demo` showcase, `options.scene.ron` retrofit | Done - Completed: `b7fbf1a` (2026-10-06) | none (touch input is NOT required: a landscape layout demo can be keyboard/mouse) |
+| **v2 - portrait / touch-first** | `Percent` (or `max_width`) on leaf `size:`, runtime show/hide of a `Group` by UI id (touch-only controls), safe-area insets, optionally `flex_grow` + margin | Queued (backlog: "Flex `Group` v2") | v1; a UI-id-based visibility action (today `Action::SetEntityVisible` resolves `SpawnRegistry` entities only); confirmed touch input in the web build (`action_bar_mouse_click.md` declines to promise it) |
 
 `mobile_ui_demo` is split accordingly in `planning/backlog.md`: **v1 (landscape)** is blocked only
 on this feature's v1; **v2 (portrait/touch)** is blocked on the v2 items above.
 
 ## Tasks
-- [ ] Add `walk_ui_nodes` + `walk_ui_nodes_pathed` + `MAX_UI_DEPTH` to `schema/scene_v2.rs` and convert
+- [x] _(done on `feature/ui_flex_group`; the nested-fixture unit test lands with `GroupDef`)_ Add `walk_ui_nodes` + `walk_ui_nodes_pathed` + `MAX_UI_DEPTH` to `schema/scene_v2.rs` and convert
       every existing flat `scene.ui` scan (re-grep both crates; `scene_loader.rs`'s `radar_handles`
       pre-pass + 4 `warn_*`, `validate.rs`'s 9 scans, `query.rs`, and `GameSceneV2::validate()`).
       Standalone, behaviour-preserving refactor with zero new schema -- do this **first**, before
       `GroupDef` exists. Its unit test gets a nested fixture as soon as `GroupDef` lands.
-- [ ] `GameSceneV2::validate()`: exempt `Group` from the empty-id check, skip `""` in duplicate
+- [x] `GameSceneV2::validate()`: exempt `Group` from the empty-id check, skip `""` in duplicate
       detection, detect duplicates across all nested nodes (R2).
-- [ ] Schema: `UiSizeDef` (`Auto`/`Px`/`Percent`) + `GroupDef` + `FlexDirectionDef`/
+- [x] Schema: `UiSizeDef` (`Auto`/`Px`/`Percent`) + `GroupDef` + `FlexDirectionDef`/
       `JustifyContentDef`/`AlignItemsDef`/`FlexWrapDef` enums, explicit defaults on all four
-- [ ] Add `Group` to `UiNodeDef` + its `id()`/`size()`/`position()`/`absolute()`/`align()` arms
-- [ ] `scene_loader.rs` (`runtime/scene_manager/`): `UiSpawnCtx<'a>` (7 fields); factor
+- [x] Add `Group` to `UiNodeDef` + its `id()`/`size()`/`position()`/`absolute()`/`align()` arms
+- [x] _(done; a Group's `Name` is its id or plain "Group", not its path - paths are for diagnostics only)_ `scene_loader.rs` (`runtime/scene_manager/`): `UiSpawnCtx<'a>` (7 fields); factor
       `build_child_node(el, force_absolute)`; recursive `Group` arm (children get `flex_shrink: 0.0`, R15); depth
       cap (16, one `warn!`)
-- [ ] Load log prints top-level + total node counts; `query.rs` adds `ui_node_count` (R6)
-- [ ] Diagnostics, all naming nodes by path (R9), with matching `ironhold validate` checks: auto-sized
+- [x] Load log prints top-level + total node counts; `query.rs` adds `ui_node_count` (R6)
+- [x] _(one shared `ui_layout_diagnostics` in `schema/scene_v2.rs`; errors in `cross_file_checks`, inert/surprising settings are `--strict` warnings, the engine `warn!`s all of them at scene load)_ Diagnostics, all naming nodes by path (R9), with matching `ironhold validate` checks: auto-sized
       `Group` whose children are all `absolute: true`; `clip: true` with both axes `Auto`; the
       R10 list
-- [ ] `ironhold validate` calls `GameSceneV2::validate()` (R3) -- first run it across all
+- [x] _(gate passed: all 15 shipped projects validate clean)_ `ironhold validate` calls `GameSceneV2::validate()` (R3) -- first run it across all
       `assets/projects/*`; if any shipped project fails, split into its own backlog item
-- [ ] Tests: nested `Group`s parse and spawn with correct `Node` flex properties (incl. `gap` setting
+- [x] _(done except a literal end-to-end click test: R7 is asserted as 'no Interaction / no FocusPolicy::Block' - see claude_suggestions.md)_ Tests: nested `Group`s parse and spawn with correct `Node` flex properties (incl. `gap` setting
       both `row_gap`/`column_gap`); `absolute: true` child escapes the flow like `ui_panel:`;
       `Auto`/`Px`/`Percent` map to the matching `Val`; nested `StatRadar` still gets a material;
       nested duplicate-keyed `ActionBar` still flagged by `warn!` and by `validate`; empty-id
       `Group` passes `validate()` while an empty-id leaf still fails; nested duplicate ids fail; a
       click on the empty area of a full-screen `Group` reaches the world (R7); walker stops at depth 16
-- [ ] New minimal `ui_demo` project (R5) with labeled stations: nested rows/columns, a
+- [x] _(project, registration in test_web.py/README/index.html/validate_projects.rs done and validated; the baseline screenshot `screenshot_baselines/scenes/ui_demo_main.png` is generated in the WASM dev-build step, so the index.html card thumbnail is missing until then)_ New minimal `ui_demo` project (R5) with labeled stations: nested rows/columns, a
       `Percent(100.0)` + `SpaceBetween` HUD bar (title left, buttons right), the full-screen
       bottom-anchored root recipe (R8), the spacer idiom. Register it: `test_web.py` `PROJECTS`,
       baseline screenshot, `index.html` card (see root `CLAUDE.md` "Adding a new asset project").
       Use plain ASCII hyphens in comments/on-screen text (the engine font has no em-dash glyph).
-- [ ] Retrofit `3rd_person_game_demo/scenes/options.scene.ron` to nested `Group`s with the even
+- [x] _(scene retrofitted and validated; its baseline screenshot is regenerated in the WASM dev-build step)_ Retrofit `3rd_person_game_demo/scenes/options.scene.ron` to nested `Group`s with the even
       rhythm from R1 (item gap 8, section gap 24; the 4-button volume row maps cleanly at gap 10).
       Add a top-of-file comment pointing at the `docs/20_data_formats.md` Group section. Regenerate
       only this scene's baseline: `python test_web.py --project 3rd_person_game_demo
@@ -467,7 +467,7 @@ on this feature's v1; **v2 (portrait/touch)** is blocked on the v2 items above.
       deliberately-overflowing `Label`/`Button` defs that must not shift; within
       `3rd_person_game_demo` the other scenes are main, start_menu, character_select and pause). The options baseline diff
       is expected (R1).
-- [ ] Docs (`docs/20_data_formats.md`): new `Group((...))` section with a full field table, a short
+- [x] Docs (`docs/20_data_formats.md`): new `Group((...))` section with a full field table, a short
       flexbox primer (link MDN), and these callouts:
       1. "Which UI mechanism do I reach for" table (`ui_panel:` vs `Group` vs plain `position:` vs an
          always-absolute HUD widget).
@@ -489,10 +489,10 @@ on this feature's v1; **v2 (portrait/touch)** is blocked on the v2 items above.
           coloured Group lets clicks through, FlexStart/FlexEnd mapping).
       11. Link `ui_demo` and the retrofitted `options.scene.ron` as the examples to copy.
       Also update the six leaf `position` rows, the six `absolute` rows and the UI Panel intro (R11), `docs/60_contributing.md` "Checks performed" and README's example-project table (R21).
-- [ ] `crates/ironhold_core/src/CLAUDE.md`: "`scene.ui` must be walked via `walk_ui_nodes`, never
+- [x] `crates/ironhold_core/src/CLAUDE.md`: "`scene.ui` must be walked via `walk_ui_nodes`, never
       iterated flat" next to the `spawn_primitive_children` rule.
-- [ ] Backlog bookkeeping: `mobile_ui_demo` split into v1/v2 (done at plan time); add v2 entries
-      when v1 ships.
+- [x] Backlog bookkeeping: `mobile_ui_demo` split into v1/v2 (done at plan time); v2 entries added when v1 shipped
+      ("Flex `Group` v2", plus the volume-readout, canvas-fit and baseline-regeneration follow-ups).
 
 ## Open questions
 - Exact enum variant lists for `JustifyContentDef` beyond the 6 named above — expand later if a

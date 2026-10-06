@@ -105,6 +105,7 @@ When a nested prefab reference is resolved, the spawner dispatches on `nested_pr
 - Cycle detection and depth limit (8 levels) are enforced inside `spawn_primitive_children`.
 - Cycle detection at **load time** is in `PrefabCatalog::validate()` (DFS via `prefab_has_cycle()`).
 - All child-spawning code must go through `spawn_primitive_children` — do **not** duplicate the mesh/material dispatch match arms. The two call sites are: composite non-player prefabs and player cosmetic children.
+- **`scene.ui` must be walked via `schema::scene_v2::walk_ui_nodes` (or `walk_ui_nodes_pathed` for diagnostics), never iterated flat.** Same class of invariant as the rule above: a consumer that loops over the top-level `Vec` silently under-covers any nested `ui:` node (e.g. a `StatRadar` inside a future `Group` would get no material, an `ActionBar` would escape every duplicate-key warning). The walker is pre-order, depth-capped at `MAX_UI_DEPTH` (16, a top-level node is depth 1) so diagnostics cover exactly the nodes that spawn, and yields nodes only -- `.enumerate()` it if you need a per-node tag. The one deliberate exception is the spawn loops in `scene_loader.rs`, which recurse structurally. See `planning/features/ui_flex_group.md`.
 - Transform composition is **multiplicative** (standard Bevy hierarchy). Non-uniform scale on parent anchors causes shearing in rotated children — document this in RON comments when relevant.
 
 ---

@@ -1,0 +1,17 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [],
+    ui: [
+        ActionBar((
+            id: "bar_a",
+            slots: [ ( key: "KeyQ", do_actions: [Log("a")] ) ],
+        )),
+        Group((children: [
+            ActionBar((
+                id: "bar_b",
+                slots: [ ( key: "KeyQ", do_actions: [Log("b")] ) ],
+            )),
+        ])),
+    ],
+)

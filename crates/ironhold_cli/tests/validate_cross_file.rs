@@ -2293,3 +2293,46 @@ fn icon_button_icon_on_and_icon_off_unresolved_exits_1() {
         "expected the missing icon_off texture key in output:\n{stdout}"
     );
 }
+
+// ── GameSceneV2::validate() wiring + nested UI ids ────────────────────────────
+
+#[test]
+fn duplicate_ui_id_across_nested_group_exits_1() {
+    let (code, stdout) = validate("duplicate_nested_ui_id");
+    assert_eq!(code, 1, "expected exit 1, got {code}:\n{stdout}");
+    assert!(stdout.contains("Duplicate UI element id") && stdout.contains("ui[1].children[0]"),
+        "the duplicate must be reported with its UI path:\n{stdout}");
+}
+
+#[test]
+fn idless_groups_exit_0() {
+    let (code, stdout) = validate("idless_group_ok");
+    assert_eq!(code, 0, "id-less Groups are pure layout wrappers and must validate, got {code}:\n{stdout}");
+}
+
+// ── Group layout diagnostics ──────────────────────────────────────────────────
+
+#[test]
+fn group_negative_gap_exits_1() {
+    let (code, stdout) = validate("group_negative_gap");
+    assert_eq!(code, 1, "expected exit 1, got {code}:\n{stdout}");
+    assert!(stdout.contains("gap must be a finite number") && stdout.contains("ui[0]"), "{stdout}");
+}
+
+#[test]
+fn group_inert_justify_is_a_strict_warning_only() {
+    let (code, stdout) = validate("group_inert_justify");
+    assert_eq!(code, 0, "an inert-but-legal layout setting must not fail a normal validate:\n{stdout}");
+    let (code, stdout) = validate_strict("group_inert_justify");
+    assert_eq!(code, 1, "--strict must surface it:\n{stdout}");
+    assert!(stdout.contains("SpaceBetween") && stdout.contains("ui[0]"), "{stdout}");
+}
+
+/// An `ActionBar` nested in a `Group` must still be covered by the cross-bar duplicate-key check
+/// (every `scene.ui` scan goes through `walk_ui_nodes`).
+#[test]
+fn nested_action_bar_duplicate_key_across_bars_exits_1() {
+    let (code, stdout) = validate("group_nested_duplicate_action_bar");
+    assert_eq!(code, 1, "expected exit 1, got {code}:\n{stdout}");
+    assert!(stdout.contains("bar_a") && stdout.contains("bar_b") && stdout.contains("both resolve to"), "{stdout}");
+}

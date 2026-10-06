@@ -7,7 +7,7 @@ use bevy_rapier3d::prelude::{
 };
 use crate::schema::*;
 use crate::schema::catalog::{PrefabKind, PrimitiveShapeKind};
-use crate::schema::scene_v2::GameSceneV2;
+use crate::schema::scene_v2::{walk_ui_nodes, GameSceneV2};
 use crate::schema::player::PlayerConfig;
 use crate::runtime::messages::*;
 use crate::runtime::material_factory::MaterialFactory;
@@ -92,15 +92,19 @@ pub fn spawn_scene_v2(
     ));
 
     info!(
-        "Scene V2 Loaded! name={}, {} entities, {} ui",
+        "Scene V2 Loaded! name={}, {} entities, {} ui nodes ({} top-level)",
         scene.name,
         scene.entities.len(),
+        walk_ui_nodes(&scene.ui).count(),
         scene.ui.len()
     );
 
     warn_cross_bar_duplicate_keys(scene);
     warn_same_player_gamepad_duplicate_slots(scene);
     warn_camera_modes_registry(scene);
+    for d in crate::schema::scene_v2::ui_layout_diagnostics(scene) {
+        warn!("UI layout in scene {:?} [{}]: {}", scene.name, d.kind, d.message);
+    }
 
     // Always remove any existing overlay (loading a new scene or new overlay replaces it).
     // `try_despawn` (not `despawn`): only the 3 overlay root entities are tagged
@@ -1173,7 +1177,7 @@ pub fn spawn_scene_v2(
     // Spawn UI — always runs for both Replace and Overlay mode.
     // Pre-create RadarMaterial handles for any StatRadar elements so we can pass owned
     // handles into the with_children closures without borrowing `mats` inside them.
-    let radar_handles: HashMap<String, Handle<RadarMaterial>> = scene.ui.iter() // det: lookup-only
+    let radar_handles: HashMap<String, Handle<RadarMaterial>> = walk_ui_nodes(&scene.ui) // det: lookup-only
         .filter_map(|el| {
             if let crate::schema::scene_v2::UiNodeDef::StatRadar(d) = el {
                 let (fr, fg, fb, fa) = d.fill_color;
@@ -1271,28 +1275,18 @@ pub fn spawn_scene_v2(
                     ))
                     .with_children(|parent| {
                         for el in &ui_elements {
-                            let h_justify = ui_justify(el.align());
-                            let node = if el.absolute() {
-                                Node {
-                                    width: Val::Px(el.size().0),
-                                    height: Val::Px(el.size().1),
-                                    position_type: PositionType::Absolute,
-                                    left: Val::Px(el.position().0),
-                                    top: Val::Px(el.position().1),
-                                    justify_content: h_justify,
-                                    align_items: AlignItems::Center,
-                                    ..default()
-                                }
-                            } else {
-                                Node {
-                                    width: Val::Px(el.size().0),
-                                    height: Val::Px(el.size().1),
-                                    justify_content: h_justify,
-                                    align_items: AlignItems::Center,
-                                    ..default()
-                                }
+                            let node = build_child_node(el, false);
+                            let mut ctx = UiSpawnCtx {
+                                radar_handles: &radar_handles,
+                                asset_server: &asset_server,
+                                atlas_layouts: mats.atlas_layouts.as_deref_mut(),
+                                asset_catalog: &params.asset_catalog.0,
+                                item_catalog: params.loaded_item_catalog.0.as_ref(),
+                                inventory_ui: &mut params.inventory_ui,
+                                container_ui: &mut params.container_ui,
+                                depth: 1,
                             };
-                            spawn_ui_element_node(parent, el, node, &radar_handles, &asset_server, mats.atlas_layouts.as_deref_mut(), &params.asset_catalog.0, params.loaded_item_catalog.0.as_ref(), &mut params.inventory_ui, &mut params.container_ui);
+                            spawn_ui_element_node(parent, el, node, &mut ctx);
                         }
                     });
             });
@@ -1314,17 +1308,18 @@ pub fn spawn_scene_v2(
             }
             root_cmd.with_children(|parent| {
                 for el in &scene.ui {
-                    let node = Node {
-                        width: Val::Px(el.size().0),
-                        height: Val::Px(el.size().1),
-                        justify_content: ui_justify(el.align()),
-                        align_items: AlignItems::Center,
-                        position_type: PositionType::Absolute,
-                        left: Val::Px(el.position().0),
-                        top: Val::Px(el.position().1),
-                        ..default()
+                    let node = build_child_node(el, true);
+                    let mut ctx = UiSpawnCtx {
+                        radar_handles: &radar_handles,
+                        asset_server: &asset_server,
+                        atlas_layouts: mats.atlas_layouts.as_deref_mut(),
+                        asset_catalog: &params.asset_catalog.0,
+                        item_catalog: params.loaded_item_catalog.0.as_ref(),
+                        inventory_ui: &mut params.inventory_ui,
+                        container_ui: &mut params.container_ui,
+                        depth: 1,
                     };
-                    spawn_ui_element_node(parent, el, node, &radar_handles, &asset_server, mats.atlas_layouts.as_deref_mut(), &params.asset_catalog.0, params.loaded_item_catalog.0.as_ref(), &mut params.inventory_ui, &mut params.container_ui);
+                    spawn_ui_element_node(parent, el, node, &mut ctx);
                 }
             });
         }
@@ -1360,7 +1355,7 @@ fn warn_cross_bar_duplicate_keys(scene: &GameSceneV2) {
     // a real cross-bar collision if two bars happened to share an id (system-architect finding).
     let mut seen: HashMap<KeyCode, (usize, String, String)> = HashMap::new(); // resolved key -> (bar index, bar id, slot key) // det: lookup-only
     let mut bar_index = 0usize;
-    for el in &scene.ui {
+    for el in walk_ui_nodes(&scene.ui) {
         let UiNodeDef::ActionBar(bar) = el else { continue };
         for slot in &bar.slots {
             let Some(kc) = InputMap::parse_key(&slot.key) else { continue }; // unparseable keys are already warned per-bar
@@ -1397,7 +1392,7 @@ fn warn_cross_bar_duplicate_keys(scene: &GameSceneV2) {
 fn warn_same_player_gamepad_duplicate_slots(scene: &GameSceneV2) {
     use crate::schema::scene_v2::UiNodeDef;
     let mut seen: HashMap<(u32, GamepadButton), (String, String)> = HashMap::new(); // (player, button) -> (bar id, slot key) // det: lookup-only
-    for el in &scene.ui {
+    for el in walk_ui_nodes(&scene.ui) {
         let UiNodeDef::ActionBar(bar) = el else { continue };
         let owner_player = bar.owner_player.unwrap_or(0);
         for slot in &bar.slots {
@@ -1656,7 +1651,7 @@ fn warn_missing_interactable_item_key(
 /// diagnostic coverage at all. See `planning/features/per_player_stat_pools.md`.
 fn warn_missing_player_stat_templates(scene: &GameSceneV2, player_configs: &[PlayerConfig]) {
     use crate::schema::scene_v2::UiNodeDef;
-    for el in &scene.ui {
+    for el in walk_ui_nodes(&scene.ui) {
         let UiNodeDef::ActionBar(bar) = el else { continue };
         let owner_player = bar.owner_player.unwrap_or(0);
         let Some(player_config) = player_configs.iter().find(|p| p.player_index == owner_player)
@@ -1688,7 +1683,7 @@ fn warn_missing_player_stat_templates(scene: &GameSceneV2, player_configs: &[Pla
 /// normalization. See `planning/features/gamepad_action_bar_slots.md`.
 fn warn_gamepad_key_without_gamepad_index(scene: &GameSceneV2, player_configs: &[PlayerConfig]) {
     use crate::schema::scene_v2::UiNodeDef;
-    for el in &scene.ui {
+    for el in walk_ui_nodes(&scene.ui) {
         let UiNodeDef::ActionBar(bar) = el else { continue };
         let owner_player = bar.owner_player.unwrap_or(0);
         let Some(player_config) = player_configs.iter().find(|p| p.player_index == owner_player)
@@ -1748,20 +1743,126 @@ fn warn_duplicate_gamepad_index(scene: &GameSceneV2, player_configs: &[PlayerCon
     }
 }
 
+/// Shared state threaded through the (recursive) UI node spawner. Mirrors `ChildSpawnCtx`: a new
+/// resource a panel arm needs is one field here, not an edit to every call site.
+struct UiSpawnCtx<'a> {
+    radar_handles: &'a HashMap<String, Handle<RadarMaterial>>, // det: lookup-only
+    asset_server: &'a AssetServer,
+    atlas_layouts: Option<&'a mut Assets<TextureAtlasLayout>>,
+    asset_catalog: &'a crate::schema::catalog::AssetCatalog,
+    item_catalog: Option<&'a crate::schema::items::ItemCatalog>,
+    inventory_ui: &'a mut crate::capabilities::inventory::LoadedInventoryUi,
+    container_ui: &'a mut crate::capabilities::inventory::LoadedContainerUi,
+    /// Nesting depth of the node being spawned; a top-level node is depth 1 (matches
+    /// `walk_ui_nodes`, so spawning and diagnostics cover exactly the same nodes).
+    depth: usize,
+}
+
+/// Builds the wrapping `Node` for one child. Panel mode and `Group` children honour
+/// `el.absolute()`; the scene's top-level absolute mode passes `force_absolute: true`.
+fn build_child_node(el: &crate::schema::scene_v2::UiNodeDef, force_absolute: bool) -> Node {
+    let mut node = Node {
+        width: Val::Px(el.size().0),
+        height: Val::Px(el.size().1),
+        justify_content: ui_justify(el.align()),
+        align_items: AlignItems::Center,
+        ..default()
+    };
+    if force_absolute || el.absolute() {
+        node.position_type = PositionType::Absolute;
+        node.left = Val::Px(el.position().0);
+        node.top = Val::Px(el.position().1);
+    }
+    node
+}
+
+fn ui_size_val(size: crate::schema::scene_v2::UiSizeDef) -> Val {
+    use crate::schema::scene_v2::UiSizeDef;
+    match size {
+        UiSizeDef::Auto => Val::Auto,
+        UiSizeDef::Px(v) => Val::Px(v),
+        UiSizeDef::Percent(v) => Val::Percent(v),
+    }
+}
+
 fn spawn_ui_element_node(
     parent: &mut ChildSpawnerCommands,
     el: &crate::schema::scene_v2::UiNodeDef,
     node: Node,
-    radar_handles: &HashMap<String, Handle<RadarMaterial>>, // det: lookup-only
-    asset_server: &AssetServer,
-    mut atlas_layouts: Option<&mut Assets<TextureAtlasLayout>>,
-    asset_catalog: &crate::schema::catalog::AssetCatalog,
-    item_catalog: Option<&crate::schema::items::ItemCatalog>,
-    inventory_ui: &mut crate::capabilities::inventory::LoadedInventoryUi,
-    container_ui: &mut crate::capabilities::inventory::LoadedContainerUi,
+    ctx: &mut UiSpawnCtx<'_>,
 ) {
+    // Shared (Copy) refs are copied out; the two `&mut` loaders and the atlas-layout assets are
+    // reborrowed from `ctx` so the recursive `Group` arm can still use `ctx` itself.
+    let radar_handles = ctx.radar_handles;
+    let asset_server = ctx.asset_server;
+    let asset_catalog = ctx.asset_catalog;
+    let item_catalog = ctx.item_catalog;
+    let atlas_layouts = &mut ctx.atlas_layouts;
+    let inventory_ui = &mut *ctx.inventory_ui;
+    let container_ui = &mut *ctx.container_ui;
     use crate::schema::scene_v2::UiNodeDef;
     match el {
+        UiNodeDef::Group(g) => {
+            use crate::schema::scene_v2::{AlignItemsDef, FlexDirectionDef, FlexWrapDef, JustifyContentDef, MAX_UI_DEPTH};
+            let mut group_node = node;
+            group_node.flex_direction = match g.flex_direction {
+                FlexDirectionDef::Row => FlexDirection::Row,
+                FlexDirectionDef::Column => FlexDirection::Column,
+                FlexDirectionDef::RowReverse => FlexDirection::RowReverse,
+                FlexDirectionDef::ColumnReverse => FlexDirection::ColumnReverse,
+            };
+            // `Start`/`End` map to CSS flex-start/flex-end (they follow the reversed directions).
+            group_node.justify_content = match g.justify_content {
+                JustifyContentDef::Start => JustifyContent::FlexStart,
+                JustifyContentDef::Center => JustifyContent::Center,
+                JustifyContentDef::End => JustifyContent::FlexEnd,
+                JustifyContentDef::SpaceBetween => JustifyContent::SpaceBetween,
+                JustifyContentDef::SpaceAround => JustifyContent::SpaceAround,
+                JustifyContentDef::SpaceEvenly => JustifyContent::SpaceEvenly,
+            };
+            group_node.align_items = match g.align_items {
+                AlignItemsDef::Start => AlignItems::FlexStart,
+                AlignItemsDef::Center => AlignItems::Center,
+                AlignItemsDef::End => AlignItems::FlexEnd,
+            };
+            group_node.flex_wrap = match g.flex_wrap {
+                FlexWrapDef::NoWrap => FlexWrap::NoWrap,
+                FlexWrapDef::Wrap => FlexWrap::Wrap,
+                FlexWrapDef::WrapReverse => FlexWrap::WrapReverse,
+            };
+            // Both gaps, like CSS `gap`.
+            group_node.row_gap = Val::Px(g.gap);
+            group_node.column_gap = Val::Px(g.gap);
+            group_node.padding = UiRect::all(Val::Px(g.padding));
+            group_node.width = ui_size_val(g.width);
+            group_node.height = ui_size_val(g.height);
+            if g.clip {
+                group_node.overflow = Overflow::clip();
+            }
+            // A Group is a pure layout wrapper: no Interaction / FocusPolicy::Block, so clicks on
+            // its empty area reach the world (a Node's default FocusPolicy is already Pass).
+            let name = if g.id.is_empty() { "Group".to_string() } else { format!("Group: {}", g.id) };
+            let mut ec = parent.spawn((Name::new(name), group_node));
+            if let Some((r, gr, b, a)) = g.background_color {
+                ec.insert(BackgroundColor(Color::srgba(r, gr, b, a)));
+            }
+            // Past the cap the children are simply not spawned; `ui_layout_diagnostics` (logged
+            // at scene load, and by `ironhold validate`) already reports it as `ui_depth_exceeded`
+            // with the node's path.
+            if ctx.depth < MAX_UI_DEPTH {
+                ec.with_children(|parent| {
+                    ctx.depth += 1;
+                    for child in &g.children {
+                        let mut child_node = build_child_node(child, false);
+                        // `size:` means exactly that many px: Bevy's default flex_shrink of 1.0
+                        // would shrink leaves in a Group narrower than its content.
+                        child_node.flex_shrink = 0.0;
+                        spawn_ui_element_node(parent, child, child_node, ctx);
+                    }
+                    ctx.depth -= 1;
+                });
+            }
+        }
         UiNodeDef::Rect(rect) => {
             let (r, g, b, a) = rect.color;
             parent.spawn((

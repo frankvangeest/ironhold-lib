@@ -1,0 +1,10 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [],
+    ui: [
+        Group((justify_content: SpaceBetween, children: [
+            Label((id: "title", text: "Title")),
+        ])),
+    ],
+)

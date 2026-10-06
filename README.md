@@ -128,6 +128,7 @@ destination state's `entry_actions` and the source state's `exit_actions` along 
 | `terrain_demo` | Heightmap terrain, splatmap texture blending, fly camera |
 | `custom_materials` | Custom WGSL shaders on primitive shapes via `assets.ron` |
 | `primitive_world` | Entire world from geometric primitives: trees, cottages, fences, a pond, a village |
+| `ui_demo` | Nestable flexbox `Group` UI layouts: rows in columns, `SpaceBetween`, spacers, and screen-edge anchoring with no pixel coordinates |
 
 ---
 

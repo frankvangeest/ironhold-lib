@@ -1,9 +1,12 @@
 import http.server
+import sys
 import mimetypes
 
 mimetypes.add_type("application/wasm", ".wasm")
 
-PORT = 8000
+# `python serve.py [port]`: pick a port so a manual playtest server (default 8000) and the
+# Playwright suite's own server (test_web.py defaults to 8001) never collide.
+PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
 
 class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
     # HTTP/1.1 (with SimpleHTTPRequestHandler's own Content-Length on every response) enables

@@ -1,5 +1,5 @@
 use ironhold_core::schema::{ProjectConfig, StateMachineAsset, MaterialDef};
-use ironhold_core::schema::scene_v2::{GameSceneV2, UiNodeDef, BarOrientation, StatSpreadLayout};
+use ironhold_core::schema::scene_v2::{ui_layout_diagnostics, UiDiagnosticSeverity, walk_ui_nodes, walk_ui_nodes_pathed, GameSceneV2, UiNodeDef, UiPath, BarOrientation, StatSpreadLayout, MAX_UI_DEPTH};
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, MovementConfig, JumpConfig, NpcFaction, NpcOnPlayerNear, FlyCamDef, ColliderShapeKind};
 use ironhold_core::schema::stats::StatCatalog;
 use ironhold_core::schema::player::InputMap;
@@ -4641,4 +4641,229 @@ fn test_stat_catalog_preserves_declaration_order() {
         vec!["zeta", "alpha", "mid"],
         "stats must load in the order they are declared in stats.ron, not hash or alphabetical order"
     );
+}
+
+/// `walk_ui_nodes` is the only sanctioned way to visit `scene.ui` (nested `Group`s must not blind
+/// a consumer). With no nesting variant yet it must behave exactly like a flat top-level scan.
+#[test]
+fn test_walk_ui_nodes_matches_flat_order_without_nesting() {
+    let ron_str = r#"[ Label((id: "a")), Rect((id: "b")), Label((id: "c")) ]"#;
+    let ui: Vec<UiNodeDef> = from_str(ron_str).expect("flat ui list should parse");
+    let ids: Vec<&str> = walk_ui_nodes(&ui).map(UiNodeDef::id).collect();
+    assert_eq!(ids, vec!["a", "b", "c"]);
+    assert_eq!(walk_ui_nodes(&ui).count(), ui.len());
+    assert_eq!(walk_ui_nodes(&[]).count(), 0);
+}
+
+/// Diagnostics name a node by path, never by an empty id or a bare index (plan R9/R18).
+#[test]
+fn test_walk_ui_nodes_pathed_reports_ui_paths() {
+    let ron_str = r#"[ Label((id: "a")), Label((id: "b")) ]"#;
+    let ui: Vec<UiNodeDef> = from_str(ron_str).expect("flat ui list should parse");
+    let paths: Vec<String> = walk_ui_nodes_pathed(&ui).map(|(p, _)| p.to_string()).collect();
+    assert_eq!(paths, vec!["ui[0]", "ui[1]"]);
+    assert_eq!(UiPath(vec![2, 0, 1]).to_string(), "ui[2].children[0].children[1]");
+    assert_eq!(MAX_UI_DEPTH, 16);
+}
+
+// ── Group (nestable flexbox layout node) ───────────────────────────────────────────────────
+
+fn nested_ui() -> Vec<UiNodeDef> {
+    from_str(r#"[
+        Label((id: "a")),
+        Group((children: [
+            Label((id: "b")),
+            Group((children: [ Label((id: "c")) ])),
+            Label((id: "d")),
+        ])),
+        Label((id: "e")),
+    ]"#).expect("nested ui list should parse")
+}
+
+#[test]
+fn test_group_defaults_and_unknown_field_rejected() {
+    let ui: Vec<UiNodeDef> = from_str(r#"[ Group((children: [])) ]"#).expect("minimal Group should parse");
+    let UiNodeDef::Group(g) = &ui[0] else { panic!("expected Group") };
+    assert_eq!(g.id, "");
+    assert_eq!(g.gap, 0.0);
+    assert_eq!(g.padding, 0.0);
+    assert!(!g.clip && !g.absolute);
+    assert!(g.background_color.is_none());
+    assert!(from_str::<Vec<UiNodeDef>>(r#"[ Group((children: [], size: (10.0, 10.0))) ]"#).is_err(),
+        "Groups use width/height, not size: - deny_unknown_fields must reject `size`");
+}
+
+#[test]
+fn test_walk_ui_nodes_is_preorder_over_nested_groups() {
+    let ui = nested_ui();
+    let ids: Vec<&str> = walk_ui_nodes(&ui).map(UiNodeDef::id).collect();
+    assert_eq!(ids, vec!["a", "", "b", "", "c", "d", "e"]);
+    let paths: Vec<String> = walk_ui_nodes_pathed(&ui).map(|(p, _)| p.to_string()).collect();
+    assert_eq!(paths, vec![
+        "ui[0]", "ui[1]", "ui[1].children[0]", "ui[1].children[1]",
+        "ui[1].children[1].children[0]", "ui[1].children[2]", "ui[2]",
+    ]);
+}
+
+/// A top-level node is depth 1 and nodes at depth 17+ are neither walked nor spawned.
+#[test]
+fn test_walk_ui_nodes_stops_at_max_depth() {
+    fn chain(depth: usize) -> UiNodeDef {
+        let mut node: UiNodeDef = from_str(r#"Label((id: "leaf"))"#).unwrap();
+        for _ in 1..depth {
+            let ron_str = r#"Group((children: []))"#;
+            let UiNodeDef::Group(mut g) = from_str::<UiNodeDef>(ron_str).unwrap() else { unreachable!() };
+            g.children.push(node);
+            node = UiNodeDef::Group(g);
+        }
+        node
+    }
+    // A leaf nested inside 15 groups sits at depth 16: still walked.
+    assert_eq!(walk_ui_nodes(&[chain(16)]).count(), 16);
+    assert_eq!(walk_ui_nodes(&[chain(16)]).last().map(UiNodeDef::id), Some("leaf"));
+    // One level deeper (leaf at depth 17) is dropped; the 16 groups remain.
+    assert_eq!(walk_ui_nodes(&[chain(17)]).count(), 16);
+    assert!(walk_ui_nodes(&[chain(17)]).all(|n| n.id() != "leaf"));
+}
+
+fn scene_with_ui(ui_ron: &str) -> GameSceneV2 {
+    from_str(&format!("(schema_version: 2, entities: [], ui: [{ui_ron}])")).expect("scene should parse")
+}
+
+#[test]
+fn test_scene_validate_allows_idless_groups_but_not_idless_leaves() {
+    let ok = scene_with_ui(r#"Group((children: [ Label((id: "a")) ])), Group((children: [])),"#);
+    ok.validate().expect("id-less Groups are pure layout wrappers and must pass; multiple \"\" ids are not duplicates");
+
+    let err = scene_with_ui(r#"Group((children: [ Label((id: "")) ])),"#).validate().unwrap_err();
+    assert!(err.contains("ui[0].children[0]") && err.contains("empty id"), "got: {err}");
+}
+
+#[test]
+fn test_scene_validate_detects_duplicate_ids_across_nesting() {
+    let err = scene_with_ui(r#"Label((id: "x")), Group((children: [ Label((id: "x")) ])),"#).validate().unwrap_err();
+    assert!(err.contains("Duplicate UI element id") && err.contains("\"x\"") && err.contains("ui[1].children[0]"), "got: {err}");
+}
+
+// ── Group layout diagnostics (shared by the engine's load-time warn! and `ironhold validate`) ──
+
+fn diag_kinds(ui_ron: &str) -> Vec<(&'static str, UiDiagnosticSeverity, String)> {
+    ui_layout_diagnostics(&scene_with_ui(ui_ron))
+        .into_iter()
+        .map(|d| (d.kind, d.severity, d.message))
+        .collect()
+}
+
+#[test]
+fn test_group_diagnostics_clean_layout_reports_nothing() {
+    assert!(diag_kinds(r#"Group((width: Percent(100.0), height: Px(50.0), justify_content: SpaceBetween, gap: 4.0,
+        children: [ Label((id: "a")), Group((children: [ Label((id: "b")) ])) ])),"#).is_empty());
+    assert!(diag_kinds(r#"Label((id: "a")),"#).is_empty(), "scenes without Groups must stay silent");
+}
+
+#[test]
+fn test_group_diagnostics_inert_justify_content_on_auto_main_axis() {
+    let d = diag_kinds(r#"Group((justify_content: SpaceBetween, children: [ Label((id: "a")) ])),"#);
+    assert_eq!(d.len(), 1, "{d:?}");
+    assert_eq!(d[0].0, "inert_justify_content");
+    assert_eq!(d[0].1, UiDiagnosticSeverity::Warning);
+    assert!(d[0].2.contains("ui[0]"), "message must name the node by path: {}", d[0].2);
+    // Column groups distribute along the height, so a Percent width alone does not help.
+    let d = diag_kinds(r#"Group((flex_direction: Column, justify_content: SpaceEvenly, width: Px(100.0), children: [])),"#);
+    assert_eq!(d.iter().filter(|x| x.0 == "inert_justify_content").count(), 1, "{d:?}");
+}
+
+#[test]
+fn test_group_diagnostics_inert_clip_and_collapsed_group() {
+    let d = diag_kinds(r#"Group((clip: true, children: [ Label((id: "a")) ])),"#);
+    assert_eq!(d.iter().map(|x| x.0).collect::<Vec<_>>(), vec!["inert_clip"]);
+    let d = diag_kinds(r#"Group((children: [ Label((id: "a", absolute: true)), Label((id: "b", absolute: true)) ])),"#);
+    assert_eq!(d.iter().map(|x| x.0).collect::<Vec<_>>(), vec!["collapsed_group"]);
+    // One flowing child is enough to give the group a size.
+    assert!(diag_kinds(r#"Group((children: [ Label((id: "a", absolute: true)), Label((id: "b")) ])),"#).is_empty());
+}
+
+#[test]
+fn test_group_diagnostics_percent_under_auto_parent() {
+    let nested = diag_kinds(r#"Group((children: [ Group((width: Percent(50.0), children: [])) ])),"#);
+    assert!(nested.iter().any(|x| x.0 == "percent_under_auto" && x.2.contains("ui[0].children[0]")), "{nested:?}");
+    // Definite parent: fine.
+    assert!(diag_kinds(r#"Group((width: Px(200.0), children: [ Group((width: Percent(50.0), children: [])) ])),"#).is_empty());
+    // Top level (the window) is always definite.
+    assert!(diag_kinds(r#"Group((width: Percent(100.0), height: Percent(100.0), children: [])),"#).is_empty());
+    // Directly inside ui_panel: with no width/height.
+    let scene: GameSceneV2 = from_str(r#"(schema_version: 2, entities: [], ui_panel: (),
+        ui: [ Group((width: Percent(100.0), children: [])) ])"#).expect("scene with ui_panel should parse");
+    assert!(ui_layout_diagnostics(&scene).iter().any(|d| d.kind == "percent_under_auto"));
+}
+
+#[test]
+fn test_group_diagnostics_invalid_values_are_errors() {
+    let d = diag_kinds(r#"Group((gap: -1.0, padding: -2.0, width: Px(-5.0), height: Percent(-1.0), children: [])),"#);
+    assert_eq!(d.iter().filter(|x| x.0 == "invalid_group_value").count(), 4, "{d:?}");
+    assert!(d.iter().filter(|x| x.0 == "invalid_group_value").all(|x| x.1 == UiDiagnosticSeverity::Error));
+}
+
+#[test]
+fn test_group_diagnostics_nested_panels_and_depth_cap() {
+    let d = diag_kinds(r#"Group((width: Px(100.0), children: [ ActionBar((id: "bar", slots: [])) ])),"#);
+    let nested = d.iter().find(|x| x.0 == "panel_nested_in_group").expect("nested ActionBar must warn");
+    assert!(nested.2.contains("top-level ui:") && nested.2.contains("ui[0].children[0]"), "{}", nested.2);
+
+    // 16 groups deep with a child below the cap: the deepest group's children never spawn.
+    let mut ron_str = String::from(r#"Label((id: "leaf"))"#);
+    for _ in 0..16 {
+        ron_str = format!("Group((width: Px(10.0), height: Px(10.0), children: [ {ron_str} ]))");
+    }
+    let d = diag_kinds(&format!("{ron_str},"));
+    let exceeded: Vec<_> = d.iter().filter(|x| x.0 == "ui_depth_exceeded").collect();
+    assert_eq!(exceeded.len(), 1, "{d:?}");
+    assert_eq!(exceeded[0].1, UiDiagnosticSeverity::Error);
+}
+
+/// Nests `leaf_ron` inside `groups` Groups (a Group with explicit sizes, so no unrelated
+/// diagnostics fire).
+fn nested_group_ron(groups: usize, leaf_ron: &str) -> String {
+    let mut ron_str = leaf_ron.to_string();
+    for _ in 0..groups {
+        ron_str = format!("Group((width: Px(10.0), height: Px(10.0), children: [ {ron_str} ]))");
+    }
+    format!("{ron_str},")
+}
+
+/// Boundary pairs for the depth cap, so an off-by-one in the diagnostics (which must agree with
+/// the walker and the spawner) fails in BOTH directions: 15 groups + a leaf puts the leaf at
+/// depth 16 (kept, no error); 16 groups + a leaf puts it at depth 17 (dropped, one error on the
+/// 16th group).
+#[test]
+fn test_group_diagnostics_depth_boundary_both_sides() {
+    let kinds = |groups| diag_kinds(&nested_group_ron(groups, r#"Label((id: "leaf"))"#));
+    assert!(kinds(15).iter().all(|d| d.0 != "ui_depth_exceeded"), "leaf at depth 16 must be fine");
+    let over = kinds(16);
+    assert_eq!(over.iter().filter(|d| d.0 == "ui_depth_exceeded").count(), 1, "{over:?}");
+    // And the walker agrees: leaf walked at depth 16, not at 17.
+    let leaf_walked = |groups| {
+        let ui = scene_with_ui(&nested_group_ron(groups, r#"Label((id: "leaf"))"#)).ui;
+        walk_ui_nodes(&ui).any(|n| n.id() == "leaf")
+    };
+    assert!(leaf_walked(15));
+    assert!(!leaf_walked(16));
+}
+
+#[test]
+fn test_group_diagnostics_exemptions_and_walker_guard() {
+    // An Auto group whose children are all absolute but which has padding is not collapsed.
+    assert!(diag_kinds(r#"Group((padding: 8.0, children: [ Label((id: "a", absolute: true)) ])),"#)
+        .iter().all(|d| d.0 != "collapsed_group"));
+    // An absolute Percent group under an Auto parent resolves against the laid-out parent: no warning.
+    assert!(diag_kinds(r#"Group((children: [ Group((width: Percent(50.0), absolute: true, children: [])) ])),"#)
+        .iter().all(|d| d.0 != "percent_under_auto"));
+    // A ui_panel: parent gets the bare-number hint, not the Px(..) one.
+    let scene: GameSceneV2 = from_str(r#"(schema_version: 2, entities: [], ui_panel: (),
+        ui: [ Group((width: Percent(100.0), children: [])) ])"#).unwrap();
+    let d = ui_layout_diagnostics(&scene).into_iter().find(|d| d.kind == "percent_under_auto").unwrap();
+    assert!(d.message.contains("bare number"), "{}", d.message);
+    // current_path before the first next() must not panic.
+    let ui = nested_ui();
+    assert_eq!(walk_ui_nodes(&ui).current_path().to_string(), "");
 }
