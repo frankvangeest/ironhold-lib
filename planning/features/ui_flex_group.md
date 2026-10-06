@@ -453,7 +453,7 @@ on this feature's v1; **v2 (portrait/touch)** is blocked on the v2 items above.
       nested duplicate-keyed `ActionBar` still flagged by `warn!` and by `validate`; empty-id
       `Group` passes `validate()` while an empty-id leaf still fails; nested duplicate ids fail; a
       click on the empty area of a full-screen `Group` reaches the world (R7); walker stops at depth 16
-- [ ] New minimal `ui_demo` project (R5) with labeled stations: nested rows/columns, a
+- [x] _(project, registration in test_web.py/README/index.html/validate_projects.rs done and validated; the baseline screenshot `screenshot_baselines/scenes/ui_demo_main.png` is generated in the WASM dev-build step, so the index.html card thumbnail is missing until then)_ New minimal `ui_demo` project (R5) with labeled stations: nested rows/columns, a
       `Percent(100.0)` + `SpaceBetween` HUD bar (title left, buttons right), the full-screen
       bottom-anchored root recipe (R8), the spacer idiom. Register it: `test_web.py` `PROJECTS`,
       baseline screenshot, `index.html` card (see root `CLAUDE.md` "Adding a new asset project").
