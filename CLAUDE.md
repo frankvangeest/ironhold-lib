@@ -247,9 +247,10 @@ When a new project is added under `assets/projects/{name}/`, three registration 
 
 2. **Baseline screenshot** — generate the project's scene screenshot so it can be used in the gallery:
    ```bash
-   python test_web.py --project {name} --update-baselines --skip-build
+   python test_web.py --project {name} --update-baselines --skip-build --real-gpu
    ```
    This writes `screenshot_baselines/scenes/{name}_main.png` (and one file per scene if the project has multiple scenes).
+   **Use `--real-gpu` (WebGPU, a visible non-headless Chromium window) with the standard dev build** (`--features webgpu`, step 7 of the Code change workflow) — it is the primary way to capture baselines and run the browser suite. The headless modes are the fallback / CI path: default GL/ANGLE needs a *WebGL2* build (no `--features webgpu`), and headless `--webgpu` (SwiftShader) finds no GPU adapter on this machine (`No available adapters`, 2026-10-06). `test_web.py` runs its own server on port **8001** (`--port` to change) so it never collides with a manual `python serve.py` on 8000 — check `netstat -ano | grep :800` if a run times out. Baselines older than 2026-10-06 were captured on headless GL, so a `--real-gpu` run can show pixel diffs on scenes you did not touch (e.g. `pause_nav/02_main_scene`) — update only the baselines for what this change affected (`--project`/`--update-baseline <name>`), never a blanket `--update-baselines`.
 
 3. **`index.html`** — add a card to the project grid. Copy an existing `<a class="project-card">` block and update:
    - `id` attribute (`card-{name}`)
@@ -420,7 +421,12 @@ Every code change follows this order. Steps 1–10 happen **on a `feature/{slug}
     sibling feature still mid-batch — that's a real cross-feature dependency the plan file should
     already call out explicitly (per step 1); copy the specific file(s) needed
     (`git checkout integration -- <path>`) right now, before starting Code changes, rather than
-    discovering the gap mid-implementation. Don't broaden this into cutting the branch from
+    discovering the gap mid-implementation.
+    **Exception (Frank-approved 2026-10-05, `feature/ui_flex_group`):** when `main` lags `integration` by a whole
+    unreleased batch the plan was written against (`git diff --stat main integration -- crates` shows dozens of files),
+    cut the branch from `integration` instead. Note the hook does NOT help here: it only syncs a plan file that is
+    *missing*, and `main` may carry a stale older copy of it (the worktree then silently has the pre-review plan).
+    Outside that situation, don't broaden this into cutting the branch from
     `integration` instead of `main` to sidestep the check — that reintroduces exactly the coupling
     between parallel features (and exposure to a not-yet-release-tested batch) the three-tier model
     exists to avoid.
@@ -445,6 +451,12 @@ Every code change follows this order. Steps 1–10 happen **on a `feature/{slug}
       The CLI check is unconditional — new `Action` variants and schema changes silently break `query.rs` without it.
 
     **Evaluate every review finding individually**: fix it now (go back to step **Code changes**) or, if it's non-blocking, log it as its own item in `planning/backlog.md` or a `planning/claude_suggestions.md` entry — don't let a non-blocking finding stall this feature. All tests must pass before continuing regardless of review outcome.
+    **Commit the review agents' memory right away, on `integration`.** Review agents always write
+    `.claude/agent-memory/` into the **primary checkout's** working tree, whichever branch/worktree the change is on. Once
+    the step-4 review cycle has finished, commit it immediately from the primary checkout (`git add .claude/agent-memory &&
+    git commit -m "chore(agent-memory): update from {slug} review cycle"`) instead of leaving it dirty until step 10: it
+    keeps `integration`'s tree clean through the rest of the feature (playtest, fixes, the later merge and the step-15
+    fast-forward) and avoids losing it. Step 10's check remains as a safety net for anything written after this point.
  5. **Docs updated** — `docs/20_data_formats.md` and any relevant `CLAUDE.md` files
  6. **Schema/CLI verify** — if any `schema/` type was added, renamed, or had a field type changed, also spot-check the query output. Use `cargo run -p ironhold_cli --`, **not** the cached `tools/bin/ironhold` binary (see "Caching the ironhold_cli binary" above) — the schema change was just made, so a stale cached binary would silently show the old output instead of catching a break:
     ```
@@ -453,7 +465,8 @@ Every code change follows this order. Steps 1–10 happen **on a `feature/{slug}
     Verify new action kinds appear in the output and nothing crashes. Re-run the two cache-build
     lines above afterward so `tools/bin/ironhold` picks up the schema change for later use.
  7. **WASM dev build** — `wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg --dev --features webgpu --features inspector`
-    Fast (~2 min once `inspector`'s deps — `bevy_egui`/`bevy_inspector_egui` — are warm in the shared target dir; the first build after a `cargo clean` pays their compile cost once, same as any other dependency). `inspector` is a standing default for every dev build, not a judgment call based on what the playtest checklist covers — this is what makes F9 (physics collider wireframes) and `` ` `` (full egui world inspector) available in-browser without having to predict ahead of time whether a given playtest will need them (real incident, 2026-09-15: a collider-fit check requested mid-playtest needed a second ~13-minute rebuild because the first dev build omitted `inspector`). For local play-testing only — **never commit `pkg/` on a feature branch** (enforced by `.githooks/pre-commit`). Never add `inspector` to the release build (step 12) — production must never ship inspector tooling.
+    Fast (~2 min once `inspector`'s deps — `bevy_egui`/`bevy_inspector_egui` — are warm in the shared target dir; the first build after a `cargo clean` pays their compile cost once, same as any other dependency). **Screenshots / browser suite:** this same dev build is what `python test_web.py --real-gpu --skip-build` uses (see "Adding a new asset project" above for why not headless, and for the 8001-vs-8000 port rule). **`pkg/` is tracked, so a dev build leaves it modified: after the playtest and any baseline runs, `git checkout -- pkg` before committing** (`.githooks/pre-commit` blocks it anyway).
+    `inspector` is a standing default for every dev build, not a judgment call based on what the playtest checklist covers — this is what makes F9 (physics collider wireframes) and `` ` `` (full egui world inspector) available in-browser without having to predict ahead of time whether a given playtest will need them (real incident, 2026-09-15: a collider-fit check requested mid-playtest needed a second ~13-minute rebuild because the first dev build omitted `inspector`). For local play-testing only — **never commit `pkg/` on a feature branch** (enforced by `.githooks/pre-commit`). Never add `inspector` to the release build (step 12) — production must never ship inspector tooling.
  8. **Provide a play-test checklist** — A checklist on how to check the changes and with what project.
  9. **User play-tests** — Frank runs `python serve.py` and confirms the feature works in the browser
     - If the user requests changes or changes are required we go back to step **Code changes** to implement them, then re-run step 4 (review + tests) before playtesting again.

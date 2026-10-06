@@ -22,6 +22,7 @@ screenshots/                      ← gitignored; current/comparison files writt
 
 Run `python test_web.py --update-baselines` after any intentional rendering change.
 Run `python test_web.py --update-baseline <name>` to update a single project or `pause_nav`.
+`play.html` shows a static navigation bar above the game canvas; the suite loads pages with `?testing=1`, which removes it (and the loading overlay) so canvas coordinates are exact. Add `?bar=hidden` to hide only the bar when playing by hand.
 Run `python test_web.py --project <name>` to restrict all test categories to one project (repeatable). Useful when iterating on a single project: `python test_web.py --project entity_logic_demo --update-baselines --skip-build`.
 
 ## Rendering backend flags
@@ -47,7 +48,11 @@ By default the test suite runs headless Chromium with GL/ANGLE (WebGL2). Two fla
 > ```
 > WebGPU builds require Chrome 113+ or Edge 113+ — Firefox and Safari are not fully supported.
 
-> **Baseline note:** baselines were captured with the default GL/ANGLE backend. Running `--webgpu` or `--real-gpu` may produce pixel-level differences (different rendering path). Regenerate baselines with `--update-baselines` if you switch the default backend.
+> **Baseline note:** `--real-gpu` (WebGPU in a visible Chromium window, using the standard `--features webgpu` dev build) is now the preferred way to capture new baselines and to run the suite interactively; headless GL/ANGLE with a WebGL2 build is the fallback / CI path. Baselines captured before 2026-10-06 (all except `ui_demo_main` and `3rd_person_game_demo_options`) came from headless GL/ANGLE, so a `--real-gpu` run may show pixel-level differences on scenes you did not change (observed: `pause_nav/02_main_scene` at 5.15% vs the 4% threshold, a stale baseline — it predates the loaded action-bar icons — on top of backend differences). Update only the baselines for what your change affected (`--project <name>` / `--update-baseline <name>`); regenerating *all* baselines under `--real-gpu` is a separate cleanup.
+>
+> **Machine note (2026-10-06):** headless `--webgpu` (SwiftShader) fails here with `No available adapters. Unable to find a GPU!` and the default GL mode needs a WebGL2 build, so on this machine use `--real-gpu`.
+>
+> **Ports:** the suite starts its own `serve.py` on port **8001** (`--port N` to change), separate from the default 8000 you use for `python serve.py` playtests. `test_web.py` does not detect a failed bind, so a leftover server on its port makes it silently use that server.
 
 ## `DebugState` resource
 
