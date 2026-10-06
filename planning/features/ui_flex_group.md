@@ -458,7 +458,7 @@ on this feature's v1; **v2 (portrait/touch)** is blocked on the v2 items above.
       bottom-anchored root recipe (R8), the spacer idiom. Register it: `test_web.py` `PROJECTS`,
       baseline screenshot, `index.html` card (see root `CLAUDE.md` "Adding a new asset project").
       Use plain ASCII hyphens in comments/on-screen text (the engine font has no em-dash glyph).
-- [ ] Retrofit `3rd_person_game_demo/scenes/options.scene.ron` to nested `Group`s with the even
+- [x] _(scene retrofitted and validated; its baseline screenshot is regenerated in the WASM dev-build step)_ Retrofit `3rd_person_game_demo/scenes/options.scene.ron` to nested `Group`s with the even
       rhythm from R1 (item gap 8, section gap 24; the 4-button volume row maps cleanly at gap 10).
       Add a top-of-file comment pointing at the `docs/20_data_formats.md` Group section. Regenerate
       only this scene's baseline: `python test_web.py --project 3rd_person_game_demo
