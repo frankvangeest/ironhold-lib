@@ -4820,3 +4820,50 @@ fn test_group_diagnostics_nested_panels_and_depth_cap() {
     assert_eq!(exceeded.len(), 1, "{d:?}");
     assert_eq!(exceeded[0].1, UiDiagnosticSeverity::Error);
 }
+
+/// Nests `leaf_ron` inside `groups` Groups (a Group with explicit sizes, so no unrelated
+/// diagnostics fire).
+fn nested_group_ron(groups: usize, leaf_ron: &str) -> String {
+    let mut ron_str = leaf_ron.to_string();
+    for _ in 0..groups {
+        ron_str = format!("Group((width: Px(10.0), height: Px(10.0), children: [ {ron_str} ]))");
+    }
+    format!("{ron_str},")
+}
+
+/// Boundary pairs for the depth cap, so an off-by-one in the diagnostics (which must agree with
+/// the walker and the spawner) fails in BOTH directions: 15 groups + a leaf puts the leaf at
+/// depth 16 (kept, no error); 16 groups + a leaf puts it at depth 17 (dropped, one error on the
+/// 16th group).
+#[test]
+fn test_group_diagnostics_depth_boundary_both_sides() {
+    let kinds = |groups| diag_kinds(&nested_group_ron(groups, r#"Label((id: "leaf"))"#));
+    assert!(kinds(15).iter().all(|d| d.0 != "ui_depth_exceeded"), "leaf at depth 16 must be fine");
+    let over = kinds(16);
+    assert_eq!(over.iter().filter(|d| d.0 == "ui_depth_exceeded").count(), 1, "{over:?}");
+    // And the walker agrees: leaf walked at depth 16, not at 17.
+    let leaf_walked = |groups| {
+        let ui = scene_with_ui(&nested_group_ron(groups, r#"Label((id: "leaf"))"#)).ui;
+        walk_ui_nodes(&ui).any(|n| n.id() == "leaf")
+    };
+    assert!(leaf_walked(15));
+    assert!(!leaf_walked(16));
+}
+
+#[test]
+fn test_group_diagnostics_exemptions_and_walker_guard() {
+    // An Auto group whose children are all absolute but which has padding is not collapsed.
+    assert!(diag_kinds(r#"Group((padding: 8.0, children: [ Label((id: "a", absolute: true)) ])),"#)
+        .iter().all(|d| d.0 != "collapsed_group"));
+    // An absolute Percent group under an Auto parent resolves against the laid-out parent: no warning.
+    assert!(diag_kinds(r#"Group((children: [ Group((width: Percent(50.0), absolute: true, children: [])) ])),"#)
+        .iter().all(|d| d.0 != "percent_under_auto"));
+    // A ui_panel: parent gets the bare-number hint, not the Px(..) one.
+    let scene: GameSceneV2 = from_str(r#"(schema_version: 2, entities: [], ui_panel: (),
+        ui: [ Group((width: Percent(100.0), children: [])) ])"#).unwrap();
+    let d = ui_layout_diagnostics(&scene).into_iter().find(|d| d.kind == "percent_under_auto").unwrap();
+    assert!(d.message.contains("bare number"), "{}", d.message);
+    // current_path before the first next() must not panic.
+    let ui = nested_ui();
+    assert_eq!(walk_ui_nodes(&ui).current_path().to_string(), "");
+}

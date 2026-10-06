@@ -2327,3 +2327,12 @@ fn group_inert_justify_is_a_strict_warning_only() {
     assert_eq!(code, 1, "--strict must surface it:\n{stdout}");
     assert!(stdout.contains("SpaceBetween") && stdout.contains("ui[0]"), "{stdout}");
 }
+
+/// An `ActionBar` nested in a `Group` must still be covered by the cross-bar duplicate-key check
+/// (every `scene.ui` scan goes through `walk_ui_nodes`).
+#[test]
+fn nested_action_bar_duplicate_key_across_bars_exits_1() {
+    let (code, stdout) = validate("group_nested_duplicate_action_bar");
+    assert_eq!(code, 1, "expected exit 1, got {code}:\n{stdout}");
+    assert!(stdout.contains("bar_a") && stdout.contains("bar_b") && stdout.contains("both resolve to"), "{stdout}");
+}

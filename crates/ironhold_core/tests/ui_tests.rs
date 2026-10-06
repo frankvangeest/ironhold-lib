@@ -536,3 +536,74 @@ fn test_stat_radar_nested_in_group_still_gets_a_material() {
         .expect("a StatRadar nested in a Group must still spawn (radar_handles pre-pass must see it)");
     assert!(material.is_some(), "nested StatRadar must carry its pre-created RadarMaterial");
 }
+
+fn load_scene_with_panel_ui(app: &mut App, ui_ron: &str) {
+    let config_handle = app
+        .world_mut()
+        .resource_mut::<Assets<ProjectConfig>>()
+        .add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/t.ron".to_string(),
+            ..Default::default()
+        });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+    let ron_text = format!("(schema_version: 2, entities: [], ui_panel: Some(()), ui: [{ui_ron}])");
+    let scene: GameSceneV2 = ron::de::from_str(&ron_text).unwrap();
+    let scene_handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::LoadingScene);
+    app.update();
+    app.update();
+    app.update();
+}
+
+fn ui_node_exists(app: &mut App, name: &str) -> bool {
+    let mut query = app.world_mut().query::<&Name>();
+    query.iter(app.world()).any(|n| n.as_str() == name)
+}
+
+/// The spawner's depth cap must agree with the walker's and the diagnostics': a leaf nested in
+/// 15 Groups (depth 16) spawns, one nested in 16 Groups (depth 17) does not, while all 16
+/// groups still do.
+#[test]
+fn test_group_depth_cap_spawns_depth_16_but_not_17() {
+    let nest = |groups: usize| {
+        let mut s = r#"Label((id: "leaf", text: "LeafText"))"#.to_string();
+        for i in 0..groups {
+            s = format!("Group((id: \"g{}\", children: [ {s} ]))", groups - 1 - i);
+        }
+        format!("{s},")
+    };
+
+    let mut app = setup_test_app();
+    app.update();
+    load_scene_with_ui(&mut app, &nest(15));
+    assert!(ui_node_exists(&mut app, "Label: LeafText"), "leaf at depth 16 must spawn");
+
+    let mut app = setup_test_app();
+    app.update();
+    load_scene_with_ui(&mut app, &nest(16));
+    assert!(!ui_node_exists(&mut app, "Label: LeafText"), "leaf at depth 17 must not spawn");
+    assert!(ui_node_exists(&mut app, "Group: g15"), "the 16th group itself still spawns");
+}
+
+/// A Group inside `ui_panel:` flows like any other panel child (not absolute, no left/top), and
+/// its own children still get the Group rules.
+#[test]
+fn test_group_inside_ui_panel_flows_and_children_do_not_shrink() {
+    let mut app = setup_test_app();
+    app.update();
+
+    load_scene_with_panel_ui(&mut app, r#"
+        Group((id: "row", gap: 6.0, children: [
+            Label((id: "x", text: "X", size: (50.0, 20.0))),
+        ])),
+    "#);
+
+    let group = node_by_name(&mut app, "Group: row");
+    assert_eq!(group.position_type, PositionType::Relative, "a non-absolute Group must flow inside ui_panel:");
+    assert_eq!(group.left, Val::Auto);
+    assert_eq!(group.column_gap, Val::Px(6.0));
+    let child = node_by_name(&mut app, "Label: X");
+    assert_eq!(child.flex_shrink, 0.0);
+}

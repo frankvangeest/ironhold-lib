@@ -103,7 +103,7 @@ pub fn spawn_scene_v2(
     warn_same_player_gamepad_duplicate_slots(scene);
     warn_camera_modes_registry(scene);
     for d in crate::schema::scene_v2::ui_layout_diagnostics(scene) {
-        warn!("UI layout [{}]: {}", d.kind, d.message);
+        warn!("UI layout in scene {:?} [{}]: {}", scene.name, d.kind, d.message);
     }
 
     // Always remove any existing overlay (loading a new scene or new overlay replaces it).
@@ -1846,14 +1846,10 @@ fn spawn_ui_element_node(
             if let Some((r, gr, b, a)) = g.background_color {
                 ec.insert(BackgroundColor(Color::srgba(r, gr, b, a)));
             }
-            if ctx.depth >= MAX_UI_DEPTH {
-                if !g.children.is_empty() {
-                    warn!(
-                        "UI Group '{}' is at the maximum nesting depth ({}); its {} children are not spawned",
-                        g.id, MAX_UI_DEPTH, g.children.len()
-                    );
-                }
-            } else {
+            // Past the cap the children are simply not spawned; `ui_layout_diagnostics` (logged
+            // at scene load, and by `ironhold validate`) already reports it as `ui_depth_exceeded`
+            // with the node's path.
+            if ctx.depth < MAX_UI_DEPTH {
                 ec.with_children(|parent| {
                     ctx.depth += 1;
                     for child in &g.children {

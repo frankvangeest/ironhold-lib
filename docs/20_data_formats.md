@@ -812,6 +812,8 @@ UI elements are rendered by Bevy UI inside the WebGPU canvas. They are **not** D
 
 Each element is a typed RON enum variant. Typos in field names fail at parse time with a clear error message.
 
+For rows, columns, spacing and screen-edge anchoring, wrap elements in [`Group((...))`](#group) (further down, after the panels) instead of hand-placing each one with `position:`.
+
 #### `Button((...))`
 
 | Field | Type | Default | Description |
@@ -1473,13 +1475,13 @@ ui: [
 | `width`, `height` | `Auto` / `Px(f32)` / `Percent(f32)` | `Auto` | Size of the group. `Auto` sizes to content. Write `width: Px(380.0)`, not a bare `380.0` like `ui_panel:` uses, and `width`/`height`, not `size:` (a `size:` field is a parse error on a `Group`). |
 | `background_color` | `Option<(f32,f32,f32,f32)>` | `None` | sRGB RGBA fill, `None` = transparent. |
 | `clip` | `bool` | `false` | Clip children to the group's box. Only meaningful when `width`/`height` are not both `Auto`. |
-| `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. For a top-level group this is measured from the screen; inside `ui_panel:` or another `Group` it is ignored unless `absolute: true`. |
+| `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. With no `ui_panel:`, a top-level group's position is measured from the screen. Inside `ui_panel:` or another `Group` it is ignored unless `absolute: true`. |
 | `absolute` | `bool` | `false` | Leave the parent's flow and position with `position:` instead. |
 
 **Things that trip people up**
 
-1. **Pick the right mechanism.** `ui_panel:` = one centered column with a background (simple menus). `Group` = anything with rows, nesting, edge alignment or spacing. Plain `position:` = a single element at a fixed spot. HUD widgets (`ActionBar`, `StatBar`, ...) position themselves; leave them top-level.
-2. **Spreading needs space.** `SpaceBetween`, `SpaceAround` and `SpaceEvenly` distribute *free* space, and an `Auto`-sized group has none. Give the main axis a `Px` or `Percent` size (`width` for a `Row`, `height` for a `Column`). `ironhold validate --strict` warns (`inert_justify_content`).
+1. **Pick the right mechanism.** `ui_panel:` = one centered column with a background (simple menus). `Group` = anything with rows, nesting, edge alignment or spacing. Plain `position:` = a single element at a fixed spot. `ActionBar` and the four panels (`DialoguePanel`, `InventoryPanel`, `ShopPanel`, `ContainerPanel`) always position themselves absolutely; leave those top-level (see 6). `Label`, `Button`, `IconButton`, `Rect`, `StatBar`, `StatSpread` and `StatRadar` flow inside a `Group` like any other child, so a health bar can sit in a HUD row.
+2. **Spreading needs space.** `SpaceBetween`, `SpaceAround` and `SpaceEvenly` distribute *free* space, and an `Auto`-sized group has none. Give the main axis a `Px` or `Percent` size (`width` for a `Row`, `height` for a `Column`). `ironhold validate --strict` warns (`inert_justify_content`); the browser console also logs a `UI layout [...]` warning whenever the scene loads.
 3. **Anchoring to a screen edge.** A top-level `position:` is always a top-left offset; there is no `right:`/`bottom:`. To pin something to the bottom or right, make a full-screen root group and put a top row and a bottom row in it (`ui_demo` shows this):
    ```ron
    Group((
@@ -1494,14 +1496,14 @@ ui: [
    `Percent` on a top-level group is measured against the window.
 4. **A `Group` never blocks clicks.** Clicks on its empty area, even with a `background_color`, reach the world behind it and camera drags still work. Buttons inside it still capture their own clicks. A coloured group is decoration, not a dialog box.
 5. **Sizes fit the boxes, not the text.** `Auto` sizes a group to its children's `size:` boxes. Text longer than a `Label`'s `size:` still spills into the next sibling; see the sizing note under `Button`. Children never shrink below their `size:` (a group narrower than its content overflows instead).
-6. **`position:` changes meaning inside a group.** An `absolute: true` child is positioned from the group's box (its padding box, so `padding` does not offset it), not the screen. `ActionBar`, `DialoguePanel`, `InventoryPanel`, `ShopPanel` and `ContainerPanel` are always absolute and are single-instance panels: keep them top-level (`ironhold validate --strict` warns `panel_nested_in_group`). A group whose children are *all* absolute and whose size is `Auto` collapses to nothing (`collapsed_group`).
-7. **`Percent` needs a definite parent.** Under an `Auto`-sized parent, `Percent(50.0)` resolves against the parent's final content size, which is rarely what you meant. A `Percent` group directly inside `ui_panel:` has the same problem unless the panel sets `width`/`height` (`percent_under_auto`).
+6. **`position:` changes meaning inside a group.** An `absolute: true` child is positioned from the group's box (its padding box, so `padding` does not offset it), not the screen. `ActionBar`, `DialoguePanel`, `InventoryPanel`, `ShopPanel` and `ContainerPanel` are always absolute and are single-instance panels: keep them top-level (`ironhold validate --strict` warns `panel_nested_in_group`; the browser console logs it on every load). A group whose children are *all* absolute and whose size is `Auto` collapses to nothing (`collapsed_group`).
+7. **`Percent` needs a definite parent.** Under an `Auto`-sized parent, `Percent(50.0)` resolves against the parent's final content size, which is rarely what you meant. A `Percent` group directly inside `ui_panel:` has the same problem unless the panel sets `width`/`height` (a bare number there, e.g. `width: 380.0`). `ironhold validate --strict` warns (`percent_under_auto`), but only about the *direct* parent: a `Percent` group inside a `Percent` parent that itself sits in an `Auto` grandparent is not flagged separately, so fix the outermost `Auto` first.
 8. **Spacers.** To add extra space between two children, put an empty group between them: `Group((height: Px(20.0), children: []))` in a column, `Group((width: Px(20.0), children: []))` in a row.
 9. **Migrating from `ui_panel:`.** The defaults do not carry over: a `Group` has no padding, no gap, no background and no clipping unless you set them.
-10. **Hidden is not gone.** A child hidden with `Visibility::Hidden` still takes up its space in an auto-sized group; only `Display::None` removes a node from layout.
+10. **Hiding (not yet in RON).** There is no way yet to show or hide a `Group` from RON. When that arrives, note that a merely invisible child still takes up its space in an auto-sized group.
 11. **Reversed directions.** `RowReverse`/`ColumnReverse` flip the children's order *and* what `Start`/`End` mean, exactly like CSS.
 
-Other things to know: a top-level `Group` in a scene with `ui_panel:` flows like any other child of the panel; without `ui_panel:` it sits at its `position:`.. Layout mistakes are reported both by `ironhold validate` and by a `UI layout [...]` warning in the console when the scene loads.
+Other things to know: a top-level `Group` in a scene with `ui_panel:` flows like any other child of the panel; without `ui_panel:` it sits at its `position:`. Layout mistakes are reported both by `ironhold validate` and by a `UI layout [...]` warning in the console when the scene loads.
 
 ### UI Panel (`UiPanelDef`) ✅
 

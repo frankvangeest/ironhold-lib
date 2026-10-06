@@ -415,8 +415,14 @@ pub struct UiNodeWalk<'a> {
 }
 
 impl<'a> UiNodeWalk<'a> {
-    /// Path of the node most recently yielded by `next`.
+    /// Path of the node most recently yielded by `next`. Only meaningful after `next` has
+    /// returned `Some`; before the first call (or once exhausted) it is an empty path.
     pub fn current_path(&self) -> UiPath {
+        // Every open level has yielded at least one node once `next` has returned `Some`, so a
+        // level still at index 0 means no node has been yielded yet.
+        if self.stack.iter().any(|(_, next)| *next == 0) {
+            return UiPath(Vec::new());
+        }
         UiPath(self.stack.iter().map(|(_, next)| next - 1).collect())
     }
 }
@@ -546,7 +552,7 @@ fn diagnose_ui_level(
                         severity: UiDiagnosticSeverity::Error,
                         kind: "ui_depth_exceeded",
                         message: format!(
-                            "{} is at the maximum UI nesting depth ({MAX_UI_DEPTH}); its {} children are never spawned",
+                            "{} is at the maximum UI nesting depth ({MAX_UI_DEPTH}); its {} children are never spawned. Flatten the nesting (move these children up a level)",
                             describe_ui_node(node, &path),
                             g.children.len()
                         ),
@@ -628,7 +634,7 @@ fn diagnose_group(node: &UiNodeDef, g: &GroupDef, path: &UiPath, parent: UiParen
         push(UiDiagnosticSeverity::Warning, "inert_clip", format!(
             "{name}: clip: true has no effect while width and height are both Auto (the box grows to fit its children)"));
     }
-    if both_auto && !g.children.is_empty() && g.children.iter().all(UiNodeDef::absolute) {
+    if both_auto && g.padding == 0.0 && !g.children.is_empty() && g.children.iter().all(UiNodeDef::absolute) {
         push(UiDiagnosticSeverity::Warning, "collapsed_group", format!(
             "{name}: every child is absolute: true and width/height are Auto, so the group collapses to a zero-size box (absolute children do not contribute to content size). Set a width/height"));
     }
@@ -645,9 +651,16 @@ fn diagnose_group(node: &UiNodeDef, g: &GroupDef, path: &UiPath, parent: UiParen
             UiParentBox::Group { height, .. } => height != UiSizeDef::Auto,
         }),
     ] {
-        if matches!(size, UiSizeDef::Percent(_)) && !definite {
+        // An absolute child resolves percentages against the parent's final, already laid-out
+        // box, so it works even under an Auto parent.
+        if matches!(size, UiSizeDef::Percent(_)) && !definite && !g.absolute {
+            let fix = if matches!(parent, UiParentBox::Panel { .. }) {
+                format!("Set {field}: <number> on ui_panel: (a bare number, not Px(..))")
+            } else {
+                format!("Give the parent group a Px or Percent {field}")
+            };
             push(UiDiagnosticSeverity::Warning, "percent_under_auto", format!(
-                "{name}: {field}: Percent(..) is measured against the parent's {field}, which is Auto here (or a ui_panel: without {field}:), so it resolves against the parent's content size instead of a fixed box. Give the parent a Px/Percent {field}"));
+                "{name}: {field}: Percent(..) is measured against the parent's {field}, which is Auto here (or a ui_panel: without {field}:), so it resolves against the parent's content size instead of a fixed box. {fix}"));
         }
     }
 }
@@ -777,7 +790,8 @@ pub struct ButtonDef {
     /// Trigger string; `"ui."` prefix is stripped when firing (e.g. `"ui.dance"` → `"dance"`).
     #[serde(default)]
     pub action: String,
-    /// Top-left corner in pixels. Ignored in panel mode unless `absolute: true`.
+    /// Top-left corner in pixels. Ignored inside `ui_panel:` or a `Group` unless `absolute: true` (then measured from that
+    /// container's box, not the screen).
     #[serde(default)]
     pub position: (f32, f32),
     /// Width and height in pixels. Default: `(120.0, 32.0)`.
@@ -789,8 +803,8 @@ pub struct ButtonDef {
     /// Horizontal text alignment. Default: `Center`.
     #[serde(default)]
     pub align: UiTextAlign,
-    /// In panel mode: position this element absolutely relative to the panel's
-    /// top-left corner using its `position` field instead of flowing in the column.
+    /// Inside `ui_panel:` or a `Group`: position this element absolutely, relative to that
+    /// container's top-left corner using its `position` field, instead of flowing.
     #[serde(default)]
     pub absolute: bool,
     /// Font size in screen pixels. `size:` sets this button's layout box only — it does NOT
@@ -830,14 +844,15 @@ pub struct IconButtonDef {
     pub icon_off: String,
     /// `GameVariables` key holding `"true"`/`"false"`. Re-evaluated every frame.
     pub bind: String,
-    /// Top-left corner in pixels. Ignored in panel mode unless `absolute: true`.
+    /// Top-left corner in pixels. Ignored inside `ui_panel:` or a `Group` unless `absolute: true` (then measured from that
+    /// container's box, not the screen).
     #[serde(default)]
     pub position: (f32, f32),
     /// Width and height in pixels. Default: `(36.0, 36.0)`.
     #[serde(default = "default_icon_button_size")]
     pub size: (f32, f32),
-    /// In panel mode: position this element absolutely relative to the panel's
-    /// top-left corner using its `position` field instead of flowing in the column.
+    /// Inside `ui_panel:` or a `Group`: position this element absolutely, relative to that
+    /// container's top-left corner using its `position` field, instead of flowing.
     #[serde(default)]
     pub absolute: bool,
     /// RGBA replacement color for the icon in its normal state (same convention as
@@ -878,7 +893,8 @@ pub struct LabelDef {
     pub id: String,
     #[serde(default)]
     pub text: String,
-    /// Top-left corner in pixels. Ignored in panel mode unless `absolute: true`.
+    /// Top-left corner in pixels. Ignored inside `ui_panel:` or a `Group` unless `absolute: true` (then measured from that
+    /// container's box, not the screen).
     #[serde(default)]
     pub position: (f32, f32),
     /// Width and height in pixels. Default: `(120.0, 32.0)`.
@@ -895,8 +911,8 @@ pub struct LabelDef {
     /// (e.g. `"Score: {}"`). Defaults to the raw value when omitted.
     #[serde(default)]
     pub format: Option<String>,
-    /// In panel mode: position this element absolutely relative to the panel's
-    /// top-left corner using its `position` field instead of flowing in the column.
+    /// Inside `ui_panel:` or a `Group`: position this element absolutely, relative to that
+    /// container's top-left corner using its `position` field, instead of flowing.
     #[serde(default)]
     pub absolute: bool,
     /// Font size in screen pixels. `size:` sets this label's layout box only — it does NOT
@@ -1006,7 +1022,8 @@ pub struct GroupDef {
     #[serde(default)]
     pub clip: bool,
     /// Top-left corner in pixels (screen for a top-level group, the parent's box otherwise).
-    /// Ignored in panel mode unless `absolute: true`.
+    /// Ignored inside `ui_panel:` or a `Group` unless `absolute: true` (then measured from that
+    /// container's box, not the screen).
     #[serde(default)]
     pub position: (f32, f32),
     #[serde(default)]
@@ -1018,7 +1035,8 @@ pub struct GroupDef {
 #[serde(deny_unknown_fields)]
 pub struct RectDef {
     pub id: String,
-    /// Top-left corner in pixels. Ignored in panel mode unless `absolute: true`.
+    /// Top-left corner in pixels. Ignored inside `ui_panel:` or a `Group` unless `absolute: true` (then measured from that
+    /// container's box, not the screen).
     #[serde(default)]
     pub position: (f32, f32),
     /// Width and height in pixels. Default: `(120.0, 32.0)`.
@@ -1027,8 +1045,8 @@ pub struct RectDef {
     /// Fill colour as linear RGBA (0.0–1.0). Default: dark grey.
     #[serde(default = "default_ui_dark_color")]
     pub color: (f32, f32, f32, f32),
-    /// In panel mode: position this element absolutely relative to the panel's
-    /// top-left corner using its `position` field instead of flowing in the column.
+    /// Inside `ui_panel:` or a `Group`: position this element absolutely, relative to that
+    /// container's top-left corner using its `position` field, instead of flowing.
     #[serde(default)]
     pub absolute: bool,
 }
@@ -1229,7 +1247,8 @@ pub struct StatBarDef {
     pub stat_key: String,
     #[serde(default)]
     pub orientation: BarOrientation,
-    /// Top-left corner in pixels. Ignored in panel mode unless `absolute: true`.
+    /// Top-left corner in pixels. Ignored inside `ui_panel:` or a `Group` unless `absolute: true` (then measured from that
+    /// container's box, not the screen).
     #[serde(default)]
     pub position: (f32, f32),
     /// Width and height in pixels. Default: `(200.0, 20.0)`.
@@ -1262,7 +1281,8 @@ pub struct StatSpreadDef {
     pub stats: Vec<String>,
     #[serde(default)]
     pub layout: StatSpreadLayout,
-    /// Top-left corner in pixels. Ignored in panel mode unless `absolute: true`.
+    /// Top-left corner in pixels. Ignored inside `ui_panel:` or a `Group` unless `absolute: true` (then measured from that
+    /// container's box, not the screen).
     #[serde(default)]
     pub position: (f32, f32),
     /// Width of the stat-name label column in pixels. Default: 80.0.
@@ -1319,7 +1339,8 @@ pub struct StatRadarDef {
     /// Width and height of the bounding square in pixels. Default: `(240.0, 240.0)`.
     #[serde(default = "default_radar_size")]
     pub size: (f32, f32),
-    /// Top-left corner in pixels. Ignored in panel mode unless `absolute: true`.
+    /// Top-left corner in pixels. Ignored inside `ui_panel:` or a `Group` unless `absolute: true` (then measured from that
+    /// container's box, not the screen).
     #[serde(default)]
     pub position: (f32, f32),
     /// Number of concentric grid rings drawn inside the polygon. Default: 3.

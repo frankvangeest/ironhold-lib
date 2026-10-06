@@ -3868,7 +3868,7 @@ fn print_human(
         }
         if !strict_warnings.is_empty() {
             parts.push(format!(
-                "{} unused definition{}",
+                "{} strict warning{}",
                 strict_warnings.len(),
                 if strict_warnings.len() == 1 { "" } else { "s" }
             ));

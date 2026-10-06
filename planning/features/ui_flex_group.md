@@ -447,7 +447,7 @@ on this feature's v1; **v2 (portrait/touch)** is blocked on the v2 items above.
       R10 list
 - [x] _(gate passed: all 15 shipped projects validate clean)_ `ironhold validate` calls `GameSceneV2::validate()` (R3) -- first run it across all
       `assets/projects/*`; if any shipped project fails, split into its own backlog item
-- [ ] Tests: nested `Group`s parse and spawn with correct `Node` flex properties (incl. `gap` setting
+- [x] _(done except a literal end-to-end click test: R7 is asserted as 'no Interaction / no FocusPolicy::Block' - see claude_suggestions.md)_ Tests: nested `Group`s parse and spawn with correct `Node` flex properties (incl. `gap` setting
       both `row_gap`/`column_gap`); `absolute: true` child escapes the flow like `ui_panel:`;
       `Auto`/`Px`/`Percent` map to the matching `Val`; nested `StatRadar` still gets a material;
       nested duplicate-keyed `ActionBar` still flagged by `warn!` and by `validate`; empty-id
@@ -467,7 +467,7 @@ on this feature's v1; **v2 (portrait/touch)** is blocked on the v2 items above.
       deliberately-overflowing `Label`/`Button` defs that must not shift; within
       `3rd_person_game_demo` the other scenes are main, start_menu, character_select and pause). The options baseline diff
       is expected (R1).
-- [ ] Docs (`docs/20_data_formats.md`): new `Group((...))` section with a full field table, a short
+- [x] Docs (`docs/20_data_formats.md`): new `Group((...))` section with a full field table, a short
       flexbox primer (link MDN), and these callouts:
       1. "Which UI mechanism do I reach for" table (`ui_panel:` vs `Group` vs plain `position:` vs an
          always-absolute HUD widget).
