@@ -1,6 +1,6 @@
 # Feature: Nestable flexbox `Group` UI node
 
-_Status: Ready (v1) — two plan-review passes (system-architect incl. a Bevy 0.18/taffy 0.9.2 source check, and ux-gamedesigner-reviewer) completed 2026-10-05; second-pass findings folded in as R14-R22, not re-reviewed a third time_
+_Status: In Progress (v1 Done 2026-10-06, v2 Queued) — v1 shipped on `feature/ui_flex_group`; v2 (portrait / touch-first) is queued in `planning/backlog.md`_
 _Planned at: `8baeac7` (2026-08-28)_
 _Drift refreshed at: `f34dd16` (2026-10-05)_
 
@@ -421,8 +421,8 @@ with its own risk/reward, not a dependency of this feature — logged to
 
 | Phase | Scope | Status | Backlog dependencies |
 |---|---|---|---|
-| **v1 - landscape** | Everything in this file: `Group`, `UiSizeDef` (`Auto`/`Px`/`Percent`), walker, diagnostics, `ui_demo` showcase, `options.scene.ron` retrofit | Ready | none (touch input is NOT required: a landscape layout demo can be keyboard/mouse) |
-| **v2 - portrait / touch-first** | `Percent` (or `max_width`) on leaf `size:`, runtime show/hide of a `Group` by UI id (touch-only controls), safe-area insets, optionally `flex_grow` + margin | Queued (backlog entries to be added when v1 ships) | v1; a UI-id-based visibility action (today `Action::SetEntityVisible` resolves `SpawnRegistry` entities only); confirmed touch input in the web build (`action_bar_mouse_click.md` declines to promise it) |
+| **v1 - landscape** | Everything in this file: `Group`, `UiSizeDef` (`Auto`/`Px`/`Percent`), walker, diagnostics, `ui_demo` showcase, `options.scene.ron` retrofit | Done - Completed: `b7fbf1a` (2026-10-06) | none (touch input is NOT required: a landscape layout demo can be keyboard/mouse) |
+| **v2 - portrait / touch-first** | `Percent` (or `max_width`) on leaf `size:`, runtime show/hide of a `Group` by UI id (touch-only controls), safe-area insets, optionally `flex_grow` + margin | Queued (backlog: "Flex `Group` v2") | v1; a UI-id-based visibility action (today `Action::SetEntityVisible` resolves `SpawnRegistry` entities only); confirmed touch input in the web build (`action_bar_mouse_click.md` declines to promise it) |
 
 `mobile_ui_demo` is split accordingly in `planning/backlog.md`: **v1 (landscape)** is blocked only
 on this feature's v1; **v2 (portrait/touch)** is blocked on the v2 items above.
@@ -491,8 +491,8 @@ on this feature's v1; **v2 (portrait/touch)** is blocked on the v2 items above.
       Also update the six leaf `position` rows, the six `absolute` rows and the UI Panel intro (R11), `docs/60_contributing.md` "Checks performed" and README's example-project table (R21).
 - [x] `crates/ironhold_core/src/CLAUDE.md`: "`scene.ui` must be walked via `walk_ui_nodes`, never
       iterated flat" next to the `spawn_primitive_children` rule.
-- [ ] Backlog bookkeeping: `mobile_ui_demo` split into v1/v2 (done at plan time); add v2 entries
-      when v1 ships.
+- [x] Backlog bookkeeping: `mobile_ui_demo` split into v1/v2 (done at plan time); v2 entries added when v1 shipped
+      ("Flex `Group` v2", plus the volume-readout, canvas-fit and baseline-regeneration follow-ups).
 
 ## Open questions
 - Exact enum variant lists for `JustifyContentDef` beyond the 6 named above — expand later if a
