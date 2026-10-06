@@ -102,6 +102,9 @@ pub fn spawn_scene_v2(
     warn_cross_bar_duplicate_keys(scene);
     warn_same_player_gamepad_duplicate_slots(scene);
     warn_camera_modes_registry(scene);
+    for d in crate::schema::scene_v2::ui_layout_diagnostics(scene) {
+        warn!("UI layout [{}]: {}", d.kind, d.message);
+    }
 
     // Always remove any existing overlay (loading a new scene or new overlay replaces it).
     // `try_despawn` (not `despawn`): only the 3 overlay root entities are tagged

@@ -457,6 +457,201 @@ pub fn walk_ui_nodes_pathed(nodes: &[UiNodeDef]) -> impl Iterator<Item = (UiPath
     })
 }
 
+// ── Layout diagnostics for `Group` ───────────────────────────────────────────────────────────
+//
+// One pure function shared by the engine (scene-load `warn!`) and `ironhold validate`, so both
+// report the same things with the same wording. It needs parent context (is the parent's axis
+// definite?), which the flat `walk_ui_nodes` iterator does not carry, so it recurses structurally
+// under the same `MAX_UI_DEPTH` cap.
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UiDiagnosticSeverity {
+    /// Definitely wrong (invalid value, content that will never spawn).
+    Error,
+    /// Legal but the setting does nothing / surprises the author.
+    Warning,
+}
+
+#[derive(Debug, Clone)]
+pub struct UiDiagnostic {
+    pub path: UiPath,
+    pub severity: UiDiagnosticSeverity,
+    /// Stable machine-readable kind, e.g. `inert_justify_content`.
+    pub kind: &'static str,
+    pub message: String,
+}
+
+/// What a node's parent looks like for percentage-size resolution.
+#[derive(Clone, Copy)]
+enum UiParentBox {
+    /// Scene root in absolute mode: the window, always definite.
+    Window,
+    /// `ui_panel:` box; each axis is definite only when `width`/`height` is set.
+    Panel { width: bool, height: bool },
+    /// Another `Group`.
+    Group { width: UiSizeDef, height: UiSizeDef },
+}
+
+fn describe_ui_node(node: &UiNodeDef, path: &UiPath) -> String {
+    let kind = match node {
+        UiNodeDef::Group(_) => "Group",
+        UiNodeDef::ActionBar(_) => "ActionBar",
+        UiNodeDef::DialoguePanel(_) => "DialoguePanel",
+        UiNodeDef::InventoryPanel(_) => "InventoryPanel",
+        UiNodeDef::ShopPanel(_) => "ShopPanel",
+        UiNodeDef::ContainerPanel(_) => "ContainerPanel",
+        _ => "UI node",
+    };
+    if node.id().is_empty() {
+        format!("{kind} at {path}")
+    } else {
+        format!("{kind} {:?} ({path})", node.id())
+    }
+}
+
+fn size_is_valid(size: UiSizeDef) -> bool {
+    match size {
+        UiSizeDef::Auto => true,
+        UiSizeDef::Px(v) | UiSizeDef::Percent(v) => v.is_finite() && v >= 0.0,
+    }
+}
+
+/// All `Group` layout diagnostics for a scene's `ui:` tree. Empty when the scene has no `Group`s.
+pub fn ui_layout_diagnostics(scene: &GameSceneV2) -> Vec<UiDiagnostic> {
+    let parent = match &scene.ui_panel {
+        Some(panel) => UiParentBox::Panel { width: panel.width.is_some(), height: panel.height.is_some() },
+        None => UiParentBox::Window,
+    };
+    let mut out = Vec::new();
+    diagnose_ui_level(&scene.ui, &mut Vec::new(), parent, 1, &mut out);
+    out
+}
+
+fn diagnose_ui_level(
+    nodes: &[UiNodeDef],
+    prefix: &mut Vec<usize>,
+    parent: UiParentBox,
+    depth: usize,
+    out: &mut Vec<UiDiagnostic>,
+) {
+    for (index, node) in nodes.iter().enumerate() {
+        prefix.push(index);
+        let path = UiPath(prefix.clone());
+        if let UiNodeDef::Group(g) = node {
+            diagnose_group(node, g, &path, parent, out);
+            if depth >= MAX_UI_DEPTH {
+                if !g.children.is_empty() {
+                    out.push(UiDiagnostic {
+                        path: path.clone(),
+                        severity: UiDiagnosticSeverity::Error,
+                        kind: "ui_depth_exceeded",
+                        message: format!(
+                            "{} is at the maximum UI nesting depth ({MAX_UI_DEPTH}); its {} children are never spawned",
+                            describe_ui_node(node, &path),
+                            g.children.len()
+                        ),
+                    });
+                }
+            } else {
+                diagnose_ui_level(
+                    &g.children,
+                    prefix,
+                    UiParentBox::Group { width: g.width, height: g.height },
+                    depth + 1,
+                    out,
+                );
+            }
+        }
+        // Panels/bars are hard-coded `absolute`; nested in a Group their `position:` silently
+        // becomes relative to the group's box, and the panel types are singletons.
+        if matches!(parent, UiParentBox::Group { .. })
+            && matches!(
+                node,
+                UiNodeDef::ActionBar(_)
+                    | UiNodeDef::DialoguePanel(_)
+                    | UiNodeDef::InventoryPanel(_)
+                    | UiNodeDef::ShopPanel(_)
+                    | UiNodeDef::ContainerPanel(_)
+            )
+        {
+            out.push(UiDiagnostic {
+                path: path.clone(),
+                severity: UiDiagnosticSeverity::Warning,
+                kind: "panel_nested_in_group",
+                message: format!(
+                    "{} is nested inside a Group: it always positions absolutely, so its position: is measured from the group's box, not the screen. Move it to the top-level ui: list",
+                    describe_ui_node(node, &path)
+                ),
+            });
+        }
+        prefix.pop();
+    }
+}
+
+fn diagnose_group(node: &UiNodeDef, g: &GroupDef, path: &UiPath, parent: UiParentBox, out: &mut Vec<UiDiagnostic>) {
+    let name = describe_ui_node(node, path);
+    let mut push = |severity, kind, message: String| {
+        out.push(UiDiagnostic { path: path.clone(), severity, kind, message });
+    };
+
+    for (field, value) in [("gap", g.gap), ("padding", g.padding)] {
+        if !value.is_finite() || value < 0.0 {
+            push(UiDiagnosticSeverity::Error, "invalid_group_value",
+                format!("{name}: {field} must be a finite number >= 0 (got {value})"));
+        }
+    }
+    for (field, size) in [("width", g.width), ("height", g.height)] {
+        if !size_is_valid(size) {
+            push(UiDiagnosticSeverity::Error, "invalid_group_value",
+                format!("{name}: {field} must be a finite number >= 0 (got {size:?})"));
+        }
+    }
+
+    let row = matches!(g.flex_direction, FlexDirectionDef::Row | FlexDirectionDef::RowReverse);
+    let main_is_auto = if row { g.width == UiSizeDef::Auto } else { g.height == UiSizeDef::Auto };
+    if main_is_auto
+        && matches!(
+            g.justify_content,
+            JustifyContentDef::SpaceBetween | JustifyContentDef::SpaceAround | JustifyContentDef::SpaceEvenly
+        )
+    {
+        push(UiDiagnosticSeverity::Warning, "inert_justify_content", format!(
+            "{name}: {:?} distributes free space, but this group's {} is Auto (it sizes to its content, so there is none). Give it a Px or Percent {}",
+            g.justify_content,
+            if row { "width" } else { "height" },
+            if row { "width" } else { "height" },
+        ));
+    }
+
+    let both_auto = g.width == UiSizeDef::Auto && g.height == UiSizeDef::Auto;
+    if g.clip && both_auto {
+        push(UiDiagnosticSeverity::Warning, "inert_clip", format!(
+            "{name}: clip: true has no effect while width and height are both Auto (the box grows to fit its children)"));
+    }
+    if both_auto && !g.children.is_empty() && g.children.iter().all(UiNodeDef::absolute) {
+        push(UiDiagnosticSeverity::Warning, "collapsed_group", format!(
+            "{name}: every child is absolute: true and width/height are Auto, so the group collapses to a zero-size box (absolute children do not contribute to content size). Set a width/height"));
+    }
+
+    for (field, size, definite) in [
+        ("width", g.width, match parent {
+            UiParentBox::Window => true,
+            UiParentBox::Panel { width, .. } => width,
+            UiParentBox::Group { width, .. } => width != UiSizeDef::Auto,
+        }),
+        ("height", g.height, match parent {
+            UiParentBox::Window => true,
+            UiParentBox::Panel { height, .. } => height,
+            UiParentBox::Group { height, .. } => height != UiSizeDef::Auto,
+        }),
+    ] {
+        if matches!(size, UiSizeDef::Percent(_)) && !definite {
+            push(UiDiagnosticSeverity::Warning, "percent_under_auto", format!(
+                "{name}: {field}: Percent(..) is measured against the parent's {field}, which is Auto here (or a ui_panel: without {field}:), so it resolves against the parent's content size instead of a fixed box. Give the parent a Px/Percent {field}"));
+        }
+    }
+}
+
 impl UiNodeDef {
     /// Child nodes laid out inside this node. This is the single place the walkers learn about
     /// nesting.

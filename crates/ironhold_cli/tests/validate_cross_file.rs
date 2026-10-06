@@ -2309,3 +2309,21 @@ fn idless_groups_exit_0() {
     let (code, stdout) = validate("idless_group_ok");
     assert_eq!(code, 0, "id-less Groups are pure layout wrappers and must validate, got {code}:\n{stdout}");
 }
+
+// ── Group layout diagnostics ──────────────────────────────────────────────────
+
+#[test]
+fn group_negative_gap_exits_1() {
+    let (code, stdout) = validate("group_negative_gap");
+    assert_eq!(code, 1, "expected exit 1, got {code}:\n{stdout}");
+    assert!(stdout.contains("gap must be a finite number") && stdout.contains("ui[0]"), "{stdout}");
+}
+
+#[test]
+fn group_inert_justify_is_a_strict_warning_only() {
+    let (code, stdout) = validate("group_inert_justify");
+    assert_eq!(code, 0, "an inert-but-legal layout setting must not fail a normal validate:\n{stdout}");
+    let (code, stdout) = validate_strict("group_inert_justify");
+    assert_eq!(code, 1, "--strict must surface it:\n{stdout}");
+    assert!(stdout.contains("SpaceBetween") && stdout.contains("ui[0]"), "{stdout}");
+}

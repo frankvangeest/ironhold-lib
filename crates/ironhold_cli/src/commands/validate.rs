@@ -7,7 +7,7 @@ use ironhold_core::schema::catalog::{
     AssetCatalog, FlyCamDef, PrefabCatalog, PrefabDef, PrefabKind, WorldStatBarStyle,
 };
 use ironhold_core::schema::items::ItemCatalog;
-use ironhold_core::schema::scene_v2::{walk_ui_nodes, GameSceneV2, UiNodeDef};
+use ironhold_core::schema::scene_v2::{ui_layout_diagnostics, walk_ui_nodes, GameSceneV2, UiDiagnosticSeverity, UiNodeDef};
 use ironhold_core::schema::player::{CameraConfig, InputMap};
 use ironhold_core::schema::stats::StatCatalog;
 use ironhold_core::schema::dialogue::{DialogueCondition, DialogueDef};
@@ -1595,6 +1595,14 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                 error_type: "invalid_scene",
             });
         }
+        // `Group` layout mistakes that are definitely wrong (invalid values, content past the
+        // depth cap that never spawns). The softer "this setting does nothing" findings are
+        // `--strict` warnings in `strict_checks`.
+        for d in ui_layout_diagnostics(scene) {
+            if d.severity == UiDiagnosticSeverity::Error {
+                errors.push(CrossFileError { source_file: scene_path.clone(), message: d.message, error_type: d.kind });
+            }
+        }
         // Scene-wide (not per-bar) so a slot key shared across two different `ActionBar`s is
         // also caught here, not just within one bar's own slots — per-player action bars
         // (`owner_player`, see `planning/features/per_player_split_screen_targeting.md` Phase 2)
@@ -2982,6 +2990,16 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
     } = project;
     let orphan_binding_prereqs_clean = logic_files_parsed_cleanly && scenes_parsed_cleanly;
     let mut warnings: Vec<StrictWarning> = Vec::new();
+
+    // `Group` layout settings that are legal but inert or surprising (the always-on errors live
+    // in `cross_file_checks`).
+    for (scene_path, scene) in scenes {
+        for d in ui_layout_diagnostics(scene) {
+            if d.severity == UiDiagnosticSeverity::Warning {
+                warnings.push(StrictWarning { source_file: scene_path.clone(), message: d.message, kind: d.kind });
+            }
+        }
+    }
 
     // `load_configured_catalog` falls back to checking a catalog's convention-path file whenever
     // its ProjectConfig field is unset (see that function's doc comment for why) -- deliberately

@@ -1,5 +1,5 @@
 use ironhold_core::schema::{ProjectConfig, StateMachineAsset, MaterialDef};
-use ironhold_core::schema::scene_v2::{walk_ui_nodes, walk_ui_nodes_pathed, GameSceneV2, UiNodeDef, UiPath, BarOrientation, StatSpreadLayout, MAX_UI_DEPTH};
+use ironhold_core::schema::scene_v2::{ui_layout_diagnostics, UiDiagnosticSeverity, walk_ui_nodes, walk_ui_nodes_pathed, GameSceneV2, UiNodeDef, UiPath, BarOrientation, StatSpreadLayout, MAX_UI_DEPTH};
 use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog, MovementConfig, JumpConfig, NpcFaction, NpcOnPlayerNear, FlyCamDef, ColliderShapeKind};
 use ironhold_core::schema::stats::StatCatalog;
 use ironhold_core::schema::player::InputMap;
@@ -4743,4 +4743,80 @@ fn test_scene_validate_allows_idless_groups_but_not_idless_leaves() {
 fn test_scene_validate_detects_duplicate_ids_across_nesting() {
     let err = scene_with_ui(r#"Label((id: "x")), Group((children: [ Label((id: "x")) ])),"#).validate().unwrap_err();
     assert!(err.contains("Duplicate UI element id") && err.contains("\"x\"") && err.contains("ui[1].children[0]"), "got: {err}");
+}
+
+// ── Group layout diagnostics (shared by the engine's load-time warn! and `ironhold validate`) ──
+
+fn diag_kinds(ui_ron: &str) -> Vec<(&'static str, UiDiagnosticSeverity, String)> {
+    ui_layout_diagnostics(&scene_with_ui(ui_ron))
+        .into_iter()
+        .map(|d| (d.kind, d.severity, d.message))
+        .collect()
+}
+
+#[test]
+fn test_group_diagnostics_clean_layout_reports_nothing() {
+    assert!(diag_kinds(r#"Group((width: Percent(100.0), height: Px(50.0), justify_content: SpaceBetween, gap: 4.0,
+        children: [ Label((id: "a")), Group((children: [ Label((id: "b")) ])) ])),"#).is_empty());
+    assert!(diag_kinds(r#"Label((id: "a")),"#).is_empty(), "scenes without Groups must stay silent");
+}
+
+#[test]
+fn test_group_diagnostics_inert_justify_content_on_auto_main_axis() {
+    let d = diag_kinds(r#"Group((justify_content: SpaceBetween, children: [ Label((id: "a")) ])),"#);
+    assert_eq!(d.len(), 1, "{d:?}");
+    assert_eq!(d[0].0, "inert_justify_content");
+    assert_eq!(d[0].1, UiDiagnosticSeverity::Warning);
+    assert!(d[0].2.contains("ui[0]"), "message must name the node by path: {}", d[0].2);
+    // Column groups distribute along the height, so a Percent width alone does not help.
+    let d = diag_kinds(r#"Group((flex_direction: Column, justify_content: SpaceEvenly, width: Px(100.0), children: [])),"#);
+    assert_eq!(d.iter().filter(|x| x.0 == "inert_justify_content").count(), 1, "{d:?}");
+}
+
+#[test]
+fn test_group_diagnostics_inert_clip_and_collapsed_group() {
+    let d = diag_kinds(r#"Group((clip: true, children: [ Label((id: "a")) ])),"#);
+    assert_eq!(d.iter().map(|x| x.0).collect::<Vec<_>>(), vec!["inert_clip"]);
+    let d = diag_kinds(r#"Group((children: [ Label((id: "a", absolute: true)), Label((id: "b", absolute: true)) ])),"#);
+    assert_eq!(d.iter().map(|x| x.0).collect::<Vec<_>>(), vec!["collapsed_group"]);
+    // One flowing child is enough to give the group a size.
+    assert!(diag_kinds(r#"Group((children: [ Label((id: "a", absolute: true)), Label((id: "b")) ])),"#).is_empty());
+}
+
+#[test]
+fn test_group_diagnostics_percent_under_auto_parent() {
+    let nested = diag_kinds(r#"Group((children: [ Group((width: Percent(50.0), children: [])) ])),"#);
+    assert!(nested.iter().any(|x| x.0 == "percent_under_auto" && x.2.contains("ui[0].children[0]")), "{nested:?}");
+    // Definite parent: fine.
+    assert!(diag_kinds(r#"Group((width: Px(200.0), children: [ Group((width: Percent(50.0), children: [])) ])),"#).is_empty());
+    // Top level (the window) is always definite.
+    assert!(diag_kinds(r#"Group((width: Percent(100.0), height: Percent(100.0), children: [])),"#).is_empty());
+    // Directly inside ui_panel: with no width/height.
+    let scene: GameSceneV2 = from_str(r#"(schema_version: 2, entities: [], ui_panel: (),
+        ui: [ Group((width: Percent(100.0), children: [])) ])"#).expect("scene with ui_panel should parse");
+    assert!(ui_layout_diagnostics(&scene).iter().any(|d| d.kind == "percent_under_auto"));
+}
+
+#[test]
+fn test_group_diagnostics_invalid_values_are_errors() {
+    let d = diag_kinds(r#"Group((gap: -1.0, padding: -2.0, width: Px(-5.0), height: Percent(-1.0), children: [])),"#);
+    assert_eq!(d.iter().filter(|x| x.0 == "invalid_group_value").count(), 4, "{d:?}");
+    assert!(d.iter().filter(|x| x.0 == "invalid_group_value").all(|x| x.1 == UiDiagnosticSeverity::Error));
+}
+
+#[test]
+fn test_group_diagnostics_nested_panels_and_depth_cap() {
+    let d = diag_kinds(r#"Group((width: Px(100.0), children: [ ActionBar((id: "bar", slots: [])) ])),"#);
+    let nested = d.iter().find(|x| x.0 == "panel_nested_in_group").expect("nested ActionBar must warn");
+    assert!(nested.2.contains("top-level ui:") && nested.2.contains("ui[0].children[0]"), "{}", nested.2);
+
+    // 16 groups deep with a child below the cap: the deepest group's children never spawn.
+    let mut ron_str = String::from(r#"Label((id: "leaf"))"#);
+    for _ in 0..16 {
+        ron_str = format!("Group((width: Px(10.0), height: Px(10.0), children: [ {ron_str} ]))");
+    }
+    let d = diag_kinds(&format!("{ron_str},"));
+    let exceeded: Vec<_> = d.iter().filter(|x| x.0 == "ui_depth_exceeded").collect();
+    assert_eq!(exceeded.len(), 1, "{d:?}");
+    assert_eq!(exceeded[0].1, UiDiagnosticSeverity::Error);
 }

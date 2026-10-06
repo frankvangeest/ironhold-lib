@@ -442,7 +442,7 @@ on this feature's v1; **v2 (portrait/touch)** is blocked on the v2 items above.
       `build_child_node(el, force_absolute)`; recursive `Group` arm (children get `flex_shrink: 0.0`, R15); depth
       cap (16, one `warn!`)
 - [x] Load log prints top-level + total node counts; `query.rs` adds `ui_node_count` (R6)
-- [ ] Diagnostics, all naming nodes by path (R9), with matching `ironhold validate` checks: auto-sized
+- [x] _(one shared `ui_layout_diagnostics` in `schema/scene_v2.rs`; errors in `cross_file_checks`, inert/surprising settings are `--strict` warnings, the engine `warn!`s all of them at scene load)_ Diagnostics, all naming nodes by path (R9), with matching `ironhold validate` checks: auto-sized
       `Group` whose children are all `absolute: true`; `clip: true` with both axes `Auto`; the
       R10 list
 - [x] _(gate passed: all 15 shipped projects validate clean)_ `ironhold validate` calls `GameSceneV2::validate()` (R3) -- first run it across all
