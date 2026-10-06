@@ -1,7 +1,7 @@
 // Options screen laid out with nested `Group`s instead of hand-computed pixel positions: one
-// Column holds the sections, each section is its own Column, and the four volume buttons are a
-// Row. Spacing is `gap` (8 between items in a section, 24 between sections), so adding or
-// removing a line no longer means re-typing every y coordinate below it.
+// Column holds a title and three framed sections, each section is its own Column with padding
+// and a background, and the four volume buttons are a Row. Spacing is `gap` and `padding`, so
+// adding or removing a line no longer means re-typing every y coordinate below it.
 // See "Group" in docs/20_data_formats.md and assets/projects/ui_demo for more patterns.
 (
   schema_version: 2,
@@ -22,40 +22,60 @@
     Group((
       id: "options_root",
       flex_direction: Column,
-      gap: 24.0,
-      position: (100.0, 30.0),
+      gap: 16.0,
+      position: (100.0, 24.0),
       children: [
+
+        Label((
+          id: "options_title",
+          text: "Options",
+          size: (620.0, 44.0),
+          align: Left,
+          font_size: 34.0,
+        )),
 
         // --- Controls ---
         Group((
           id: "controls_section",
           flex_direction: Column,
-          gap: 8.0,
+          gap: 6.0,
+          padding: 12.0,
+          background_color: (0.10, 0.12, 0.18, 0.85),
           children: [
             Label((
               id: "controls_heading",
               text: "Controls",
-              size: (300.0, 35.0),
+              size: (596.0, 32.0),
+              align: Left,
+              font_size: 26.0,
             )),
             Label((
               id: "ctrl_move",
               text: "Move:    WASD  /  Left Stick",
-              size: (400.0, 30.0),
+              size: (596.0, 28.0),
+              align: Left,
+              font_size: 20.0,
             )),
             Label((
               id: "ctrl_camera",
               text: "Camera:  Mouse  /  Right Stick",
-              size: (400.0, 30.0),
+              size: (596.0, 28.0),
+              align: Left,
+              font_size: 20.0,
             )),
             Label((
               id: "ctrl_sprint",
               text: "Sprint:  Shift  /  Left Trigger",
-              size: (400.0, 30.0),
+              size: (596.0, 28.0),
+              align: Left,
+              font_size: 20.0,
             )),
             Label((
               id: "ctrl_dance",
               text: "Dance:   In-game button",
-              size: (400.0, 30.0),
+              size: (596.0, 28.0),
+              align: Left,
+              font_size: 20.0,
             )),
           ],
         )),
@@ -65,11 +85,15 @@
           id: "volume_section",
           flex_direction: Column,
           gap: 8.0,
+          padding: 12.0,
+          background_color: (0.10, 0.12, 0.18, 0.85),
           children: [
             Label((
               id: "audio_heading",
               text: "Volume",
-              size: (300.0, 35.0),
+              size: (596.0, 32.0),
+              align: Left,
+              font_size: 26.0,
             )),
             // Volume preset buttons: 25 / 50 / 75 / 100 (no hard-mute; use Toggle Mute below)
             Group((
@@ -109,22 +133,26 @@
         // Mute toggle: shows live state via bound label.
         Group((
           id: "mute_section",
-          flex_direction: Column,
-          gap: 8.0,
+          flex_direction: Row,
+          align_items: Center,
+          gap: 16.0,
+          padding: 12.0,
+          background_color: (0.10, 0.12, 0.18, 0.85),
           children: [
-            Label((
-              id: "options_audio_state",
-              text: "",
-              bind: "audio_state",
-              format: "Audio: {}",
-              size: (300.0, 30.0),
-              align: Left,
-            )),
             Button((
               id: "toggle_mute",
               text: "Toggle Mute",
               action: "ui.toggle_mute",
               size: (200.0, 50.0),
+            )),
+            Label((
+              id: "options_audio_state",
+              text: "",
+              bind: "audio_state",
+              format: "Audio: {}",
+              size: (200.0, 30.0),
+              align: Left,
+              font_size: 22.0,
             )),
           ],
         )),
@@ -134,7 +162,7 @@
           id: "back_button",
           text: "< Back",
           action: "ui.back_to_start_menu",
-          size: (300.0, 65.0),
+          size: (300.0, 56.0),
         )),
       ],
     )),
