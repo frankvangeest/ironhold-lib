@@ -1,6 +1,6 @@
 # Feature: Live volume percent readout (`audio_volume_percent`)
 
-_Status: Draft_
+_Status: Ready — two plan reviews (system-architect, ux-gamedesigner-reviewer) completed 2026-10-06; both findings sets folded in below (R1-R9)_
 _Planned at: `e847b93` (2026-10-06)_
 
 ## What
@@ -21,81 +21,88 @@ active (raised by Frank during the flex `Group` playtest, 2026-10-06). RON alone
 - seeding at start-menu entry (`SetVariable` in the `menu` state's `entry_actions`) would **reset**
   the display to 100 every time the player returns from Options after choosing 50;
 - an event-based mirror (`audio.volume:{pct}` + one `global_on` rule per value) was the first idea
-  (backlog entry, 2026-10-06) but needs a rule per possible value, a new event family, and CLI
-  event-check changes — and still cannot show the initial value without a `SyncAudioState` call.
+  (backlog entry, 2026-10-06) but needs a rule per possible value (up to 101 for a `u8`), a new event
+  family, and CLI event-check changes — and still cannot show the initial value without a
+  `SyncAudioState` call.
 
 Engine-written `GameVariables` already have precedent for exactly this shape: the targeting capability
 writes `target_display` / `target_name` / `target_id` on every change and `docs/20_data_formats.md`
 documents them under "GameVariables auto-written by capabilities" ("bind a `Label` to these — no rule
-wiring needed"). `audio_volume_percent` joins that table.
+wiring needed"). `audio_volume_percent` joins that table. (`score` is NOT a precedent: designers write
+it with `IncrementVariable`; the engine only reads it for `DebugState`. The docs table lists it as
+"auto-written", a pre-existing inaccuracy to correct in the same docs pass — R8.)
+
+## Resolutions from the plan reviews
+
+| # | Resolution | Source |
+|---|---|---|
+| R1 | **Ordering corrected.** The FSM interpreter never reads `GameVariables` (readers: `update_dynamic_labels_system`, `icon_button_sync_system`, dialogue conditions, `DebugState.score`), so the planned `.before(fsm_interpreter_system)` rationale ("a rule reading it the same frame sees it") was false and would add a frame of lag: `SetVolume` mutates `AudioState` inside `action_executor_system`, which runs *after* the interpreter. Register the mirror `.after(action_executor_system).before(update_dynamic_labels_system)` so the label updates the same frame and a one-`app.update()` test is deterministic. `audio_state_system` itself stays where it is (it must precede `PlayMusicLoop` for `mute_on_start`). | architect (blocking) |
+| R2 | Helper `volume_percent_string(f32)`: `if !f.is_finite() { 0 }` explicit, then `(f * 100.0).round().clamp(0.0, 100.0) as u32`. **Round, not truncate**: `29/100` in f32 is `0.28999999`, `*100` truncates to 28. | architect |
+| R3 | Skip the `vars.0.insert` when the stored value already equals the new one (so `ToggleMute`, which changes only `muted`, does not touch `GameVariables`' change ticks). Cosmetic but free. | architect |
+| R4 | Key name `audio_volume_percent` confirmed by both reviewers; per-channel siblings (queued "Audio channels" item) can later be `audio_volume_percent.music` etc. Reserved-key behaviour is **intermittent**, not "always overwritten": the engine writes only when `AudioState` changes, so a project's own `SetVariable("audio_volume_percent", ..)` survives until the next `SetVolume`/`ToggleMute`/project load. Docs say: "Reserved — the engine overwrites it whenever the audio state changes; don't `SetVariable` it." Policy: docs-only now; a `validate` warning for any `SetVariable`/`IncrementVariable` on an engine-written key (`target_*`, `audio_volume_percent`) is ONE suggestion in `claude_suggestions.md`. | both |
+| R5 | Mute stays on its existing RON `global_on` bridge (`audio.muted`/`audio.unmuted` -> `audio_state`/`audio_muted`); an engine-written mute key is out of scope, but logged in `claude_suggestions.md` so the two-conventions state does not become permanent (and so a future key name avoids colliding with the demo's own `audio_muted`). The docs say explicitly that mute is NOT auto-written. | both |
+| R6 | "Volume: 50% - Muted" means **two labels** (a `Label` binds one key with one `{}`): the bound heading plus the existing `options_audio_state` label. Use an ASCII hyphen in any such string (the engine font has no em-dash glyph). A `mute_on_start: true` project correctly reads "Volume: 100%" next to "Audio: Muted". | UX |
+| R7 | Docs reach beyond the auto-written table: (a) `AudioConfig` section of `docs/20` (~4660-4687) gets a "GameVariables" line under its "Pipeline events" table, since that is where a designer looking for audio settings lands; (b) the `SyncAudioState` row says it is not needed for `audio_volume_percent`; (c) the `Label` `bind` row documents "shows nothing until the key has been set; `ironhold validate` does not check bind keys"; (d) `docs/30` next to the audio events (~123), `docs/STATUS.md:98`, and the existing `SetVolume(u32)` vs `u8` inconsistency at `docs/30:366`. | UX |
+| R8 | `docs/20` auto-written table: add the `audio_volume_percent` row, and correct the `score` row (designer-written, engine-read). The options scene gets an "audio_volume_percent is written by the engine - no rule needed" comment above the bound heading (mirrors the `main.scene.ron:330` "audio_muted is not written automatically" comment). | UX + architect |
+| R9 | Follow-ups to log (not built here): bound `Label` falling back to its `text:` until its key exists (removes the blank-until-set footgun for every bound label); a highlighted/"selected" preset button (Button has no selected binding); the reserved-key `validate` warning; the engine-written mute key (R5). | UX |
 
 ## Approach
 
 No schema change, no new `Action`, no new event, no CLI change.
 
-**One new system**, next to `audio_state_system` (`runtime/scene_manager/mod.rs`, registered in
-`lib.rs` right beside it):
+**One new system**, in `runtime/scene_manager/mod.rs` next to `audio_state_system`, registered in
+`lib.rs` per R1:
 
 ```rust
 /// Mirrors `AudioState.active_fraction` into `GameVariables["audio_volume_percent"]` ...
 pub fn audio_volume_var_system(audio_state: Res<AudioState>, mut vars: ResMut<GameVariables>) {
     if !audio_state.is_changed() { return; }
-    vars.0.insert("audio_volume_percent".into(), volume_percent_string(audio_state.active_fraction));
+    let value = volume_percent_string(audio_state.active_fraction);
+    if vars.0.get(AUDIO_VOLUME_PERCENT_KEY) != Some(&value) {
+        vars.0.insert(AUDIO_VOLUME_PERCENT_KEY.to_string(), value);
+    }
 }
 ```
 
-- Runs whenever `AudioState` changes. `AudioState` is inserted at project load
-  (`project_loader.rs`, two sites), and an inserted resource counts as changed, so the variable exists
-  from the first frame; `SetVolume` mutates `active_fraction` (change detected); nothing else clears
-  `GameVariables`, so scene changes cannot lose it (verified: no `game_vars.0.clear()` anywhere).
+- Runs whenever `AudioState` changes. A resource insert counts as changed in every path (bevy_ecs 0.18
+  `ResourceData::insert` sets `changed_ticks` unconditionally, on first insert and on replacement):
+  `AudioState` is `init_resource`d at `lib.rs:171` (variable present from frame 1) and re-inserted at
+  project load (`project_loader.rs:141`/`:335`); `SetVolume` mutates `active_fraction`; nothing clears
+  `GameVariables` on scene change (verified: no `game_vars.0.clear()`; `LoadScene` only calls
+  `clear_target_vars`), so scene changes cannot lose it. `SyncAudioState` only reads and does not mark
+  the resource changed — not needed.
 - **Value:** the *chosen preset*, `round(active_fraction * 100)` clamped to `0..=100`, as an integer
   string (`"100"`, `"25"`). It is NOT the effective volume: `SetVolume(100)` equals the project's
-  `max_volume` ceiling (`docs/20`: "scales against `max_volume`"), so the player-facing number is the
-  slider-style percent they picked. Muting does not change it — the existing `audio_state` mirror
-  (`"Muted"`/`"Sound On"`) already covers mute, and showing both is the useful UI ("Volume: 50% — Muted").
-- Ordered `.before(fsm_interpreter_system)` alongside `audio_state_system` so a rule reading it the same
-  frame sees the new value.
-- A small pure helper `volume_percent_string(f32) -> String` (unit-testable: 0.0 -> "0", 0.25 -> "25",
-  1.0 -> "100", 0.555 -> "56", NaN/negative/over-1 clamped) keeps the formatting out of the system body.
+  `max_volume` ceiling, so the player-facing number is the percent they picked. Muting does not change it.
+- `GameVariables` is `// det: lookup-only` and the insert names no hash type, so `determinism_lint` is
+  unaffected; the system only does work on change (negligible WASM cost).
 
 **RON / designer surface:** the options scene's `audio_heading` label becomes
-`Label((id: "audio_heading", text: "", bind: "audio_volume_percent", format: "Volume: {}%", ...))`.
-The preset buttons are unchanged. The `3rd_person_game_demo` `state_machine.ron` is **unchanged**.
-
-**Backwards compatibility:** a new variable key; a project that never binds it is unaffected. A project
-that already used the key `audio_volume_percent` for its own purposes would be overwritten when
-`AudioState` changes — the same reserved-key caveat as `target_*`/`score`; documented in the table.
+`Label((id: "audio_heading", text: "", bind: "audio_volume_percent", format: "Volume: {}%", ...))`
+(12 characters, ~160px at 26px in the existing 596px box; `clip` stays `false`, section height
+unchanged). The preset buttons are unchanged. `state_machine.ron` is **unchanged**.
 
 ## Tasks
-- [ ] `volume_percent_string` + `audio_volume_var_system` (`runtime/scene_manager/mod.rs`), exported and
-      registered in `lib.rs` next to `audio_state_system`
-- [ ] Tests (`tests/audio_tests.rs`): variable present after project load with the default 100; present
-      and equal to `mute_on_start` projects' fraction (muted does not change it); `SetVolume(25)` ->
-      `"25"`; `SetVolume(200)` clamps to `"100"`; `ToggleMute` leaves it unchanged; value survives a
-      `LoadScene`; pure-helper table test (rounding, clamping, NaN)
-- [ ] `3rd_person_game_demo/scenes/options.scene.ron`: bind the Volume heading to the variable; keep
-      the section fitting 720px; refresh only `3rd_person_game_demo_options.png` (`--real-gpu`)
-- [ ] Docs: add the `audio_volume_percent` row to "GameVariables auto-written by capabilities" in
-      `docs/20_data_formats.md` and a one-line mention next to `SetVolume`/`SyncAudioState` in the
-      action tables (`docs/20`, `docs/30`); note that `ironhold validate` does not check `bind:` keys
-- [ ] Backlog: replace the event-based "Show the live volume percent" item with this plan's Done entry
+- [ ] `AUDIO_VOLUME_PERCENT_KEY`, `volume_percent_string`, `audio_volume_var_system`
+      (`runtime/scene_manager/mod.rs`), re-exported and registered in `lib.rs` per R1
+- [ ] Tests in `tests/audio_tests.rs` (use `scene_lifecycle_tests.rs:16-28`'s mocked-`ProjectConfig`
+      pattern for the project-load case): variable present after load with `"100"`; `mute_on_start: true`
+      still `"100"` with `muted == true`; one `SetVolume(25)` + one `app.update()` -> `"25"` (R1 makes this
+      deterministic); `SetVolume(200)` clamps to `"100"`; `ToggleMute` leaves it unchanged; survives a
+      `LoadScene`; helper tests: round-trip `volume_percent_string(p as f32 / 100.0) == p.to_string()` for
+      every `p in 0..=100` (pins round-vs-truncate), NaN/inf/negative/over-1 clamp
+- [ ] `3rd_person_game_demo/scenes/options.scene.ron`: bound heading + the R8 comment; refresh only
+      `3rd_person_game_demo_options.png` (`--real-gpu`, existing procedure)
+- [ ] Docs per R7/R8 (`docs/20`, `docs/30`, `docs/STATUS.md`)
+- [ ] `planning/claude_suggestions.md`: R5/R9 follow-ups; `planning/backlog.md`: replace the event-based
+      "Show the live volume percent" item with this feature's Active/Done entry
 - [ ] Code-change workflow steps 4-10 (reviews, full test loop, WASM dev build, playtest, merge)
-
-## Open questions
-- Key name: `audio_volume_percent` (chosen: matches `audio_state`/`audio_muted` prefix and says what the
-  number is). Alternative `volume_percent`/`audio_volume` — any objection before it becomes a reserved
-  key?
-- Should the same system also mirror `audio_muted`/`audio_state` so the existing `global_on` bridge in
-  `state_machine.ron` becomes unnecessary? **Out of scope here** (it would change an existing, working
-  convention and the strings `"Muted"`/`"Sound On"` are designer-authored); log as a follow-up if wanted.
-- Reserved-key policy: is a docs-table entry enough, or should `ironhold validate` warn when a
-  `SetVariable` targets an engine-written key? (Not done for `target_*`/`score` today.)
 
 ## Acceptance criteria
 - Given a project with the default audio config, when the options scene shows a `Label` bound to
   `audio_volume_percent`, then it reads `Volume: 100%` on first view (no button pressed, no rule authored).
 - Given the player presses the `50%` preset, when the options scene is open, then the label reads
-  `Volume: 50%`; after `Back` and returning to Options it still reads `Volume: 50%`.
+  `Volume: 50%` within the same frame's render; after `Back` and returning to Options it still reads `Volume: 50%`.
 - Given the game is muted, when the volume preset is 75, then `audio_volume_percent` is still `"75"`.
 - Given `SetVolume(200)`, then the variable reads `"100"`, matching the clamped `active_fraction`.
 - Given a project with no label bound to it, then nothing about its behaviour changes.
