@@ -40,12 +40,13 @@
             display: block;
         }
 
-        /* ── Floating top bar ── */
+        /* ── Top bar ──
+           Static and in normal page flow: it sits ABOVE the game canvas instead of floating over
+           it, so it never covers or intercepts clicks on the game's own top-of-screen UI. The
+           canvas is a fixed-size element the engine appends after this bar. Add ?bar=hidden to
+           the URL to remove the bar entirely (?testing=1, used by test_web.py, also hides it). */
         .top-bar {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
+            position: relative;
             z-index: 1000;
             display: flex;
             align-items: center;
@@ -53,36 +54,12 @@
             padding: 0 1.25rem;
             height: 44px;
             background: var(--bar-bg);
-            backdrop-filter: blur(14px);
-            -webkit-backdrop-filter: blur(14px);
             border-bottom: 1px solid var(--bar-border);
-            /* Start visible, fade out after delay */
-            opacity: 1;
-            transition: opacity 0.4s ease, transform 0.4s ease;
-            pointer-events: auto;
-        }
-
-        .top-bar.dimmed {
-            opacity: 0;
-            transform: translateY(-4px);
-        }
-
-        /* Children can't intercept clicks when bar is invisible */
-        .top-bar.dimmed>* {
-            pointer-events: none;
-        }
-
-        .top-bar:hover {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        .top-bar:hover>* {
-            pointer-events: auto;
         }
 
         /* Fully hidden in test mode */
         .top-bar.testing-mode,
+        .top-bar.bar-hidden,
         .loading-overlay.testing-mode {
             display: none !important;
         }
@@ -192,7 +169,7 @@
 
 <body>
 
-    <!-- Floating top bar — overlays on top of Canvas, auto-hides after 3 seconds -->
+    <!-- Static top bar above the Canvas (not an overlay). ?bar=hidden or ?testing=1 removes it. -->
     <nav class="top-bar" id="top-bar">
         <a href="index.html" class="back-link" id="back-link">
             <svg viewBox="0 0 24 24">
@@ -262,6 +239,11 @@
                 document.getElementById('loading-overlay').classList.add('testing-mode');
             }
 
+            // ?bar=hidden: no navigation bar (e.g. to play with the game filling the window)
+            if (params.get('bar') === 'hidden') {
+                document.getElementById('top-bar').classList.add('bar-hidden');
+            }
+
             // Show project name from URL
             const project = params.get('project');
             const label = document.getElementById('project-label');
@@ -281,21 +263,6 @@
                 }
             });
             observer.observe(document.body, { childList: true, subtree: true });
-
-            // Auto-dim the top bar after 3 seconds so it doesn't block gameplay
-            let dimTimer = setTimeout(() => {
-                document.getElementById('top-bar').classList.add('dimmed');
-            }, 3000);
-
-            // Reset the dim timer when mouse enters the bar area
-            const bar = document.getElementById('top-bar');
-            bar.addEventListener('mouseenter', () => {
-                clearTimeout(dimTimer);
-                bar.classList.remove('dimmed');
-            });
-            bar.addEventListener('mouseleave', () => {
-                dimTimer = setTimeout(() => bar.classList.add('dimmed'), 2000);
-            });
         })();
     </script>
 

@@ -45,7 +45,10 @@ from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 # Configuration
 # ---------------------------------------------------------------------------
 
-PORT = 8000
+# Default differs from serve.py's 8000 on purpose: test_web.py starts its own server and does
+# not notice when the bind fails, so a leftover manual `python serve.py` on 8000 would silently
+# serve the suite instead (confusing timeouts). Override with --port.
+PORT = 8001
 BASE_URL = f"http://localhost:{PORT}"
 
 PROJECTS = ["quick_scene", "3rd_person_game_demo", "terrain_demo", "custom_materials", "primitive_world", "entity_logic_demo", "particles_demo", "effect_mayhem_demo", "foliage_demo", "stats_demo", "blank_project", "ui_demo", "local_coop_demo", "camera_modes", "dynamic_animation_control"]
@@ -632,10 +635,13 @@ def build_wasm() -> bool:
 
 
 def main() -> None:
+    global PORT, BASE_URL
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--skip-build", action="store_true")
+    parser.add_argument("--port", type=int, default=PORT,
+                        help="Port for the suite's own dev server (default: %(default)s)")
     parser.add_argument("--update-baselines", action="store_true",
                         help="Overwrite all stored baselines")
     parser.add_argument("--update-baseline", metavar="TARGET", action="append", default=[],
@@ -661,6 +667,8 @@ def main() -> None:
                              "--real-gpu (non-headless, real GPU args) unless --webgpu is also "
                              "given explicitly.")
     args = parser.parse_args()
+    PORT = args.port
+    BASE_URL = f"http://localhost:{PORT}"
 
     screenshot_dir = Path(args.screenshot_dir)
     screenshot_dir.mkdir(exist_ok=True)
@@ -677,7 +685,7 @@ def main() -> None:
 
     print("[server] Starting dev server …")
     server = subprocess.Popen(
-        [sys.executable, "serve.py"],
+        [sys.executable, "serve.py", str(PORT)],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
