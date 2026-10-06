@@ -171,7 +171,7 @@ Actions represent explicit operations the runtime can execute.
 - `PlaySound(key: audio_key)` ✅ — plays a sound by `AssetCatalog` audio key; fire-and-forget (entity despawns on completion); warns and no-ops for unsupported formats (`.wav`, `.ogg`, `.mp3` supported) or missing catalog keys; optional `volume: f32` (0.0–1.0, default 1.0) multiplies the per-entry catalog volume
 - `PlayMusicLoop(key: audio_key)` ✅ — starts a looping background music track by `AssetCatalog` audio key; stops any currently playing music; optional `volume: f32` (0.0–1.0, default 1.0) multiplies the per-entry catalog volume
 - `StopMusic` ✅ — stops the current background music
-- `SetVolume(pct)` ✅ — sets global audio volume 0–100 (percent); scales against the project's `max_volume` ceiling so `SetVolume(100)` equals `max_volume`, not 1.0; emits `audio.volume_changed`
+- `SetVolume(pct)` ✅ — sets global audio volume 0–100 (percent); scales against the project's `max_volume` ceiling so `SetVolume(100)` equals `max_volume`, not 1.0; updates the engine-written `audio_volume_percent` variable (bind a `Label` to it); emits `audio.volume_changed`
 - `ToggleMute` ✅ — toggles muted state; muting emits `audio.muted`, unmuting restores the previous volume and emits `audio.unmuted`
 
 #### State/variables actions

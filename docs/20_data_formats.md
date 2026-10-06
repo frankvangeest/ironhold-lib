@@ -884,7 +884,7 @@ The `bind` variable is kept in sync by rules in `logic/state_machine.ron` that l
 | `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored inside `ui_panel:` or a `Group` unless `absolute: true` (then measured from that container's box, not the screen). |
 | `size` | `(f32, f32)` | `(120.0, 32.0)` | Width and height in pixels |
 | `align` | `UiTextAlign` | `Center` | Text alignment: `Left`, `Center`, `Right` |
-| `bind` | `Option<String>` | `None` | `GameVariables` key — when set, label text is replaced each frame with the variable's value. **Shows nothing until the key has been set** (a typo'd key just renders an empty label), and `ironhold validate` does not check `bind:` keys. |
+| `bind` | `Option<String>` | `None` | `GameVariables` key — when set, label text is replaced each frame with the variable's value. **An unset key renders as an empty string**: without `format:` the label is blank, and with `format:` the text around `{}` still shows (a typo'd `bind` with `format: "Volume: {}%"` reads `Volume: %`). `ironhold validate` does not check `bind:` keys. Engine-written keys (see the table below, e.g. `audio_volume_percent`) are always present and need no initialiser. |
 | `format` | `Option<String>` | `None` | Template for `bind`; `"{}"` is replaced by the value (e.g. `"Score: {}"`). Raw value used when omitted. |
 | `absolute` | `bool` | `false` | Inside `ui_panel:` or a `Group`: leave the flow and position absolutely, relative to that container's top-left |
 | `font_size` | `f32` | `22.0` | Font size in screen pixels. `size:` sets the layout box only — it does NOT scale to fit; see the sizing note under `Button` above (same behavior, same 26px→22px default swap, same `clip` field). |
@@ -897,12 +897,11 @@ The `bind` variable is kept in sync by rules in `logic/state_machine.ron` that l
 | `target_display` | targeting | `"<prefab> <id>"` of the current target (e.g. `"enemy_orc_melee orc_01"`); empty string when no target |
 | `target_name` | targeting | prefab catalog key of the current target (e.g. `"enemy_orc_melee"`) |
 | `target_id` | targeting | spawn id of the current target (e.g. `"orc_01"`) |
-| `audio_volume_percent` | audio | the chosen volume preset as an integer string (`"100"` by default, `"25"` after `SetVolume(25)`), present from the first frame. It is the preset the player picked, **not** the effective volume: unaffected by `max_volume` and by mute. Reserved: the engine overwrites it whenever the audio state changes, so bind a `Label` to it but don't `SetVariable` it. **Mute is NOT auto-written** — bridge `audio.muted`/`audio.unmuted` with `SetVariable` (see `SyncAudioState`). |
-| `score` | *you* | **not** engine-written: your own `IncrementVariable("score", …)` rules write it; the engine only reads it (for the debug overlay) |
+| `audio_volume_percent` | audio | the chosen volume preset as an integer string (`"100"` by default, `"25"` after `SetVolume(25)`), present from the first frame. It is the preset the player picked, **not** the effective volume: unaffected by `max_volume` and by mute. Reserved: bind a `Label` to it but don't `SetVariable` it — if you do, your value shows only until the next `SetVolume`/`ToggleMute`/project load, then silently reverts. **Mute is NOT auto-written** — bridge `audio.muted`/`audio.unmuted` with `SetVariable` (see `SyncAudioState`). |
 
-The targeting variables update on every selection change (click, Tab, or `SetTarget`) and blank on clear/`LoadScene`; `audio_volume_percent` updates on every `SetVolume` and survives scene loads. Example: `Label((id: "target_label", bind: "target_display", format: "Target: {}"))` — see `assets/projects/3rd_person_game_demo`.
+The targeting variables update on every selection change (click, Tab, or `SetTarget`) and blank on clear/`LoadScene`; `audio_volume_percent` updates on every `SetVolume`, survives scene loads, and resets to `"100"` when a project loads. (`score` is **not** engine-written: your own `IncrementVariable("score", …)` rules write it and the engine only reads it, for the debug-state readout.) Example: `Label((id: "target_label", bind: "target_display", format: "Target: {}"))` — see `assets/projects/3rd_person_game_demo`.
 
-> **2+ players present (including party mode):** these three variables go blank whenever 2+
+> **2+ players present (including party mode):** the three targeting variables go blank whenever 2+
 > players are present, rather than reflecting only one player's target with no indication a
 > second player's selection isn't shown. Use the per-viewport `target_hud:` block instead for a
 > **split-screen** scene's target readout — party mode has no readout replacement today (no

@@ -1058,6 +1058,8 @@ The same applies to `Visibility`, `Transform`, and any component read by the ren
 On each new `SceneEvent::Ready` the resource is cleared and repopulated, so scene transitions always reflect the current catalog without accumulating stale handles.
 
 ### Audio file authoring
+`audio_volume_var_system` mirrors `AudioState.active_fraction` into `GameVariables[AUDIO_VOLUME_PERCENT_KEY]` (`"audio_volume_percent"`, the chosen preset as an integer string, not the effective volume) whenever `AudioState` changes, so a bound `Label` shows the live volume with no RON rules — same shape as the targeting `target_*` variables. It is scheduled `.after(action_executor_system).before(update_dynamic_labels_system)` (the FSM interpreter never reads `GameVariables`, so `.before(fsm_interpreter_system)` would only add a frame of lag). Mute is deliberately NOT mirrored here: it still goes through the `audio.muted`/`audio.unmuted` RON `global_on` bridge. Tests that stand in for the project loader's `AudioState` re-insert must insert a non-default `active_fraction`, or they pass vacuously (the test harness never completes a project load).
+
 Short SFX (jumps, pickups, UI clicks) must have **no leading silence** in the audio file. Any silence baked into the file at export time is played back verbatim, adding perceived delay on top of any engine latency. Trim the start of the file in your audio editor before exporting.
 
 Use WAV for all short SFX — it is uncompressed PCM with zero decode overhead. OGG/Vorbis and MP3 incur a decoder initialisation cost that is especially noticeable on first play in WASM. Reserve compressed formats for long-form audio (background music, ambient loops) where the file-size saving is worth the decode cost.

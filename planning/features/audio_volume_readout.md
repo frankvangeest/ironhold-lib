@@ -91,7 +91,7 @@ unchanged). The preset buttons are unchanged. `state_machine.ron` is **unchanged
       deterministic); `SetVolume(200)` clamps to `"100"`; `ToggleMute` leaves it unchanged; survives a
       `LoadScene`; helper tests: round-trip `volume_percent_string(p as f32 / 100.0) == p.to_string()` for
       every `p in 0..=100` (pins round-vs-truncate), NaN/inf/negative/over-1 clamp
-- [x] `3rd_person_game_demo/scenes/options.scene.ron`: bound heading + the R8 comment; refresh only
+- [ ] _(scene edit done; baseline refresh pending the WASM dev build)_ `3rd_person_game_demo/scenes/options.scene.ron`: bound heading + the R8 comment; refresh only
       `3rd_person_game_demo_options.png` (`--real-gpu`, existing procedure)
 - [x] Docs per R7/R8 (`docs/20`, `docs/30`, `docs/STATUS.md`)
 - [x] `planning/claude_suggestions.md`: R5/R9 follow-ups; `planning/backlog.md`: replace the event-based

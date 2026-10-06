@@ -410,14 +410,36 @@ fn test_volume_percent_unchanged_by_toggle_mute() {
 }
 
 #[test]
-fn test_volume_percent_with_mute_on_start_state_is_still_100() {
-    // Mirrors a project with `audio: (mute_on_start: true)`: project load inserts AudioState with
-    // `active_fraction: 1.0` and `muted: true`.
+fn test_volume_percent_follows_a_reinserted_audio_state_and_ignores_mute_and_max_volume() {
+    // Stand-in for the project loader replacing `AudioState` (`project_loader.rs` re-inserts it at
+    // project load; the test harness never completes a project load). Uses a NON-default fraction:
+    // with 1.0 this would pass even if the mirror never reacted to the re-insert.
     let mut app = setup_test_app();
     app.update();
-    app.insert_resource(AudioState { max_volume: 0.6, active_fraction: 1.0, muted: true });
+    assert_eq!(volume_var(&app).as_deref(), Some("100"), "precondition: default");
+    app.insert_resource(AudioState { max_volume: 0.6, active_fraction: 0.4, muted: true });
     app.update();
-    assert_eq!(volume_var(&app).as_deref(), Some("100"), "the preset, not the effective volume (max_volume 0.6, muted)");
+    assert_eq!(volume_var(&app).as_deref(), Some("40"), "the chosen preset (0.4), not the effective volume (muted, max_volume 0.6)");
+}
+
+#[test]
+fn test_bound_label_shows_the_new_volume_the_same_frame() {
+    // Pins the scheduling contract (mirror runs after action_executor_system and before
+    // update_dynamic_labels_system): SetVolume -> one update -> the bound label's text is current.
+    let mut app = setup_test_app();
+    app.update();
+    let label = app.world_mut().spawn((
+        Text::new(""),
+        ironhold_core::DynamicLabel {
+            key: AUDIO_VOLUME_PERCENT_KEY.to_string(),
+            format: Some("Volume: {}%".to_string()),
+        },
+    )).id();
+    app.update();
+    assert_eq!(app.world().get::<Text>(label).unwrap().0, "Volume: 100%", "readout is correct before any action runs");
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SetVolume(25));
+    app.update();
+    assert_eq!(app.world().get::<Text>(label).unwrap().0, "Volume: 25%", "SetVolume must reach the bound label within the same update");
 }
 
 #[test]
