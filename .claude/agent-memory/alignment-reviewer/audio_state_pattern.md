@@ -27,6 +27,10 @@ The 2026-06-10 mute/master-volume review established the reference shape for pro
 - `audio.muted` / `audio.unmuted` / `audio.volume_changed` events let designers chain follow-on actions (e.g. swap a mute-button label) with zero Rust.
 - All three layers documented in docs/20_data_formats.md and docs/30_runtime_events_and_logic.md.
 
+## Engine-written `audio_volume_percent` (2026-10-06, feature/audio_volume_readout)
+
+`audio_volume_var_system` (scene_manager/mod.rs) mirrors `active_fraction` -> `GameVariables["audio_volume_percent"]` as a rounded integer string, `.after(action_executor_system).before(update_dynamic_labels_system)`. Reviewed ALIGNED: same shape as targeting's `target_display` (engine owns the semantic number, RON owns the `format:` text). Distinct from the mute rule above: a NUMBER is not presentation text, so engine-writing it is fine; a word like "Muted" would not be. Mute is still RON-bridged (two conventions, logged as a follow-up). Docs: the "GameVariables auto-written by capabilities" table in docs/20 is the registry of engine-written keys; `crates/ironhold_core/src/CLAUDE.md` ~344 keeps a second, targeting-only list that was not updated — check both when a new engine-written key appears. No CLI check exists for SetVariable on reserved keys (suggestion only).
+
 ## Footgun: dual write to GlobalVolume
 
 The executor writes `GlobalVolume` directly AND mutating `scene_state.audio_state` (a ResMut) trips `is_changed()`, so `audio_state_system` writes `GlobalVolume` AGAIN next frame. Benign today (same value, idempotent) but it is redundant and a latent change-detection-churn smell. If anyone adds a third writer or makes `GlobalVolume` writes expensive, prefer ONE source of truth: mutate only `AudioState` in the executor and let `audio_state_system` be the sole `GlobalVolume` writer. Flag this if a future change touches either site. Not a blocker — the system is `is_changed()`-guarded so it does not churn every frame, only the frame after a volume action.

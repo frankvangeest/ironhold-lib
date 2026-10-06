@@ -5,7 +5,7 @@
 - [Particle quality/budget pattern](particle_quality_budget_pattern.md) — six-touchpoint checklist for global-state Actions that mutate persistent resources, plus backward-compat rules for adding fields to EffectDef/LayerDef
 - [PrefabDef markers need all 3 spawn paths](prefab_marker_three_spawn_paths.md) — spawn-time marker fields wired only into spawn_prefab_instance silently break primitive/composite prefabs; grep scene_loader.rs for the field
 - [Targeting capability + {target} pattern](targeting_capability_pattern.md) — click/Tab selection, screen-space not raycast, 3-spawn-path markers, and the SetTarget-vs-capability GameVariable asymmetry footgun
-- [Audio state pattern](audio_state_pattern.md) — AudioConfig/AudioState/SetVolume/ToggleMute six touchpoints; two project_loader insert sites; dual-write-to-GlobalVolume footgun
+- [Audio state pattern](audio_state_pattern.md) — AudioConfig/AudioState/SetVolume/ToggleMute six touchpoints; engine-written audio_volume_percent (number OK, words in RON); dual-write-to-GlobalVolume footgun
 - [NPC GLB Actor capsule pattern](npc_glb_actor_pattern.md) — components.npc works on GLB Actors via entity_spawner.rs; capsule dims now data-driven (NpcDef.collider_radius/height); npc.rs emits GameEvent not ActionQueue (correct); ResetToSpawn parse+behavior test gap now closed
 - [stat_overrides flow](stat_overrides_pattern.md) — SceneEntityDef.stat_overrides correctly covers all 3 non-player spawn paths (positive reference); StatMap-build is triplicated (refactor candidate)
 - [WorldLabel stat UI pattern](world_label_stat_ui_pattern.md) — stat_label/world_stat_bar dynamic-spawn route via DynamicStatUiQueue; dynamic spawns DO inherit depth_scale now; 4 bar styles; shared spawn helpers

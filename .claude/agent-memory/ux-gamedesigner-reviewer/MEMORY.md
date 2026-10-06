@@ -33,7 +33,7 @@
 - [{self} substitution pattern](project_self_substitution_pattern.md) — Entity-targeted actions accept {self} in .behavior.ron; canonical example is primitive_world/behaviors/attack_dummy.behavior.ron
 - [EffectDef `layers` field](project_effectdef_layers.md) — multi-layer emitter list; canonical multi-layer example is particles_demo `campfire_fire`; canonical single-layer is primitive_world `campfire_fire`
 - [Auto-written GameVariables undocumented](project_auto_written_gamevariables_undocumented.md) — capability-populated bind keys (targeting's target_display/target_name/target_id) live only in core CLAUDE.md, not docs/
-- [Audio writes no GameVariable](project_audio_no_gamevariable.md) — ToggleMute/SetVolume only emit events; mute state must be bridged to a variable via SetVariable on audio.muted/unmuted for a Label to show it
+- [Audio GameVariables](project_audio_no_gamevariable.md) — only audio_volume_percent is engine-written (preset, not effective); mute still needs SetVariable bridge
 - [NPC collider canonical example](project_npc_collider_canonical_example.md) — collider_height/radius worked example lives in 3rd_person_game_demo snake/spider prefabs, not docs' own orc_guard/rat examples
 - [decals: map has two consumers](project_decals_map_two_consumers.md) — assets.ron decals: feeds BOTH Action::ProjectDecal and scene target_indicator; doc sections don't cross-link; texture: field resolves against decals not textures
 - [AnimationPolicy doc gaps](project_animation_policy_gaps.md) — 4 old gaps CLOSED (incl. un-freezing); still no policy field table, clips-alias looping undocumented
