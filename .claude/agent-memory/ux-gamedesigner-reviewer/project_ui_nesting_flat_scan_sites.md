@@ -69,5 +69,16 @@ All first-pass items resolved (R1-R13). Remaining traps worth re-checking at cod
 - camera_modes is its own PROJECT, not a 3rd_person_game_demo scene (plan text mislabels it).
 - README "Example projects" table lists only 5 of 14 projects.
 
+## 2026-10-06 post-implementation review (feature/ui_flex_group) — Ship with doc fixes
+- Shipped: Group section docs/20 ~1438-1504, 11 traps; docs/60 ~263-264 check list; ui_demo
+  project (3 stations + top/bottom anchored bars); options.scene.ron retrofit; README + index.html.
+- Open at review time: trap 1 lumps StatBar into "position themselves" but StatBar/StatSpread/
+  StatRadar have `absolute: bool` and DO flow in a Group (only ActionBar + 4 panels are
+  always-absolute); trap 10 uses Bevy jargon (Visibility::Hidden / Display::None) with no RON path;
+  percent_under_auto message says "Px/Percent width" even when the parent is ui_panel: (bare f32);
+  scene-load `UI layout [...]` warn omits scene name; validate summary counts layout warnings as
+  "unused definitions"; ui_demo never shows flex_wrap/Percent<100/Reverse/clip/absolute.
+- Group heading sits 600 lines below the "UI Elements" intro with no pointer from it.
+
 Related: [[ui-label-button-font-and-clip]], [[container-events-undocumented]],
 [[warn-vs-silent-fallback-principle]], [[schema-bool-toggle-house-style]].

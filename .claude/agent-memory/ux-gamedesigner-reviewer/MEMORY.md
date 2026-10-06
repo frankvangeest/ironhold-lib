@@ -69,4 +69,4 @@
 - [UI trigger wiring](project_ui_trigger_wiring.md) — 4 surfaces emit ui.button_pressed:{trigger}; exact-match only; `unreachable_trigger` check's blind spots (gamepad, state gating, nested behaviors, parse cascade)
 - [max_fixed_delta_secs](project_max_fixed_delta_secs.md) — any value <= the real frame interval = permanent slow-motion; validate only rejects <=0/non-finite; 6 doc surfaces, 3 missing
 - [Default mouse-binding test projects](project_mouse_default_binding_test_projects.md) — 3rd_person/local_coop override orbit_button; primitive_world/stats_demo use defaults + have ActionBars
-- [UI nesting breaks 11 flat scene.ui scans](project_ui_nesting_flat_scan_sites.md) — StatRadar pre-pass + 4 warns + 6 CLI checks skip nested children; Container/ContainerPanel name clash; auto-size+SpaceBetween is a no-op
+- [UI nesting breaks 11 flat scene.ui scans](project_ui_nesting_flat_scan_sites.md) — StatRadar pre-pass + 4 warns + 6 CLI checks skip nested children; Container/ContainerPanel name clash; auto-size+SpaceBetween is a no-op; Group shipped 2026-10-06 (open doc nits listed)

@@ -1,9 +1,19 @@
 ---
 name: ui-flat-scan-and-taffy-facts
-description: scene.ui is scanned FLAT in 11 places (6 core + 5 CLI) plus a hard-dependency radar pre-pass — any nestable UI node silently blinds all of them; plus verified Bevy 0.18/taffy 0.9.2 flex facts
+description: scene.ui flat-scan blindness (now fixed by walk_ui_nodes on feature/ui_flex_group, 2026-10-06) + radar pre-pass functional dep + verified Bevy 0.18/taffy 0.9.2 flex facts
 metadata:
   type: project
 ---
+
+**Status 2026-10-06 (post-impl review of `feature/ui_flex_group`):** every site below now goes
+through `schema::scene_v2::walk_ui_nodes`/`walk_ui_nodes_pathed` (explicit-stack pre-order,
+`MAX_UI_DEPTH`=16, top-level = depth 1; spawner's `UiSpawnCtx.depth` uses the same convention),
+and the rule is in `crates/ironhold_core/src/CLAUDE.md`. Only intentional flat uses remain: the
+two spawn loops (structural recursion) and `scene.ui.len()` top-level counts. Layout checks live in
+one pure `ui_layout_diagnostics` (schema/) shared by engine `warn!` (all severities) and CLI
+(Error=always, Warning=`--strict`). Review gaps noted then: no spawner-side 16-vs-17 test, no
+click-reaches-world test for R7, truncation double-warned at load. The historical text below is
+the pre-fix inventory.
 
 **`GameSceneV2.ui` is treated as a flat `Vec` by every scene-wide consumer.** Introducing any
 nestable UI node (`Container`-style, `children: Vec<UiNodeDef>`) makes all of these silently

@@ -50,3 +50,4 @@
 - [Item-gated interactable pattern](item_gated_interactable_pattern.md) — 8-touchpoint "gate an existing capability event" recipe; hit_any polarity; catalog-wide-CLI vs scene-scoped-warn asymmetry; PlayerInventory-is-global is a legit boundary
 - [Same-frame order determinism (D1)](same_frame_order_determinism_pattern.md) — stats.ron file order / binding+slot string order are now designer semantics; alias-sort and "10"-slot footguns
 - [Determinism lint / `// det:` markers (D2)](determinism_lint_annotation_pattern.md) — how to audit marker honesty; catalog BTreeMap = no RON/CLI change; clippy.toml can't see markers
+- [UI flex Group + walk_ui_nodes](ui_flex_group_walker_pattern.md) — scene.ui is a tree: never iterate flat; layout diags shared fn, CLI warnings only under --strict
