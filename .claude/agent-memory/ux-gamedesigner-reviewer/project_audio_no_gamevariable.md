@@ -16,4 +16,6 @@ metadata:
 ```
 then `Label((bind: "audio_state", format: "{}"))`. Canonical proof-of-pattern: `docs/20_data_formats.md:595` (action_bar status uses the same SetVariable-on-event trick) and `3rd_person_game_demo` main.scene.ron target_label (bind+format).
 
+**Planned change (2026-10-06, planning/features/audio_volume_readout.md):** engine will auto-write `audio_volume_percent` (chosen preset 0-100 as integer string, ignores mute and max_volume). Mute stays RON-bridged. Once shipped: the `audio_` prefix mixes ONE engine-written key with demo-authored `audio_state`/`audio_muted` — docs must say which is which. Bound labels render "" when the key is unset (undocumented in docs/ as of 2026-10-06); `bind` takes ONE key, so "Volume: 50% - Muted" in one label is impossible.
+
 **How to apply:** Any review of an audio/mute UX feature should check whether the designer wired the event→SetVariable bridge. If the UI says "Toggle Mute" with no bound Label, flag missing visual state feedback as a friction/blocker. Recommend the bridge rather than asking for a new engine GameVariable.
