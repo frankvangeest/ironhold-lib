@@ -13,8 +13,8 @@ overlap slightly; treat totals as +/-10%. Nothing here was verified against the 
 
 **Destination labels** (resolved 2026-10-07: topic content lives in tool-neutral `docs/dev/<topic>.md`; Claude Code gets a thin `.claude/rules/<topic>.md` path-scoped stub and every topic a pointer line in its directory file, because OpenCode has no path-scoped rules; see the plan):
 `PARENT` = stays in `crates/ironhold_core/src/CLAUDE.md` · `CAP` = `capabilities/CLAUDE.md` · `SM` =
-`runtime/scene_manager/CLAUDE.md` (there is no content that belongs only in `runtime/`; every interpreter,
-executor and loader file lives in `runtime/scene_manager/`) · `SCH` = `schema/CLAUDE.md` · `TOPIC:<name>` =
+`runtime/scene_manager/CLAUDE.md` (interpreter, executor and loader files) · `RT` = `runtime/CLAUDE.md` (the six files
+outside `scene_manager/`: `input.rs`, `actions.rs`, `messages.rs`, `model_spawner.rs`, `material_factory.rs`, `mod.rs`) · `SCH` = `schema/CLAUDE.md` · `TOPIC:<name>` =
 on-demand reference (path-scoped rule or skill) · `DOC:` = a `docs/` page · `CUT` = derivable or history.
 **Safety** = `Y` means a must/never rule whose violation breaks determinism, physics, WASM or data: it has to load
 for *every* file that could violate it.
@@ -241,3 +241,39 @@ Re-homings and relabels the plan review required; the row tables above keep the 
   `docs/30_runtime_events_and_logic.md:313`, `docs/60_contributing.md:393-396` (self-references),
   `tools/asset_checker/CLAUDE.md:7`, `planning/backlog.md:7` and ~12 active plan files. No test, hook, script,
   `.githooks`, `.opencode` config or HTML page reads these paths programmatically.
+
+## 7. Second-pass corrections (2026-10-07)
+
+**Governs lists for the rows whose placement the second review corrected** (written now so the audit's governs-glob
+check is honest; globs are relative to `crates/ironhold_core/src/`):
+
+| Row (lines) | Rule | Governs | Placement |
+|---|---|---|---|
+| 1530-1574 `.rule` | consumers take `Option<&BoundGamepad>`, never required | `capabilities/{action_bar,camera,interactable,targeting}.rs`, `runtime/input.rs` | **CAP line** + RT line (not RT only) |
+| 1530-1574 `.rule` | never bind to an already-claimed entity; ascending-`PlayerIndex`; `input_translator_system` also here | `runtime/input.rs`, `capabilities/player.rs` | RT |
+| 1606-1636 `.rule` | reset `PendingJoinGamepad` to `None` each run; one pad per frame; `.take()` in the executor | `runtime/input.rs`, `runtime/scene_manager/action_executor.rs` | RT (+ SM line) |
+| 670-675 | `seek_fraction`/`frozen` must be durable (WASM-only regression) | `capabilities/animation.rs`, `animation_resolver.rs` | **CAP one-liner** (the block otherwise re-homes to `TOPIC:animation-pipeline`) |
+| 1224-1260 | collider/friction: `Friction` 0.15 idle-only; initial value set in `entity_spawner.rs:~1140` | `capabilities/player.rs`, `runtime/scene_manager/entity_spawner.rs` | CAP **+ SM line** |
+| 575-585 `tick_delayed_events_system` line | delayed-event tick is pause-ungated | `lib.rs:~758` | **PARENT line or nowhere** (not "runtime/") |
+| 247-255 | every `CharacterController` needs `PlayerTarget` | `capabilities/action_bar.rs`, player-construction sites in `runtime/scene_manager/` | CAP **+ SM** |
+| 711-720 | WGSL authoring rules | every `.wgsl` | **`assets/CLAUDE.md`** (not a stub) + a one-liner in PARENT |
+
+- **Split rows needing sub-IDs:** 108, 284, 286-314, 452-462, 575-585, 856-882, 1121-1200, 1530-1574, 1606-1636,
+  1657-1667, 1668-1693, 1713-1729, 1731-1752.
+- **Label resolution:** "Y-ish" (70-80, 144-187, 247-255, 284, 489-505), "Y partial" (1606-1636) and
+  "RON-authoring Y" (575-585, 598-606) are resolved to Y when violating the rule fails silently or breaks
+  determinism/physics/WASM/data (Y: 70-80, 144-187 `{new_id}` collisions, 247-255, 284, 489-505, 1606-1636 rule part);
+  rows whose violation only matters to RON authors and is already in a designer doc (`docs/30:~674`) are N with a
+  pointer (575-585 body, 598-606). Rules phrased "any new system/spawn site/RenderLayers consumer" govern future files:
+  default governs = the widest covering directory (usually the parent).
+- **Owners:** the `ActionQueue` FIFO rule belongs to the parent's pipeline block (rows 1-34), not `runtime/CLAUDE.md`.
+- **`lib.rs` edges** (decision 10 in the plan) are protected by `// load-bearing` comments in `lib.rs`; the rows that
+  say "needs a PARENT pointer" (e.g. 1383-1405, 452-462, 686-702, 1261-1330's ordering part) are satisfied by the
+  comment + the parent's 3-line rule.
+- **Budget tally after §6/§7 (architect):** parent ~18.0k (19.3k with a complete edge list; needs the condensing of
+  `try_despawn` 2.3k -> 0.6k and determinism 3.8k); `schema/` ~4.8-5.1k; `runtime/` ~2.5k; `runtime/scene_manager/` ~20k;
+  `capabilities/` ~23-24k raw (needs ~4k more: WGSL -> `assets/CLAUDE.md` -1k, 1383-1405 2k -> 0.8k, 286-314 2.4k -> 1k,
+  323-351 trim).
+- **More live references:** `planning/claude_suggestions.md:145,407,417,515` and `planning/backlog.md:7,65,149,226`
+  (for the docs move); `docs/20_data_formats.md:3292` (cites the gamepad notes that move to `docs/dev/gamepad-routing`);
+  11 active plan files cite the six docs.
