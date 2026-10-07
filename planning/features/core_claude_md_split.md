@@ -251,7 +251,7 @@ run it against the *unchanged* file with every block mapped to itself (0 problem
   follows the lightweight path of the code workflow.
 
 ## Tasks
-- [ ] Phase A on `feature/docs_audience_split`: A0-A4, reviews (R7), merge
+- [x] Phase A on `feature/docs_audience_split`: A0-A4, reviews (R7), merge (`c188550`, 2026-10-07)
 - [ ] Backlog items: designer web-loading/warmup page + overview cleanup + README block; publish prebuilt `ironhold` binary
 - [ ] Phase 0 spike (hard gate) + audit script + freeze the base
 - [ ] Phase 1: R10 fixes in the monolith, then schema, runtime, scene_manager, capabilities, assets, parent draft

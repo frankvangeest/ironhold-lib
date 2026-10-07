@@ -388,7 +388,7 @@ designer path:
   - (c) Cheap and high value: an `unknown_token` validate warning for any `{word}` in an
     action/event string that is not one of the known tokens (`{self}`, `{target}`, `{new_id}`,
     `{attacker}`). This catches typos for all four tokens at once.
-  - Add whatever ships to the "Checks performed" list in `docs/60_contributing.md` (~244-256).
+  - Add whatever ships as a row in the matching table of `docs/15_authoring_tools.md` (the canonical list of validate checks).
 
 #### Non-blocking
 
@@ -422,7 +422,7 @@ designer path:
      (3836): they list only "`{self}` substituted in behavior files". Add `{target}`/`{attacker}`.
   8. `docs/STATUS.md`: the entity messages list (~110-114) and any NPC/combat feature row. This is
      the place that keeps getting missed.
-  9. `docs/60_contributing.md` checks list, per B3.
+  9. `docs/15_authoring_tools.md` checks tables, per B3.
 - `planning/investigations/rpg_event_taxonomy.md:107` proposes `combat.hit:{attacker}:{target}`. That
   is a different namespace *and* the reverse argument order. Update it in the same change so the
   "convention" this plan sets is not contradicted by the taxonomy doc it cites.

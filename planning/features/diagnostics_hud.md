@@ -83,7 +83,7 @@ and WASM builds clean.
 - [ ] Wire `ui.toggle_diagnostics` action to toggle panel `Visibility` in action executor
 - [ ] Expose `--features diagnostics` in `ironhold_native`
 - [ ] Tests: HUD panel entity exists when feature enabled; absent when disabled
-- [ ] Docs: add usage note to `docs/70_profiling.md`
+- [ ] Docs: add usage note to `docs/dev/70_profiling.md`
 
 ## Open questions
 - Should the HUD position (top-right vs. top-left) be configurable, or is a fixed

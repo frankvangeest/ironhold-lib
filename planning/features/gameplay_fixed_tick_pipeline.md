@@ -199,7 +199,7 @@ Needs a spike (Phase 3, first task) because `accumulate_overstep` on a paused cl
 use; fallback is the `SimPaused` flag. `real_pause.md` needs a one-paragraph amendment when this is accepted.
 
 ### 7. What stays non-deterministic after this plan
-Documented in `docs/40_determinism_and_networking.md` and asserted as "expected divergence" in the harness:
+Documented in `docs/dev/40_determinism_and_networking.md` and asserted as "expected divergence" in the harness:
 rendering/animation pose, audio, particle simulation; **asset-load completion tick** (`SceneEvent::Ready`,
 `BehaviorHandle`, dialogue assets, GLTF readiness - audit finding B; harness answer: hold tick 0 until Ready and
 stamp the tick, or record load-complete as an input); camera-derived input (click-to-target); wall-clock-fed
@@ -295,7 +295,7 @@ tick; Phase 4 adds the hash hook.
 - Cosmetic systems are unchanged; no new frame of UI latency beyond the <= 1 tick wait; 30 fps and 144 fps
   frame cost within agreed budget on `3rd_person_game_demo`.
 - The existing suite passes after the documented mechanical migration; `ironhold_cli` checks; harness expected-divergence
-  list is documented in `docs/40_determinism_and_networking.md`.
+  list is documented in `docs/dev/40_determinism_and_networking.md`.
 
 ## Plan-review (2026-10-02)
 
@@ -637,7 +637,7 @@ wrong. Both are plan edits, not redesigns.
    - Phase 4:
      - `docs/30` ~49 and `docs/STATUS.md` ~91: both say "max 2/frame" for `Spawn`;
      - `planning/features/spawn_wave_encounter.md` ~283 ("takes 5 frames").
-   - Also put `docs/browser_tests.md` (DebugState) on the list if `SimTick` is exposed there (see
+   - Also put `docs/dev/browser_tests.md` (DebugState) on the list if `SimTick` is exposed there (see
      Non-blocking 1).
 
 #### Non-blocking

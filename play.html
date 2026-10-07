@@ -110,6 +110,14 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            min-width: 0;
+        }
+
+        /* Docs link sits at the far right of the static bar; opens in a new tab so the running game is not torn down. */
+        .docs-link {
+            margin-left: auto;
+            flex-shrink: 0;
+            white-space: nowrap;
         }
 
         .project-name .accent-dot {
@@ -182,6 +190,7 @@
             <span class="accent-dot"></span>
             <span id="project-label">Loading…</span>
         </span>
+        <a href="https://github.com/frankvangeest/ironhold-lib/blob/main/docs/README.md" class="back-link docs-link" id="docs-link" target="_blank" rel="noopener">Docs</a>
     </nav>
 
     <!-- Loading indicator shown until canvas appears -->

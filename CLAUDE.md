@@ -178,7 +178,7 @@ After implementing any feature, capability, or schema change, always invoke thes
 | **`alignment-reviewer`** | After any code change — verifies RON designer-reachability and no hardcoded behavior |
 | **`system-architect`** | After any code change — verifies crate boundaries, WASM compatibility, and long-term maintainability |
 | **`debug-detective`** | After any code change — general adversarial review for latent bugs/edge cases in the diff, not only known reproducible bugs |
-| **`ux-gamedesigner-reviewer`** | *(conditional)* After any change to `assets/`, `docs/`, or RON schema — verifies the designer experience is clear and documented |
+| **`ux-gamedesigner-reviewer`** | *(conditional)* After any change to `assets/`, `docs/` (excluding `docs/dev/`; run `system-architect` on that folder only for architecture or workflow pages), or RON schema — verifies the designer experience is clear and documented |
 | **`wasm-perf-reviewer`** | *(conditional)* For changes to runtime systems, rendering, the render/update hot path, asset-loading, per-frame work, new dependencies, or schema that drives per-frame processing — verifies no WASM frame-time or binary-size regressions |
 
 `alignment-reviewer`, `system-architect`, and `debug-detective` run after every code change — launch all three **in parallel** (single message, multiple tool calls), alongside `ux-gamedesigner-reviewer`/`wasm-perf-reviewer` when their conditional triggers apply, and alongside the test suite (steps 4/11 in the Code change workflow below — reviews and tests are independent of each other). Skip the conditional two for pure RON/asset/doc tweaks. Use `/code-review` to run the full set for a consolidated pre-commit verdict on code changes, or `/plan-review` for the feature plan before any code is written.
@@ -429,9 +429,9 @@ When asked to update or audit documentation, check **all** of the following — 
 - `CLAUDE.md` (root)
 - `crates/ironhold_core/src/CLAUDE.md`
 - `crates/ironhold_core/tests/CLAUDE.md`
-- Every `.md` file in `docs/` (`00_overview.md`, `10_architecture.md`, `20_data_formats.md`, `25_custom_shaders.md`, `30_runtime_events_and_logic.md`, `40_determinism_and_networking.md`, `50_roadmap_and_milestones.md`, `60_contributing.md`, `70_profiling.md`, `browser_tests.md`, `STATUS.md`)
+- Every `.md` file in `docs/` and `docs/dev/`, plus `README.md`. Designer/library-user docs live directly in `docs/` (`00_overview.md`, `05_art_style.md`, `15_authoring_tools.md`, `20_data_formats.md`, `25_custom_shaders.md`, `30_runtime_events_and_logic.md`, `STATUS.md`, and the `docs/README.md` index); developer docs live in `docs/dev/` (`10_architecture.md`, `40_determinism_and_networking.md`, `50_roadmap_and_milestones.md`, `60_contributing.md`, `70_profiling.md`, `browser_tests.md`). A new validate check adds a row to `docs/15_authoring_tools.md`.
 
 > Rust-specific rules (GPU/WGSL alignment, physics, terrain, inspector) live in
 > `crates/ironhold_core/src/CLAUDE.md`.
 > Integration test setup rules live in `crates/ironhold_core/tests/CLAUDE.md`.
-> Browser test suite documentation lives in `docs/browser_tests.md`.
+> Browser test suite documentation lives in `docs/dev/browser_tests.md`.

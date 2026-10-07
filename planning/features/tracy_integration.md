@@ -65,7 +65,7 @@ automatically when `bevy/trace_tracy` is compiled in.
 ## Tasks
 - [ ] Add `trace_tracy` feature to `ironhold_native/Cargo.toml` and `ironhold_core/Cargo.toml`
 - [ ] Verify spans appear in Tracy for key systems: terrain, physics, animation, scene loader
-- [ ] Document the workflow in `docs/70_profiling.md` with step-by-step instructions
+- [ ] Document the workflow in `docs/dev/70_profiling.md` with step-by-step instructions
 - [ ] Add a note to `CLAUDE.md` so Claude knows to suggest `--features trace_tracy` for CPU perf questions
 
 ## Open questions

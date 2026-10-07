@@ -68,7 +68,7 @@ nothing to settle.
 - [ ] Add freeze system: on `SceneEvent::Ready` + `StaticMode(true)` → pause virtual clock + seek all `AnimationPlayer`s to 0.0
 - [ ] Append `&static=1` to screenshot URLs in `test_web.py`; optionally reduce `SCREENSHOT_SETTLE_FRAMES`
 - [ ] Verify all baseline tests pass consistently across two consecutive runs with no diff
-- [ ] Docs: note `?static=1` in `docs/browser_tests.md`
+- [ ] Docs: note `?static=1` in `docs/dev/browser_tests.md`
 
 ## Open questions
 
