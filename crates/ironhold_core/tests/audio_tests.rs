@@ -1,5 +1,6 @@
 use bevy::prelude::*;
-use ironhold_core::runtime::{ActionQueue, SceneEvent, BackgroundMusic, LoadedAssetCatalog, LoadedAudioHandles};
+use ironhold_core::GameVariables;
+use ironhold_core::runtime::{ActionQueue, AudioState, SceneEvent, BackgroundMusic, LoadedAssetCatalog, LoadedAudioHandles, AUDIO_VOLUME_PERCENT_KEY, volume_percent_string};
 use ironhold_core::schema::Action;
 use ironhold_core::schema::catalog::{AssetCatalog, AudioEntry};
 
@@ -360,4 +361,114 @@ fn test_set_volume_no_resource_does_not_panic() {
     app.world_mut().resource_mut::<ActionQueue>()
         .push(Action::SetVolume(80));
     app.update();
+}
+
+// ── audio_volume_percent GameVariable (planning/features/audio_volume_readout.md) ──────────────
+
+fn volume_var(app: &App) -> Option<String> {
+    app.world().resource::<GameVariables>().0.get(AUDIO_VOLUME_PERCENT_KEY).cloned()
+}
+
+#[test]
+fn test_volume_percent_variable_exists_from_first_frame_at_100() {
+    let mut app = setup_test_app();
+    app.update();
+    assert_eq!(volume_var(&app).as_deref(), Some("100"), "default AudioState (fraction 1.0) must publish \"100\" with no action run");
+}
+
+#[test]
+fn test_volume_percent_follows_set_volume_in_one_update() {
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SetVolume(25));
+    app.update();
+    assert_eq!(volume_var(&app).as_deref(), Some("25"), "SetVolume must be reflected the same frame (mirror runs after action_executor_system)");
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SetVolume(75));
+    app.update();
+    assert_eq!(volume_var(&app).as_deref(), Some("75"));
+}
+
+#[test]
+fn test_volume_percent_clamps_over_100() {
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SetVolume(200));
+    app.update();
+    assert_eq!(volume_var(&app).as_deref(), Some("100"));
+}
+
+#[test]
+fn test_volume_percent_unchanged_by_toggle_mute() {
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SetVolume(50));
+    app.update();
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::ToggleMute);
+    app.update();
+    assert!(app.world().resource::<AudioState>().muted, "precondition: ToggleMute muted the game");
+    assert_eq!(volume_var(&app).as_deref(), Some("50"), "muting must not change the chosen preset shown to the player");
+}
+
+#[test]
+fn test_volume_percent_follows_a_reinserted_audio_state_and_ignores_mute_and_max_volume() {
+    // Stand-in for the project loader replacing `AudioState` (`project_loader.rs` re-inserts it at
+    // project load; the test harness never completes a project load). Uses a NON-default fraction:
+    // with 1.0 this would pass even if the mirror never reacted to the re-insert.
+    let mut app = setup_test_app();
+    app.update();
+    assert_eq!(volume_var(&app).as_deref(), Some("100"), "precondition: default");
+    app.insert_resource(AudioState { max_volume: 0.6, active_fraction: 0.4, muted: true });
+    app.update();
+    assert_eq!(volume_var(&app).as_deref(), Some("40"), "the chosen preset (0.4), not the effective volume (muted, max_volume 0.6)");
+}
+
+#[test]
+fn test_bound_label_shows_the_new_volume_the_same_frame() {
+    // Pins the scheduling contract (mirror runs after action_executor_system and before
+    // update_dynamic_labels_system): SetVolume -> one update -> the bound label's text is current.
+    let mut app = setup_test_app();
+    app.update();
+    let label = app.world_mut().spawn((
+        Text::new(""),
+        ironhold_core::DynamicLabel {
+            key: AUDIO_VOLUME_PERCENT_KEY.to_string(),
+            format: Some("Volume: {}%".to_string()),
+        },
+    )).id();
+    app.update();
+    assert_eq!(app.world().get::<Text>(label).unwrap().0, "Volume: 100%", "readout is correct before any action runs");
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SetVolume(25));
+    app.update();
+    assert_eq!(app.world().get::<Text>(label).unwrap().0, "Volume: 25%", "SetVolume must reach the bound label within the same update");
+}
+
+#[test]
+fn test_volume_percent_survives_scene_load() {
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SetVolume(50));
+    app.update();
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::LoadScene("scenes/other.scene.ron".to_string()));
+    app.update();
+    app.update();
+    assert_eq!(volume_var(&app).as_deref(), Some("50"), "LoadScene must not clear the variable (only the target_* vars are cleared)");
+}
+
+#[test]
+fn test_volume_percent_string_round_trips_every_preset() {
+    // Every value SetVolume can produce: percent -> fraction -> string must give the percent back.
+    // Pins round-vs-truncate (29/100 is 0.28999999 in f32; truncation would give 28).
+    for p in 0u32..=100 {
+        assert_eq!(volume_percent_string(p as f32 / 100.0), p.to_string(), "percent {p}");
+    }
+}
+
+#[test]
+fn test_volume_percent_string_clamps_and_handles_non_finite() {
+    assert_eq!(volume_percent_string(-0.5), "0");
+    assert_eq!(volume_percent_string(1.7), "100");
+    assert_eq!(volume_percent_string(f32::NAN), "0");
+    assert_eq!(volume_percent_string(f32::INFINITY), "0");
+    assert_eq!(volume_percent_string(f32::NEG_INFINITY), "0");
+    assert_eq!(volume_percent_string(0.555), "56");
 }

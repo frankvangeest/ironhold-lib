@@ -88,9 +88,14 @@
           padding: 12.0,
           background_color: (0.10, 0.12, 0.18, 0.85),
           children: [
+            // `audio_volume_percent` is written by the engine (the chosen preset, e.g. "75"): no
+            // state_machine.ron rule is needed, and it reads the current preset (100% at startup).
+            // Mute is different: it is NOT written automatically (see `options_audio_state` below).
             Label((
               id: "audio_heading",
-              text: "Volume",
+              text: "",
+              bind: "audio_volume_percent",
+              format: "Volume: {}%",
               size: (596.0, 32.0),
               align: Left,
               font_size: 26.0,

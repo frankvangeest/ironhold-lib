@@ -884,7 +884,7 @@ The `bind` variable is kept in sync by rules in `logic/state_machine.ron` that l
 | `position` | `(f32, f32)` | `(0,0)` | Top-left corner in pixels. Ignored inside `ui_panel:` or a `Group` unless `absolute: true` (then measured from that container's box, not the screen). |
 | `size` | `(f32, f32)` | `(120.0, 32.0)` | Width and height in pixels |
 | `align` | `UiTextAlign` | `Center` | Text alignment: `Left`, `Center`, `Right` |
-| `bind` | `Option<String>` | `None` | `GameVariables` key — when set, label text is replaced each frame with the variable's value |
+| `bind` | `Option<String>` | `None` | `GameVariables` key — when set, label text is replaced each frame with the variable's value. **An unset key renders as an empty string**: without `format:` the label is blank, and with `format:` the text around `{}` still shows (a typo'd `bind` with `format: "Volume: {}%"` reads `Volume: %`). `ironhold validate` does not check `bind:` keys. Engine-written keys (see the table below, e.g. `audio_volume_percent`) are always present and need no initialiser. |
 | `format` | `Option<String>` | `None` | Template for `bind`; `"{}"` is replaced by the value (e.g. `"Score: {}"`). Raw value used when omitted. |
 | `absolute` | `bool` | `false` | Inside `ui_panel:` or a `Group`: leave the flow and position absolutely, relative to that container's top-left |
 | `font_size` | `f32` | `22.0` | Font size in screen pixels. `size:` sets the layout box only — it does NOT scale to fit; see the sizing note under `Button` above (same behavior, same 26px→22px default swap, same `clip` field). |
@@ -897,11 +897,11 @@ The `bind` variable is kept in sync by rules in `logic/state_machine.ron` that l
 | `target_display` | targeting | `"<prefab> <id>"` of the current target (e.g. `"enemy_orc_melee orc_01"`); empty string when no target |
 | `target_name` | targeting | prefab catalog key of the current target (e.g. `"enemy_orc_melee"`) |
 | `target_id` | targeting | spawn id of the current target (e.g. `"orc_01"`) |
-| `score` | action executor | running score, derived from `IncrementVariable("score", …)` |
+| `audio_volume_percent` | audio | the chosen volume preset as an integer string (`"100"` by default, `"25"` after `SetVolume(25)`), present from the first frame. It is the preset the player picked, **not** the effective volume: unaffected by `max_volume` and by mute. Reserved: bind a `Label` to it but don't `SetVariable` it — if you do, your value shows only until the next `SetVolume`/`ToggleMute`/project load, then silently reverts. **Mute is NOT auto-written** — bridge `audio.muted`/`audio.unmuted` with `SetVariable` (see `SyncAudioState`). |
 
-The targeting variables update on every selection change (click, Tab, or `SetTarget`) and blank on clear/`LoadScene`. Example: `Label((id: "target_label", bind: "target_display", format: "Target: {}"))` — see `assets/projects/3rd_person_game_demo`.
+The targeting variables update on every selection change (click, Tab, or `SetTarget`) and blank on clear/`LoadScene`; `audio_volume_percent` updates on every `SetVolume`, survives scene loads, and resets to `"100"` when a project loads. (`score` is **not** engine-written: your own `IncrementVariable("score", …)` rules write it and the engine only reads it, for the debug-state readout.) Example: `Label((id: "target_label", bind: "target_display", format: "Target: {}"))` — see `assets/projects/3rd_person_game_demo`.
 
-> **2+ players present (including party mode):** these three variables go blank whenever 2+
+> **2+ players present (including party mode):** the three targeting variables go blank whenever 2+
 > players are present, rather than reflecting only one player's target with no indication a
 > second player's selection isn't shown. Use the per-viewport `target_hud:` block instead for a
 > **split-screen** scene's target readout — party mode has no readout replacement today (no
@@ -3911,9 +3911,9 @@ column.
 | `SpawnEffect(key: "key", position/entity)` | Spawn a particle burst from `assets.ron effects`. Quality multiplier and budget gating are applied at spawn time. See the Particle System section. |
 | `ProjectDecal(key: "key", …)` | Spawn a flat ground-projected texture quad. See the Ground Decals section. |
 | `SetParticleQuality(Level)` | Set the global quality tier (`High`, `Medium`, `Low`, `Minimal`). Persists across scene transitions. Affects all subsequent `SpawnEffect` calls. |
-| `SetVolume(0–100)` | Set the global audio volume (percent). Scales against the project's `max_volume` ceiling — `SetVolume(100)` equals `max_volume`. Emits `audio.volume_changed`. |
+| `SetVolume(0–100)` | Set the global audio volume (percent). Scales against the project's `max_volume` ceiling — `SetVolume(100)` equals `max_volume`. Emits `audio.volume_changed` and updates the engine-written `audio_volume_percent` variable (bind a `Label` to it for a live readout, e.g. `format: "Volume: {}%"`). |
 | `ToggleMute` | Toggle muted state. Muting emits `audio.muted`; unmuting restores the previous volume and emits `audio.unmuted`. |
-| `SyncAudioState` | Re-emit the current mute state (`audio.muted` or `audio.unmuted`) without changing it. Use in state `entry_actions` to initialise bound audio labels on first load — combine with a `global_on` bridge that maps the event to `SetVariable`. |
+| `SyncAudioState` | Re-emit the current mute state (`audio.muted` or `audio.unmuted`) without changing it. Use in state `entry_actions` to initialise bound **mute** labels on first load — combine with a `global_on` bridge that maps the event to `SetVariable`. Not needed for `audio_volume_percent`, which is always present. |
 | `ToggleOwnNameplate` | Toggle the local player's own nameplate visibility as a runtime preference, independent of the scene's `show_player_nameplate` default. Does not persist across scene transitions (resets to the new scene's authored default). Has no effect on NPC/prop nameplates or when the player prefab has an explicit `nameplate: Some(true)`/`Some(false)` override (that always wins). Emits `nameplate.own_shown`/`nameplate.own_hidden`. |
 | `ApplyModifier(modifier_key: "key")` | Apply a named stat modifier template to its target stat. |
 | `RemoveModifier(modifier_key: "key")` | Remove all active instances of a named modifier. |
@@ -4685,6 +4685,8 @@ Optional block in `{name}.project.ron` that controls project-level audio volume.
 | `audio.muted` | `ToggleMute` transitions to muted, or `SyncAudioState` while already muted |
 | `audio.unmuted` | `ToggleMute` transitions to unmuted, or `SyncAudioState` while not muted |
 | `audio.volume_changed` | `SetVolume` changes the active fraction |
+
+**`GameVariables` written by the audio system:** `audio_volume_percent` (the chosen preset as an integer string, `"100"` at start) — see "GameVariables auto-written by capabilities" under `Label`. It does not follow mute or `max_volume`, so a `mute_on_start: true` project correctly reads `Volume: 100%` next to a bridged `Audio: Muted` label; show both with two `Label`s (a `Label` binds one key). Mute is not auto-written: bridge the events above to a variable yourself.
 
 ---
 

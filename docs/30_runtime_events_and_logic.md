@@ -120,7 +120,7 @@ The name is used as-is in the rules pipeline — the caller is responsible for n
 - The targeting capability also writes the `target_display` / `target_name` / `target_id` `GameVariables` on every change — bind a `Label` to one of these for a HUD target frame (no rule wiring needed). ✅
 - `"audio.muted"` — emitted by `ToggleMute` when transitioning to muted ✅
 - `"audio.unmuted"` — emitted by `ToggleMute` when transitioning to unmuted ✅
-- `"audio.volume_changed"` — emitted by `SetVolume` after the active fraction changes ✅
+- `"audio.volume_changed"` — emitted by `SetVolume` after the active fraction changes ✅ (the audio system also keeps the `audio_volume_percent` `GameVariables` entry in sync — bind a `Label` to it, no rule needed; mute is not auto-written)
 - `"dialogue.started:{npc_id}"` — dialogue panel opened for the NPC with the given spawn ID; emitted by `Action::StartDialogue` ✅
 - `"dialogue.ended:{dialogue_path}"` — dialogue panel closed; payload is the project-relative `.dialogue.ron` path; emitted by `Action::EndDialogue` and cleared on `LoadScene` ✅
 - `"inventory.added:{entity}:{item_key}:{count}"` — items successfully added to the named entity's inventory (or `"player"` for `PlayerInventory`); emitted by `Action::AddItem` ✅
@@ -171,7 +171,7 @@ Actions represent explicit operations the runtime can execute.
 - `PlaySound(key: audio_key)` ✅ — plays a sound by `AssetCatalog` audio key; fire-and-forget (entity despawns on completion); warns and no-ops for unsupported formats (`.wav`, `.ogg`, `.mp3` supported) or missing catalog keys; optional `volume: f32` (0.0–1.0, default 1.0) multiplies the per-entry catalog volume
 - `PlayMusicLoop(key: audio_key)` ✅ — starts a looping background music track by `AssetCatalog` audio key; stops any currently playing music; optional `volume: f32` (0.0–1.0, default 1.0) multiplies the per-entry catalog volume
 - `StopMusic` ✅ — stops the current background music
-- `SetVolume(pct)` ✅ — sets global audio volume 0–100 (percent); scales against the project's `max_volume` ceiling so `SetVolume(100)` equals `max_volume`, not 1.0; emits `audio.volume_changed`
+- `SetVolume(pct)` ✅ — sets global audio volume 0–100 (percent); scales against the project's `max_volume` ceiling so `SetVolume(100)` equals `max_volume`, not 1.0; updates the engine-written `audio_volume_percent` variable (bind a `Label` to it); emits `audio.volume_changed`
 - `ToggleMute` ✅ — toggles muted state; muting emits `audio.muted`, unmuting restores the previous volume and emits `audio.unmuted`
 
 #### State/variables actions
@@ -363,7 +363,7 @@ Applies actions to the world. Key design points:
 - `PlaySound { key, volume }` — fire-and-forget audio by catalog key; `volume` (0.0–1.0, default 1.0) multiplies the per-entry catalog volume; warns for unsupported formats or missing keys
 - `PlayMusicLoop { key, volume }` — starts a looping background music track by catalog key; `volume` (0.0–1.0, default 1.0) multiplies the per-entry catalog volume
 - `StopMusic` — stops the current background music
-- `SetVolume(u32)` — sets global audio volume 0–100
+- `SetVolume(u8)` — sets global audio volume 0–100
 - `PreloadScene(String)` — warms the asset cache for a `.scene.ron` before it is needed; use on `scene.ready` so a subsequent `LoadScene` resolves without a loading pause
 - `PreloadPrefab(String)` — loads a prefab's GLB model and stores the handle in `PreloadedGlbHandles`; fire on `scene.ready` to eliminate the WASM GLB-decode stall on first spawn
 - `SetVariable(String, String)` — writes a named string value into `GameVariables`; readable by data-bound UI labels; `DebugState.score` is derived from the `"score"` key

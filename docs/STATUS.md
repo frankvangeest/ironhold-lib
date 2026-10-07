@@ -95,7 +95,7 @@ _Last updated: 2026‑05‑18_
 - `Action::PlaySound { key, volume }` — fire-and-forget sound by audio catalog key; `volume` (0.0–1.0, default 1.0) multiplies the per-entry catalog volume; warns for unsupported formats or missing keys
 - `Action::PlayMusicLoop { key, volume }` — starts a looping background music track by audio catalog key; `volume` (0.0–1.0, default 1.0) multiplies the per-entry catalog volume
 - `Action::StopMusic` — stops the current background music track
-- `Action::SetVolume(u8)` — sets global volume 0–100
+- `Action::SetVolume(u8)` — sets global volume 0–100; the engine mirrors the chosen preset into the `audio_volume_percent` `GameVariables` entry (live-bindable readout)
 - `Action::PreloadScene(String)` — warms the asset cache for a `.scene.ron` before it is needed
 - `Action::SetVariable(String, String)` — writes a named string value into `GameVariables`; readable by data-bound UI labels; `DebugState.score` is derived from the `"score"` key
 - `Action::IncrementVariable(String, i32)` — parses the variable as `i32` and adds the delta; missing or unparseable values default to `0`
