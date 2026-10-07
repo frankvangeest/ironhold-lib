@@ -27,24 +27,12 @@ the cached binary is still valid immediately after one). Every command below use
 binary directly — no `cargo` invocation, no rebuild, effectively instant:
 
 ```bash
-# Ironhold CLI — inspect, validate, and query project assets (no engine startup required)
 tools/bin/ironhold validate <project_dir>              # parse & cross-check all RON files; exit 0=ok 1=errors 2=tool-error
 tools/bin/ironhold validate --strict <project_dir>    # also report defined keys never referenced anywhere (orphan detection)
-tools/bin/ironhold inspect glb     <path.glb>          # animations, meshes, materials, root nodes
-tools/bin/ironhold inspect texture <path.png|jpg|webp> # dimensions, format, channels, file size
-tools/bin/ironhold inspect audio   <path.wav|mp3>      # duration, sample rate, channels, file size
-tools/bin/ironhold query prefabs <project_dir>         # list prefabs (kind, model, tags, behavior)
-tools/bin/ironhold query effects <project_dir>         # list particle effects (count, layers, flags)
-tools/bin/ironhold query scenes   <project_dir>        # list scenes (entities, ui, player, overlay)
-tools/bin/ironhold query logic    <project_dir>        # list logic/state_machine.ron content (global_on, states, transitions)
-tools/bin/ironhold query actions  <project_dir>        # list all action types used across logic files
-tools/bin/ironhold query events   <project_dir>        # list all event triggers used across logic files
-tools/bin/ironhold query prefabs <project_dir> --keys-only             # one key per line (pipe-friendly)
-tools/bin/ironhold query effects <project_dir> --filter additive=true  # filter by field=value
-tools/bin/ironhold watch  <project_dir>               # watch for .ron changes and re-validate on every save
-tools/bin/ironhold stats  <project_dir>               # compact summary: scenes, prefabs, effects, logic, catalog size
 tools/bin/ironhold --json <command>                    # any command accepts --json for machine-readable output
 ```
+
+`tools/bin/ironhold --help` lists the rest (`inspect`, `query`, `stats`, `watch`).
 
 Still needed occasionally, and NOT replaced by the cached binary: `cargo check -p ironhold_cli`
 (the mandatory schema-change gate, step 6 of the Code change workflow below — it must compile
@@ -52,15 +40,6 @@ against the current source, not a stale cached binary) and `cargo test -p ironho
 test suite). Both rebuild from source deliberately.
 
 ```bash
-# Run native (desktop) build
-cargo run -p ironhold_native
-
-# Run with inspector UI (debug overlay)
-cargo run -p ironhold_native --all-features
-
-# Run a specific project by name
-cargo run -p ironhold_native -- --project 3rd_person_game_demo
-
 # ⚠️ Before any cargo/wasm-pack command: verify CARGO_TARGET_DIR is actually set in THIS shell.
 # `export` does not persist across separate tool invocations/shells, and this machine has no
 # .cargo/config.toml or shell profile file to fall back on -- if the variable is empty, cargo
@@ -142,16 +121,7 @@ python test_web.py --update-baseline pause_nav
 
 ## Architecture Overview
 
-Three-crate workspace:
-- **`ironhold_core`** — platform-agnostic game library; contains all logic, rendering, physics, and the scene pipeline. Must never have platform-specific code.
-- **`ironhold_native`** — thin desktop runner; parses `--project` CLI arg, calls `ironhold_core::start_app()`.
-- **`ironhold_web`** — thin WASM runner; `#[wasm_bindgen(start)]` calls `ironhold_core::start_app(None)`.
-
-### Core internal structure (`ironhold_core/src/`)
-
-- **`schema/`** — RON-serializable data types (`ProjectConfig`, `GameSceneV2`, `AssetCatalog`, `PrefabCatalog`, `Action`, etc.). These are the source of truth for all data-driven content.
-- **`runtime/`** — systems that run at engine boot/update: scene loading (`scene_manager`), model spawning, material creation, input translation, message interpreter, action executor.
-- **`capabilities/`** — modular gameplay systems: player controller, orbit camera, flycam, animation, animation resolver, NPC AI, collectible triggers, motion (rotate/bob), custom material, terrain mesh generation, terrain material, physics (Rapier3D).
+`ironhold_core` is the platform-agnostic game library (logic, rendering, physics, scene pipeline) and **must never contain platform-specific code**; `ironhold_native` and `ironhold_web` are thin runners that call `ironhold_core::start_app()`.
 
 ### Data-driven game loop
 
@@ -163,48 +133,15 @@ The engine uses a **Message → Interpreter → Action → Executor** pipeline:
 
 This means game behavior can be authored entirely in RON without recompiling the engine.
 
-### Asset & project layout
+### Project layout
 
-```
-assets/projects/{name}/
-  {name}.project.ron          ← ProjectConfig (entry point, initial scene ref)
-  scenes/*.scene.ron          ← GameSceneV2 files (models, UI, lighting, player); projects can have multiple scenes
-  logic/state_machine.ron     ← FSM-based logic: flat (global_on only) for simple projects, or with states/transitions for multi-scene projects
-  overrides/model_fixes.ron   ← per-model transform corrections
-  prefabs/prefabs.ron         ← reusable component definitions
-  prefabs/animation/*.ron     ← AnimationPolicy per character
-  assets.ron                  ← AssetCatalog
-```
+Projects live in `assets/projects/{name}/`; create new ones with `/new-project <name>`.
 
 Note: every project uses `logic/state_machine.ron` — there is no separate `rules.ron` format (removed; see `docs/20_data_formats.md`'s "Removed: rules.ron" callout for the migration mapping). A project with only `global_on` bindings and no `states`/`transitions` is exactly as valid as one with a full FSM — start flat, add states when you need modes. See the interpreter notes in `crates/ironhold_core/src/CLAUDE.md`.
 
-Example projects: `quick_scene`, `3rd_person_game_demo`, `terrain_demo`, `custom_materials`, `primitive_world`, `entity_logic_demo`, `particles_demo`. Test data lives in `assets/projects/integration_tests/`.
-
 ## Tools
 
-Python CLI tools live in `tools/`. Always run them from the repo root.
-
-| Tool | When to use |
-|---|---|
-| `tools/asset_checker/check.py` | After editing any `assets.ron` or moving/renaming asset files — verifies all referenced paths resolve on disk with the correct case (`ironhold_cli validate` also checks this now — see `docs/60_contributing.md`'s "Checks performed" list) |
-| `tools/texture_gen/generate.py` | Generate seamless noise textures or per-project terrain heightmaps |
-| `tools/avif2png/convert.py` | Batch-convert AVIF preview images to PNG |
-| `tools/glb_inspector/inspect_glb.py` | Inspect a GLB for exact node names, animation clips, and materials before authoring RON |
-| `tools/glb_preview/preview.py` | Render a 3/4-view preview PNG for GLB models using Blender headless |
-| `tools/build_asset_manifest.py` | After adding, removing, or renaming any asset files — regenerates `assets_manifest.json` for the `assets.html` browser |
-
-Each tool has its own `CLAUDE.md` with full usage examples. Run `python <tool> --help` for a quick reference.
-
-```bash
-# Always run after changing any assets.ron or moving asset files
-python tools/asset_checker/check.py
-
-# Also check for unreferenced files in assets/shared/
-python tools/asset_checker/check.py --orphans
-
-# Regenerate the asset browser manifest after adding/removing asset files
-python tools/build_asset_manifest.py
-```
+Python CLI tools live in `tools/` (run them from the repo root); each has its own `CLAUDE.md` with usage.
 
 ### Using OpenCode alongside Claude Code
 
@@ -220,44 +157,11 @@ the Claude Code side:
 
 ## Planning
 
-All work items live in `planning/`. See `planning/CLAUDE.md` for the full folder reference.
-
-### Backlog (`planning/backlog.md`)
-The canonical priority queue — features and bugs in one place. Items flow: **Icebox → Queued → Active → Done**. Do not duplicate items into GitHub issues or `docs/`.
-
-### Bugs
-Log known bugs in the `## Bugs` section of `planning/backlog.md` as a one-liner with reproduction and suspected cause. If the bug needs investigation before it can be fixed, also create `planning/investigations/{name}.md` and link to it from the backlog entry.
-
-### Feature files (`planning/features/`)
-Create `planning/features/{name}.md` (copy `_template.md`) when a feature needs design discussion before coding: new schema fields, new event/action types, cross-capability changes, or anything where the approach is unclear. Always fill in `Planned at: <hash> (<YYYY-MM-DD>)` at the top — run `git rev-parse --short HEAD` to get the hash.
-
-### Claude suggestions (`planning/claude_suggestions.md`)
-While implementing features, if you notice something worth revisiting — a latent bug, a pattern that could be improved, a follow-up optimisation — add a brief entry. Format:
-```
-- **Title** _(observed at `<hash>` <YYYY-MM-DD>)_
-  What (one sentence) + Why (one sentence, concrete basis).
-```
-Only add things with a concrete technical basis. Frank reviews these periodically and promotes good ones to the backlog.
+All work items live in `planning/` (`planning/CLAUDE.md` has the full folder reference: backlog, bugs, feature files, `claude_suggestions.md`). Do not duplicate backlog items into GitHub issues or `docs/`. Fill in `Planned at: <hash> (<date>)` (`git rev-parse --short HEAD`) at the top of every feature file.
 
 ## Adding a new asset project
 
-When a new project is added under `assets/projects/{name}/`, three registration steps are required:
-
-1. **`test_web.py`** — append the project name to the `PROJECTS` list at the top of the file.
-
-2. **Baseline screenshot** — generate the project's scene screenshot so it can be used in the gallery:
-   ```bash
-   python test_web.py --project {name} --update-baselines --skip-build --real-gpu
-   ```
-   This writes `screenshot_baselines/scenes/{name}_main.png` (and one file per scene if the project has multiple scenes).
-   **Use `--real-gpu` (WebGPU, a visible non-headless Chromium window) with the standard dev build** (`--features webgpu`, step 7 of the Code change workflow) — it is the primary way to capture baselines and run the browser suite. The headless modes are the fallback / CI path: default GL/ANGLE needs a *WebGL2* build (no `--features webgpu`), and headless `--webgpu` (SwiftShader) finds no GPU adapter on this machine (`No available adapters`, 2026-10-06). `test_web.py` runs its own server on port **8001** (`--port` to change) so it never collides with a manual `python serve.py` on 8000 — check `netstat -ano | grep :800` if a run times out. Baselines older than 2026-10-06 were captured on headless GL, so a `--real-gpu` run can show pixel diffs on scenes you did not touch (e.g. `pause_nav/02_main_scene`) — update only the baselines for what this change affected (`--project`/`--update-baseline <name>`), never a blanket `--update-baselines`.
-
-3. **`index.html`** — add a card to the project grid. Copy an existing `<a class="project-card">` block and update:
-   - `id` attribute (`card-{name}`)
-   - `href` → `play.html?project={name}`
-   - `data-keywords` → space-separated search terms
-   - `img src` → `screenshot_baselines/scenes/{name}_main.png`
-   - `img alt`, card title, description, and tags
+**Always use `/new-project <name>`** (`.claude/commands/new-project.md`) — never hand-copy the template or hand-register a project. It does every registration (`test_web.py` `PROJECTS`, `validate_projects.rs`, the README table, the `index.html` card) and the baseline screenshot. Baselines are captured with `python test_web.py --real-gpu` (visible WebGPU Chromium, port 8001) against the dev build; headless modes are the fallback only. Update only the baselines your change affected (`--project`/`--update-baseline <name>`), never a blanket `--update-baselines`.
 
 ---
 
@@ -391,7 +295,7 @@ the shared cache itself, per the 2026-07-12 incident).
 ## Critical Rules
 
 ### Code change workflow
-Every code change follows this order. Steps 1–10 happen **on a `feature/{slug}` branch** (parallelizable — one per worktree); steps 11–17 happen **on `integration`**, once per batch of merged features, not once per feature. See Branching Model above for the branch tiers.
+Every code change follows this order. Steps 1–10 happen **on a `feature/{slug}` branch** (parallelizable — one per worktree); steps 11–17 happen **on `integration`**, once per batch of merged features, not once per feature. See Branching Model above for the branch tiers. `/ship-feature` walks steps 1-10 on a feature branch; `/release` walks steps 11-17 on `integration`.
 
 **On a feature branch:**
 
@@ -434,6 +338,7 @@ Every code change follows this order. Steps 1–10 happen **on a `feature/{slug}
       - implement the feature or fix
       - update cli 
       - update tests
+      - **a new project under `assets/projects/` is created with `/new-project <name>`** — see "Adding a new asset project"
       - **any playtest-aid RON/asset changes (e.g. a demo-project addition so a fix has something
         to visually confirm) belong here too, not bolted on later right before the WASM build.**
         Added late, they silently skip step 4's test gate entirely — this happened for real

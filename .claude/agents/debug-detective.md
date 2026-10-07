@@ -35,7 +35,7 @@ You are deeply familiar with:
 
 **Reactive** (a bug is already reported — error, crash, wrong behavior): use the phased methodology below, starting from the reported symptom.
 
-**Proactive** (invoked as part of the ship workflow's mandatory post-code-change review, e.g. `.claude/commands/ship.md` step 4 — no symptom reported yet): there is no stack trace to start from, so instead read the diff itself and actively hunt for latent bugs before they ship:
+**Proactive** (invoked as part of the ship workflow's mandatory post-code-change review, e.g. `.claude/commands/ship-feature.md` step 4 — no symptom reported yet): there is no stack trace to start from, so instead read the diff itself and actively hunt for latent bugs before they ship:
 - Edge cases the implementer likely didn't test: empty collections, zero/negative values, first-frame vs. steady-state, entities missing an expected component.
 - ECS hazards: system-ordering assumptions, query aliasing/mutability conflicts, change-detection gaps, event-timing races (emitted-and-consumed-same-frame vs. next-frame).
 - Silent failure paths: `unwrap_or_default()`, `if let Ok(...) = ...` that swallow an error branch, `.ok()` discarding a `Result` that could matter.

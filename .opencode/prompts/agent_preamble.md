@@ -31,7 +31,7 @@ Code subagent definition, included verbatim from `.claude/agents/`. Read it with
    - "launch agents in parallel" / the `Agent` tool → OpenCode's `task` tool (same parallel/
      background semantics, but every invocation starts with a fresh context — there is no
      context-inheriting fork).
-   - a Claude Code slash command (`/code-review`, `/ship`, etc.) → the identically-named OpenCode
+   - a Claude Code slash command (`/code-review`, `/ship-feature`, etc.) → the identically-named OpenCode
      command.
    - anything mentioning `Monitor`, `ToolSearch`, `EnterWorktree`/`isolation: "worktree"`,
      `Cron*`/`ScheduleWakeup`, or Claude's `Skill` tool → no OpenCode equivalent exists; skip it and

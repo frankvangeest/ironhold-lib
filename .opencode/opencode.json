@@ -230,10 +230,15 @@
       "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
       "template": "OPENCODE: this review is advisory only. Before step 10's merge into integration, run /code-review in Claude Code.\n\n{file:../.claude/commands/plan-review.md}"
     },
-    "ship": {
-      "description": "Walk through the ironhold-lib code change workflow for the current feature.",
+    "ship-feature": {
+      "description": "Walk a feature through the ironhold-lib code change workflow up to merging into integration (steps 1-10).",
       "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
-      "template": "OPENCODE: this review is advisory only. Before step 10's merge into integration, run /code-review in Claude Code.\n\n{file:../.claude/commands/ship.md}"
+      "template": "OPENCODE: this review is advisory only. Before step 10's merge into integration, run /code-review in Claude Code.\n\n{file:../.claude/commands/ship-feature.md}"
+    },
+    "release": {
+      "description": "Promote the combined integration batch to main (steps 11-17).",
+      "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+      "template": "OPENCODE: this review is advisory only. Before step 10's merge into integration, run /code-review in Claude Code.\n\n{file:../.claude/commands/release.md}"
     },
     "new-project": {
       "description": "Scaffold a new ironhold project from the blank_project template.",

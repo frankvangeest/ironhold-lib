@@ -23,7 +23,7 @@ Code, translate them:
 | Claude Code mechanic | Under OpenCode |
 |---|---|
 | `Agent` tool / "launch agents in parallel" | OpenCode's `task` tool (same parallel/background semantics, but every invocation starts cold — no context-inheriting fork) |
-| A slash command (`/code-review`, `/ship`, etc.) | The identically-named OpenCode command |
+| A slash command (`/code-review`, `/ship-feature`, etc.) | The identically-named OpenCode command |
 | `Monitor`, `ToolSearch`, `EnterWorktree`/`isolation: "worktree"`, `Cron*`/`ScheduleWakeup`, Claude's `Skill` tool | No equivalent — skip and proceed with the rest of the instructions |
 
 **Merge gate (applies to every AI tool other than Claude Code, including OpenCode):** any review

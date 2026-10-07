@@ -41,7 +41,7 @@ the project your key belongs to has **no billing account linked**. If billing is
 | Tier | Model | Used by |
 |---|---|---|
 | E (paid) | `openrouter/deepseek/deepseek-v4.1-flash` | Only `system-architect-deep` / `debug-detective-deep` |
-| R (free reasoning) | `opencode/nemotron-3-ultra-free` or `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` | `system-architect`, `debug-detective`, `alignment-reviewer`, `/code-review`/`/plan-review`/`/ship` orchestration, the built-in `plan` agent |
+| R (free reasoning) | `opencode/nemotron-3-ultra-free` or `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` | `system-architect`, `debug-detective`, `alignment-reviewer`, `/code-review`/`/plan-review`/`/ship-feature`/`/release` orchestration, the built-in `plan` agent |
 | R-lite | `openrouter/nvidia/nemotron-3-super-120b-a12b:free` | `wasm-perf-reviewer` |
 | C (free code) | Split across 3 providers (2026-09-23), see below | `integration-test-author`, `ron-gameplay-scripter`, `data-format-doc-writer`, the default `build`/`general` agents |
 | G (free, low-volume) | `google/gemini-3.8-flash` | `ux-gamedesigner-reviewer`, `game-world-designer` |

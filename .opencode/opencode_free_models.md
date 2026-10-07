@@ -219,7 +219,7 @@ doc writing) is lower-stakes than Pro's — bad docs are easy to spot-check.
 
 **`nvidia/nemotron-3-ultra-550b-a55b:free`** (`system-architect`, `debug-detective`, plus the
 `opencode/nemotron-3-ultra-free` Zen twin backing the built-in `plan` agent and
-`/code-review`/`/plan-review`/`/ship` orchestration) — **CAUTION**. NVIDIA's own tech report
+`/code-review`/`/plan-review`/`/ship-feature`/`/release` orchestration) — **CAUTION**. NVIDIA's own tech report
 documents that reasoning tokens from previous turns are dropped whenever a new user/tool-result
 message arrives — a different trigger than Cohere's "between tool calls" case, but the same
 failure family (reasoning-state loss → risk of reconstructing/fabricating rather than continuing
