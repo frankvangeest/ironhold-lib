@@ -1,6 +1,6 @@
 # Feature: Live volume percent readout (`audio_volume_percent`)
 
-_Status: Ready — two plan reviews (system-architect, ux-gamedesigner-reviewer) completed 2026-10-06; both findings sets folded in below (R1-R9)_
+_Status: Done (2026-10-07) — shipped on `feature/audio_volume_readout`; playtest confirmed by Frank_
 _Planned at: `e847b93` (2026-10-06)_
 
 ## What
