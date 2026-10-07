@@ -208,3 +208,36 @@ Historical citations (done plans, agent memory, `opencode_compatibility.md`) are
 - `FixedUpdate` camera-follow wording (731-733) contradicts `lib.rs` (camera chain runs in `Update`)
 - the `audio_volume_var_system` note under "Audio file authoring" (1060)
 - `opencode_compatibility.md` says the file is "~154 KB"
+
+## 6. Corrections from the 2026-10-07 plan review (apply when the rows are used)
+
+Re-homings and relabels the plan review required; the row tables above keep the original slice-agent labels.
+- **`runtime/` is not empty.** It holds `input.rs`, `actions.rs`, `messages.rs`, `model_spawner.rs`,
+  `material_factory.rs`, `mod.rs` besides `scene_manager/`. A small **`runtime/CLAUDE.md`** is added. The gamepad
+  safety invariants (rows 1530-1574 and 1606-1636: never bind to a claimed entity, ascending-`PlayerIndex` order,
+  reset `PendingJoinGamepad` to `None` each run, one pad per frame, `.take()` in the executor) go there (and the
+  topic doc keeps the long form), **not** only in a topic.
+- **`lib.rs` schedule edges -> PARENT** ("Load-bearing schedule edges in `lib.rs`", ~1.2k chars): targeting-chain
+  consumers, `camera_blend_system` last (row 1383-1405), `target_hud_update_system` after
+  `split_screen_viewport_system` (row 452-462), dialogue ordering (row 686-702), the audio mirror ordering.
+- **Rows relabelled "RON-authoring Y (also `docs/30:674`)"** — 575-585 (respawn rules in `global_on`) and 598-606:
+  the rule is for RON authors and is already in a designer doc; CUT here with a pointer, or keep a one-liner.
+- **Re-homed to topics (to reach the `capabilities/` budget):** animation pipeline 622-684 (~4.6k) ->
+  `TOPIC:animation-pipeline`; viewport-aware saga 1463-1528 (~5.9k) -> `TOPIC:split-screen-cameras-and-widgets`.
+- **One topic name:** `split-screen-ring-visibility` (rows 383-431) is the same topic as
+  `split-screen-cameras-and-widgets`.
+- **`schema/` gains two rules** the map put only in SM: "a new rendering `PrefabDef` field must be checked against
+  the player path" (1213-1223; `PrefabDef` lives in `schema/catalog.rs`) and the `{self}`/`{target}` four-site
+  enumeration (`rewrite_self`, `rewrite_target`, `substitute_self_in_action`, `action_needs_target`).
+- **SFX block 1063-1066 -> CUT** (already at `docs/20:1928`; add the missing "decoder start-up on first play in WASM"
+  clause to that row). Not `DOC:asset-authoring`.
+- **WGSL rules 711-720** also get a stub with `paths: assets/**/*.wgsl`.
+- **Added live citations (§4):** `crates/ironhold_core/clippy.toml:4`, `crates/ironhold_core/src/det_math.rs:30`,
+  `assets/projects/entity_logic_demo/behaviors/respawning_gem.behavior.ron:7` (cites the `{new_id}` section, moving to
+  SM), and ~20 **active** `planning/features/*.md` files (e.g. `fade_out_despawn.md:65,140` citing `:1644`,
+  `:1724-1744`; `ocean_simulation_demo.md:46` citing `:718`; `gameplay_pipeline_system_sets.md:58,203` citing `:30`).
+- **Docs-move references** (for Phase A): live text refs to the six moving docs are `README.md:206-212,220`, root
+  `CLAUDE.md:432,437`, `docs/00_overview.md:174,177`, `docs/20_data_formats.md:3881`,
+  `docs/30_runtime_events_and_logic.md:313`, `docs/60_contributing.md:393-396` (self-references),
+  `tools/asset_checker/CLAUDE.md:7`, `planning/backlog.md:7` and ~12 active plan files. No test, hook, script,
+  `.githooks`, `.opencode` config or HTML page reads these paths programmatically.
