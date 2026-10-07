@@ -1,8 +1,8 @@
 {
- "base_commit": "ba4088d",
- "base_lines": 1752,
- "base_chars": 160039,
- "base_sha1": "8391ef847a05b73a3ed2b76af93179615c283c82",
+ "base_commit": "d222d91",
+ "base_lines": 1753,
+ "base_chars": 160481,
+ "base_sha1": "a1595e86749eb5c348435dc1328c1304e03b023a",
  "topics": {
   "player-ground-detection": {
    "pointer_in": "CAP"
@@ -47,7 +47,13 @@
    "subs": [],
    "text_sha1": "9ffadf5fc0e8cf7db0538339262eea906c6e1dbc",
    "review": false,
-   "notes": "\"single most important architectural rule\"; event-name table (23-27) partly derivable, keep"
+   "notes": "\"single most important architectural rule\"; event-name table (23-27) partly derivable, keep",
+   "orig_lines": [
+    [
+     1,
+     34
+    ]
+   ]
   },
   {
    "id": "b:35",
@@ -69,7 +75,13 @@
    "subs": [],
    "text_sha1": "184092cb02d934070f043b7457117a960123cbc9",
    "review": false,
-   "notes": "no `serde(flatten)`, rename = hard break, bump `schema_version`; steps 1-3 derivable; step 2 points at the executor (add pointer to SM)"
+   "notes": "no `serde(flatten)`, rename = hard break, bump `schema_version`; steps 1-3 derivable; step 2 points at the executor (add pointer to SM)",
+   "orig_lines": [
+    [
+     35,
+     53
+    ]
+   ]
   },
   {
    "id": "b:54",
@@ -89,7 +101,13 @@
    "subs": [],
    "text_sha1": "039ecbda940929b2668d9838617ab59c6c65a2b3",
    "review": true,
-   "notes": "the compiler error reveals it"
+   "notes": "the compiler error reveals it",
+   "orig_lines": [
+    [
+     54,
+     69
+    ]
+   ]
   },
   {
    "id": "b:70",
@@ -111,7 +129,13 @@
    "subs": [],
    "text_sha1": "c91a2c3c94b15c8daeb99fb3e97c87658322516c",
    "review": false,
-   "notes": "forced state change skips entry/exit actions; line 72 says \"see below\" but text is inline; do not strand \"do not add a general condition system\""
+   "notes": "forced state change skips entry/exit actions; line 72 says \"see below\" but text is inline; do not strand \"do not add a general condition system\"",
+   "orig_lines": [
+    [
+     70,
+     80
+    ]
+   ]
   },
   {
    "id": "b:81",
@@ -133,7 +157,13 @@
    "subs": [],
    "text_sha1": "9df8eba8644f5051185ed5b055af37ce130e466b",
    "review": false,
-   "notes": "heading \"Before coding\" is misleading; line 86 duplicates root CLAUDE.md (~80 chars CUT); heading \"Color field convention\" is cited by the plan for flex Group"
+   "notes": "heading \"Before coding\" is misleading; line 86 duplicates root CLAUDE.md (~80 chars CUT); heading \"Color field convention\" is cited by the plan for flex Group",
+   "orig_lines": [
+    [
+     81,
+     91
+    ]
+   ]
   },
   {
    "id": "b:92",
@@ -159,7 +189,17 @@
    "subs": [],
    "text_sha1": "7aa71ec394f0e1df3054922a4c3659470641c053",
    "review": false,
-   "notes": "all child spawning goes through it; depth cap 8; `ChildSpawnCtx` field list (~700 chars) derivable"
+   "notes": "all child spawning goes through it; depth cap 8; `ChildSpawnCtx` field list (~700 chars) derivable",
+   "orig_lines": [
+    [
+     92,
+     107
+    ],
+    [
+     109,
+     110
+    ]
+   ]
   },
   {
    "id": "b:108",
@@ -184,7 +224,13 @@
    ],
    "text_sha1": "2099db8b57c92831e98c54c819fe1be01d2f1b47",
    "review": true,
-   "notes": "added 2026-10-05 and bolted onto the composite-prefab list"
+   "notes": "added 2026-10-05 and bolted onto the composite-prefab list",
+   "orig_lines": [
+    [
+     108,
+     108
+    ]
+   ]
   },
   {
    "id": "b:111",
@@ -206,7 +252,13 @@
    "subs": [],
    "text_sha1": "fe9d8fb5736243dc904b1f8089f97bc2d945c738",
    "review": false,
-   "notes": "chain list derivable from the plugin schedule"
+   "notes": "chain list derivable from the plugin schedule",
+   "orig_lines": [
+    [
+     111,
+     126
+    ]
+   ]
   },
   {
    "id": "b:127",
@@ -226,7 +278,13 @@
    "subs": [],
    "text_sha1": "c8b048a8549d187447e7d7721022fe4e477a1824",
    "review": false,
-   "notes": "derivable from `action_substitution.rs` (`rewrite_self`); **hook `action_docs_reminder.py:15` tells Claude to add new variants to this list**; line 188 depends on it"
+   "notes": "derivable from `action_substitution.rs` (`rewrite_self`); **hook `action_docs_reminder.py:15` tells Claude to add new variants to this list**; line 188 depends on it",
+   "orig_lines": [
+    [
+     127,
+     143
+    ]
+   ]
   },
   {
    "id": "b:144",
@@ -248,7 +306,13 @@
    "subs": [],
    "text_sha1": "231eec7c225a64047d7bd6b2c8d4733e452a74bd",
    "review": true,
-   "notes": "170-175 (~500 chars) is `dialogue.rs` → CAP stub"
+   "notes": "170-175 (~500 chars) is `dialogue.rs` → CAP stub",
+   "orig_lines": [
+    [
+     144,
+     187
+    ]
+   ]
   },
   {
    "id": "b:188",
@@ -268,7 +332,13 @@
    "subs": [],
    "text_sha1": "df5567db7577b08bf54a5709e0673d63a08b5d61",
    "review": true,
-   "notes": "\"same as `{self}` above\" must be rewritten"
+   "notes": "\"same as `{self}` above\" must be rewritten",
+   "orig_lines": [
+    [
+     188,
+     189
+    ]
+   ]
   },
   {
    "id": "b:190",
@@ -288,7 +358,13 @@
    "subs": [],
    "text_sha1": "0ca3e01b7851cd36f43589a0deea13a3be5bbee3",
    "review": false,
-   "notes": "keep a one-line \"primary player = `PlayerIndex(0)` or none\" definition in CAP (used across 190-351); cites \"Player-construction sites\" (later in file)"
+   "notes": "keep a one-line \"primary player = `PlayerIndex(0)` or none\" definition in CAP (used across 190-351); cites \"Player-construction sites\" (later in file)",
+   "orig_lines": [
+    [
+     190,
+     205
+    ]
+   ]
   },
   {
    "id": "b:206",
@@ -308,7 +384,13 @@
    "subs": [],
    "text_sha1": "b6fb82ce9e0b94b9432d70cc7fc6ccd347e9e5d3",
    "review": false,
-   "notes": "keep a one-line gotcha in CAP: the state-machine rule override resolves against the primary player"
+   "notes": "keep a one-line gotcha in CAP: the state-machine rule override resolves against the primary player",
+   "orig_lines": [
+    [
+     206,
+     246
+    ]
+   ]
   },
   {
    "id": "b:247",
@@ -329,9 +411,15 @@
     "crates/ironhold_core/src/runtime/scene_manager/*.rs"
    ],
    "subs": [],
-   "text_sha1": "82d327ec96b67e7b9dfbf7c4a3501c03b42279ad",
+   "text_sha1": "c5b60ec921661d2a1cb34a8d009fd5991286aebc",
    "review": false,
-   "notes": "silent no-op drops a whole bar; \"four-site inventory above\" is dangling (and stale: now five sites)"
+   "notes": "silent no-op drops a whole bar; \"four-site inventory above\" is dangling (and stale: now five sites)",
+   "orig_lines": [
+    [
+     247,
+     255
+    ]
+   ]
   },
   {
    "id": "b:256",
@@ -351,7 +439,13 @@
    "subs": [],
    "text_sha1": "bd70fb2b0766b7e9a9caedb2c12f829f2b9778c7",
    "review": false,
-   "notes": "key fact: `gamepad_key` fires only from the owning player's `BoundGamepad`"
+   "notes": "key fact: `gamepad_key` fires only from the owning player's `BoundGamepad`",
+   "orig_lines": [
+    [
+     256,
+     283
+    ]
+   ]
   },
   {
    "id": "b:284",
@@ -378,7 +472,13 @@
    ],
    "text_sha1": "3167bfa172e97e5c75d3cddd42ce0c78f416d52d",
    "review": false,
-   "notes": "\"do not replace with a `ClickedSlots` resource\" is load-bearing; single 2.3k paragraph; test recipe could go to tests/CLAUDE.md"
+   "notes": "\"do not replace with a `ClickedSlots` resource\" is load-bearing; single 2.3k paragraph; test recipe could go to tests/CLAUDE.md",
+   "orig_lines": [
+    [
+     284,
+     284
+    ]
+   ]
   },
   {
    "id": "b:286",
@@ -403,7 +503,13 @@
    ],
    "text_sha1": "ddc3704709f18039dabf499a92f9d51921ea363e",
    "review": true,
-   "notes": "**not covered by a test — this text is the only guard**; consider a PARENT bullet \"any system touching `PlayerTarget`/`CurrentTarget` must be ordered explicitly\""
+   "notes": "**not covered by a test — this text is the only guard**; consider a PARENT bullet \"any system touching `PlayerTarget`/`CurrentTarget` must be ordered explicitly\"",
+   "orig_lines": [
+    [
+     286,
+     314
+    ]
+   ]
   },
   {
    "id": "b:315",
@@ -423,7 +529,13 @@
    "subs": [],
    "text_sha1": "43b53d5d0a0fa742d35dd173c359fed6273bc502",
    "review": true,
-   "notes": "duplicate"
+   "notes": "duplicate",
+   "orig_lines": [
+    [
+     315,
+     322
+    ]
+   ]
   },
   {
    "id": "b:323",
@@ -443,7 +555,13 @@
    "subs": [],
    "text_sha1": "c1c4fa6a3c957a55ad718dffa87787d316d694e0",
    "review": true,
-   "notes": "keep: screen-space not raycast, vars blank at 2+ players, `target.changed*` primary-only"
+   "notes": "keep: screen-space not raycast, vars blank at 2+ players, `target.changed*` primary-only",
+   "orig_lines": [
+    [
+     323,
+     351
+    ]
+   ]
   },
   {
    "id": "b:352",
@@ -463,7 +581,13 @@
    "subs": [],
    "text_sha1": "019331c6a4a71f0d40b640a544aef1927aed5a71",
    "review": true,
-   "notes": "rest derivable"
+   "notes": "rest derivable",
+   "orig_lines": [
+    [
+     352,
+     382
+    ]
+   ]
   },
   {
    "id": "b:383",
@@ -483,7 +607,13 @@
    "subs": [],
    "text_sha1": "f69df7cffff5cbc4ca4fde36bd93357a78d7e977",
    "review": false,
-   "notes": "\"sole owners of this arithmetic\" → one-line CAP rule; layer 31 reservation touches `inspector.rs`"
+   "notes": "\"sole owners of this arithmetic\" → one-line CAP rule; layer 31 reservation touches `inspector.rs`",
+   "orig_lines": [
+    [
+     383,
+     395
+    ]
+   ]
   },
   {
    "id": "b:396",
@@ -503,7 +633,13 @@
    "subs": [],
    "text_sha1": "8bdcfb0ab706a9d2c963770ae3a12a88524a22ce",
    "review": true,
-   "notes": "\"keyed on `player_index`, not loop order\" is a GOTCHA"
+   "notes": "\"keyed on `player_index`, not loop order\" is a GOTCHA",
+   "orig_lines": [
+    [
+     396,
+     405
+    ]
+   ]
   },
   {
    "id": "b:406",
@@ -523,7 +659,13 @@
    "subs": [],
    "text_sha1": "ab96437e97ae5cdff7193f2c4bc546282fa03df9",
    "review": false,
-   "notes": "invariant found in plan review"
+   "notes": "invariant found in plan review",
+   "orig_lines": [
+    [
+     406,
+     413
+    ]
+   ]
   },
   {
    "id": "b:414",
@@ -543,7 +685,13 @@
    "subs": [],
    "text_sha1": "fa4d228f66cb5a0830f2c0b45627994210c0f4aa",
    "review": true,
-   "notes": "\"no mid-scene toggle without re-tagging\" → one line in SM"
+   "notes": "\"no mid-scene toggle without re-tagging\" → one line in SM",
+   "orig_lines": [
+    [
+     414,
+     423
+    ]
+   ]
   },
   {
    "id": "b:424",
@@ -563,7 +711,13 @@
    "subs": [],
    "text_sha1": "2422f3e37d4ffa84fd021cc4eefcf5becf13d1b0",
    "review": true,
-   "notes": "derivable from the `warn!` sites"
+   "notes": "derivable from the `warn!` sites",
+   "orig_lines": [
+    [
+     424,
+     431
+    ]
+   ]
   },
   {
    "id": "b:433",
@@ -583,7 +737,13 @@
    "subs": [],
    "text_sha1": "2ed8f8bd7960d61ccb4f94ef3c10db4aef7f438c",
    "review": false,
-   "notes": "touches `lib.rs` (src root)"
+   "notes": "touches `lib.rs` (src root)",
+   "orig_lines": [
+    [
+     433,
+     437
+    ]
+   ]
   },
   {
    "id": "b:439",
@@ -603,7 +763,13 @@
    "subs": [],
    "text_sha1": "eb5a0517dd2c5477f6cd523867005e6ad17954fa",
    "review": true,
-   "notes": ""
+   "notes": "",
+   "orig_lines": [
+    [
+     439,
+     444
+    ]
+   ]
   },
   {
    "id": "b:446",
@@ -623,7 +789,13 @@
    "subs": [],
    "text_sha1": "557bff7cbb155d57c17d9836372ccd3367260b17",
    "review": false,
-   "notes": "grep gives the same"
+   "notes": "grep gives the same",
+   "orig_lines": [
+    [
+     446,
+     450
+    ]
+   ]
   },
   {
    "id": "b:452",
@@ -646,7 +818,13 @@
    ],
    "text_sha1": "8ae9350da99e524b6ada047b6590264ca4faa631",
    "review": true,
-   "notes": "rest derivable"
+   "notes": "rest derivable",
+   "orig_lines": [
+    [
+     452,
+     462
+    ]
+   ]
   },
   {
    "id": "b:464",
@@ -666,7 +844,13 @@
    "subs": [],
    "text_sha1": "2e47eaab4476ae8a58eecfdcc4720aea14d806a4",
    "review": false,
-   "notes": "drop the empty bold lead at 464 (\"New capabilities for entity logic:\" groups 464-620 under a misleading label)"
+   "notes": "drop the empty bold lead at 464 (\"New capabilities for entity logic:\" groups 464-620 under a misleading label)",
+   "orig_lines": [
+    [
+     464,
+     466
+    ]
+   ]
   },
   {
    "id": "b:468",
@@ -686,7 +870,13 @@
    "subs": [],
    "text_sha1": "18307508b83077c23e6b42278841f65709b59016",
    "review": false,
-   "notes": "covered by docs/20"
+   "notes": "covered by docs/20",
+   "orig_lines": [
+    [
+     468,
+     471
+    ]
+   ]
   },
   {
    "id": "b:472",
@@ -706,7 +896,13 @@
    "subs": [],
    "text_sha1": "6ada2391573d18f6fccc028d4688913ec9d75f51",
    "review": false,
-   "notes": "587-596 depends on it"
+   "notes": "587-596 depends on it",
+   "orig_lines": [
+    [
+     472,
+     476
+    ]
+   ]
   },
   {
    "id": "b:478",
@@ -726,7 +922,13 @@
    "subs": [],
    "text_sha1": "56d57f8ab39e8873e20577b9215d90b0e3dc81fa",
    "review": true,
-   "notes": "mostly history"
+   "notes": "mostly history",
+   "orig_lines": [
+    [
+     478,
+     488
+    ]
+   ]
   },
   {
    "id": "b:489",
@@ -748,7 +950,13 @@
    "subs": [],
    "text_sha1": "9359101ea56ef49d451de47aab206bbf19001ccf",
    "review": false,
-   "notes": "same-frame Despawn race; mirrors `SpawnEffect.entity`"
+   "notes": "same-frame Despawn race; mirrors `SpawnEffect.entity`",
+   "orig_lines": [
+    [
+     489,
+     505
+    ]
+   ]
   },
   {
    "id": "b:507",
@@ -768,7 +976,13 @@
    "subs": [],
    "text_sha1": "6c4a8e32d587bcc7e14fbbd718a9c3bfc3797fdd",
    "review": true,
-   "notes": "history of a retrofit; the one current-state line moves into TOPIC:lootable-corpse"
+   "notes": "history of a retrofit; the one current-state line moves into TOPIC:lootable-corpse",
+   "orig_lines": [
+    [
+     507,
+     522
+    ]
+   ]
   },
   {
    "id": "b:524",
@@ -788,7 +1002,13 @@
    "subs": [],
    "text_sha1": "0da185ede159f26746502887688134d299323cdd",
    "review": true,
-   "notes": "cut the incident narrative"
+   "notes": "cut the incident narrative",
+   "orig_lines": [
+    [
+     524,
+     543
+    ]
+   ]
   },
   {
    "id": "b:545",
@@ -808,7 +1028,13 @@
    "subs": [],
    "text_sha1": "07c7827bab49d19d1bc1bbd09f8446170fe7dc50",
    "review": false,
-   "notes": "content is targeting, heading is the corpse group"
+   "notes": "content is targeting, heading is the corpse group",
+   "orig_lines": [
+    [
+     545,
+     552
+    ]
+   ]
   },
   {
    "id": "b:554",
@@ -828,7 +1054,13 @@
    "subs": [],
    "text_sha1": "1ca276587729d1a3e15fbe76663aaf4e19f2828c",
    "review": false,
-   "notes": "linked to 587-596"
+   "notes": "linked to 587-596",
+   "orig_lines": [
+    [
+     554,
+     561
+    ]
+   ]
   },
   {
    "id": "b:563",
@@ -848,7 +1080,13 @@
    "subs": [],
    "text_sha1": "9586a6e72ce80be2fdde1748ea3945778b7db15d",
    "review": false,
-   "notes": "cites the \"Despawning\" notes"
+   "notes": "cites the \"Despawning\" notes",
+   "orig_lines": [
+    [
+     563,
+     573
+    ]
+   ]
   },
   {
    "id": "b:575",
@@ -875,7 +1113,13 @@
    ],
    "text_sha1": "7df8c2c057b3749055d270d445086dc1ece560e5",
    "review": true,
-   "notes": "continues 563-573; keep contiguous"
+   "notes": "continues 563-573; keep contiguous",
+   "orig_lines": [
+    [
+     575,
+     585
+    ]
+   ]
   },
   {
    "id": "b:587",
@@ -895,7 +1139,13 @@
    "subs": [],
    "text_sha1": "07c39111d84555bf6967c17d1b4d30760cbd84ff",
    "review": false,
-   "notes": "depends on 472-476"
+   "notes": "depends on 472-476",
+   "orig_lines": [
+    [
+     587,
+     596
+    ]
+   ]
   },
   {
    "id": "b:598",
@@ -917,7 +1167,13 @@
    "subs": [],
    "text_sha1": "7441424887299ce0632b5d585019346c66597aaa",
    "review": false,
-   "notes": "add a pointer from the CAP trigger code; a backlog item is cited"
+   "notes": "add a pointer from the CAP trigger code; a backlog item is cited",
+   "orig_lines": [
+    [
+     598,
+     606
+    ]
+   ]
   },
   {
    "id": "b:608",
@@ -937,7 +1193,13 @@
    "subs": [],
    "text_sha1": "eb9e199200b7c92d2a1f7557d6c6ead344059c58",
    "review": false,
-   "notes": "the surviving reason lives in the 524-543 rule"
+   "notes": "the surviving reason lives in the 524-543 rule",
+   "orig_lines": [
+    [
+     608,
+     620
+    ]
+   ]
   },
   {
    "id": "b:622",
@@ -955,9 +1217,15 @@
    "dest_raw": "CAP",
    "governs": [],
    "subs": [],
-   "text_sha1": "52d428915320f27472cfdbca97fec7253a6bfefc",
+   "text_sha1": "6b8296aef46c5b3676415af51b6609740756c230",
    "review": false,
-   "notes": "compact table"
+   "notes": "compact table",
+   "orig_lines": [
+    [
+     622,
+     637
+    ]
+   ]
   },
   {
    "id": "b:638",
@@ -977,7 +1245,13 @@
    "subs": [],
    "text_sha1": "f88e1a3debdff276c41e1abfed80ea07f7b4e037",
    "review": false,
-   "notes": ""
+   "notes": "",
+   "orig_lines": [
+    [
+     638,
+     646
+    ]
+   ]
   },
   {
    "id": "b:647",
@@ -997,7 +1271,13 @@
    "subs": [],
    "text_sha1": "26008d563999d8a56926144b86bfdc49cd9ef108",
    "review": false,
-   "notes": "load-bearing"
+   "notes": "load-bearing",
+   "orig_lines": [
+    [
+     647,
+     657
+    ]
+   ]
   },
   {
    "id": "b:658",
@@ -1017,7 +1297,13 @@
    "subs": [],
    "text_sha1": "b502d68418d40b7eb8337f735d59a786d6b3790c",
    "review": false,
-   "notes": "cites a `tag_spawned_entity` doc comment"
+   "notes": "cites a `tag_spawned_entity` doc comment",
+   "orig_lines": [
+    [
+     658,
+     669
+    ]
+   ]
   },
   {
    "id": "b:670",
@@ -1040,7 +1326,13 @@
    "subs": [],
    "text_sha1": "fd9eb1b658025d5fbcc8ae2c9bb552fefdd44281",
    "review": false,
-   "notes": ""
+   "notes": "",
+   "orig_lines": [
+    [
+     670,
+     675
+    ]
+   ]
   },
   {
    "id": "b:677",
@@ -1060,7 +1352,13 @@
    "subs": [],
    "text_sha1": "53c01246d387cf8307fc13b4b4881d68989ceec1",
    "review": true,
-   "notes": ""
+   "notes": "",
+   "orig_lines": [
+    [
+     677,
+     684
+    ]
+   ]
   },
   {
    "id": "b:686",
@@ -1080,7 +1378,13 @@
    "subs": [],
    "text_sha1": "d2732c77f946d3c5bb5fb928053c88ca54e56992",
    "review": true,
-   "notes": ""
+   "notes": "",
+   "orig_lines": [
+    [
+     686,
+     702
+    ]
+   ]
   },
   {
    "id": "b:706",
@@ -1102,7 +1406,13 @@
    "subs": [],
    "text_sha1": "2d1b3e7dc043cd5f51e6d8b79f15641afccc3741",
    "review": false,
-   "notes": "heading likely cited by name"
+   "notes": "heading likely cited by name",
+   "orig_lines": [
+    [
+     706,
+     709
+    ]
+   ]
   },
   {
    "id": "b:711",
@@ -1124,7 +1434,13 @@
    "subs": [],
    "text_sha1": "1a8f1d2954087fc22f980c1e083dfc763496c9ab",
    "review": false,
-   "notes": "check `runtime/` material creation before finalising"
+   "notes": "check `runtime/` material creation before finalising",
+   "orig_lines": [
+    [
+     711,
+     720
+    ]
+   ]
   },
   {
    "id": "b:722",
@@ -1146,7 +1462,13 @@
    "subs": [],
    "text_sha1": "ba679528b265754acadc1167e2fd938855811c47",
    "review": false,
-   "notes": "spans runtime, schema, capabilities"
+   "notes": "spans runtime, schema, capabilities",
+   "orig_lines": [
+    [
+     722,
+     728
+    ]
+   ]
   },
   {
    "id": "b:729",
@@ -1166,7 +1488,13 @@
    "subs": [],
    "text_sha1": "84e601a2351209e6f8d41b50c7900daf81f2414b",
    "review": true,
-   "notes": ""
+   "notes": "",
+   "orig_lines": [
+    [
+     729,
+     730
+    ]
+   ]
   },
   {
    "id": "b:731",
@@ -1176,7 +1504,7 @@
      733
     ]
    ],
-   "title": "Physics/movement/camera-follow must run in `FixedUpdate`",
+   "title": "Physics/movement must run in `FixedUpdate` (camera follow/blend and animation stay in `Update`)",
    "type": "RULE",
    "safety": "Y",
    "dest": "PARENT",
@@ -1186,9 +1514,15 @@
     "crates/ironhold_core/src/**"
    ],
    "subs": [],
-   "text_sha1": "c079d3f6be418786a7b3ab8817b1f51540519339",
+   "text_sha1": "2e9da198269c4e102304d447834b10773a4bcbed",
    "review": false,
-   "notes": "**wording is stale: the camera chain runs in `Update`** (`claude_suggestions.md` ~L531, `opencode_compatibility.md` F2) — fix while moving"
+   "notes": "**wording is stale: the camera chain runs in `Update`** (`claude_suggestions.md` ~L531, `opencode_compatibility.md` F2) — fix while moving",
+   "orig_lines": [
+    [
+     731,
+     733
+    ]
+   ]
   },
   {
    "id": "b:734",
@@ -1210,7 +1544,13 @@
    "subs": [],
    "text_sha1": "4b7f4b6f154cd585d056ab717c0a8087418840c0",
    "review": true,
-   "notes": "\"two separate mitigations\" intro leads into 750-764 — move 734-764 together"
+   "notes": "\"two separate mitigations\" intro leads into 750-764 — move 734-764 together",
+   "orig_lines": [
+    [
+     734,
+     749
+    ]
+   ]
   },
   {
    "id": "b:750",
@@ -1232,7 +1572,13 @@
    "subs": [],
    "text_sha1": "df0268582a68a7e21f925fd9f1660bcf3b0ff138",
    "review": false,
-   "notes": "cross-cutting; phrase on the helper name so grep finds it"
+   "notes": "cross-cutting; phrase on the helper name so grep finds it",
+   "orig_lines": [
+    [
+     750,
+     758
+    ]
+   ]
   },
   {
    "id": "b:759",
@@ -1252,7 +1598,13 @@
    "subs": [],
    "text_sha1": "bc2cf24e5a37fc1eaa39b69a02d3676eeeec895b",
    "review": false,
-   "notes": "splits an argument from its rule; keep a pointer"
+   "notes": "splits an argument from its rule; keep a pointer",
+   "orig_lines": [
+    [
+     759,
+     764
+    ]
+   ]
   },
   {
    "id": "b:765",
@@ -1272,7 +1624,13 @@
    "subs": [],
    "text_sha1": "bbe7db5a4829d743c20b6e9c4a18234d6c72d759",
    "review": true,
-   "notes": ""
+   "notes": "",
+   "orig_lines": [
+    [
+     765,
+     768
+    ]
+   ]
   },
   {
    "id": "b:769",
@@ -1292,7 +1650,13 @@
    "subs": [],
    "text_sha1": "61eeebf252cc3d23d2c622313d72ff3841ef7994",
    "review": true,
-   "notes": "duplicates `docs/20#max_frame_delta_secs`"
+   "notes": "duplicates `docs/20#max_frame_delta_secs`",
+   "orig_lines": [
+    [
+     769,
+     777
+    ]
+   ]
   },
   {
    "id": "b:779",
@@ -1312,7 +1676,13 @@
    "subs": [],
    "text_sha1": "b01362e3da6ce1b45879d5c95c7c1f9da17726cd",
    "review": false,
-   "notes": "heading is under the FixedUpdate section; tests named at 779/841"
+   "notes": "heading is under the FixedUpdate section; tests named at 779/841",
+   "orig_lines": [
+    [
+     779,
+     814
+    ]
+   ]
   },
   {
    "id": "b:815",
@@ -1332,7 +1702,13 @@
    "subs": [],
    "text_sha1": "c3949fa65d62f88e88439b5d1236d398397e62e2",
    "review": false,
-   "notes": "`jump_liftoff_y` teleport caveat (850-854) is a real GOTCHA; stale \"used to\" prose trimmable"
+   "notes": "`jump_liftoff_y` teleport caveat (850-854) is a real GOTCHA; stale \"used to\" prose trimmable",
+   "orig_lines": [
+    [
+     815,
+     855
+    ]
+   ]
   },
   {
    "id": "b:856",
@@ -1357,7 +1733,13 @@
    ],
    "text_sha1": "a02e9289ee50a0968492254f30a681f7b76745fb",
    "review": true,
-   "notes": "\"a debounce that smooths feel must never leak into correctness timing\""
+   "notes": "\"a debounce that smooths feel must never leak into correctness timing\"",
+   "orig_lines": [
+    [
+     856,
+     882
+    ]
+   ]
   },
   {
    "id": "b:883",
@@ -1377,7 +1759,13 @@
    "subs": [],
    "text_sha1": "7a147c341c88da5c7f7eb464d55927bf9753a5ca",
    "review": false,
-   "notes": "**`animation_resolver.rs:30` cites the \"Coyote time\" section**"
+   "notes": "**`animation_resolver.rs:30` cites the \"Coyote time\" section**",
+   "orig_lines": [
+    [
+     883,
+     911
+    ]
+   ]
   },
   {
    "id": "b:912",
@@ -1399,7 +1787,13 @@
    "subs": [],
    "text_sha1": "78b6bf442a9a40964f6ee4534a5ca45f1a48eee6",
    "review": true,
-   "notes": "keep adjacent to 856-882"
+   "notes": "keep adjacent to 856-882",
+   "orig_lines": [
+    [
+     912,
+     928
+    ]
+   ]
   },
   {
    "id": "b:929",
@@ -1421,7 +1815,13 @@
    "subs": [],
    "text_sha1": "917782e25478fda7b18594e526ebd12d38db66af",
    "review": true,
-   "notes": "generic for any physics query in capabilities/ (`npc.rs` LOS precedent)"
+   "notes": "generic for any physics query in capabilities/ (`npc.rs` LOS precedent)",
+   "orig_lines": [
+    [
+     929,
+     949
+    ]
+   ]
   },
   {
    "id": "b:950",
@@ -1441,7 +1841,13 @@
    "subs": [],
    "text_sha1": "f364f3b8a3e2d97fa9aa3acd5044623f3bbc07e0",
    "review": false,
-   "notes": "monotone-loop rationale (980-993) is not derivable; link the backlog bug on compound colliders"
+   "notes": "monotone-loop rationale (980-993) is not derivable; link the backlog bug on compound colliders",
+   "orig_lines": [
+    [
+     950,
+     1004
+    ]
+   ]
   },
   {
    "id": "b:1005",
@@ -1461,7 +1867,13 @@
    "subs": [],
    "text_sha1": "cf55e88355b8a9db2952cb4ad5b7e5599ab6789d",
    "review": false,
-   "notes": "accepted-tradeoff list is not derivable"
+   "notes": "accepted-tradeoff list is not derivable",
+   "orig_lines": [
+    [
+     1005,
+     1022
+    ]
+   ]
   },
   {
    "id": "b:1023",
@@ -1483,7 +1895,13 @@
    "subs": [],
    "text_sha1": "05b14c46d4d3ea5fcd079ddd2a2d55cbbcbefa9e",
    "review": false,
-   "notes": "**`tests/determinism_lint.rs:8` and `:201` (a failure message) quote the heading \"Deterministic iteration order on gameplay paths\"; `docs/40:102` too — keep the heading text**; D1 site inventory could be a list"
+   "notes": "**`tests/determinism_lint.rs:8` and `:201` (a failure message) quote the heading \"Deterministic iteration order on gameplay paths\"; `docs/40:102` too — keep the heading text**; D1 site inventory could be a list",
+   "orig_lines": [
+    [
+     1023,
+     1026
+    ]
+   ]
   },
   {
    "id": "b:1027",
@@ -1505,7 +1923,13 @@
    "subs": [],
    "text_sha1": "e74d7ba3d19aa2257cf30559a7f4ddb3af55cb4a",
    "review": false,
-   "notes": ""
+   "notes": "",
+   "orig_lines": [
+    [
+     1027,
+     1029
+    ]
+   ]
   },
   {
    "id": "b:1030",
@@ -1527,7 +1951,13 @@
    "subs": [],
    "text_sha1": "060c432c14efd3fb5bb4733fa0096259e2ba4bd9",
    "review": false,
-   "notes": "applies to components everywhere"
+   "notes": "applies to components everywhere",
+   "orig_lines": [
+    [
+     1030,
+     1032
+    ]
+   ]
   },
   {
    "id": "b:1033",
@@ -1547,7 +1977,13 @@
    "subs": [],
    "text_sha1": "ee090b9b78d44120ec5f66f538eb58a133150fbb",
    "review": true,
-   "notes": "300-2000 ms WASM stall rationale not derivable"
+   "notes": "300-2000 ms WASM stall rationale not derivable",
+   "orig_lines": [
+    [
+     1033,
+     1040
+    ]
+   ]
   },
   {
    "id": "b:1041",
@@ -1569,7 +2005,13 @@
    "subs": [],
    "text_sha1": "60c221f4cd326ef7a17eefe96d4fd87de24929f5",
    "review": false,
-   "notes": "**`camera.rs:878` and `nameplate.rs:49` cite \"Change-detection discipline\"**"
+   "notes": "**`camera.rs:878` and `nameplate.rs:49` cite \"Change-detection discipline\"**",
+   "orig_lines": [
+    [
+     1041,
+     1052
+    ]
+   ]
   },
   {
    "id": "b:1053",
@@ -1589,7 +2031,13 @@
    "subs": [],
    "text_sha1": "8e7421f4c7ee94fd8fbdc20e7b2eadd987f5cdf4",
    "review": false,
-   "notes": "handles must stay alive"
+   "notes": "handles must stay alive",
+   "orig_lines": [
+    [
+     1053,
+     1059
+    ]
+   ]
   },
   {
    "id": "b:1060",
@@ -1607,16 +2055,22 @@
    "dest_raw": "SM",
    "governs": [],
    "subs": [],
-   "text_sha1": "15c8f445582c8bf3554559da78df8119579c7b80",
+   "text_sha1": "1cf2c944b25f2b8aa5db0693a85aaa23d4a42d2b",
    "review": false,
-   "notes": "**sits under \"Audio file authoring\"** — a runtime system note; test-harness gotcha (non-default fraction) is real"
+   "notes": "**sits under \"Audio file authoring\"** — a runtime system note; test-harness gotcha (non-default fraction) is real",
+   "orig_lines": [
+    [
+     1060,
+     1062
+    ]
+   ]
   },
   {
    "id": "b:1063",
    "lines": [
     [
-     1063,
-     1066
+     1064,
+     1067
     ]
    ],
    "title": "SFX: no leading silence, WAV only",
@@ -1629,14 +2083,20 @@
    "subs": [],
    "text_sha1": "c6ae7dfe9a68d88c9f41c68da7319c0e628af5de",
    "review": false,
-   "notes": "already at docs/20:1928; add the decoder start-up-on-first-play (WASM) clause to that row"
+   "notes": "already at docs/20:1928; add the decoder start-up-on-first-play (WASM) clause to that row",
+   "orig_lines": [
+    [
+     1063,
+     1066
+    ]
+   ]
   },
   {
    "id": "b:1067",
    "lines": [
     [
-     1067,
-     1083
+     1068,
+     1084
     ]
    ],
    "title": "`tag_spawned_entity` is the single spawn-metadata source",
@@ -1649,16 +2109,22 @@
     "crates/ironhold_core/src/**"
    ],
    "subs": [],
-   "text_sha1": "6bb197505921c8ffd93d77d160fc7e36ce4633bc",
+   "text_sha1": "c7e9f114fc6930d7ce54f92ef136a5eb11280b41",
    "review": false,
-   "notes": "\"four-site inventory below\" is stale: five sites"
+   "notes": "\"four-site inventory below\" is stale: five sites",
+   "orig_lines": [
+    [
+     1067,
+     1083
+    ]
+   ]
   },
   {
    "id": "b:1084",
    "lines": [
     [
-     1084,
-     1110
+     1085,
+     1111
     ]
    ],
    "title": "Prefer `try_despawn()` when an entity may already be gone",
@@ -1671,14 +2137,20 @@
    "subs": [],
    "text_sha1": "67313385d9c68891130c223e3784983f00272fc8",
    "review": false,
-   "notes": "cross-cuts capabilities and scene_manager; incident trimmable to ~600 chars"
+   "notes": "cross-cuts capabilities and scene_manager; incident trimmable to ~600 chars",
+   "orig_lines": [
+    [
+     1084,
+     1110
+    ]
+   ]
   },
   {
    "id": "b:1111",
    "lines": [
     [
-     1111,
-     1120
+     1112,
+     1121
     ]
    ],
    "title": "Child `LevelEntity`/`OverlayEntity` self-tagging is deliberate",
@@ -1693,14 +2165,20 @@
    "subs": [],
    "text_sha1": "df67a5e0736933f021c92dc6ae94cda17c096c39",
    "review": false,
-   "notes": "continues the try_despawn argument"
+   "notes": "continues the try_despawn argument",
+   "orig_lines": [
+    [
+     1111,
+     1120
+    ]
+   ]
   },
   {
    "id": "b:1121",
    "lines": [
     [
-     1121,
-     1200
+     1122,
+     1201
     ]
    ],
    "title": "Player-construction sites inventory (1-5) + post-dispatch rule",
@@ -1714,16 +2192,22 @@
     "rule",
     "ref"
    ],
-   "text_sha1": "5c93614e39c24feb44ce3dca6ca302781148df88",
+   "text_sha1": "7c609b8d7b57e81b26b43eb67f55efe2aee8c4cf",
    "review": true,
-   "notes": "stale \"line 560\"; heading sits under \"Despawning\"; widely cited as \"Player-construction sites\" / \"four player-construction sites\""
+   "notes": "stale \"line 560\"; heading sits under \"Despawning\"; widely cited as \"Player-construction sites\" / \"four player-construction sites\"",
+   "orig_lines": [
+    [
+     1121,
+     1200
+    ]
+   ]
   },
   {
    "id": "b:1201",
    "lines": [
     [
-     1201,
-     1212
+     1202,
+     1213
     ]
    ],
    "title": "Player `stat_label`/`world_stat_bar` routing; 16-param ceiling",
@@ -1736,14 +2220,20 @@
    "subs": [],
    "text_sha1": "47df376f615327e0331aa853df33302d65a40cf2",
    "review": false,
-   "notes": "`SystemParam` 16-param limit on `spawn_scene_v2` is the reusable gotcha"
+   "notes": "`SystemParam` 16-param limit on `spawn_scene_v2` is the reusable gotcha",
+   "orig_lines": [
+    [
+     1201,
+     1212
+    ]
+   ]
   },
   {
    "id": "b:1213",
    "lines": [
     [
-     1213,
-     1223
+     1214,
+     1224
     ]
    ],
    "title": "`PrefabDef.material` not auto-applied on the player path",
@@ -1756,14 +2246,20 @@
    "subs": [],
    "text_sha1": "f1b26be9f01e47c5eef1d3bb149c4407902a3622",
    "review": false,
-   "notes": "restate \"new rendering `PrefabDef` field must be checked against the player path\""
+   "notes": "restate \"new rendering `PrefabDef` field must be checked against the player path\"",
+   "orig_lines": [
+    [
+     1213,
+     1223
+    ]
+   ]
   },
   {
    "id": "b:1224",
    "lines": [
     [
-     1224,
-     1260
+     1225,
+     1261
     ]
    ],
    "title": "Collider divergence; Friction 0.15 idle-only after the wall-friction fix",
@@ -1779,14 +2275,20 @@
    "subs": [],
    "text_sha1": "e181a7cb3f55ba3d2d01d05177e5422492512403",
    "review": true,
-   "notes": "`wall_friction_tests.rs`"
+   "notes": "`wall_friction_tests.rs`",
+   "orig_lines": [
+    [
+     1224,
+     1260
+    ]
+   ]
   },
   {
    "id": "b:1261",
    "lines": [
     [
-     1261,
-     1330
+     1262,
+     1331
     ]
    ],
    "title": "Local co-op: Party, split, Grid, dynamic split, fallback",
@@ -1799,14 +2301,20 @@
    "subs": [],
    "text_sha1": "9ac6010ff2aa8575e9ce2f8c70a8b9c3650bda42",
    "review": false,
-   "notes": "\"neither set: warn\" (1326-1329) short enough for CAP"
+   "notes": "\"neither set: warn\" (1326-1329) short enough for CAP",
+   "orig_lines": [
+    [
+     1261,
+     1330
+    ]
+   ]
   },
   {
    "id": "b:1331",
    "lines": [
     [
-     1331,
-     1358
+     1332,
+     1359
     ]
    ],
    "title": "Split prefabs need `zoom_speed:0`, `orbit_button:\"None\"`, `character_rotate_button:None`",
@@ -1819,14 +2327,20 @@
    "subs": [],
    "text_sha1": "6c576510ab0871d532da88e8af65c50b864487cb",
    "review": false,
-   "notes": "three-field list is load-bearing; playtest narrative trimmable"
+   "notes": "three-field list is load-bearing; playtest narrative trimmable",
+   "orig_lines": [
+    [
+     1331,
+     1358
+    ]
+   ]
   },
   {
    "id": "b:1359",
    "lines": [
     [
-     1359,
-     1373
+     1360,
+     1374
     ]
    ],
    "title": "Keyboard camera look",
@@ -1839,14 +2353,20 @@
    "subs": [],
    "text_sha1": "8a0fa877c6cc8984410e8b1bcd25e4864e7bac7d",
    "review": true,
-   "notes": "pitch-direction pin → one CAP line"
+   "notes": "pitch-direction pin → one CAP line",
+   "orig_lines": [
+    [
+     1359,
+     1373
+    ]
+   ]
   },
   {
    "id": "b:1374",
    "lines": [
     [
-     1374,
-     1382
+     1375,
+     1383
     ]
    ],
    "title": "`CameraShake` query must exclude Fixed/FirstPerson/Flycam",
@@ -1859,14 +2379,20 @@
    "subs": [],
    "text_sha1": "0e47b16732431c056925c08f656adad4b854b530",
    "review": false,
-   "notes": "straddles `camera.rs` and `scene_manager/mod.rs`"
+   "notes": "straddles `camera.rs` and `scene_manager/mod.rs`",
+   "orig_lines": [
+    [
+     1374,
+     1382
+    ]
+   ]
   },
   {
    "id": "b:1383",
    "lines": [
     [
-     1383,
-     1405
+     1384,
+     1406
     ]
    ],
    "title": "`SetCameraMode`; Authored vs Active camera mode; `camera_blend_system` must be last in the chain",
@@ -1881,14 +2407,20 @@
    "subs": [],
    "text_sha1": "a469fb6930aedbbd1592e9e82056149fe9e52fbb",
    "review": false,
-   "notes": "ordering lives in `lib.rs` → needs a PARENT pointer (see risk 3)"
+   "notes": "ordering lives in `lib.rs` → needs a PARENT pointer (see risk 3)",
+   "orig_lines": [
+    [
+     1383,
+     1405
+    ]
+   ]
   },
   {
    "id": "b:1406",
    "lines": [
     [
-     1406,
-     1462
+     1407,
+     1463
     ]
    ],
    "title": "`WorldLabelRank` viewport-aware labels; per-rank widget duplication",
@@ -1901,14 +2433,20 @@
    "subs": [],
    "text_sha1": "f20509252dcad59d8be27077448aed8c1d72834a",
    "review": true,
-   "notes": "continues into 1463-1528 (one story)"
+   "notes": "continues into 1463-1528 (one story)",
+   "orig_lines": [
+    [
+     1406,
+     1462
+    ]
+   ]
   },
   {
    "id": "b:1463",
    "lines": [
     [
-     1463,
-     1474
+     1464,
+     1475
     ]
    ],
    "title": "`particle_renderer` billboard viewport-aware (Phase 1)",
@@ -1921,14 +2459,20 @@
    "subs": [],
    "text_sha1": "51122d8c1d7c11e8eb8ccae5214d7d2a3e004d3c",
    "review": false,
-   "notes": "rows 1463-1486 + 1488-1509 are one story with 1406-1462"
+   "notes": "rows 1463-1486 + 1488-1509 are one story with 1406-1462",
+   "orig_lines": [
+    [
+     1463,
+     1474
+    ]
+   ]
   },
   {
    "id": "b:1476",
    "lines": [
     [
-     1476,
-     1486
+     1477,
+     1487
     ]
    ],
    "title": "Targeting `click_select` viewport-aware (Phase 2)",
@@ -1941,14 +2485,20 @@
    "subs": [],
    "text_sha1": "50091ec3c66f9e66e42f32fbcc4d4b857c57c102",
    "review": true,
-   "notes": ""
+   "notes": "",
+   "orig_lines": [
+    [
+     1476,
+     1486
+    ]
+   ]
   },
   {
    "id": "b:1488",
    "lines": [
     [
-     1488,
-     1509
+     1489,
+     1510
     ]
    ],
    "title": "Nameplate distance culling via stored camera distance (Phase 3)",
@@ -1961,14 +2511,20 @@
    "subs": [],
    "text_sha1": "66b3d538fda53a52dec93479480a9e0778ca4869",
    "review": false,
-   "notes": "rule: read the stored distance, never re-select a camera; refers to `WorldLabelRank` (Phase 4, earlier)"
+   "notes": "rule: read the stored distance, never re-select a camera; refers to `WorldLabelRank` (Phase 4, earlier)",
+   "orig_lines": [
+    [
+     1488,
+     1509
+    ]
+   ]
   },
   {
    "id": "b:1511",
    "lines": [
     [
-     1511,
-     1528
+     1512,
+     1529
     ]
    ],
    "title": "Split-screen player HUD labels (P{n})",
@@ -1981,14 +2537,20 @@
    "subs": [],
    "text_sha1": "4c51db579461459af159d27149ae75ba067aa158",
    "review": true,
-   "notes": "\"see above\" for `PlayerIndex` will dangle"
+   "notes": "\"see above\" for `PlayerIndex` will dangle",
+   "orig_lines": [
+    [
+     1511,
+     1528
+    ]
+   ]
   },
   {
    "id": "b:1530",
    "lines": [
     [
-     1530,
-     1574
+     1531,
+     1575
     ]
    ],
    "title": "Gamepad routing: `BoundGamepad`, `claimed` invariant",
@@ -2014,14 +2576,20 @@
    ],
    "text_sha1": "36a1abed1c2a4ab1d9e875ed62c724aa201dd4da",
    "review": true,
-   "notes": "spans `capabilities/player.rs`, `runtime/input.rs`, the consumers — cross-cutting"
+   "notes": "spans `capabilities/player.rs`, `runtime/input.rs`, the consumers — cross-cutting",
+   "orig_lines": [
+    [
+     1530,
+     1574
+    ]
+   ]
   },
   {
    "id": "b:1576",
    "lines": [
     [
-     1576,
-     1587
+     1577,
+     1588
     ]
    ],
    "title": "Gamepad button/axis RON mapping, parity gap",
@@ -2034,14 +2602,20 @@
    "subs": [],
    "text_sha1": "4222492032a20b50727c373c9b0ec088368a590a",
    "review": false,
-   "notes": "keep \"no gamepad camera-yaw is deliberate\""
+   "notes": "keep \"no gamepad camera-yaw is deliberate\"",
+   "orig_lines": [
+    [
+     1576,
+     1587
+    ]
+   ]
   },
   {
    "id": "b:1589",
    "lines": [
     [
-     1589,
-     1604
+     1590,
+     1605
     ]
    ],
    "title": "Duplicate `gamepad_index`/`player_index` validation scope",
@@ -2054,14 +2628,20 @@
    "subs": [],
    "text_sha1": "4979bbc4928b85ab60648567c957855239cf351c",
    "review": true,
-   "notes": "stops someone \"fixing\" the `entities:`-only scope"
+   "notes": "stops someone \"fixing\" the `entities:`-only scope",
+   "orig_lines": [
+    [
+     1589,
+     1604
+    ]
+   ]
   },
   {
    "id": "b:1606",
    "lines": [
     [
-     1606,
-     1636
+     1607,
+     1637
     ]
    ],
    "title": "Gamepad-triggered hot join: `PendingJoinGamepad`",
@@ -2083,14 +2663,20 @@
    ],
    "text_sha1": "9e2db36ca89d25dc7afad788f6bf336ac31638f5",
    "review": false,
-   "notes": "needs \"Player-construction sites\" reachable; \"troubleshooting note above\" is unlocated/dangling"
+   "notes": "needs \"Player-construction sites\" reachable; \"troubleshooting note above\" is unlocated/dangling",
+   "orig_lines": [
+    [
+     1606,
+     1636
+    ]
+   ]
   },
   {
    "id": "b:1638",
    "lines": [
     [
-     1638,
-     1644
+     1639,
+     1645
     ]
    ],
    "title": "View-box clamp",
@@ -2103,14 +2689,20 @@
    "subs": [],
    "text_sha1": "dad0c07554fbad9b74306e7152f98383273d0d3e",
    "review": false,
-   "notes": "\"zero `linvel` on the clamped axis\" prevents jitter"
+   "notes": "\"zero `linvel` on the clamped axis\" prevents jitter",
+   "orig_lines": [
+    [
+     1638,
+     1644
+    ]
+   ]
   },
   {
    "id": "b:1646",
    "lines": [
     [
-     1646,
-     1655
+     1647,
+     1656
     ]
    ],
    "title": "Spawn queue: `SPAWNS_PER_FRAME = 2`",
@@ -2125,14 +2717,20 @@
    "subs": [],
    "text_sha1": "dade0d7dee28cc92446dabb1e6ab33557c672c04",
    "review": true,
-   "notes": "Spawn must go through the queue; clear on `LoadScene`; heading \"Dynamic spawning\" may be cited"
+   "notes": "Spawn must go through the queue; clear on `LoadScene`; heading \"Dynamic spawning\" may be cited",
+   "orig_lines": [
+    [
+     1646,
+     1655
+    ]
+   ]
   },
   {
    "id": "b:1657",
    "lines": [
     [
-     1657,
-     1667
+     1658,
+     1668
     ]
    ],
    "title": "Component parity: dynamic vs scene-placed (nameplate gating)",
@@ -2148,14 +2746,20 @@
    ],
    "text_sha1": "731bafc848c11bbdfe22fcd6543a81efb55afc94",
    "review": true,
-   "notes": "callers span `scene_loader.rs`, `entity_spawner.rs`, `action_executor.rs` → place where all load"
+   "notes": "callers span `scene_loader.rs`, `entity_spawner.rs`, `action_executor.rs` → place where all load",
+   "orig_lines": [
+    [
+     1657,
+     1667
+    ]
+   ]
   },
   {
    "id": "b:1668",
    "lines": [
     [
-     1668,
-     1693
+     1669,
+     1694
     ]
    ],
    "title": "Label depth scale + validation coverage",
@@ -2171,14 +2775,20 @@
    ],
    "text_sha1": "2168f736fe430ee1a85d31f58f5e8fe6ad43100b",
    "review": true,
-   "notes": "starts as a bullet of the previous list"
+   "notes": "starts as a bullet of the previous list",
+   "orig_lines": [
+    [
+     1668,
+     1693
+    ]
+   ]
   },
   {
    "id": "b:1695",
    "lines": [
     [
-     1695,
-     1711
+     1696,
+     1712
     ]
    ],
    "title": "CLI vs runtime camera-set asymmetry for label depth scale",
@@ -2191,14 +2801,20 @@
    "subs": [],
    "text_sha1": "1499ba85f008218e59765e39b22809f25117e850",
    "review": true,
-   "notes": "someone may \"fix\" the asymmetry"
+   "notes": "someone may \"fix\" the asymmetry",
+   "orig_lines": [
+    [
+     1695,
+     1711
+    ]
+   ]
   },
   {
    "id": "b:1713",
    "lines": [
     [
-     1713,
-     1729
+     1714,
+     1730
     ]
    ],
    "title": "GLB preloading `PreloadPrefab`/`PreloadGlb`",
@@ -2216,14 +2832,20 @@
    ],
    "text_sha1": "6ba0871eed1d495ac0550ce9863d95991153090c",
    "review": true,
-   "notes": "RON snippet derivable from the example project"
+   "notes": "RON snippet derivable from the example project",
+   "orig_lines": [
+    [
+     1713,
+     1729
+    ]
+   ]
   },
   {
    "id": "b:1731",
    "lines": [
     [
-     1731,
-     1752
+     1732,
+     1753
     ]
    ],
    "title": "Particle pipeline warmup + `ParticleBudget` footgun",
@@ -2239,7 +2861,13 @@
    ],
    "text_sha1": "d7783e78c2852406200ff9653f0ef69156073ea7",
    "review": true,
-   "notes": "check `docs/20` before cutting (designers need it)"
+   "notes": "check `docs/20` before cutting (designers need it)",
+   "orig_lines": [
+    [
+     1731,
+     1752
+    ]
+   ]
   }
  ]
 }

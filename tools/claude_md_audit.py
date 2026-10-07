@@ -20,6 +20,11 @@ SCHEME
 MODES
   freeze   Build the sidecar from the section map + the base file. One-time; afterwards edit the sidecar by
            hand (dest, governs, subs). Refuses to overwrite unless --force.
+  rebase   After an intentional edit to the monolith that is already committed (R10 fixes, a ported-forward concurrent
+           edit): re-point every block's `lines` and `text_sha1` at the current parent by diffing it against the
+           file at the sidecar's `base_commit`, then move `base_commit` forward. Block IDs do NOT change (they
+           are names; `b:92` stays `b:92` even if the text moves). Lists the blocks whose text changed and any new
+           non-blank lines that fall between blocks (assign those by hand in the sidecar `lines`).
   self     (Phase 0) The parent still holds everything. Checks the sidecar covers every non-blank,
            non-heading line of the parent exactly once and that each block's text still matches the frozen
            hash. A hash mismatch means the monolith was edited after the freeze: port that edit forward.
@@ -41,7 +46,7 @@ OPTIONS
 BLIND SPOT: the Safety check only proves consistency with the author-written governs globs; a wrong glob
 passes. The reviewer must read each Safety=Y row's governs list.
 """
-import argparse, glob, hashlib, json, os, re, subprocess, sys, tempfile
+import argparse, difflib, glob, hashlib, json, os, re, subprocess, sys, tempfile
 
 PARENT = 'crates/ironhold_core/src/CLAUDE.md'
 MAP = 'planning/investigations/core_claude_md_split_map.md'
@@ -176,6 +181,47 @@ def freeze(root, force):
         json.dump(doc, f, indent=1, ensure_ascii=False)
         f.write('\n')
     print(f'wrote {SIDECAR}: {len(blocks)} blocks, {sum(b["review"] for b in blocks)} with an ambiguous dest label')
+    return 0
+
+
+def rebase(root):
+    p = os.path.join(root, SIDECAR)
+    doc = json.load(open(p, encoding='utf-8'))
+    old = norm(subprocess.run(['git', 'show', f'{doc["base_commit"]}:{PARENT}'], cwd=root, capture_output=True,
+                              text=True, encoding='utf-8').stdout).split('\n')
+    if sha1('\n'.join(old)) != doc['base_sha1']:
+        print('the file at base_commit does not match the sidecar base hash; refusing to rebase')
+        return 2
+    new_text = read(root, PARENT)
+    new = new_text.split('\n')
+    start, end = {}, {}
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, old, new, autojunk=False).get_opcodes():
+        for k, i in enumerate(range(i1, i2)):
+            if tag == 'equal':
+                start[i + 1] = end[i + 1] = j1 + k + 1
+            else:
+                start[i + 1] = j1 + 1
+                end[i + 1] = max(j1 + 1, j2) if j2 > j1 else j1
+    changed = []
+    for b in doc['blocks']:
+        rng = []
+        for a, z in b['lines']:
+            na, nz = start[a], end[z]
+            if nz < na:
+                print(f'warning: {b["id"]} range {a}-{z} collapsed after the edit; fix its lines by hand')
+                nz = na
+            rng.append([na, nz])
+        text = '\n'.join('\n'.join(new[a - 1:z]) for a, z in rng)
+        if sha1(text) != b['text_sha1']:
+            changed.append(b['id'])
+        b['orig_lines'] = b.get('orig_lines', b['lines'])
+        b['lines'], b['text_sha1'] = rng, sha1(text)
+    head = subprocess.run(['git', 'log', '-1', '--format=%h', '--', PARENT], cwd=root, capture_output=True, text=True).stdout.strip()
+    doc.update(base_commit=head, base_lines=len(new), base_chars=len(new_text), base_sha1=sha1(new_text))
+    with open(p, 'w', encoding='utf-8', newline='\n') as f:
+        json.dump(doc, f, indent=1, ensure_ascii=False)
+        f.write('\n')
+    print(f'rebased {len(doc["blocks"])} blocks onto {head} ({len(new)} lines); text changed in: {", ".join(changed) or "none"}')
     return 0
 
 
@@ -414,7 +460,7 @@ def selftest():
 
 def main():
     ap = argparse.ArgumentParser(description='Audit the CLAUDE.md split (see the file header).')
-    ap.add_argument('mode', choices=['freeze', 'self', 'dest', 'full'], nargs='?')
+    ap.add_argument('mode', choices=['freeze', 'rebase', 'self', 'dest', 'full'], nargs='?')
     ap.add_argument('--force', action='store_true')
     ap.add_argument('--strict', action='store_true')
     ap.add_argument('--hints', action='store_true')
@@ -426,7 +472,11 @@ def main():
         ap.error('mode required')
     root = os.getcwd()
     try:
-        return freeze(root, a.force) if a.mode == 'freeze' else run(root, a.mode, a.strict, a.hints)
+        if a.mode == 'freeze':
+            return freeze(root, a.force)
+        if a.mode == 'rebase':
+            return rebase(root)
+        return run(root, a.mode, a.strict, a.hints)
     except (OSError, ValueError, KeyError, AssertionError) as e:
         print('tool error:', e)
         return 2
