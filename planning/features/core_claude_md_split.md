@@ -247,6 +247,17 @@ Method: throwaway rules and directory file carrying unique canary tokens (`SPIKE
 
 **Gate verdict: PASS, with three plan adjustments** (none stops the work): (1) stubs are pointer-only, no `@import`; (2) the R1 audit rejects any `.claude/rules/*.md` whose frontmatter lacks the exact key `paths:`; (3) R18 becomes a concrete rule: review agents and any other agent that reads worktree files must have cwd inside the worktree (or be told to Read the directory `CLAUDE.md` files for what they touch) — to be written into `ship-feature.md` / the review prompts in Phase 3.
 
+### Audit tooling (built in Phase 0)
+`python tools/claude_md_audit.py <mode>` (header comment documents the scheme). Modes: `self` (parent still holds
+everything; also detects an edit to the monolith after the freeze via per-block hashes: port it forward, decision 11),
+`dest` (Phases 1-3, parent not scanned), `full` (Phase 4, parent scanned), `freeze` (one-time sidecar build; the
+sidecar is hand-edited afterwards), `--hints` (modal-verb lines per block), `--strict` (ambiguous dest labels fail),
+`--selftest`. The sidecar carries 104 blocks, 36 Safety=Y, 13 with `.rule`/`.ref` sub-IDs, and the map section-6/7
+re-homings, `also` placements and governs lists already applied. **Phase 1 curation still owed in the sidecar:** 41
+blocks with an ambiguous destination label (`review: true`), and 30 of the 36 Safety=Y blocks still carry the default
+governs `crates/ironhold_core/src/**`, which `dest` mode rejects for any subdirectory placement until each is narrowed
+(or placed in the parent) deliberately. Running `dest` before Phase 1 lists these as its to-do list.
+
 ### Phases 1-5 — `feature/core_claude_md_split` (additive, parent slimmed last)
 - **Phase 1 — build the destinations** (first commit: the R10 fixes in the monolith; then one commit each, audit
   after each): `schema/CLAUDE.md` (adds "a new rendering `PrefabDef` field must be checked against the player path"
@@ -273,7 +284,7 @@ Method: throwaway rules and directory file carrying unique canary tokens (`SPIKE
 ## Tasks
 - [x] Phase A on `feature/docs_audience_split`: A0-A4, reviews (R7), merge (`c188550`, 2026-10-07)
 - [ ] Backlog items: designer web-loading/warmup page + overview cleanup + README block; publish prebuilt `ironhold` binary
-- [ ] Phase 0 spike (hard gate) + audit script + freeze the base
+- [x] Phase 0 spike (hard gate) + audit script + freeze the base (2026-10-07: spike passed, results above; `tools/claude_md_audit.py` + `planning/investigations/core_claude_md_split_blocks.json`; base = the parent file as of `ba4088d`, 1752 lines / 160,039 chars; `self` mode 0 problems)
 - [ ] Phase 1: R10 fixes in the monolith, then schema, runtime, scene_manager, capabilities, assets, parent draft
 - [ ] Phase 2: topic references (one commit each) + SFX cut
 - [ ] Phase 3: live citations, active plans, `lib.rs` load-bearing comments, hooks, `tests/CLAUDE.md`, `AGENTS.md`, command files

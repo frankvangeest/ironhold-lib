@@ -1,0 +1,2245 @@
+{
+ "base_commit": "ba4088d",
+ "base_lines": 1752,
+ "base_chars": 160039,
+ "base_sha1": "8391ef847a05b73a3ed2b76af93179615c283c82",
+ "topics": {
+  "player-ground-detection": {
+   "pointer_in": "CAP"
+  },
+  "split-screen-cameras-and-widgets": {
+   "pointer_in": "CAP"
+  },
+  "action-bar-input-routing": {
+   "pointer_in": "CAP"
+  },
+  "gamepad-routing": {
+   "pointer_in": "RT"
+  },
+  "player-spawn-sites": {
+   "pointer_in": "SM"
+  },
+  "animation-pipeline": {
+   "pointer_in": "CAP"
+  },
+  "lootable-corpse": {
+   "pointer_in": "SM"
+  }
+ },
+ "blocks": [
+  {
+   "id": "b:1",
+   "lines": [
+    [
+     1,
+     34
+    ]
+   ],
+   "title": "Message→Interpreter→Action→Executor pipeline; sensors never push actions",
+   "type": "RULE",
+   "safety": "Y",
+   "dest": "PARENT",
+   "also": [],
+   "dest_raw": "PARENT",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [],
+   "text_sha1": "9ffadf5fc0e8cf7db0538339262eea906c6e1dbc",
+   "review": false,
+   "notes": "\"single most important architectural rule\"; event-name table (23-27) partly derivable, keep"
+  },
+  {
+   "id": "b:35",
+   "lines": [
+    [
+     35,
+     53
+    ]
+   ],
+   "title": "Adding new actions + `deny_unknown_fields` consequences",
+   "type": "RULE/GOTCHA",
+   "safety": "Y",
+   "dest": "SCH",
+   "also": [],
+   "dest_raw": "SCH",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [],
+   "text_sha1": "184092cb02d934070f043b7457117a960123cbc9",
+   "review": false,
+   "notes": "no `serde(flatten)`, rename = hard break, bump `schema_version`; steps 1-3 derivable; step 2 points at the executor (add pointer to SM)"
+  },
+  {
+   "id": "b:54",
+   "lines": [
+    [
+     54,
+     69
+    ]
+   ],
+   "title": "RON struct vs tuple variant syntax",
+   "type": "GOTCHA (mostly DER)",
+   "safety": "N",
+   "dest": "SCH",
+   "also": [],
+   "dest_raw": "SCH (2 lines) or CUT",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "039ecbda940929b2668d9838617ab59c6c65a2b3",
+   "review": true,
+   "notes": "the compiler error reveals it"
+  },
+  {
+   "id": "b:70",
+   "lines": [
+    [
+     70,
+     80
+    ]
+   ],
+   "title": "Conditions on rules: only `LogicState`; `EnterState` removed",
+   "type": "RAT+RULE",
+   "safety": "Y",
+   "dest": "SM",
+   "also": [],
+   "dest_raw": "SM",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [],
+   "text_sha1": "c91a2c3c94b15c8daeb99fb3e97c87658322516c",
+   "review": false,
+   "notes": "forced state change skips entry/exit actions; line 72 says \"see below\" but text is inline; do not strand \"do not add a general condition system\""
+  },
+  {
+   "id": "b:81",
+   "lines": [
+    [
+     81,
+     91
+    ]
+   ],
+   "title": "No hardcoded assets; sRGB colours only",
+   "type": "RULE",
+   "safety": "Y",
+   "dest": "PARENT",
+   "also": [],
+   "dest_raw": "PARENT",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [],
+   "text_sha1": "9df8eba8644f5051185ed5b055af37ce130e466b",
+   "review": false,
+   "notes": "heading \"Before coding\" is misleading; line 86 duplicates root CLAUDE.md (~80 chars CUT); heading \"Color field convention\" is cited by the plan for flex Group"
+  },
+  {
+   "id": "b:92",
+   "lines": [
+    [
+     92,
+     107
+    ],
+    [
+     109,
+     110
+    ]
+   ],
+   "title": "Composite/nested prefab spawning via `spawn_primitive_children`",
+   "type": "REF+RULE",
+   "safety": "Y",
+   "dest": "SM",
+   "also": [],
+   "dest_raw": "SM",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [],
+   "text_sha1": "7aa71ec394f0e1df3054922a4c3659470641c053",
+   "review": false,
+   "notes": "all child spawning goes through it; depth cap 8; `ChildSpawnCtx` field list (~700 chars) derivable"
+  },
+  {
+   "id": "b:108",
+   "lines": [
+    [
+     108,
+     108
+    ]
+   ],
+   "title": "`scene.ui` must be walked via `walk_ui_nodes`",
+   "type": "RULE",
+   "safety": "Y",
+   "dest": "SCH",
+   "also": [],
+   "dest_raw": "SCH (+ pointer from SM)",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [
+    "rule",
+    "ref"
+   ],
+   "text_sha1": "2099db8b57c92831e98c54c819fe1be01d2f1b47",
+   "review": true,
+   "notes": "added 2026-10-05 and bolted onto the composite-prefab list"
+  },
+  {
+   "id": "b:111",
+   "lines": [
+    [
+     111,
+     126
+    ]
+   ],
+   "title": "Entity FSM overview, interpreter chain order, never bypass pipeline",
+   "type": "REF+RULE",
+   "safety": "Y",
+   "dest": "SM",
+   "also": [],
+   "dest_raw": "SM",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [],
+   "text_sha1": "fe9d8fb5736243dc904b1f8089f97bc2d945c738",
+   "review": false,
+   "notes": "chain list derivable from the plugin schedule"
+  },
+  {
+   "id": "b:127",
+   "lines": [
+    [
+     127,
+     143
+    ]
+   ],
+   "title": "Supported `{self}` targets (15 examples)",
+   "type": "DER",
+   "safety": "N",
+   "dest": "CUT",
+   "also": [],
+   "dest_raw": "CUT",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "c8b048a8549d187447e7d7721022fe4e477a1824",
+   "review": false,
+   "notes": "derivable from `action_substitution.rs` (`rewrite_self`); **hook `action_docs_reminder.py:15` tells Claude to add new variants to this list**; line 188 depends on it"
+  },
+  {
+   "id": "b:144",
+   "lines": [
+    [
+     144,
+     187
+    ]
+   ],
+   "title": "`{new_id}` semantics, collisions, resolved at executor",
+   "type": "GOTCHA+RAT",
+   "safety": "Y",
+   "dest": "SM",
+   "also": [],
+   "dest_raw": "SM (trim ~40%)",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [],
+   "text_sha1": "231eec7c225a64047d7bd6b2c8d4733e452a74bd",
+   "review": true,
+   "notes": "170-175 (~500 chars) is `dialogue.rs` → CAP stub"
+  },
+  {
+   "id": "b:188",
+   "lines": [
+    [
+     188,
+     189
+    ]
+   ],
+   "title": "`{target}` substitution via `CurrentTarget`",
+   "type": "REF/GOTCHA",
+   "safety": "N",
+   "dest": "SM",
+   "also": [],
+   "dest_raw": "SM (merge with `{new_id}`)",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "df5567db7577b08bf54a5709e0673d63a08b5d61",
+   "review": true,
+   "notes": "\"same as `{self}` above\" must be rewritten"
+  },
+  {
+   "id": "b:190",
+   "lines": [
+    [
+     190,
+     205
+    ]
+   ],
+   "title": "Per-player targeting Phase 1: `PlayerTarget` vs `CurrentTarget`",
+   "type": "REF/RAT",
+   "safety": "N",
+   "dest": "TOPIC:action-bar-input-routing",
+   "also": [],
+   "dest_raw": "TOPIC:action-bar-input-routing",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "0ca3e01b7851cd36f43589a0deea13a3be5bbee3",
+   "review": false,
+   "notes": "keep a one-line \"primary player = `PlayerIndex(0)` or none\" definition in CAP (used across 190-351); cites \"Player-construction sites\" (later in file)"
+  },
+  {
+   "id": "b:206",
+   "lines": [
+    [
+     206,
+     246
+    ]
+   ],
+   "title": "Per-player action bars Phase 2: `owner_player`, `owns_slot`, cost pools, duplicate-key detectors",
+   "type": "REF+RAT",
+   "safety": "N",
+   "dest": "TOPIC:action-bar-input-routing",
+   "also": [],
+   "dest_raw": "TOPIC:action-bar-input-routing",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "b6fb82ce9e0b94b9432d70cc7fc6ccd347e9e5d3",
+   "review": false,
+   "notes": "keep a one-line gotcha in CAP: the state-machine rule override resolves against the primary player"
+  },
+  {
+   "id": "b:247",
+   "lines": [
+    [
+     247,
+     255
+    ]
+   ],
+   "title": "`action_bar_input_system` requires `PlayerTarget` on every `CharacterController`",
+   "type": "GOTCHA",
+   "safety": "Y",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP",
+   "governs": [
+    "crates/ironhold_core/src/capabilities/action_bar.rs",
+    "crates/ironhold_core/src/runtime/scene_manager/*.rs"
+   ],
+   "subs": [],
+   "text_sha1": "82d327ec96b67e7b9dfbf7c4a3501c03b42279ad",
+   "review": false,
+   "notes": "silent no-op drops a whole bar; \"four-site inventory above\" is dangling (and stale: now five sites)"
+  },
+  {
+   "id": "b:256",
+   "lines": [
+    [
+     256,
+     283
+    ]
+   ],
+   "title": "Gamepad-routed action-bar slots (`gamepad_key`, `BoundGamepad`)",
+   "type": "REF/RAT",
+   "safety": "N",
+   "dest": "TOPIC:action-bar-input-routing",
+   "also": [],
+   "dest_raw": "TOPIC:action-bar-input-routing",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "bd70fb2b0766b7e9a9caedb2c12f829f2b9778c7",
+   "review": false,
+   "notes": "key fact: `gamepad_key` fires only from the owning player's `BoundGamepad`"
+  },
+  {
+   "id": "b:284",
+   "lines": [
+    [
+     284,
+     284
+    ]
+   ],
+   "title": "Mouse-click action-bar slots (`Option<Ref<Interaction>>`, `InspectorEnabled`)",
+   "type": "GOTCHA+RAT",
+   "safety": "Y",
+   "dest": "TOPIC:action-bar-input-routing",
+   "also": [
+    "CAP"
+   ],
+   "dest_raw": "TOPIC + 2 rules in CAP",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [
+    "rule",
+    "ref"
+   ],
+   "text_sha1": "3167bfa172e97e5c75d3cddd42ce0c78f416d52d",
+   "review": false,
+   "notes": "\"do not replace with a `ClickedSlots` resource\" is load-bearing; single 2.3k paragraph; test recipe could go to tests/CLAUDE.md"
+  },
+  {
+   "id": "b:286",
+   "lines": [
+    [
+     286,
+     314
+    ]
+   ],
+   "title": "Targeting chain ordering `.before(action_bar_input_system)`; transitive edge to the interpreter",
+   "type": "RULE+RAT",
+   "safety": "Y",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP + pointer in SM",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [
+    "rule",
+    "ref"
+   ],
+   "text_sha1": "ddc3704709f18039dabf499a92f9d51921ea363e",
+   "review": true,
+   "notes": "**not covered by a test — this text is the only guard**; consider a PARENT bullet \"any system touching `PlayerTarget`/`CurrentTarget` must be ordered explicitly\""
+  },
+  {
+   "id": "b:315",
+   "lines": [
+    [
+     315,
+     322
+    ]
+   ],
+   "title": "`Targetable` test fixtures must register in `SpawnRegistry`",
+   "type": "GOTCHA",
+   "safety": "N",
+   "dest": "TESTS",
+   "also": [],
+   "dest_raw": "tests/CLAUDE.md (already there: `tests/CLAUDE.md:11` has the same rule → CUT here after verifying)",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "43b53d5d0a0fa742d35dd173c359fed6273bc502",
+   "review": true,
+   "notes": "duplicate"
+  },
+  {
+   "id": "b:323",
+   "lines": [
+    [
+     323,
+     351
+    ]
+   ],
+   "title": "`target.*` events, screen-space selection, `select_aim_height`, `target_*` vars blank at 2+ players",
+   "type": "REF+GOTCHA",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP (trim ~800 derivable)",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "c1c4fa6a3c957a55ad718dffa87787d316d694e0",
+   "review": true,
+   "notes": "keep: screen-space not raycast, vars blank at 2+ players, `target.changed*` primary-only"
+  },
+  {
+   "id": "b:352",
+   "lines": [
+    [
+     352,
+     382
+    ]
+   ],
+   "title": "Target indicator ring, per-player, colour precedence",
+   "type": "REF+RAT",
+   "safety": "N",
+   "dest": "TOPIC:split-screen-cameras-and-widgets",
+   "also": [],
+   "dest_raw": "TOPIC:split-screen-cameras-and-widgets (keep the \"no dedup, deliberate\" decision, 1-2 lines, in CAP)",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "019331c6a4a71f0d40b640a544aef1927aed5a71",
+   "review": true,
+   "notes": "rest derivable"
+  },
+  {
+   "id": "b:383",
+   "lines": [
+    [
+     383,
+     395
+    ]
+   ],
+   "title": "Per-viewport ring visibility: RenderLayers intro",
+   "type": "REF",
+   "safety": "N",
+   "dest": "TOPIC:split-screen-cameras-and-widgets",
+   "also": [],
+   "dest_raw": "TOPIC:split-screen-ring-visibility",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "f69df7cffff5cbc4ca4fde36bd93357a78d7e977",
+   "review": false,
+   "notes": "\"sole owners of this arithmetic\" → one-line CAP rule; layer 31 reservation touches `inspector.rs`"
+  },
+  {
+   "id": "b:396",
+   "lines": [
+    [
+     396,
+     405
+    ]
+   ],
+   "title": "Orbit camera / ring layer assignment",
+   "type": "REF",
+   "safety": "N",
+   "dest": "TOPIC:split-screen-cameras-and-widgets",
+   "also": [],
+   "dest_raw": "same topic",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "8bdcfb0ab706a9d2c963770ae3a12a88524a22ce",
+   "review": true,
+   "notes": "\"keyed on `player_index`, not loop order\" is a GOTCHA"
+  },
+  {
+   "id": "b:406",
+   "lines": [
+    [
+     406,
+     413
+    ]
+   ],
+   "title": "Party camera must carry `all_ring_layers()`",
+   "type": "GOTCHA",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "ab96437e97ae5cdff7193f2c4bc546282fa03df9",
+   "review": false,
+   "notes": "invariant found in plan review"
+  },
+  {
+   "id": "b:414",
+   "lines": [
+    [
+     414,
+     423
+    ]
+   ],
+   "title": "`TargetRingVisibilityMode` lifecycle",
+   "type": "REF+GOTCHA",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "same topic",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "fa4d228f66cb5a0830f2c0b45627994210c0f4aa",
+   "review": true,
+   "notes": "\"no mid-scene toggle without re-tagging\" → one line in SM"
+  },
+  {
+   "id": "b:424",
+   "lines": [
+    [
+     424,
+     431
+    ]
+   ],
+   "title": "Warnings: `player_index` collision, non-hot-join Spawn",
+   "type": "REF",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "same topic",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "2422f3e37d4ffa84fd021cc4eefcf5becf13d1b0",
+   "review": true,
+   "notes": "derivable from the `warn!` sites"
+  },
+  {
+   "id": "b:433",
+   "lines": [
+    [
+     433,
+     437
+    ]
+   ],
+   "title": "`pipeline_warmup_system` doesn't touch RenderLayers",
+   "type": "GOTCHA",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "2ed8f8bd7960d61ccb4f94ef3c10db4aef7f438c",
+   "review": false,
+   "notes": "touches `lib.rs` (src root)"
+  },
+  {
+   "id": "b:439",
+   "lines": [
+    [
+     439,
+     444
+    ]
+   ],
+   "title": "Light visibility intersects light RenderLayers (shadowless lit mesh)",
+   "type": "GOTCHA",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP (or PARENT if RenderLayers used outside capabilities)",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "eb5a0517dd2c5477f6cd523867005e6ad17954fa",
+   "review": true,
+   "notes": ""
+  },
+  {
+   "id": "b:446",
+   "lines": [
+    [
+     446,
+     450
+    ]
+   ],
+   "title": "\"Reader-facing entry points\" for the ring feature",
+   "type": "DER",
+   "safety": "N",
+   "dest": "CUT",
+   "also": [],
+   "dest_raw": "CUT",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "557bff7cbb155d57c17d9836372ccd3367260b17",
+   "review": false,
+   "notes": "grep gives the same"
+  },
+  {
+   "id": "b:452",
+   "lines": [
+    [
+     452,
+     462
+    ]
+   ],
+   "title": "Per-viewport target HUD readout",
+   "type": "REF",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP (keep the `.after(split_screen_viewport_system)` ordering line)",
+   "governs": [],
+   "subs": [
+    "rule",
+    "ref"
+   ],
+   "text_sha1": "8ae9350da99e524b6ada047b6590264ca4faa631",
+   "review": true,
+   "notes": "rest derivable"
+  },
+  {
+   "id": "b:464",
+   "lines": [
+    [
+     464,
+     466
+    ]
+   ],
+   "title": "`behavior` works on composite primitive prefabs",
+   "type": "GOTCHA",
+   "safety": "N",
+   "dest": "SM",
+   "also": [],
+   "dest_raw": "SM",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "2e47eaab4476ae8a58eecfdcc4720aea14d806a4",
+   "review": false,
+   "notes": "drop the empty bold lead at 464 (\"New capabilities for entity logic:\" groups 464-620 under a misleading label)"
+  },
+  {
+   "id": "b:468",
+   "lines": [
+    [
+     468,
+     471
+    ]
+   ],
+   "title": "`TriggerZone` description",
+   "type": "DER",
+   "safety": "N",
+   "dest": "CUT",
+   "also": [],
+   "dest_raw": "CUT",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "18307508b83077c23e6b42278841f65709b59016",
+   "review": false,
+   "notes": "covered by docs/20"
+  },
+  {
+   "id": "b:472",
+   "lines": [
+    [
+     472,
+     476
+    ]
+   ],
+   "title": "`Interactable` fires for every in-range interactable",
+   "type": "GOTCHA",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "6ada2391573d18f6fccc028d4688913ec9d75f51",
+   "review": false,
+   "notes": "587-596 depends on it"
+  },
+  {
+   "id": "b:478",
+   "lines": [
+    [
+     478,
+     488
+    ]
+   ],
+   "title": "Lootable corpse design summary",
+   "type": "RAT+REF",
+   "safety": "N",
+   "dest": "TOPIC:lootable-corpse",
+   "also": [],
+   "dest_raw": "TOPIC:lootable-corpse (also in docs/30)",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "56d57f8ab39e8873e20577b9215d90b0e3dc81fa",
+   "review": true,
+   "notes": "mostly history"
+  },
+  {
+   "id": "b:489",
+   "lines": [
+    [
+     489,
+     505
+    ]
+   ],
+   "title": "`Action::Spawn.at_entity` copies full transform; skip with warning, never origin",
+   "type": "GOTCHA/RULE",
+   "safety": "Y",
+   "dest": "SM",
+   "also": [],
+   "dest_raw": "SM",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [],
+   "text_sha1": "9359101ea56ef49d451de47aab206bbf19001ccf",
+   "review": false,
+   "notes": "same-frame Despawn race; mirrors `SpawnEffect.entity`"
+  },
+  {
+   "id": "b:507",
+   "lines": [
+    [
+     507,
+     522
+    ]
+   ],
+   "title": "Corpse ids unique via `{new_id}` (retrofit history)",
+   "type": "RAT",
+   "safety": "N",
+   "dest": "CUT",
+   "also": [],
+   "dest_raw": "CUT (one current-state line into TOPIC:lootable-corpse)",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "6c4a8e32d587bcc7e14fbbd718a9c3bfc3797fdd",
+   "review": true,
+   "notes": "history of a retrofit; the one current-state line moves into TOPIC:lootable-corpse"
+  },
+  {
+   "id": "b:524",
+   "lines": [
+    [
+     524,
+     543
+    ]
+   ],
+   "title": "Prefer `SetDespawnTimer` over `EmitEventAfterDelay`+`Despawn`",
+   "type": "RULE+RAT",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP (542-543 rule + one-line why)",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "0da185ede159f26746502887688134d299323cdd",
+   "review": true,
+   "notes": "cut the incident narrative"
+  },
+  {
+   "id": "b:545",
+   "lines": [
+    [
+     545,
+     552
+    ]
+   ],
+   "title": "`target_auto_clear_system` clears on despawn",
+   "type": "GOTCHA",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "07c7827bab49d19d1bc1bbd09f8446170fe7dc50",
+   "review": false,
+   "notes": "content is targeting, heading is the corpse group"
+  },
+  {
+   "id": "b:554",
+   "lines": [
+    [
+     554,
+     561
+    ]
+   ],
+   "title": "`Action::Despawn` closes an open container panel",
+   "type": "GOTCHA",
+   "safety": "N",
+   "dest": "SM",
+   "also": [],
+   "dest_raw": "SM",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "1ca276587729d1a3e15fbe76663aaf4e19f2828c",
+   "review": false,
+   "notes": "linked to 587-596"
+  },
+  {
+   "id": "b:563",
+   "lines": [
+    [
+     563,
+     573
+    ]
+   ],
+   "title": "A dying entity can't catch its own respawn timer; global rule needed",
+   "type": "GOTCHA",
+   "safety": "N",
+   "dest": "TOPIC:lootable-corpse",
+   "also": [],
+   "dest_raw": "TOPIC:lootable-corpse",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "9586a6e72ce80be2fdde1748ea3945778b7db15d",
+   "review": false,
+   "notes": "cites the \"Despawning\" notes"
+  },
+  {
+   "id": "b:575",
+   "lines": [
+    [
+     575,
+     585
+    ]
+   ],
+   "title": "Respawn rules must be in `global_on`, not state-scoped `on:`",
+   "type": "RULE+RAT",
+   "safety": "Y",
+   "dest": "TOPIC:lootable-corpse",
+   "also": [
+    "PARENT"
+   ],
+   "dest_raw": "TOPIC:lootable-corpse (+ one runtime/ line: `tick_delayed_events_system` is pause-ungated)",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [
+    "rule",
+    "ref"
+   ],
+   "text_sha1": "7df8c2c057b3749055d270d445086dc1ece560e5",
+   "review": true,
+   "notes": "continues 563-573; keep contiguous"
+  },
+  {
+   "id": "b:587",
+   "lines": [
+    [
+     587,
+     596
+    ]
+   ],
+   "title": "`OpenContainer` must not double-count `panels_open`",
+   "type": "GOTCHA",
+   "safety": "N",
+   "dest": "SM",
+   "also": [],
+   "dest_raw": "SM",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "07c39111d84555bf6967c17d1b4d30760cbd84ff",
+   "review": false,
+   "notes": "depends on 472-476"
+  },
+  {
+   "id": "b:598",
+   "lines": [
+    [
+     598,
+     606
+    ]
+   ],
+   "title": "No `trigger_zone` on a Dynamic rigid-body prefab",
+   "type": "GOTCHA/RULE",
+   "safety": "Y",
+   "dest": "SM",
+   "also": [],
+   "dest_raw": "SM",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [],
+   "text_sha1": "7441424887299ce0632b5d585019346c66597aaa",
+   "review": false,
+   "notes": "add a pointer from the CAP trigger code; a backlog item is cited"
+  },
+  {
+   "id": "b:608",
+   "lines": [
+    [
+     608,
+     620
+    ]
+   ],
+   "title": "Superseded same-entity corpse design (cautionary)",
+   "type": "RAT",
+   "safety": "N",
+   "dest": "CUT",
+   "also": [],
+   "dest_raw": "CUT",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "eb9e199200b7c92d2a1f7557d6c6ead344059c58",
+   "review": false,
+   "notes": "the surviving reason lives in the 524-543 rule"
+  },
+  {
+   "id": "b:622",
+   "lines": [
+    [
+     622,
+     637
+    ]
+   ],
+   "title": "Animation resolver/playback pipeline, field-ownership table",
+   "type": "REF+GOTCHA",
+   "safety": "N",
+   "dest": "TOPIC:animation-pipeline",
+   "also": [],
+   "dest_raw": "CAP",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "52d428915320f27472cfdbca97fec7253a6bfefc",
+   "review": false,
+   "notes": "compact table"
+  },
+  {
+   "id": "b:638",
+   "lines": [
+    [
+     638,
+     646
+    ]
+   ],
+   "title": "`pending_seek` purpose",
+   "type": "GOTCHA",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "f88e1a3debdff276c41e1abfed80ea07f7b4e037",
+   "review": false,
+   "notes": ""
+  },
+  {
+   "id": "b:647",
+   "lines": [
+    [
+     647,
+     657
+    ]
+   ],
+   "title": "Paused clip must be resumed before next play",
+   "type": "GOTCHA",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "26008d563999d8a56926144b86bfdc49cd9ef108",
+   "review": false,
+   "notes": "load-bearing"
+  },
+  {
+   "id": "b:658",
+   "lines": [
+    [
+     658,
+     669
+    ]
+   ],
+   "title": "`set_seek_time` not `seek_to`; duration via the live graph",
+   "type": "RULE+RAT",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "b502d68418d40b7eb8337f735d59a786d6b3790c",
+   "review": false,
+   "notes": "cites a `tag_spawned_entity` doc comment"
+  },
+  {
+   "id": "b:670",
+   "lines": [
+    [
+     670,
+     675
+    ]
+   ],
+   "title": "`ActiveOverride.seek_fraction`/`frozen` must be durable",
+   "type": "GOTCHA",
+   "safety": "Y",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP",
+   "governs": [
+    "crates/ironhold_core/src/capabilities/animation.rs",
+    "crates/ironhold_core/src/capabilities/animation_resolver.rs"
+   ],
+   "subs": [],
+   "text_sha1": "fd9eb1b658025d5fbcc8ae2c9bb552fefdd44281",
+   "review": false,
+   "notes": ""
+  },
+  {
+   "id": "b:677",
+   "lines": [
+    [
+     677,
+     684
+    ]
+   ],
+   "title": "Spawn-already-posed needs a minimal `AnimationPolicy`",
+   "type": "GOTCHA",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP or TOPIC:lootable-corpse",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "53c01246d387cf8307fc13b4b4881d68989ceec1",
+   "review": true,
+   "notes": ""
+  },
+  {
+   "id": "b:686",
+   "lines": [
+    [
+     686,
+     702
+    ]
+   ],
+   "title": "Dialogue system",
+   "type": "REF (mostly DER)",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP (trim to: ordering `.after(button_system).after(interactable_system).before(fsm_interpreter_system)`, `{self}` substitution, `portrait` not implemented)",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "d2732c77f946d3c5bb5fb928053c88ca54e56992",
+   "review": true,
+   "notes": ""
+  },
+  {
+   "id": "b:706",
+   "lines": [
+    [
+     706,
+     709
+    ]
+   ],
+   "title": "WebGPU 16-byte alignment for GPU structs",
+   "type": "RULE",
+   "safety": "Y",
+   "dest": "PARENT",
+   "also": [],
+   "dest_raw": "PARENT",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [],
+   "text_sha1": "2d1b3e7dc043cd5f51e6d8b79f15641afccc3741",
+   "review": false,
+   "notes": "heading likely cited by name"
+  },
+  {
+   "id": "b:711",
+   "lines": [
+    [
+     711,
+     720
+    ]
+   ],
+   "title": "WGSL authoring rules for designer-facing shaders",
+   "type": "RULE+GOTCHA",
+   "safety": "Y",
+   "dest": "ASSETS",
+   "also": [],
+   "dest_raw": "CAP (+ \"always test in a web build\" one-liner in PARENT)",
+   "governs": [
+    "assets/**/*.wgsl"
+   ],
+   "subs": [],
+   "text_sha1": "1a8f1d2954087fc22f980c1e083dfc763496c9ab",
+   "review": false,
+   "notes": "check `runtime/` material creation before finalising"
+  },
+  {
+   "id": "b:722",
+   "lines": [
+    [
+     722,
+     728
+    ]
+   ],
+   "title": "Engine-internal shaders embedded via `include_str!`/`uuid_handle!`; no fabricated asset paths",
+   "type": "RULE",
+   "safety": "Y",
+   "dest": "PARENT",
+   "also": [],
+   "dest_raw": "PARENT",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [],
+   "text_sha1": "ba679528b265754acadc1167e2fd938855811c47",
+   "review": false,
+   "notes": "spans runtime, schema, capabilities"
+  },
+  {
+   "id": "b:729",
+   "lines": [
+    [
+     729,
+     730
+    ]
+   ],
+   "title": "Pointer to `docs/25_custom_shaders.md`",
+   "type": "REF",
+   "safety": "N",
+   "dest": "PARENT",
+   "also": [],
+   "dest_raw": "PARENT (stays with the shader section)",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "84e601a2351209e6f8d41b50c7900daf81f2414b",
+   "review": true,
+   "notes": ""
+  },
+  {
+   "id": "b:731",
+   "lines": [
+    [
+     731,
+     733
+    ]
+   ],
+   "title": "Physics/movement/camera-follow must run in `FixedUpdate`",
+   "type": "RULE",
+   "safety": "Y",
+   "dest": "PARENT",
+   "also": [],
+   "dest_raw": "PARENT",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [],
+   "text_sha1": "c079d3f6be418786a7b3ab8817b1f51540519339",
+   "review": false,
+   "notes": "**wording is stale: the camera chain runs in `Update`** (`claude_suggestions.md` ~L531, `opencode_compatibility.md` F2) — fix while moving"
+  },
+  {
+   "id": "b:734",
+   "lines": [
+    [
+     734,
+     749
+    ]
+   ],
+   "title": "Rapier steps in `FixedUpdate` at 64Hz; multi-tick frames; `mark_dirty_trees`",
+   "type": "RAT+GOTCHA",
+   "safety": "Y",
+   "dest": "PARENT",
+   "also": [],
+   "dest_raw": "PARENT (condensed)",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [],
+   "text_sha1": "4b7f4b6f154cd585d056ab717c0a8087418840c0",
+   "review": true,
+   "notes": "\"two separate mitigations\" intro leads into 750-764 — move 734-764 together"
+  },
+  {
+   "id": "b:750",
+   "lines": [
+    [
+     750,
+     758
+    ]
+   ],
+   "title": "Update systems must not read `&GlobalTransform`; use `utils::fresh_global_transform`",
+   "type": "RULE",
+   "safety": "Y",
+   "dest": "PARENT",
+   "also": [],
+   "dest_raw": "PARENT",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [],
+   "text_sha1": "df0268582a68a7e21f925fd9f1660bcf3b0ff138",
+   "review": false,
+   "notes": "cross-cutting; phrase on the helper name so grep finds it"
+  },
+  {
+   "id": "b:759",
+   "lines": [
+    [
+     759,
+     764
+    ]
+   ],
+   "title": "\"Confirmed fine, deliberately unconverted\" list",
+   "type": "RAT",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "bc2cf24e5a37fc1eaa39b69a02d3676eeeec895b",
+   "review": false,
+   "notes": "splits an argument from its rule; keep a pointer"
+  },
+  {
+   "id": "b:765",
+   "lines": [
+    [
+     765,
+     768
+    ]
+   ],
+   "title": "Faster-than-64Hz displays step motion (accepted)",
+   "type": "RAT",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP (or fold into the PARENT paragraph)",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "bbe7db5a4829d743c20b6e9c4a18234d6c72d759",
+   "review": true,
+   "notes": ""
+  },
+  {
+   "id": "b:769",
+   "lines": [
+    [
+     769,
+     777
+    ]
+   ],
+   "title": "`ProjectConfig.max_frame_delta_secs` caps catch-up ticks",
+   "type": "REF",
+   "safety": "N",
+   "dest": "SCH",
+   "also": [],
+   "dest_raw": "SCH (one-line pointer) or CUT",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "61eeebf252cc3d23d2c622313d72ff3841ef7994",
+   "review": true,
+   "notes": "duplicates `docs/20#max_frame_delta_secs`"
+  },
+  {
+   "id": "b:779",
+   "lines": [
+    [
+     779,
+     814
+    ]
+   ],
+   "title": "Jump reset can't rely on a ground-check edge; slope walkability gate",
+   "type": "RAT/INCIDENT",
+   "safety": "N",
+   "dest": "TOPIC:player-ground-detection",
+   "also": [],
+   "dest_raw": "TOPIC:player-ground-detection",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "b01362e3da6ce1b45879d5c95c7c1f9da17726cd",
+   "review": false,
+   "notes": "heading is under the FixedUpdate section; tests named at 779/841"
+  },
+  {
+   "id": "b:815",
+   "lines": [
+    [
+     815,
+     855
+    ]
+   ],
+   "title": "`jumps_used` reset: grace ticks, velocity, liftoff height; dual-clock history",
+   "type": "REF+RAT",
+   "safety": "N",
+   "dest": "TOPIC:player-ground-detection",
+   "also": [],
+   "dest_raw": "TOPIC:player-ground-detection",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "c3949fa65d62f88e88439b5d1236d398397e62e2",
+   "review": false,
+   "notes": "`jump_liftoff_y` teleport caveat (850-854) is a real GOTCHA; stale \"used to\" prose trimmable"
+  },
+  {
+   "id": "b:856",
+   "lines": [
+    [
+     856,
+     882
+    ]
+   ],
+   "title": "Reset must read `raw_grounded`, never coyote-buffered `is_grounded`",
+   "type": "RULE+RAT",
+   "safety": "Y",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP (rule + 2-line incident; full story in TOPIC)",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [
+    "rule",
+    "ref"
+   ],
+   "text_sha1": "a02e9289ee50a0968492254f30a681f7b76745fb",
+   "review": true,
+   "notes": "\"a debounce that smooths feel must never leak into correctness timing\""
+  },
+  {
+   "id": "b:883",
+   "lines": [
+    [
+     883,
+     911
+    ]
+   ],
+   "title": "Coyote time: debounced grounding",
+   "type": "REF",
+   "safety": "N",
+   "dest": "TOPIC:player-ground-detection",
+   "also": [],
+   "dest_raw": "TOPIC:player-ground-detection",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "7a147c341c88da5c7f7eb464d55927bf9753a5ca",
+   "review": false,
+   "notes": "**`animation_resolver.rs:30` cites the \"Coyote time\" section**"
+  },
+  {
+   "id": "b:912",
+   "lines": [
+    [
+     912,
+     928
+    ]
+   ],
+   "title": "`can_jump`: coyote buffer unlocks only the first jump",
+   "type": "RULE+RAT",
+   "safety": "Y",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP (condensed)",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [],
+   "text_sha1": "78b6bf442a9a40964f6ee4534a5ca45f1a48eee6",
+   "review": true,
+   "notes": "keep adjacent to 856-882"
+  },
+  {
+   "id": "b:929",
+   "lines": [
+    [
+     929,
+     949
+    ]
+   ],
+   "title": "Ground shape-cast must `.exclude_sensors()` and `normalize_or_zero()`",
+   "type": "GOTCHA+RAT",
+   "safety": "Y",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP (condensed)",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [],
+   "text_sha1": "917782e25478fda7b18594e526ebd12d38db66af",
+   "review": true,
+   "notes": "generic for any physics query in capabilities/ (`npc.rs` LOS precedent)"
+  },
+  {
+   "id": "b:950",
+   "lines": [
+    [
+     950,
+     1004
+    ]
+   ],
+   "title": "`ground_cast` re-query loop, \"underfoot\", `is_walkable_contact`, known gap",
+   "type": "REF+RAT",
+   "safety": "N",
+   "dest": "TOPIC:player-ground-detection",
+   "also": [],
+   "dest_raw": "TOPIC:player-ground-detection",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "f364f3b8a3e2d97fa9aa3acd5044623f3bbc07e0",
+   "review": false,
+   "notes": "monotone-loop rationale (980-993) is not derivable; link the backlog bug on compound colliders"
+  },
+  {
+   "id": "b:1005",
+   "lines": [
+    [
+     1005,
+     1022
+    ]
+   ],
+   "title": "`jump_air_grace_ticks` NaN clamp; accepted pogo consequences",
+   "type": "REF+GOTCHA",
+   "safety": "N",
+   "dest": "TOPIC:player-ground-detection",
+   "also": [],
+   "dest_raw": "TOPIC:player-ground-detection",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "cf55e88355b8a9db2952cb4ad5b7e5599ab6789d",
+   "review": false,
+   "notes": "accepted-tradeoff list is not derivable"
+  },
+  {
+   "id": "b:1023",
+   "lines": [
+    [
+     1023,
+     1026
+    ]
+   ],
+   "title": "Deterministic iteration order: BTreeMap/IndexMap; `determinism_lint` markers",
+   "type": "RULE",
+   "safety": "Y",
+   "dest": "PARENT",
+   "also": [],
+   "dest_raw": "PARENT",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [],
+   "text_sha1": "05b14c46d4d3ea5fcd079ddd2a2d55cbbcbefa9e",
+   "review": false,
+   "notes": "**`tests/determinism_lint.rs:8` and `:201` (a failure message) quote the heading \"Deterministic iteration order on gameplay paths\"; `docs/40:102` too — keep the heading text**; D1 site inventory could be a list"
+  },
+  {
+   "id": "b:1027",
+   "lines": [
+    [
+     1027,
+     1029
+    ]
+   ],
+   "title": "Terrain generation is async",
+   "type": "RULE",
+   "safety": "Y",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [],
+   "text_sha1": "e74d7ba3d19aa2257cf30559a7f4ddb3af55cb4a",
+   "review": false,
+   "notes": ""
+  },
+  {
+   "id": "b:1030",
+   "lines": [
+    [
+     1030,
+     1032
+    ]
+   ],
+   "title": "Inspector isolation (`cfg_attr(feature = \"inspector\")`)",
+   "type": "RULE",
+   "safety": "Y",
+   "dest": "PARENT",
+   "also": [],
+   "dest_raw": "PARENT",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [],
+   "text_sha1": "060c432c14efd3fb5bb4733fa0096259e2ba4bd9",
+   "review": false,
+   "notes": "applies to components everywhere"
+  },
+  {
+   "id": "b:1033",
+   "lines": [
+    [
+     1033,
+     1040
+    ]
+   ],
+   "title": "Native frame cap, unfocused throttle, pipeline warmup",
+   "type": "REF+GOTCHA",
+   "safety": "N",
+   "dest": "PARENT",
+   "also": [],
+   "dest_raw": "PARENT (lib.rs note)",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "ee090b9b78d44120ec5f66f538eb58a133150fbb",
+   "review": true,
+   "notes": "300-2000 ms WASM stall rationale not derivable"
+  },
+  {
+   "id": "b:1041",
+   "lines": [
+    [
+     1041,
+     1052
+    ]
+   ],
+   "title": "Change-detection discipline for render-affecting components",
+   "type": "RULE",
+   "safety": "Y",
+   "dest": "PARENT",
+   "also": [],
+   "dest_raw": "PARENT",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [],
+   "text_sha1": "60c221f4cd326ef7a17eefe96d4fd87de24929f5",
+   "review": false,
+   "notes": "**`camera.rs:878` and `nameplate.rs:49` cite \"Change-detection discipline\"**"
+  },
+  {
+   "id": "b:1053",
+   "lines": [
+    [
+     1053,
+     1059
+    ]
+   ],
+   "title": "Audio preloading: `preload_audio_system`, `LoadedAudioHandles`",
+   "type": "REF",
+   "safety": "N",
+   "dest": "SM",
+   "also": [],
+   "dest_raw": "SM",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "8e7421f4c7ee94fd8fbdc20e7b2eadd987f5cdf4",
+   "review": false,
+   "notes": "handles must stay alive"
+  },
+  {
+   "id": "b:1060",
+   "lines": [
+    [
+     1060,
+     1062
+    ]
+   ],
+   "title": "`audio_volume_var_system` mirrors `AudioState` to a `GameVariable`",
+   "type": "REF+GOTCHA",
+   "safety": "N",
+   "dest": "SM",
+   "also": [],
+   "dest_raw": "SM",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "15c8f445582c8bf3554559da78df8119579c7b80",
+   "review": false,
+   "notes": "**sits under \"Audio file authoring\"** — a runtime system note; test-harness gotcha (non-default fraction) is real"
+  },
+  {
+   "id": "b:1063",
+   "lines": [
+    [
+     1063,
+     1066
+    ]
+   ],
+   "title": "SFX: no leading silence, WAV only",
+   "type": "GOTCHA",
+   "safety": "N",
+   "dest": "CUT",
+   "also": [],
+   "dest_raw": "DOC:asset-authoring (or `docs/60`)",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "c6ae7dfe9a68d88c9f41c68da7319c0e628af5de",
+   "review": false,
+   "notes": "already at docs/20:1928; add the decoder start-up-on-first-play (WASM) clause to that row"
+  },
+  {
+   "id": "b:1067",
+   "lines": [
+    [
+     1067,
+     1083
+    ]
+   ],
+   "title": "`tag_spawned_entity` is the single spawn-metadata source",
+   "type": "RULE",
+   "safety": "Y",
+   "dest": "SM",
+   "also": [],
+   "dest_raw": "SM",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [],
+   "text_sha1": "6bb197505921c8ffd93d77d160fc7e36ce4633bc",
+   "review": false,
+   "notes": "\"four-site inventory below\" is stale: five sites"
+  },
+  {
+   "id": "b:1084",
+   "lines": [
+    [
+     1084,
+     1110
+    ]
+   ],
+   "title": "Prefer `try_despawn()` when an entity may already be gone",
+   "type": "RULE+RAT",
+   "safety": "N",
+   "dest": "PARENT",
+   "also": [],
+   "dest_raw": "PARENT",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "67313385d9c68891130c223e3784983f00272fc8",
+   "review": false,
+   "notes": "cross-cuts capabilities and scene_manager; incident trimmable to ~600 chars"
+  },
+  {
+   "id": "b:1111",
+   "lines": [
+    [
+     1111,
+     1120
+    ]
+   ],
+   "title": "Child `LevelEntity`/`OverlayEntity` self-tagging is deliberate",
+   "type": "RULE (don't \"clean up\")",
+   "safety": "Y",
+   "dest": "PARENT",
+   "also": [],
+   "dest_raw": "PARENT",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [],
+   "text_sha1": "df67a5e0736933f021c92dc6ae94cda17c096c39",
+   "review": false,
+   "notes": "continues the try_despawn argument"
+  },
+  {
+   "id": "b:1121",
+   "lines": [
+    [
+     1121,
+     1200
+    ]
+   ],
+   "title": "Player-construction sites inventory (1-5) + post-dispatch rule",
+   "type": "REF (+RULE)",
+   "safety": "N",
+   "dest": "TOPIC:player-spawn-sites",
+   "also": [],
+   "dest_raw": "TOPIC:player-spawn-sites; 2-3 line RULE in SM",
+   "governs": [],
+   "subs": [
+    "rule",
+    "ref"
+   ],
+   "text_sha1": "5c93614e39c24feb44ce3dca6ca302781148df88",
+   "review": true,
+   "notes": "stale \"line 560\"; heading sits under \"Despawning\"; widely cited as \"Player-construction sites\" / \"four player-construction sites\""
+  },
+  {
+   "id": "b:1201",
+   "lines": [
+    [
+     1201,
+     1212
+    ]
+   ],
+   "title": "Player `stat_label`/`world_stat_bar` routing; 16-param ceiling",
+   "type": "GOTCHA",
+   "safety": "N",
+   "dest": "SM",
+   "also": [],
+   "dest_raw": "SM",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "47df376f615327e0331aa853df33302d65a40cf2",
+   "review": false,
+   "notes": "`SystemParam` 16-param limit on `spawn_scene_v2` is the reusable gotcha"
+  },
+  {
+   "id": "b:1213",
+   "lines": [
+    [
+     1213,
+     1223
+    ]
+   ],
+   "title": "`PrefabDef.material` not auto-applied on the player path",
+   "type": "GOTCHA",
+   "safety": "N",
+   "dest": "SM",
+   "also": [],
+   "dest_raw": "SM",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "f1b26be9f01e47c5eef1d3bb149c4407902a3622",
+   "review": false,
+   "notes": "restate \"new rendering `PrefabDef` field must be checked against the player path\""
+  },
+  {
+   "id": "b:1224",
+   "lines": [
+    [
+     1224,
+     1260
+    ]
+   ],
+   "title": "Collider divergence; Friction 0.15 idle-only after the wall-friction fix",
+   "type": "GOTCHA+RAT",
+   "safety": "Y",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP (collapse to current state)",
+   "governs": [
+    "crates/ironhold_core/src/capabilities/player.rs",
+    "crates/ironhold_core/src/runtime/scene_manager/entity_spawner.rs"
+   ],
+   "subs": [],
+   "text_sha1": "e181a7cb3f55ba3d2d01d05177e5422492512403",
+   "review": true,
+   "notes": "`wall_friction_tests.rs`"
+  },
+  {
+   "id": "b:1261",
+   "lines": [
+    [
+     1261,
+     1330
+    ]
+   ],
+   "title": "Local co-op: Party, split, Grid, dynamic split, fallback",
+   "type": "REF",
+   "safety": "N",
+   "dest": "TOPIC:split-screen-cameras-and-widgets",
+   "also": [],
+   "dest_raw": "TOPIC:split-screen-cameras-and-widgets",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "9ac6010ff2aa8575e9ce2f8c70a8b9c3650bda42",
+   "review": false,
+   "notes": "\"neither set: warn\" (1326-1329) short enough for CAP"
+  },
+  {
+   "id": "b:1331",
+   "lines": [
+    [
+     1331,
+     1358
+    ]
+   ],
+   "title": "Split prefabs need `zoom_speed:0`, `orbit_button:\"None\"`, `character_rotate_button:None`",
+   "type": "GOTCHA",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "6c576510ab0871d532da88e8af65c50b864487cb",
+   "review": false,
+   "notes": "three-field list is load-bearing; playtest narrative trimmable"
+  },
+  {
+   "id": "b:1359",
+   "lines": [
+    [
+     1359,
+     1373
+    ]
+   ],
+   "title": "Keyboard camera look",
+   "type": "REF+GOTCHA",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "same TOPIC",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "8a0fa877c6cc8984410e8b1bcd25e4864e7bac7d",
+   "review": true,
+   "notes": "pitch-direction pin → one CAP line"
+  },
+  {
+   "id": "b:1374",
+   "lines": [
+    [
+     1374,
+     1382
+    ]
+   ],
+   "title": "`CameraShake` query must exclude Fixed/FirstPerson/Flycam",
+   "type": "GOTCHA",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "0e47b16732431c056925c08f656adad4b854b530",
+   "review": false,
+   "notes": "straddles `camera.rs` and `scene_manager/mod.rs`"
+  },
+  {
+   "id": "b:1383",
+   "lines": [
+    [
+     1383,
+     1405
+    ]
+   ],
+   "title": "`SetCameraMode`; Authored vs Active camera mode; `camera_blend_system` must be last in the chain",
+   "type": "GOTCHA",
+   "safety": "Y",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [],
+   "text_sha1": "a469fb6930aedbbd1592e9e82056149fe9e52fbb",
+   "review": false,
+   "notes": "ordering lives in `lib.rs` → needs a PARENT pointer (see risk 3)"
+  },
+  {
+   "id": "b:1406",
+   "lines": [
+    [
+     1406,
+     1462
+    ]
+   ],
+   "title": "`WorldLabelRank` viewport-aware labels; per-rank widget duplication",
+   "type": "REF+GOTCHA",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "same TOPIC",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "f20509252dcad59d8be27077448aed8c1d72834a",
+   "review": true,
+   "notes": "continues into 1463-1528 (one story)"
+  },
+  {
+   "id": "b:1463",
+   "lines": [
+    [
+     1463,
+     1474
+    ]
+   ],
+   "title": "`particle_renderer` billboard viewport-aware (Phase 1)",
+   "type": "RAT+GOTCHA",
+   "safety": "N",
+   "dest": "TOPIC:split-screen-cameras-and-widgets",
+   "also": [],
+   "dest_raw": "CAP (use `camera_priority_key`, filter `is_active`; accepted limit of one billboard camera)",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "51122d8c1d7c11e8eb8ccae5214d7d2a3e004d3c",
+   "review": false,
+   "notes": "rows 1463-1486 + 1488-1509 are one story with 1406-1462"
+  },
+  {
+   "id": "b:1476",
+   "lines": [
+    [
+     1476,
+     1486
+    ]
+   ],
+   "title": "Targeting `click_select` viewport-aware (Phase 2)",
+   "type": "RAT+GOTCHA",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP (dead-quadrant click does nothing)",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "50091ec3c66f9e66e42f32fbcc4d4b857c57c102",
+   "review": true,
+   "notes": ""
+  },
+  {
+   "id": "b:1488",
+   "lines": [
+    [
+     1488,
+     1509
+    ]
+   ],
+   "title": "Nameplate distance culling via stored camera distance (Phase 3)",
+   "type": "GOTCHA+RAT",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "66b3d538fda53a52dec93479480a9e0778ca4869",
+   "review": false,
+   "notes": "rule: read the stored distance, never re-select a camera; refers to `WorldLabelRank` (Phase 4, earlier)"
+  },
+  {
+   "id": "b:1511",
+   "lines": [
+    [
+     1511,
+     1528
+    ]
+   ],
+   "title": "Split-screen player HUD labels (P{n})",
+   "type": "REF",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP (keep the ordering rule + \"relies on full-window Camera2d\" warning)",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "4c51db579461459af159d27149ae75ba067aa158",
+   "review": true,
+   "notes": "\"see above\" for `PlayerIndex` will dangle"
+  },
+  {
+   "id": "b:1530",
+   "lines": [
+    [
+     1530,
+     1574
+    ]
+   ],
+   "title": "Gamepad routing: `BoundGamepad`, `claimed` invariant",
+   "type": "GOTCHA+RAT",
+   "safety": "Y",
+   "dest": "TOPIC:gamepad-routing",
+   "also": [
+    "CAP",
+    "RT"
+   ],
+   "dest_raw": "TOPIC:gamepad-routing + ~800-char rule stub",
+   "governs": [
+    "crates/ironhold_core/src/capabilities/action_bar.rs",
+    "crates/ironhold_core/src/capabilities/camera.rs",
+    "crates/ironhold_core/src/capabilities/interactable.rs",
+    "crates/ironhold_core/src/capabilities/targeting.rs",
+    "crates/ironhold_core/src/runtime/input.rs",
+    "crates/ironhold_core/src/capabilities/player.rs"
+   ],
+   "subs": [
+    "rule",
+    "ref"
+   ],
+   "text_sha1": "36a1abed1c2a4ab1d9e875ed62c724aa201dd4da",
+   "review": true,
+   "notes": "spans `capabilities/player.rs`, `runtime/input.rs`, the consumers — cross-cutting"
+  },
+  {
+   "id": "b:1576",
+   "lines": [
+    [
+     1576,
+     1587
+    ]
+   ],
+   "title": "Gamepad button/axis RON mapping, parity gap",
+   "type": "REF (partly DER)",
+   "safety": "N",
+   "dest": "TOPIC:gamepad-routing",
+   "also": [],
+   "dest_raw": "TOPIC:gamepad-routing",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "4222492032a20b50727c373c9b0ec088368a590a",
+   "review": false,
+   "notes": "keep \"no gamepad camera-yaw is deliberate\""
+  },
+  {
+   "id": "b:1589",
+   "lines": [
+    [
+     1589,
+     1604
+    ]
+   ],
+   "title": "Duplicate `gamepad_index`/`player_index` validation scope",
+   "type": "RAT+GOTCHA",
+   "safety": "N",
+   "dest": "SCH",
+   "also": [],
+   "dest_raw": "SCH or TOPIC (+ 2-line CLI note)",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "4979bbc4928b85ab60648567c957855239cf351c",
+   "review": true,
+   "notes": "stops someone \"fixing\" the `entities:`-only scope"
+  },
+  {
+   "id": "b:1606",
+   "lines": [
+    [
+     1606,
+     1636
+    ]
+   ],
+   "title": "Gamepad-triggered hot join: `PendingJoinGamepad`",
+   "type": "REF+GOTCHA",
+   "safety": "Y",
+   "dest": "TOPIC:gamepad-routing",
+   "also": [
+    "RT",
+    "SM"
+   ],
+   "dest_raw": "TOPIC:gamepad-routing",
+   "governs": [
+    "crates/ironhold_core/src/runtime/input.rs",
+    "crates/ironhold_core/src/runtime/scene_manager/action_executor.rs"
+   ],
+   "subs": [
+    "rule",
+    "ref"
+   ],
+   "text_sha1": "9e2db36ca89d25dc7afad788f6bf336ac31638f5",
+   "review": false,
+   "notes": "needs \"Player-construction sites\" reachable; \"troubleshooting note above\" is unlocated/dangling"
+  },
+  {
+   "id": "b:1638",
+   "lines": [
+    [
+     1638,
+     1644
+    ]
+   ],
+   "title": "View-box clamp",
+   "type": "REF+GOTCHA",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "dad0c07554fbad9b74306e7152f98383273d0d3e",
+   "review": false,
+   "notes": "\"zero `linvel` on the clamped axis\" prevents jitter"
+  },
+  {
+   "id": "b:1646",
+   "lines": [
+    [
+     1646,
+     1655
+    ]
+   ],
+   "title": "Spawn queue: `SPAWNS_PER_FRAME = 2`",
+   "type": "RAT+RULE",
+   "safety": "Y",
+   "dest": "SM",
+   "also": [],
+   "dest_raw": "SM (or PARENT)",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [],
+   "text_sha1": "dade0d7dee28cc92446dabb1e6ab33557c672c04",
+   "review": true,
+   "notes": "Spawn must go through the queue; clear on `LoadScene`; heading \"Dynamic spawning\" may be cited"
+  },
+  {
+   "id": "b:1657",
+   "lines": [
+    [
+     1657,
+     1667
+    ]
+   ],
+   "title": "Component parity: dynamic vs scene-placed (nameplate gating)",
+   "type": "REF+RULE",
+   "safety": "N",
+   "dest": "SM",
+   "also": [],
+   "dest_raw": "SM (nameplate details to CAP)",
+   "governs": [],
+   "subs": [
+    "rule",
+    "ref"
+   ],
+   "text_sha1": "731bafc848c11bbdfe22fcd6543a81efb55afc94",
+   "review": true,
+   "notes": "callers span `scene_loader.rs`, `entity_spawner.rs`, `action_executor.rs` → place where all load"
+  },
+  {
+   "id": "b:1668",
+   "lines": [
+    [
+     1668,
+     1693
+    ]
+   ],
+   "title": "Label depth scale + validation coverage",
+   "type": "REF+RAT",
+   "safety": "N",
+   "dest": "SM",
+   "also": [],
+   "dest_raw": "SM (single-resolver rule) + SCH (`radius_range`); CLI walkthrough ~2.5k derivable",
+   "governs": [],
+   "subs": [
+    "rule",
+    "ref"
+   ],
+   "text_sha1": "2168f736fe430ee1a85d31f58f5e8fe6ad43100b",
+   "review": true,
+   "notes": "starts as a bullet of the previous list"
+  },
+  {
+   "id": "b:1695",
+   "lines": [
+    [
+     1695,
+     1711
+    ]
+   ],
+   "title": "CLI vs runtime camera-set asymmetry for label depth scale",
+   "type": "RAT",
+   "safety": "N",
+   "dest": "CUT",
+   "also": [],
+   "dest_raw": "CUT (one sentence in SM; already in `claude_suggestions.md`)",
+   "governs": [],
+   "subs": [],
+   "text_sha1": "1499ba85f008218e59765e39b22809f25117e850",
+   "review": true,
+   "notes": "someone may \"fix\" the asymmetry"
+  },
+  {
+   "id": "b:1713",
+   "lines": [
+    [
+     1713,
+     1729
+    ]
+   ],
+   "title": "GLB preloading `PreloadPrefab`/`PreloadGlb`",
+   "type": "REF",
+   "safety": "Y",
+   "dest": "DOC",
+   "also": [],
+   "dest_raw": "DOC (WASM load-stall page) + 3-line GOTCHA in SM",
+   "governs": [
+    "crates/ironhold_core/src/**"
+   ],
+   "subs": [
+    "rule",
+    "ref"
+   ],
+   "text_sha1": "6ba0871eed1d495ac0550ce9863d95991153090c",
+   "review": true,
+   "notes": "RON snippet derivable from the example project"
+  },
+  {
+   "id": "b:1731",
+   "lines": [
+    [
+     1731,
+     1752
+    ]
+   ],
+   "title": "Particle pipeline warmup + `ParticleBudget` footgun",
+   "type": "GOTCHA+REF",
+   "safety": "N",
+   "dest": "CAP",
+   "also": [],
+   "dest_raw": "CAP (budget footgun) / same DOC page",
+   "governs": [],
+   "subs": [
+    "rule",
+    "ref"
+   ],
+   "text_sha1": "d7783e78c2852406200ff9653f0ef69156073ea7",
+   "review": true,
+   "notes": "check `docs/20` before cutting (designers need it)"
+  }
+ ]
+}
