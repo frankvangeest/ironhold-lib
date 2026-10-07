@@ -1,6 +1,6 @@
 # Section map: splitting `crates/ironhold_core/src/CLAUDE.md`
 
-_Mapped at: `b24078b` (2026-10-07). Source file: 1,752 lines / 160,039 chars (~40k est. tokens), auto-loaded
+_Mapped at: `b24078b` (2026-10-07; the tooling copy of this map is `core_claude_md_split_blocks.json`, rebuilt against the post-R10 file, and its block IDs keep these line numbers as names). Source file: 1,752 lines / 160,039 chars (~40k est. tokens), auto-loaded
 whenever any file under `crates/ironhold_core/src/` is touched. This file is the **map only** — nothing has been
 moved. The plan that uses it is `planning/features/core_claude_md_split.md`._
 

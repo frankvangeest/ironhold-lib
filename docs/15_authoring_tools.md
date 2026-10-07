@@ -177,8 +177,8 @@ ironhold inspect audio   assets/shared/audio/boulder/boulder-push1.wav
 - **`inspect texture`**: dimensions, format and channels, file size — catches oversized textures before they bloat
   the web download. PNG, JPEG, WebP, GIF, BMP and TIFF; AVIF is not supported.
 - **`inspect audio`**: format, **duration**, sample rate and channels. Use the duration to set a sound-synchronised
-  `delay_secs` in `EmitEventAfterDelay`. Reads WAV and MP3 (prefer WAV for short sound effects; see
-  [20_data_formats.md](20_data_formats.md)).
+  `delay_secs` in `EmitEventAfterDelay`. Reads WAV and MP3 only: it cannot read OGG, the format
+  [20_data_formats.md](20_data_formats.md) recommends for music, so check OGG files in an audio editor.
 
 ## 6. Looking things up
 
