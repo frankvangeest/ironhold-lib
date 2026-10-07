@@ -4,7 +4,7 @@ Verifies that every file path referenced in `assets.ron` catalogs exists on disk
 matches the real on-disk case/separators — `Path.exists()` is case-insensitive on
 Windows, so a mis-cased reference previously validated clean here while still 404ing
 over the case-sensitive HTTP path a real WASM/browser build serves from. Also checked
-by `ironhold_cli validate` (see `docs/60_contributing.md`'s "Checks performed" list) —
+by `ironhold_cli validate` (see `docs/15_authoring_tools.md`) —
 this tool remains useful as a fast, no-build, `assets.ron`-only spot-check.
 Optionally reports unreferenced files in `assets/shared/`.
 

@@ -103,7 +103,7 @@ Entry point for a project. References all other files.
 | `display_name` | `Option<String>` | v2+ | Human-readable name |
 | `asset_catalog` | `Option<String>` | v2+ | Path to an `assets.ron` file. When absent, no asset catalog loads for this project at all — no models/effects/audio/decals are resolvable. `ironhold_cli validate`/`query effects`/`stats` all read this field, not the `assets.ron` convention path, so relocating it is honored (falls back to checking the convention path only when this field itself is unset). |
 | `prefab_catalog` | `Option<String>` | v2+ | Path to a `prefabs/prefabs.ron` file. When absent, no prefab catalog loads for this project at all. Same `ironhold_cli validate`/`query prefabs`/`query scenes`/`stats` behavior as `asset_catalog` above. |
-| `state_machine_path` | `Option<String>` | v3 | Path to `logic/state_machine.ron` — every project's game logic. When absent, no logic file loads for this project at all (no convention-path fallback once a `.project.ron` exists). `ironhold_cli validate` reads this field the same way the runtime does — see "Checks performed" in `docs/60_contributing.md`. |
+| `state_machine_path` | `Option<String>` | v3 | Path to `logic/state_machine.ron` — every project's game logic. When absent, no logic file loads for this project at all (no convention-path fallback once a `.project.ron` exists). `ironhold_cli validate` reads this field the same way the runtime does — see `docs/15_authoring_tools.md`. |
 | `model_fixes_path` | `Option<String>` | v1+ | Path to `overrides/model_fixes.ron`. `ironhold_cli validate` reads this field, not the convention path — see `asset_catalog` above. |
 | `global_environment` | `Option<EnvironmentMapConfig>` | — | Project-wide fallback IBL lighting |
 | `global_key_bindings` | `Map<String, String>` | — | Key name → trigger name (e.g. `"Escape": "toggle_pause"`). The value is used **as-is** — do not prefix it with `ui.` (unlike a `Button`'s `action:`, this map's value has no `ui.` stripping). Fires `ui.button_pressed:<trigger>`; `ironhold_cli validate` reports a value with no matching rule/transition/binding as `unreachable_trigger`. If several bound keys are pressed in the same frame, their triggers fire in **key-name order** (text order of the key name as written: digits before capitals before lower-case, e.g. `"Escape"` before `"KeyI"`, `"KeyE"` before `"i"`) on every machine. |
@@ -3878,7 +3878,7 @@ named `start_at_fracton` in `PlayAnimationOn`, expected one of `target`, `clip`,
 ```
 
 To catch these before you run the game, use `ironhold validate <project_dir>` or
-`ironhold watch <project_dir>` (see `docs/60_contributing.md`) — same message, same line and
+`ironhold watch <project_dir>` (see `docs/15_authoring_tools.md`) — same message, same line and
 column.
 
 | Action | Description |

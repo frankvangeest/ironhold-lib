@@ -388,7 +388,7 @@ designer path:
   - (c) Cheap and high value: an `unknown_token` validate warning for any `{word}` in an
     action/event string that is not one of the known tokens (`{self}`, `{target}`, `{new_id}`,
     `{attacker}`). This catches typos for all four tokens at once.
-  - Add whatever ships to the "Checks performed" list in `docs/60_contributing.md` (~244-256).
+  - Add whatever ships as a row in the matching table of `docs/15_authoring_tools.md` (the canonical list of validate checks).
 
 #### Non-blocking
 

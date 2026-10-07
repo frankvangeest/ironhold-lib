@@ -135,213 +135,69 @@ If you add a new UI button that should be testable, note its canvas coordinates 
 
 ---
 
-## CLI tooling (`ironhold`) ✅
+## CLI tooling (`ironhold`) — developer notes ✅
 
-The `ironhold` CLI (`crates/ironhold_cli`) inspects asset files without starting the engine.
-Build it once with `cargo build -p ironhold_cli` or run ad-hoc with `cargo run -p ironhold_cli -- <args>`.
+**How designers use the tool** (`validate`, `validate --strict`, `watch`, `stats`, `query`, `inspect`, exit codes,
+`--json`, and the canonical table of every check with its code) is documented in
+`docs/15_authoring_tools.md`. This section keeps only what contributors need.
 
-### `inspect glb <path.glb>`
+- **Build / run:** `cargo build -p ironhold_cli` once, or `cargo run -p ironhold_cli -- <args>` ad hoc. The repo
+  keeps a gitignored release-binary cache at `tools/bin/ironhold.exe` (see the root `CLAUDE.md` for when to rebuild
+  it). Use `cargo run`, not the cached binary, whenever a schema type just changed.
+- **`inspect glb`** replaces `tools/glb_inspector/inspect_glb.py` for day-to-day authoring; the Python tool is still
+  needed for `--preview` renders that require Blender.
 
-Lists everything you need to author RON for a model: animation clip names and durations,
-mesh names with vertex/triangle counts, materials, and root scene nodes.
+### Adding a validate check
+1. Implement it in `crates/ironhold_cli/src/commands/validate.rs` (an always-on error goes in `cross_file_checks`
+   with a stable `error_type` string; an advisory finding goes in `strict_checks` and makes `--strict` exit `1`). Walk
+   `scene.ui` through `walk_ui_nodes`, never flat (root `CLAUDE.md` / the core `CLAUDE.md`).
+2. Add a fixture under `crates/ironhold_cli/tests/fixtures/<name>/` and a test in
+   `crates/ironhold_cli/tests/validate_cross_file.rs` (exit code and the message text).
+3. **Add a row to the matching table in `docs/15_authoring_tools.md`** (what the designer sees, the code, what breaks
+   if ignored, the fix). That page is the single canonical list of checks; do not re-list checks here.
+4. Note the text output does not print the `error_type` code (only `--json` does), so the message wording is the
+   designer's lookup key — write it so it is searchable.
 
-```bash
-ironhold inspect glb assets/shared/models/creatures/orc-enemy.glb
-ironhold --json inspect glb assets/shared/models/creatures/dragon.glb
-```
-
-Use this instead of `tools/glb_inspector/inspect_glb.py` for day-to-day authoring
-(the Python tool is still needed for `--preview` renders that require Blender).
-
-### `inspect texture <path>`
-
-Reports image dimensions, format (PNG/JPEG/WebP/etc.), channel layout (RGB/RGBA/Grayscale),
-and file size. Useful for catching oversized textures before they land in WASM builds.
-Supports PNG, JPEG, WebP, GIF, BMP, TIFF. AVIF requires a native C decoder and is not supported.
-
-```bash
-ironhold inspect texture assets/shared/textures/decals/circle_filled.png
-ironhold --json inspect texture assets/shared/textures/Cobblestone_001_SD/Cobblestone_001_COLOR.jpg
-```
-
-### `inspect audio <path>`
-
-Reports audio format, duration, sample rate, channel count, and file size.
-Duration is the key output — use it to set correct `delay_secs` values in `EmitEventAfterDelay`
-after a sound plays. Supports WAV and MP3.
-
-```bash
-ironhold inspect audio assets/shared/audio/boulder/boulder-push1.wav
-ironhold --json inspect audio assets/shared/audio/bg-music-balance.mp3
-```
-
-### `watch <project_dir>`
-
-Re-runs `validate` automatically every time a `.ron` file in the project directory changes.
-Press Ctrl+C to stop. Useful for an edit-validate loop without starting the engine.
-
-```bash
-ironhold watch assets/projects/quick_scene/
-ironhold watch assets/projects/particles_demo/
-```
-
-Each save prints the changed file path and a compact result line:
-
-```
-Watching C:\git\rust\ironhold-lib\assets\projects\quick_scene\ — Ctrl+C to stop
-
-[14:23:01] initial check  →  OK (6 files)
-
-[14:24:15] scenes\main.scene.ron
-           →  ERROR (1 issue)
-             scenes/main.scene.ron: line 12, col 5: unknown field `directioonal`
-
-[14:24:32] scenes\main.scene.ron
-           →  OK (6 files)
-```
-
-The `--json` flag has no effect on `watch` — output is always human-readable.
-
-### `stats <project_dir>`
-
-Prints a compact summary of a project without starting the engine. Useful for quick AI context
-before authoring new RON files, and for spotting projects that have grown unexpectedly large.
-
-```bash
-ironhold stats assets/projects/particles_demo/
-ironhold stats assets/projects/3rd_person_game_demo/
-ironhold --json stats assets/projects/quick_scene/
-```
-
-Example output:
-
-```
-particles_demo
-  Scenes:    2
-  Prefabs:   16
-  Effects:   18
-  Logic:     21 rules  5 behaviors
-  Catalog:   120 entries  (models:0  textures:97  audio:0  effects:18  decals:5)
-  Project:   11 RON files, 87.6 KB on disk
-```
-
-The `--json` flag emits a structured object with all the same fields plus `total_bytes`. `Prefabs`/`Catalog` counts respect a relocated `prefab_catalog`/`asset_catalog` (`.project.ron` fields), same resolution `query prefabs`/`query effects` use — a project that relocates a catalog gets accurate counts here, not silent zeros.
-
-### `validate <project_dir>`
-
-Parses every RON file in a project directory using the same schema types as the engine runtime,
-then runs cross-file consistency checks. Use this before committing to catch typos and broken
-references without starting the engine.
-
-**Checks performed:**
-- Per-file RON parse errors with line and column numbers
-- Effect keys in `SpawnEffect` / decal keys in `ProjectDecal` exist in `assets.ron`
-- Audio keys in `PlaySound` / `PlayMusicLoop` exist in `assets.ron`
-- Prefab keys in scene entity defs and `Spawn` / `PreloadPrefab` actions exist in `prefabs.ron`
-- Modifier keys in `ApplyModifier` / `RemoveModifier` exist in `stats.ron` (when present)
-- Behavior file paths on `PrefabDef` exist on disk
-- `dialogues/*.dialogue.ron` files are parsed the same as `state_machine.ron`/`behaviors/*.behavior.ron`, and their `do_actions` participate in every check below just like a binding's; dialogue path references (`PrefabDef.dialogue`, `Action::StartDialogue`'s `dialogue_path`) exist on disk (`missing_file`)
-- Scene paths in `LoadScene` / `LoadSceneOverlay` / `PreloadScene` / `ToggleOverlay` actions, and the project's own `initial_scene`, exist on disk (`missing_file`). Unlike every other scene-path source, a path here isn't limited to the conventional `scenes/` directory — it's parsed and folded into the same cross-checked scene set as every `scenes/*.scene.ron` file, so its own contents (entities, ui, camera_modes, spawn_points, …) are checked too, not just that the path itself resolves. (This does not yet extend to a scene reachable only through an `ActionBar` slot's own `do_actions` — see the `ActionSlotDef.do_actions` gap in `planning/claude_suggestions.md`.)
-- A merchant prefab's `currency_stat` exists in `stats.ron`, and every `stock[].item_key` exists in `items.ron` (whenever an item catalog is loaded — see "A configured catalog path..." below) — see "MerchantDef fields" in `docs/20_data_formats.md`
-- Item keys in `AddItem` / `RemoveItem` / `TransferItem` / `BuyItem` actions, a prefab's `inventory.initial_items[].item_key`, and a prefab's `interactable.requires_item`, exist in `items.ron`; an `ItemDef`'s own `currency_stat` exists in `stats.ron` (all whenever an item catalog is loaded). A `requires_item` naming a nonexistent key fails *closed* (the entity permanently blocks every player), so this one also gets a matching scene-load `warn!` — the only diagnostic a WASM-only designer (no CLI access) or a project with no `items_path` at all ever sees
-- Two players instantiated in the same scene — or reachable via that scene's `join_prefab_keys` hot-join slots — author the same `InputMap.gamepad_index` (`duplicate_gamepad_index`) — see "How a controller gets assigned to a player" in `docs/20_data_formats.md`. The `join_prefab_keys` half of this check has no scene-load `warn!` counterpart (the runtime warning only scans scene-instantiated players at load time, before any hot-join can happen) — this is the only design-time signal for that case.
-- A scene's `label_depth_scale.min_scale` is outside `[0.0, 1.0]` (`label_depth_scale_min_scale_out_of_range`) — see "Label depth scaling" in `docs/20_data_formats.md`
-- `camera_modes:` registry entries (reserved `"default"` key, `Party(...)` unreachable via `SetCameraMode`, `Fixed.look_at_entity` existence) and `Action::SetCameraMode`'s `mode` exist in some scene's `camera_modes` registry
-- `split`/`party` authored INSIDE a `camera_mode: Orbit(...)` payload — instead of as siblings of `camera_mode` under a player prefab's `components:` block — are silently never read (`camera_mode_nested_split_party`); checked on both a player-tagged prefab's `camera_mode` and every `camera_modes:` registry entry (only authorable on the former — a registry entry's remedy is "delete them", not "move them")
-- `Action::Spawn`'s `spawn_point` exists in some scene's `spawn_points` map (`missing_reference`) — a typo silently falls back to the world origin at runtime; a `{self}`/`{target}`-templated value (e.g. `"{self}_spawn"`) is skipped, since it is resolved before this check would see it
-- Every scene `Button`/`IconButton`, every `global_key_bindings`/`scene_key_bindings` entry, and every `global_unclaimed_gamepad_bindings`/`scene_unclaimed_gamepad_bindings` entry's derived `ui.button_pressed:{trigger}` event is actually handled by some binding/transition in `state_machine.ron` or a `behaviors/*.behavior.ron` file (`unreachable_trigger`) — otherwise the button/binding is live but its press is silently dropped ("I clicked the button and nothing happened"). Also covers the five engine-hardcoded panel triggers whenever the matching panel is present in a scene: an `InventoryPanel`/`ShopPanel`/`ContainerPanel`'s own built-in close button (`close_inventory`/`close_shop`/`close_container`), a `ContainerPanel`'s take-all button (`take_all_from_container`), and a `ShopPanel`'s buy button for every `item_key` across every merchant prefab's `stock` in the catalog (`buy_item:{item_key}`) — these are never authored as a scene `Button.action` string, so there's no `action:` typo to spot; only the panel's mere presence with no matching binding reveals the mistake. Skipped entirely (not fabricated) whenever `state_machine.ron`/a behavior file itself failed to parse — see that file's own reported parse error first.
-- A configured catalog path (`asset_catalog` / `prefab_catalog` / `stats_path` / `items_path` / `model_fixes_path` in `.project.ron`) exists on disk. All five are read from their configured location, not assumed at the `assets.ron`/`prefabs/prefabs.ron`/`stats/stats.ron`/`items/items.ron`/`overrides/model_fixes.ron` convention path — relocate any of them and `validate` follows along. When a field is left unset, `validate` falls back to checking the convention-path file if one happens to exist (unlike the runtime, which loads nothing at all in that case) so a project with no `.project.ron`, or one that simply omits a field, still gets checked rather than silently skipped.
-- `state_machine_path` is resolved the same way, but with **no** convention-path fallback when unset — an unset `state_machine_path` means no state machine at all, full stop (the runtime never guesses at `logic/state_machine.ron` on disk in that case). This fallback-free behavior only applies once a `.project.ron` exists — with none at all, `validate` still falls back to the convention path, same reasoning as the catalog paths above.
-- Every path reference above that passes its `exists()`/`is_file()` check (scene paths, dialogue paths, prefab behavior paths, the five configured catalog paths, and `state_machine_path`) is also checked for exact case and forward-slash separators against the real on-disk file (`path_case_mismatch`) — `Path::exists()` is case-insensitive and `\`-tolerant on Windows/NTFS, so `"Scenes\\Main.scene.ron"` validates clean locally while 404ing over HTTP in the actual WASM/browser build. Author every path with forward slashes and the file's exact on-disk casing. A mis-cased configured path is still parsed afterward (unlike a genuinely missing one), so this doesn't hide other checks that depend on that file.
-- Every `AssetCatalog` entry's own underlying file path — `models[key].path`, `textures[key]`, `audio[key].path`, `decals[key]`, and `MaterialDef`'s nested texture/shader/splatmap paths (`MaterialKind::Standard`'s five texture fields, `MaterialKind::Terrain`'s `splatmap`/`layers`, `MaterialKind::Custom`'s `shader`/`textures`) — plus `ProjectConfig.global_environment`'s `diffuse_path`/`specular_path` and a scene's `terrain.heightmap`/`.splatmap`/`.material_paths`, exists on disk and matches the real on-disk case (`missing_file`/`path_case_mismatch`) — these are raw file paths, not `AssetCatalog` keys, resolved against the asset root `assets/` (the nearest ancestor of `project_dir` literally named `assets` AND containing a `projects/` or `shared/` child as corroboration — the name alone isn't enough, since a project could live under an unrelated directory that merely happens to be named `assets`) rather than `project_dir` itself, since a path here can be `shared/`-prefixed (shared across every project) or `projects/{name}/`-prefixed (project-local, e.g. every shipped terrain heightmap) — both are equally valid and resolve against the same root. A GLB path's `#Scene0`-style sub-asset fragment is stripped before the on-disk check. An absolute authored path (e.g. pasted from a file browser) is rejected outright (`absolute_asset_path`) rather than silently resolved against the author's own machine. Skipped entirely (not fabricated) when no corroborated `assets`-named ancestor can be found — e.g. this crate's own bare `tests/fixtures/{name}/` fixtures (the fixtures for these specific checks live under `tests/fixtures/assets/projects/{name}/` instead, so they resolve correctly).
-- `PrefabDef.animation_policy` exists on disk and matches the real on-disk case (`missing_file`/`path_case_mismatch`) — resolved project-relative, same as `behavior`/`dialogue` right next to it. A 404 here is the worst of the three: `entity_spawner.rs` spawns the entity `Visibility::Hidden` pending the policy load, so a missing/mis-cased path means a permanently invisible character.
-- A `DialogueChoice.jump_to` names an existing node `id` in the same dialogue file, or is the reserved `"__end__"` (`missing_reference`) — otherwise the runtime `warn!`s and silently closes the dialogue panel mid-conversation. A `DialogueNode.id` duplicated within one file is also caught (`duplicate_node_id`) — the schema doc requires uniqueness, but the runtime's `jump_to` resolution only ever reaches the FIRST node with a given id, so every later duplicate is permanently unreachable with no other symptom.
-- A `DialogueCondition::StatAtLeast.stat_key` exists in `stats.ron` (`missing_reference`, whenever a stat catalog is loaded) — same shape as the merchant `currency_stat` check; a typo silently hides that dialogue choice forever with no runtime message at all.
-- A scene's `join_prefab_keys` entry is reachable at all: a slot at or beyond `MAX_SPLIT_PLAYERS` is flagged on its own (`unreachable_join_slot`, since the executor never even reads a slot that far out), and — for every slot that IS reachable and whose prefab exists/is player-tagged/isn't primitive-shaped — a matching `player_{slot + 1}_start` entry must exist in the same scene's `spawn_points` (`missing_reference`); otherwise `Action::JoinPlayer` silently spawns the joiner next to the primary player instead of at their own point, with no runtime warning either way.
-- `ItemDef.icon_sheet` exists in `assets.ron`'s `textures` (`missing_reference`, whenever both an item catalog and asset catalog are loaded) — same lookup shape as `currency_stat`, in the same per-item loop.
-- The parsed `AssetCatalog`/`PrefabCatalog`/`StatCatalog`/`ItemCatalog` each pass their own schema-level `.validate()` invariants (`invalid_asset_catalog` / `invalid_prefab_catalog` / `invalid_stat_catalog` / `invalid_item_catalog`) — e.g. an empty `AssetCatalog` model/decal path, a `kind: Foliage` prefab missing its `foliage` block, a stat's `min > max`, an item's `max_stack: 0`. These were previously enforced only at runtime (`project_loader.rs`), never by `validate`.
-- Each scene passes `GameSceneV2::validate()` (`invalid_scene`): wrong `schema_version`, an empty or duplicate entity / world_label id, and an empty or duplicate UI id — UI ids are checked across nested `Group`s and the message names the node by path (`ui[1].children[0]`). A `Group` may have no `id`; empty ids are never duplicates of each other. Fail-fast: one `invalid_scene` per scene.
-- `Group` layout mistakes (`ui_layout_diagnostics`, also logged as `UI layout [kind]: ...` at scene load). **Always errors:** `invalid_group_value` (negative or non-finite `gap`/`padding`/`width`/`height`), `ui_depth_exceeded` (nesting deeper than 16 levels is never spawned). **`--strict` warnings:** `inert_justify_content` (`SpaceBetween`/`SpaceAround`/`SpaceEvenly` on an `Auto` main axis), `inert_clip` (`clip: true` with `width` and `height` both `Auto`), `collapsed_group` (an `Auto`-sized group whose children are all `absolute: true`), `percent_under_auto` (`Percent` size under an `Auto` parent, or directly in a `ui_panel:` with no `width`/`height`), `panel_nested_in_group` (`ActionBar`/`DialoguePanel`/`InventoryPanel`/`ShopPanel`/`ContainerPanel` inside a `Group`) — see "Group" in `docs/20_data_formats.md`
-- The project's own `ProjectConfig::validate()` invariants (`invalid_project_config`) — `schema_version` in range, and (as of `deterministic_fixed_timestep`'s follow-up work) `max_frame_delta_secs`, when set, falling within `[MIN_MAX_FRAME_DELTA_SECS, MAX_MAX_FRAME_DELTA_SECS]` (`schema/project.rs`, currently ~0.03–60 seconds) — outside that range either panics at runtime (too large or too close to zero, see that field's doc comment) or silently runs the whole game in permanent slow-motion (too small). Same previously-runtime-only shape as the four catalog checks above.
-- Every `AssetCatalog.textures` key referenced by `InventoryPanelDef`/`ContainerPanelDef.icon_sheet`, `ActionBarDef.icon_sheet`/`ActionSlotDef.icon` (per-slot), `IconButtonDef.icon_on`/`icon_off`, and a prefab's `WorldStatBarStyle::Icon.icon_sheet`/`::Textured.texture_sheet` resolves (`missing_catalog_key`) — most of these silently render a blank/unchanged image node on a miss with no runtime warning at all. A scene's `target_indicator.texture` is checked the same way but against `AssetCatalog.decals` instead (`missing_reference`) — despite the field name, it's a ground-ring decal, not a texture.
-- `CameraModeDef::Party(...)` authored directly on a player prefab's `camera_mode:` (`unsupported_prefab_camera_mode`) — has no meaning for a single player; the runtime silently falls back to Orbit. A `tags: ["flycam"]` prefab's `camera_mode` that isn't `Flycam(...)` is checked the same way — the flycam-spawn code already warns and falls back to `FlyCamDef::default()` at runtime; this is the design-time counterpart.
-- `orbit_button`/`character_rotate_button` (on both `camera_mode: Orbit(...)` and the legacy `components.camera` field) and `look_button` (on both `camera_mode: Flycam(...)` and the legacy `components.flycam` field) are checked against their real accepted vocabulary (`invalid_binding`) — an unrecognized value only ever warned and fell back to `"Either"` at runtime. `FlyCamDef`'s six movement-key fields (`forward`/`backward`/`left`/`right`/`up`/`down`, on both the modern and legacy field) are checked too (`invalid_key`) — a typo'd key previously had **no signal at all**, not even a runtime warning, silently falling back to that field's own per-key default (`KeyW`/`KeyS`/`KeyA`/`KeyD`/`Space`/`KeyQ` respectively).
-
-```bash
-ironhold validate assets/projects/particles_demo/
-ironhold validate assets/projects/primitive_world/
-ironhold --json validate assets/projects/quick_scene/
-```
-
-**`--strict` flag** adds reverse / orphan detection on top of the normal checks:
-- Prefab keys in `prefabs.ron` never referenced in any scene entity or `Spawn` / `PreloadPrefab` action
-- Effect keys in `assets.ron` never used in any `SpawnEffect` action
-- Audio keys in `assets.ron` never used in any `PlaySound` or `PlayMusicLoop` action
-- Decal keys in `assets.ron` never used in any `ProjectDecal` action
-- A player prefab's `jump`/`double_jump_height` apex does not clear `collider_radius + ground_cast_length` (`jump_cannot_clear_ground_sensor`) — see the `MovementConfig` note in `docs/20_data_formats.md`
-- A player prefab's `max_walkable_slope_deg` is outside the valid `(0, 90]` range (`invalid_walkable_slope_limit`) — see the `MovementConfig` note in `docs/20_data_formats.md`
-- A player prefab's `coyote_time_secs` is negative (`negative_coyote_time_secs`) — silently disables the coyote-time buffer (same as `0.0`), most likely a typo — see the `MovementConfig` note in `docs/20_data_formats.md`
-- A scene's `label_depth_scale.reference_distance` falls far outside its reachable player camera(s)' radius range (`label_depth_scale_reference_distance_outside_camera_range`) — depth scaling may never visibly engage; see "Label depth scaling" in `docs/20_data_formats.md`
-- A convention-path catalog file (`assets.ron` / `prefabs/prefabs.ron` / `stats/stats.ron` / `items/items.ron` / `overrides/model_fixes.ron`) exists on disk but its matching `.project.ron` field (`asset_catalog` / `prefab_catalog` / `stats_path` / `items_path` / `model_fixes_path`) is unset (`unset_catalog_path_with_convention_file`) — validates clean without `--strict` via the convention-path fallback, but the runtime loads nothing for that catalog at all
-- A convention-path logic file (`logic/state_machine.ron`) exists on disk but its matching `.project.ron` field (`state_machine_path`) is unset (`unset_logic_path_with_convention_file`) — unlike the catalog warning above, there is no fallback checking it either: the file gets zero signal from any tool at all until this fires
-- A binding/transition in `state_machine.ron` or a `behaviors/*.behavior.ron` file handles a `ui.button_pressed:{trigger}` event that no button, key binding, or gamepad binding anywhere in the project can ever fire (`orphan_binding`) — the reverse of `unreachable_trigger`: dead code left over from a scene rewrite (a renamed/removed button, a binding nobody wired up). Correctly accounts for the five engine-hardcoded panel triggers (`close_inventory`/`close_shop`/`close_container`/`take_all_from_container`/`buy_item:{item_key}`) as reachable whenever the corresponding `InventoryPanel`/`ShopPanel`/`ContainerPanel` is present in a scene, even though no button ever authors those exact strings. Only inspects `ui.button_pressed:*`-shaped events — a binding handling `scene.ready:*`, `entity.entered:*`, or any other event shape has no button/binding origin at all and is out of scope. Skipped entirely (not fabricated) under the same parse-failure protection as `unreachable_trigger`.
-- A player-tagged prefab's or `camera_modes:` registry entry's `Fixed(...)` camera_mode has both `look_at`/`look_at_entity` set, or neither (`camera_mode_fixed_ambiguous_look_at` / `camera_mode_fixed_missing_look_at`) — both are working, not broken (the runtime resolves `look_at_entity` when live and falls back to `look_at` otherwise; "neither set" just holds whatever rotation the camera already has), which is why this is `--strict` advisory rather than a hard error, unlike the always-on nested-`split`/`party` check above
-- A player prefab's `coyote_time_secs` is longer than its own resolved jump airtime (`coyote_time_exceeds_jump_airtime`) — can mask the entire jump/fall, suppressing the airborne animation and `jump_exit` clip; see the `MovementConfig` note in `docs/20_data_formats.md`
-- 2+ player-tagged prefabs instantiated in the same scene's `entities:` list share the same `player_index` (`duplicate_player_index`) — including the common case where both simply omit it, since it defaults to `0`; they'd show the identical "P{n}" HUD label/color and collide on the same target-indicator ring layer
-- A `Label`/`Button`/entity `label:`/`world_labels:` `text:` field, or a dialogue node's `speaker`/`body`/choice `label`, contains any non-ASCII character (`non_ascii_char_in_text`) — the embedded UI font's glyph coverage is ASCII-only (`U+0020..U+007E`), so anything outside that range renders as a tofu box; see the em-dash note in `docs/20_data_formats.md`'s Label section
-
-```bash
-ironhold validate --strict assets/projects/particles_demo/
-ironhold --json validate --strict assets/projects/quick_scene/
-```
-
-Strict warnings appear in a separate `Strict checks` section and cause exit code `1`. Use in CI to enforce no dead data; omit for day-to-day editing where catalog entries accumulate ahead of usage.
-
-**Exit codes:** `0` = all valid, `1` = validation errors or strict warnings found, `2` = tool / IO error.
-
-### `query <subcommand> <project_dir>`
-
-Lists data parsed from a project directory. Useful for AI agents and scripts that need to know what keys are defined before authoring new RON files.
-
-```bash
-ironhold query prefabs assets/projects/particles_demo/
-ironhold query prefabs assets/projects/particles_demo/ --keys-only
-ironhold query prefabs assets/projects/particles_demo/ --filter kind=actor
-ironhold query prefabs assets/projects/particles_demo/ --filter tag=player
-ironhold query prefabs assets/projects/particles_demo/ --filter behavior=true
-
-ironhold query effects assets/projects/particles_demo/
-ironhold query effects assets/projects/particles_demo/ --keys-only
-ironhold query effects assets/projects/particles_demo/ --filter additive=true
-ironhold query effects assets/projects/particles_demo/ --filter priority=Ambient
-ironhold query effects assets/projects/particles_demo/ --filter layers=true
-
-ironhold query scenes   assets/projects/3rd_person_game_demo/
-ironhold query logic    assets/projects/3rd_person_game_demo/
-ironhold query actions  assets/projects/3rd_person_game_demo/
-ironhold query events   assets/projects/3rd_person_game_demo/
-
-ironhold --json query prefabs  assets/projects/particles_demo/ --keys-only
-ironhold --json query effects  assets/projects/particles_demo/
-ironhold --json query actions  assets/projects/3rd_person_game_demo/
-ironhold --json query events   assets/projects/particles_demo/
-```
-
-**`query prefabs`** — lists all entries from the project's prefab catalog: `prefabs/prefabs.ron` by convention, or `ProjectConfig.prefab_catalog`'s path when the project relocates it (same resolution `validate`/`stats` use). Human output shows kind, model, tags, npc/trigger_zone/interactable flags, and behavior path. Supports `--filter kind=actor|prop|primitive`, `--filter tag=<value>`, `--filter behavior=true|false`, `--filter npc=true`. Use `--keys-only` to get one key per line for piping.
-
-**`query effects`** — lists all `effects` entries from the project's asset catalog: `assets.ron` by convention, or `ProjectConfig.asset_catalog`'s path when relocated. Human output shows particle count or layer count, lifetime, additive flag, sprite flag, light flag, and non-default priority. Supports `--filter additive=true`, `--filter priority=Player|Npc|Ambient`, `--filter layers=true`, `--filter sprite=true`.
-
-**`query scenes`** — lists all `*.scene.ron` files. Output shows name, entity count, UI element count, `player:true` (if any entity's prefab has the `player` tag), and `overlay` (scenes with only UI and no world entities or terrain).
-
-**`query logic`** — shows `logic/state_machine.ron`: initial state, `global_on` binding count, each state's entry/exit action counts and in-state `on:` binding count, and outgoing transition count.
-
-**`query actions`** — lists every action type used across `state_machine.ron` and all `*.behavior.ron` files. Shows variant name, total count, and which source files use it. Sorted by count descending. Useful for auditing what a project actually does at a glance.
-
-**`query events`** — lists every event trigger string used across the same logic files. Shows the event name, how many bindings use it, which action types it directly fires, and `[transition]` when it also drives an FSM state change. Sorted alphabetically.
-
-### `--json` flag
-
-Any command accepts `--json` (before the subcommand name) for machine-readable output.
+### Check internals (implementation notes, keyed by code)
+- **`missing_file` / `path_case_mismatch`**: `Path::exists()` is case-insensitive and `\`-tolerant on Windows/NTFS,
+  so the check compares the authored path against the real on-disk entry (exact case, forward slashes). A mis-cased
+  configured path is still parsed afterwards, so it does not hide the checks that depend on that file. Catalog/asset
+  raw paths resolve against the asset root `assets/` — the nearest ancestor of `project_dir` literally named `assets`
+  **and** containing a `projects/` or `shared/` child (the name alone is not enough); a GLB path's `#Scene0`-style
+  fragment is stripped first. The check is skipped (never fabricated) when no corroborated `assets` ancestor exists —
+  this crate's bare `tests/fixtures/{name}/` fixtures — so the fixtures for these checks live under
+  `tests/fixtures/assets/projects/{name}/`.
+- **Configured paths**: all five catalog paths (`asset_catalog`, `prefab_catalog`, `stats_path`, `items_path`,
+  `model_fixes_path`) are read from their configured location, falling back to the convention path when unset (unlike
+  the runtime, which then loads nothing); `state_machine_path` has **no** such fallback once a `.project.ron`
+  exists.
+- **Scene discovery**: scene paths from actions and `initial_scene` are parsed and folded into the same cross-checked
+  scene set as `scenes/*.scene.ron`, so their contents are checked too. A scene reachable only through an
+  `ActionSlotDef.do_actions` is not yet covered (see `planning/claude_suggestions.md`).
+- **`unreachable_trigger` / `orphan_binding`**: skipped entirely when `state_machine.ron`/a behavior file failed to
+  parse (fix that parse error first). Both account for the five engine-hardcoded panel triggers
+  (`close_inventory`/`close_shop`/`close_container`/`take_all_from_container`/`buy_item:{item_key}`) whenever the
+  matching panel is in a scene. `orphan_binding` only inspects `ui.button_pressed:*`-shaped events.
+- **`missing_reference` on `Action::Spawn`'s `spawn_point`**: a `{self}`/`{target}`-templated value is skipped because
+  it is resolved before the check would see it; a `requires_item` naming a missing key fails *closed* at runtime, so
+  that one also has a scene-load `warn!` (the only diagnostic a WASM-only designer sees). The `join_prefab_keys` half
+  of `duplicate_gamepad_index` has no runtime counterpart (the runtime warning scans scene-instantiated players at load
+  time, before any hot join).
+- **`missing_file` on `PrefabDef.animation_policy`**: `entity_spawner.rs` spawns the entity `Visibility::Hidden`
+  pending the policy load, so a missing path means a permanently invisible character.
+- **`duplicate_node_id`**: the runtime's `jump_to` resolution only ever reaches the first node with a given id.
+- **Catalog `.validate()` checks** (`invalid_asset_catalog` / `invalid_prefab_catalog` / `invalid_stat_catalog` /
+  `invalid_item_catalog`) and **`invalid_project_config`** were previously enforced only at runtime
+  (`project_loader.rs`). `max_frame_delta_secs` is bounded by `MIN_MAX_FRAME_DELTA_SECS`/`MAX_MAX_FRAME_DELTA_SECS`
+  in `schema/project.rs` (~0.03 to 60 s): too large or near zero panics at runtime, too small runs the game in
+  permanent slow motion.
+- **`invalid_scene`**: `GameSceneV2::validate()` is fail-fast (one error per scene); the runtime never calls it.
+- **Group layout checks** (`ui_layout_diagnostics` in `schema/scene_v2.rs`): errors are `invalid_group_value` and
+  `ui_depth_exceeded`; the rest are `--strict` warnings, and the engine logs all of them as `UI layout [kind]: ...` at
+  scene load.
+- **Strict-only movement checks** (`jump_cannot_clear_ground_sensor`, `invalid_walkable_slope_limit`,
+  `negative_coyote_time_secs`, `coyote_time_exceeds_jump_airtime`) mirror scene-load `warn!`s; the `MovementConfig`
+  note in `docs/20_data_formats.md` explains the numbers.
 
 ---
 
