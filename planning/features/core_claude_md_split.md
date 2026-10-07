@@ -227,6 +227,26 @@ pointer-only), only Phase 2's stub items change. Delete the spike; record result
 Also: write the audit script (`tools/claude_md_audit.py`, header comment only) with the block-ID/sub-ID/anchor scheme,
 run it against the *unchanged* file with every block mapped to itself (0 problems expected), and freeze the base.
 
+### Phase 0 results (2026-10-07, Claude Code 2.1.292, `feature/core_claude_md_split` worktree)
+Method: throwaway rules and directory file carrying unique canary tokens (`SPIKE_<WORD><digit>`), headless `claude -p` runs on `--model haiku` (one question per session, the model reports canaries from its own context). `/context` was not used, so every result below rests on the model's self-report; the positive results were consistent across runs, and the controls (an unrelated Read, an import line removed) behaved as expected. Spike files deleted.
+
+| Question | Result | Consequence |
+|---|---|---|
+| `paths:` rule and a directory `CLAUDE.md` load on **Read** in the subtree | Yes (neither is in context at session start) | stubs and directory files work |
+| ... on **Write of a brand-new file** in the subtree | Yes (both loaded, no prior Read) | no stop condition triggered |
+| ... on an **unrelated** file (`runtime/mod.rs`) | No | negative control passes |
+| ... on **Edit** | Not isolated: Edit requires a prior Read, so it is covered by the Read result | none |
+| loaded for a **subagent** reading a subtree file | Yes (the subagent reported both; whether before or after its Read is ambiguous in its report) | reviewers get them when they Read |
+| `paths:` globs resolve from a **worktree cwd** | Yes | `.claude/rules` stubs work in `../ironhold-lib-{slug}` |
+| cwd = **primary checkout**, reading a file in a sibling worktree via `--add-dir` | **No**: neither the rule nor the directory `CLAUDE.md` loaded, nor any rule from that worktree's `.claude/` | **R18 is real**: an agent must run with cwd inside the worktree, or its prompt must tell it to Read the directory `CLAUDE.md` of each touched directory itself. Applies to every review agent launched from the primary checkout |
+| stub with **no frontmatter** | Loads at session start (always) | the R1 "every rule has a `paths:` key" check is **mandatory** |
+| stub with a **mistyped key** (`path:` for `paths:`) | Loads at session start (always) | same: the check must verify the exact key, not just that frontmatter exists |
+| `@import` inside a path-scoped rule | **Eager**: the imported file loaded at session start even though the importing rule did not; removing the import line removed it | **stubs are pointers only, never `@import`** (an import defeats the lazy loading the stubs exist for) |
+| block HTML comments `<!-- b:NNN -->` in a rule | **Stripped** from loaded context (the rule's quoted text had no comment line) | anchors cost no context tokens; the audit script reads the files, not the loaded context |
+| OpenCode directory-file attach | Not run (not cheap here) | stays an assumption from its docs; check once when OpenCode is next used |
+
+**Gate verdict: PASS, with three plan adjustments** (none stops the work): (1) stubs are pointer-only, no `@import`; (2) the R1 audit rejects any `.claude/rules/*.md` whose frontmatter lacks the exact key `paths:`; (3) R18 becomes a concrete rule: review agents and any other agent that reads worktree files must have cwd inside the worktree (or be told to Read the directory `CLAUDE.md` files for what they touch) — to be written into `ship-feature.md` / the review prompts in Phase 3.
+
 ### Phases 1-5 — `feature/core_claude_md_split` (additive, parent slimmed last)
 - **Phase 1 — build the destinations** (first commit: the R10 fixes in the monolith; then one commit each, audit
   after each): `schema/CLAUDE.md` (adds "a new rendering `PrefabDef` field must be checked against the player path"
