@@ -11,6 +11,7 @@
 
 ## Active
 
+- [ ] **Docs audience split (Phase A of the core CLAUDE.md split)** _(planned 2026-10-07, plan-reviewed twice)_ — extract the CLI docs into a designer-side `docs/15_authoring_tools.md` (single canonical list of checks), move the six developer docs into `docs/dev/` (pure `git mv` commit, scripted reference rewrite, redirect stubs in a separate commit), add `docs/README.md` (audience-tagged index), split the root README table, add a GitHub-rendered "Docs" link to `index.html`/`assets.html`/`play.html`, narrow the UX-reviewer scope. Docs-only. See `planning/features/core_claude_md_split.md` (Phase A). _Branch `feature/docs_audience_split`, cut from `integration`, started 2026-10-07._
 ---
 
 ## Bugs
