@@ -198,18 +198,30 @@ Full schema reference: [`docs/20_data_formats.md`](docs/20_data_formats.md)
 
 ## Documentation
 
+Everything is indexed, with an audience tag per doc, in [`docs/README.md`](docs/README.md).
+
+**Making a game (no Rust needed)** — start with [Getting started in 5 minutes](docs/00_overview.md#getting-started-in-5-minutes).
+
 | File | Contents |
 |------|----------|
 | [`docs/20_data_formats.md`](docs/20_data_formats.md) | Full RON schema reference — the main authoring guide |
-| [`docs/25_custom_shaders.md`](docs/25_custom_shaders.md) | Custom WGSL shaders: authoring, bindings, uniform packing |
+| [`docs/15_authoring_tools.md`](docs/15_authoring_tools.md) | Check, watch and inspect your project with the optional `ironhold` tool |
 | [`docs/30_runtime_events_and_logic.md`](docs/30_runtime_events_and_logic.md) | Events, actions, FSM semantics |
-| [`docs/10_architecture.md`](docs/10_architecture.md) | Crate structure, runtime pipeline, asset discovery |
-| [`docs/00_overview.md`](docs/00_overview.md) | Goals and vision |
-| [`docs/40_determinism_and_networking.md`](docs/40_determinism_and_networking.md) | Future: determinism + multiplayer |
-| [`docs/50_roadmap_and_milestones.md`](docs/50_roadmap_and_milestones.md) | Milestones and roadmap |
+| [`docs/25_custom_shaders.md`](docs/25_custom_shaders.md) | Custom WGSL shaders: authoring, bindings, uniform packing |
+| [`docs/05_art_style.md`](docs/05_art_style.md) | Art style and asset guidance |
+| [`docs/00_overview.md`](docs/00_overview.md) | Getting started, goals and vision |
 | [`docs/STATUS.md`](docs/STATUS.md) | Implementation status matrix |
-| [`docs/browser_tests.md`](docs/browser_tests.md) | Browser test suite |
-| [`docs/60_contributing.md`](docs/60_contributing.md) | Contributing guidelines |
+
+**Developing the library** (`docs/dev/`)
+
+| File | Contents |
+|------|----------|
+| [`docs/dev/60_contributing.md`](docs/dev/60_contributing.md) | Contributing guidelines, workflow, tests, adding validate checks |
+| [`docs/dev/10_architecture.md`](docs/dev/10_architecture.md) | Crate structure, runtime pipeline, asset discovery |
+| [`docs/dev/40_determinism_and_networking.md`](docs/dev/40_determinism_and_networking.md) | Future: determinism + multiplayer |
+| [`docs/dev/50_roadmap_and_milestones.md`](docs/dev/50_roadmap_and_milestones.md) | Milestones and roadmap |
+| [`docs/dev/70_profiling.md`](docs/dev/70_profiling.md) | Profiling and performance analysis |
+| [`docs/dev/browser_tests.md`](docs/dev/browser_tests.md) | Browser test suite |
 
 ---
 
@@ -217,7 +229,7 @@ Full schema reference: [`docs/20_data_formats.md`](docs/20_data_formats.md)
 
 Contributions welcome — especially around documentation, new example projects, new event/action types, and capability systems. Please keep behaviors data-driven, capabilities modular, and web/native parity in mind.
 
-See [`docs/60_contributing.md`](docs/60_contributing.md).
+See [`docs/dev/60_contributing.md`](docs/dev/60_contributing.md).
 
 ---
 

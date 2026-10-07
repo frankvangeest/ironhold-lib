@@ -171,8 +171,9 @@ Full field reference: `docs/20_data_formats.md`.
 
 ## Where to read next
 
-- `docs/10_architecture.md` — current state + target architecture
 - `docs/20_data_formats.md` — full field reference for all RON file types
-- `docs/30_runtime_events_and_logic.md` — event/action model and FSM details
-- `docs/50_roadmap_and_milestones.md` — milestones and feature gates
-
+- `docs/15_authoring_tools.md` — check, watch and inspect your project with the optional `ironhold` tool (`watch` re-checks every time you save)
+- `docs/30_runtime_events_and_logic.md` — event/action model and FSM details (start with "Project logic: `state_machine.ron`")
+- `docs/25_custom_shaders.md` — writing WGSL shaders
+- `docs/05_art_style.md` — art style and asset guidance
+- Engine developers: `docs/dev/10_architecture.md` (current state + target architecture) and `docs/dev/50_roadmap_and_milestones.md` (milestones and feature gates)
