@@ -8,7 +8,7 @@ SCHEME
                across destinations carry sub-IDs (`b:108.rule`, `b:108.ref`); the Safety check applies to the
                `.rule` part. The sidecar `planning/investigations/core_claude_md_split_blocks.json` holds one
                record per block: id, lines, title, type, safety (Y/N), dest (canonical), also (extra
-               placements), governs (repo-relative globs a Safety=Y rule must be loaded for), subs, text_sha1
+               placements; optional sub_dest {sub: dest} when a split block's parts live in different places), governs (repo-relative globs a Safety=Y rule must be loaded for), subs, text_sha1
                (hash of the block's text in the frozen base), review (dest label was ambiguous), notes.
   Anchor       `<!-- b:92 -->` written immediately before the block's text in its destination. HTML block
                comments are stripped from loaded context (Phase 0 spike), so anchors cost no tokens.
@@ -270,9 +270,13 @@ def glob_prefix(g):
     return '/'.join(parts)
 
 
-def expected_files(b):
+def sub_dest(b, sub):
+    return b.get('sub_dest', {}).get(sub, b['dest']) if sub else b['dest']
+
+
+def expected_files(b, sub=None):
     out = []
-    for d in [b['dest']] + b.get('also', []):
+    for d in [sub_dest(b, sub)] + (b.get('also', []) if not sub or sub == 'rule' else []):
         if d in DEST_FILE:
             out.append(DEST_FILE[d])
         elif d.startswith('TOPIC:'):
@@ -304,7 +308,8 @@ def check_dest(root, doc, include_parent, strict, problems):
     found, texts = gather_anchors(root, include_parent)
     known = set()
     for b in doc['blocks']:
-        ids = [f"{b['id']}.{s}" for s in b['subs']] or [b['id']]
+        subs = b['subs'] or [None]
+        ids = [f"{b['id']}.{s}" if s else b['id'] for s in subs]
         known.update(ids)
         if strict and b['review']:
             problems.append(f'{b["id"]} dest label is ambiguous ({b["dest_raw"][:50]!r}); resolve it in the sidecar')
@@ -320,28 +325,32 @@ def check_dest(root, doc, include_parent, strict, problems):
             continue
         if b['dest'] == 'DOC':
             continue
-        if b['dest'] == 'PARENT' and not include_parent:
-            continue  # stays in the parent; destinations-only mode does not scan it
-        exp = expected_files(b)
-        for i in ids:
+        for sub, i in zip(subs, ids):
+            d0 = sub_dest(b, sub)
+            if d0 == 'PARENT' and not include_parent:
+                continue  # stays in the parent; destinations-only mode does not scan it
+            exp = expected_files(b, sub)
             where = found.get(i, [])
-            if len(where) != 1 and not (b['also'] and len(where) == len(exp)):
-                problems.append(f'{i} appears {len(where)} times in destinations (expected once): {where}')
+            has_also = bool(b['also']) and (not sub or sub == 'rule')
+            want = len(exp) if has_also else 1
+            if len(where) != want or len(set(where)) != len(where):
+                problems.append(f'{i} appears {len(where)} times in destinations (expected {want}, once per file {exp}): {where}')
             elif not set(where) <= set(exp):
-                problems.append(f'{i} found in {where} but its dest {b["dest"]} expects {exp}')
-        if b['safety'] == 'Y':
-            if b['dest'].startswith('TOPIC:') and not b['also']:
-                problems.append(f'{b["id"]} is Safety=Y but lives only in {b["dest"]}; add an `also` directory-file placement for the rule')
-            for d in [b['dest']] + b['also']:
-                if d == 'PARENT' or d.startswith('TOPIC:'):
-                    continue  # the parent loads for everything; a topic doc is never the only home (rule stubs/dir lines carry it)
-                dd = dir_of(d)
-                if dd is None:
-                    continue
-                for g in b['governs']:
-                    pre = glob_prefix(g)
-                    if not (pre == dd or pre.startswith(dd + '/')):
-                        problems.append(f'{b["id"]} is Safety=Y in {d} ({dd}) but governs {g!r}, which that directory does not cover')
+                problems.append(f'{i} found in {where} but its dest {d0} expects {exp}')
+            if b['safety'] == 'Y' and (not sub or sub == 'rule'):
+                places = [d0] + (b['also'] if has_also else [])
+                if d0.startswith('TOPIC:') and not b['also']:
+                    problems.append(f'{i} is Safety=Y but lives only in {d0}; add an `also` directory-file placement for the rule')
+                for d in places:
+                    if d == 'PARENT' or d.startswith('TOPIC:'):
+                        continue  # the parent loads for everything; a topic doc is never the only home
+                    dd = dir_of(d)
+                    if dd is None:
+                        continue
+                    for g in b['governs']:
+                        pre = glob_prefix(g)
+                        if not (pre == dd or pre.startswith(dd + '/')):
+                            problems.append(f'{i} is Safety=Y in {d} ({dd}) but governs {g!r}, which that directory does not cover')
     for i in found:
         if i not in known:
             problems.append(f'anchor {i} in {found[i]} matches no block in the sidecar')

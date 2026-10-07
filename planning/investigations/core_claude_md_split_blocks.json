@@ -70,7 +70,7 @@
    "also": [],
    "dest_raw": "SCH",
    "governs": [
-    "crates/ironhold_core/src/**"
+    "crates/ironhold_core/src/schema/**"
    ],
    "subs": [],
    "text_sha1": "184092cb02d934070f043b7457117a960123cbc9",
@@ -100,7 +100,7 @@
    "governs": [],
    "subs": [],
    "text_sha1": "039ecbda940929b2668d9838617ab59c6c65a2b3",
-   "review": true,
+   "review": false,
    "notes": "the compiler error reveals it",
    "orig_lines": [
     [
@@ -223,14 +223,18 @@
     "ref"
    ],
    "text_sha1": "2099db8b57c92831e98c54c819fe1be01d2f1b47",
-   "review": true,
+   "review": false,
    "notes": "added 2026-10-05 and bolted onto the composite-prefab list",
    "orig_lines": [
     [
      108,
      108
     ]
-   ]
+   ],
+   "sub_dest": {
+    "rule": "PARENT",
+    "ref": "SCH"
+   }
   },
   {
    "id": "b:111",
@@ -1649,7 +1653,7 @@
    "governs": [],
    "subs": [],
    "text_sha1": "61eeebf252cc3d23d2c622313d72ff3841ef7994",
-   "review": true,
+   "review": false,
    "notes": "duplicates `docs/20#max_frame_delta_secs`",
    "orig_lines": [
     [
@@ -2239,14 +2243,16 @@
    "title": "`PrefabDef.material` not auto-applied on the player path",
    "type": "GOTCHA",
    "safety": "N",
-   "dest": "SM",
-   "also": [],
+   "dest": "SCH",
+   "also": [
+    "SM"
+   ],
    "dest_raw": "SM",
    "governs": [],
    "subs": [],
    "text_sha1": "f1b26be9f01e47c5eef1d3bb149c4407902a3622",
    "review": false,
-   "notes": "restate \"new rendering `PrefabDef` field must be checked against the player path\"",
+   "notes": "restate \"new rendering `PrefabDef` field must be checked against the player path\" | rule lives in schema/ (PrefabDef is in schema/catalog.rs); SM keeps a one-line pointer",
    "orig_lines": [
     [
      1213,
@@ -2627,7 +2633,7 @@
    "governs": [],
    "subs": [],
    "text_sha1": "4979bbc4928b85ab60648567c957855239cf351c",
-   "review": true,
+   "review": false,
    "notes": "stops someone \"fixing\" the `entities:`-only scope",
    "orig_lines": [
     [
