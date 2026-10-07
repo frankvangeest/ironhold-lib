@@ -249,7 +249,7 @@ to share one (system-architect finding, plan-review).
 to `Query<(&SpawnId, &PlayerTarget, Option<&PlayerIndex>), With<CharacterController>>`, so a player
 entity missing `PlayerTarget` silently drops out of the match and that player's entire action bar
 never fires (not just a missing ring/HUD, as a `PlayerTarget` omission would have meant before this
-phase). Every player-construction site already inserts `PlayerTarget` (see the four-site inventory
+phase). Every player-construction site already inserts `PlayerTarget` (see the five-site inventory
 above), so this holds today — but check it again against both spawn paths if a future change ever
 touches player-entity construction.
 
@@ -621,7 +621,7 @@ re-trigger).
 
 ### Animation resolver/playback pipeline (`capabilities/animation_resolver.rs` + `capabilities/animation.rs`)
 
-Two-stage pipeline, chained back-to-back in `lib.rs`'s `Update` set:
+Two-stage pipeline inside `lib.rs`'s single `Update` `.chain()` — **not adjacent**: `animation_resolver_system` is first and `animation_playback_system` last, with the 12 per-mode camera systems (through `camera_blend_system`) between them:
 `animation_resolver_system` (turns `LocomotionState` + queued `AnimationRequest`s into a single
 `AnimationController.current`) → `animation_playback_system` (drives the real Bevy
 `AnimationPlayer`/`AnimationTransitions` from that). **Field ownership is split between the two,
@@ -729,7 +729,7 @@ All shaders in this project are authored in WGSL. WGSL is the native language of
 See `docs/25_custom_shaders.md` for the full shader authoring guide.
 
 ## Physics & movement must use `FixedUpdate`
-All player movement, physics processing, and camera-follow logic must run in `FixedUpdate`. Using `Update` for physics-driven movement causes stuttering.
+All player movement and physics processing must run in `FixedUpdate`. Using `Update` for physics-driven movement causes stuttering. Camera follow/blend and the animation pipeline deliberately stay in `Update` (rendering cadence, not physics) — see the comment above that `.chain()` in `lib.rs`.
 
 **Rapier itself now steps in `FixedUpdate` too** (`capabilities/physics.rs`, `TimestepMode::Fixed`
 at `FIXED_TICK_RATE` = 64Hz, `planning/features/deterministic_fixed_timestep.md` v1) — no longer a
@@ -1057,9 +1057,10 @@ The same applies to `Visibility`, `Transform`, and any component read by the ren
 
 On each new `SceneEvent::Ready` the resource is cleared and repopulated, so scene transitions always reflect the current catalog without accumulating stale handles.
 
-### Audio file authoring
+### Live volume variable (`audio_volume_var_system`)
 `audio_volume_var_system` mirrors `AudioState.active_fraction` into `GameVariables[AUDIO_VOLUME_PERCENT_KEY]` (`"audio_volume_percent"`, the chosen preset as an integer string, not the effective volume) whenever `AudioState` changes, so a bound `Label` shows the live volume with no RON rules — same shape as the targeting `target_*` variables. It is scheduled `.after(action_executor_system).before(update_dynamic_labels_system)` (the FSM interpreter never reads `GameVariables`, so `.before(fsm_interpreter_system)` would only add a frame of lag). Mute is deliberately NOT mirrored here: it still goes through the `audio.muted`/`audio.unmuted` RON `global_on` bridge. Tests that stand in for the project loader's `AudioState` re-insert must insert a non-default `active_fraction`, or they pass vacuously (the test harness never completes a project load).
 
+### Audio file authoring
 Short SFX (jumps, pickups, UI clicks) must have **no leading silence** in the audio file. Any silence baked into the file at export time is played back verbatim, adding perceived delay on top of any engine latency. Trim the start of the file in your audio editor before exporting.
 
 Use WAV for all short SFX — it is uncompressed PCM with zero decode overhead. OGG/Vorbis and MP3 incur a decoder initialisation cost that is especially noticeable on first play in WASM. Reserve compressed formats for long-form audio (background music, ambient loops) where the file-size saving is worth the decode cost.
@@ -1069,7 +1070,7 @@ Use WAV for all short SFX — it is uncompressed PCM with zero decode overhead. 
 **`tag_spawned_entity` (in `runtime/scene_manager/mod.rs`) is the single source of truth for the
 metadata every addressable spawned entity gets.** Every spawn site routes through it — GLB
 actor/prop, single-mesh primitive, composite primitive, foliage root, every player spawn path
-(see the four-site inventory below), and dynamic `Action::Spawn`. It always inserts `SpawnId` +
+(see the five-site inventory below), and dynamic `Action::Spawn`. It always inserts `SpawnId` +
 `PrefabKey` + `LevelEntity` and registers the entity in `SpawnRegistry`; it inserts the
 `ClickSelectable`/`Targetable` markers per the prefab flags (players pass `false`).
 Player-specific components (CharacterController, physics, camera) stay at the call site.
@@ -1177,7 +1178,7 @@ remains is:
    `Grid` loop, adding just `SplitViewportSlot`/`Camera.order`), then increments
    `ActiveSplitSlotCount` by one. Scoped to `Grid`-split scenes only — see the doc comment on
    `ActiveSplitSlotCount` below, which this site resolves. See "Gamepad-triggered hot join" above
-   for the `bound_gamepad` hand-off `PlayerConfig.bound_gamepad` (set at line 560) feeds into.
+   for the `bound_gamepad` hand-off `PlayerConfig.bound_gamepad` (set in `action_executor.rs`'s `Action::JoinPlayer` arm from `pending_join_gamepad.0.take()`) feeds into.
 
 Because `PlayerIndex`, `PlayerTarget`, `BoundGamepad`, `StatMap` (when `stat_templates` is
 non-empty), stat widgets, and material override are now inserted in the shared post-dispatch code
