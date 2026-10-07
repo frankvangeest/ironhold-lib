@@ -20,6 +20,6 @@ cli_validate_batch3 review (2026-09-11), proven with a one-node fixture.
 does. `FoliageMaterialDef.leaf_texture` already has its own empty-string guard for the same reason
 — that guard is precedent, not an unexplained quirk.
 
-Sibling still uncovered as of that batch: `IconButtonDef.icon_on`/`icon_off` are required
-`AssetCatalog.textures` keys resolved with `.unwrap_or_default()` and **zero** runtime warning
-(`scene_loader.rs` ~1781) — the exact failure shape the batch's own doc comment describes.
+`IconButtonDef.icon_on`/`icon_off` (uncovered in that batch) are now checked as
+`missing_catalog_key` in `validate.rs` (verified 2026-10-07); the runtime itself still resolves
+them with `.unwrap_or_default()` and no warning, so validate is the only signal.

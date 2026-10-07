@@ -1,6 +1,6 @@
 # Memory Index
 
-- [Docs audience split](project_docs_audience_split.md) — docs/dev/ + docs/15 CLI page; "Checks performed" cite trap; Pages serves .md raw; no prebuilt CLI
+- [Docs audience split](project_docs_audience_split.md) — Phase A shipped; code-span cross-refs dead on GitHub; Getting-started assumes repo clone; no prebuilt CLI
 
 - [ocean demo plan-review](project_ocean_demo_plan_review.md) — compass vs rotation_euler_deg clash; SetParam keys must mirror RON paths; boat input vs InputMap; readout precision
 
@@ -69,6 +69,6 @@
 - [ui: Label/Button font & clip](project_ui_label_button_font_and_clip.md) — font_size house style is f32+default fn (13 precedents); 22/26px, ~11px/char; clip+wrap+center = half-cut lines; camera_modes hints overflow today
 - [RON parse-failure diagnostics](project_ron_parse_failure_diagnostics.md) — ron 0.11 error text is GOOD (names the Action variant); logic/catalog/.behavior/.dialogue loaders now error! w/ path; .project.ron hangs loading; blast radius = whole file
 - [UI trigger wiring](project_ui_trigger_wiring.md) — 4 surfaces emit ui.button_pressed:{trigger}; exact-match only; `unreachable_trigger` check's blind spots (gamepad, state gating, nested behaviors, parse cascade)
-- [max_fixed_delta_secs](project_max_fixed_delta_secs.md) — any value <= the real frame interval = permanent slow-motion; validate only rejects <=0/non-finite; 6 doc surfaces, 3 missing
+- [max_frame_delta_secs](project_max_fixed_delta_secs.md) — renamed from max_fixed_; validate now enforces ~0.03..60s; doc surfaces list
 - [Default mouse-binding test projects](project_mouse_default_binding_test_projects.md) — 3rd_person/local_coop override orbit_button; primitive_world/stats_demo use defaults + have ActionBars
 - [UI nesting breaks 11 flat scene.ui scans](project_ui_nesting_flat_scan_sites.md) — StatRadar pre-pass + 4 warns + 6 CLI checks skip nested children; Container/ContainerPanel name clash; auto-size+SpaceBetween is a no-op; Group shipped 2026-10-06 (open doc nits listed)
