@@ -158,7 +158,7 @@ is viable, before more of the roadmap is built on top of an unverified assumptio
 - Compare native × WASM/Chrome × WASM/Firefox × dev × release. First divergent tick + which
   quantity diverged is the report; a clean run across the full matrix is the report too.
 - This is Milestone B ("Replay tooling" / tick-level state hashing) from
-  `docs/40_determinism_and_networking.md:184-186` (not lines 150-157, which is the Rollback netcode
+  `docs/dev/40_determinism_and_networking.md:184-186` (not lines 150-157, which is the Rollback netcode
   section — corrected citation), pulled forward and scoped concretely.
 - **Build this as a permanent, repeatable tool, not a one-off investigation script.** It is the
   only mechanism that would ever catch a future regression in the `FixedUpdate`/`PhysicsSet`
@@ -242,7 +242,7 @@ is viable, before more of the roadmap is built on top of an unverified assumptio
       movement_system)` (their previous mechanism for driving movement in isolation while physics
       still stepped for free via the old unconditional `PostUpdate` schedule) stopped working
       once physics moved into the same schedule the manual duration was freezing.
-- [x] Docs: `docs/40_determinism_and_networking.md`, `docs/STATUS.md`, `crates/ironhold_core/src/
+- [x] Docs: `docs/dev/40_determinism_and_networking.md`, `docs/STATUS.md`, `crates/ironhold_core/src/
       CLAUDE.md`, `crates/ironhold_core/tests/CLAUDE.md` all updated to reflect the landed fixed
       tick, `det_math`, and the render-smoothing decision.
 - [x] **Fix world-space UI/camera staleness found during Frank's playtest (step 9) — not caught by

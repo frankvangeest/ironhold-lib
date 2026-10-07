@@ -310,7 +310,7 @@ Applies actions to the world. Key design points:
 - For determinism, prefer a **fixed tick** for gameplay actions.
 - Separate deterministic gameplay actions from non-deterministic presentation effects.
 
-(See `docs/40_determinism_and_networking.md` for design notes.)
+(See `docs/dev/40_determinism_and_networking.md` for design notes.)
 
 ## Milestone mapping (suggested)
 

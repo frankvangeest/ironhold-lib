@@ -16,7 +16,7 @@ Reported by Frank playtesting `3rd_person_game_demo` (2026-09-15): monsters kept
 patrolling and attacking, chests could still be looted, and the character kept walking
 around behind the pause overlay. Not project-specific — `primitive_world` has the same
 defect in both its `paused` and (worse) its `game_over` states, and four docs pages
-currently document pause as if it already works (`docs/10_architecture.md` lists a
+currently document pause as if it already works (`docs/dev/10_architecture.md` lists a
 `Paused` engine lifecycle state that does not exist; `docs/30_runtime_events_and_logic.md`
 and `docs/STATUS.md` both ship the exact broken `paused` FSM block as a canonical
 copy-paste pattern).
@@ -128,7 +128,7 @@ opening the pause menu in a `?static=1` session and resuming un-freezes static m
     (~229, ~360)
   - `docs/STATUS.md` action list **and** its pause example (~158)
   - `assets/projects/CLAUDE.md` tuple-variant list
-  - `docs/10_architecture.md:110` — make `Paused` real or remove it
+  - `docs/dev/10_architecture.md:110` — make `Paused` real or remove it
   - `docs/30_runtime_events_and_logic.md:599-606` **and** the RON comment at
     `3rd_person_game_demo/logic/state_machine.ron:12-30` — the "timers tick while
     paused" rationale becomes false; the `global_on` rule stays, its reason changes.

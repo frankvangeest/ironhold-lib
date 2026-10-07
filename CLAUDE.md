@@ -429,9 +429,9 @@ When asked to update or audit documentation, check **all** of the following — 
 - `CLAUDE.md` (root)
 - `crates/ironhold_core/src/CLAUDE.md`
 - `crates/ironhold_core/tests/CLAUDE.md`
-- Every `.md` file in `docs/` (`00_overview.md`, `10_architecture.md`, `20_data_formats.md`, `25_custom_shaders.md`, `30_runtime_events_and_logic.md`, `40_determinism_and_networking.md`, `50_roadmap_and_milestones.md`, `60_contributing.md`, `70_profiling.md`, `browser_tests.md`, `STATUS.md`)
+- Every `.md` file in `docs/` and `docs/dev/`, plus `README.md`. Designer/library-user docs live directly in `docs/` (`00_overview.md`, `05_art_style.md`, `15_authoring_tools.md`, `20_data_formats.md`, `25_custom_shaders.md`, `30_runtime_events_and_logic.md`, `STATUS.md`, and the `docs/README.md` index); developer docs live in `docs/dev/` (`10_architecture.md`, `40_determinism_and_networking.md`, `50_roadmap_and_milestones.md`, `60_contributing.md`, `70_profiling.md`, `browser_tests.md`). A new validate check adds a row to `docs/15_authoring_tools.md`.
 
 > Rust-specific rules (GPU/WGSL alignment, physics, terrain, inspector) live in
 > `crates/ironhold_core/src/CLAUDE.md`.
 > Integration test setup rules live in `crates/ironhold_core/tests/CLAUDE.md`.
-> Browser test suite documentation lives in `docs/browser_tests.md`.
+> Browser test suite documentation lives in `docs/dev/browser_tests.md`.

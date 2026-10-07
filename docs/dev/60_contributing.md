@@ -246,10 +246,10 @@ If your change affects the runtime model (events/actions/determinism) or data fo
 - Reference the roadmap milestone you’re targeting.
 
 Recommended starting points:
-- `docs/10_architecture.md`
+- `docs/dev/10_architecture.md`
 - `docs/30_runtime_events_and_logic.md`
-- `docs/40_determinism_and_networking.md`
-- `docs/50_roadmap_and_milestones.md`
+- `docs/dev/40_determinism_and_networking.md`
+- `docs/dev/50_roadmap_and_milestones.md`
 
 ## Documentation requirements for Messages/Actions
 

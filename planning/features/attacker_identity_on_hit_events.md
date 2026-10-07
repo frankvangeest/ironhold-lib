@@ -422,7 +422,7 @@ designer path:
      (3836): they list only "`{self}` substituted in behavior files". Add `{target}`/`{attacker}`.
   8. `docs/STATUS.md`: the entity messages list (~110-114) and any NPC/combat feature row. This is
      the place that keeps getting missed.
-  9. `docs/60_contributing.md` checks list, per B3.
+  9. `docs/dev/60_contributing.md` checks list, per B3.
 - `planning/investigations/rpg_event_taxonomy.md:107` proposes `combat.hit:{attacker}:{target}`. That
   is a different namespace *and* the reverse argument order. Update it in the same change so the
   "convention" this plan sets is not contradicted by the taxonomy doc it cites.
