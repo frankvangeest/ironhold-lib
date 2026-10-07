@@ -70,7 +70,7 @@ Ironhold-lib is a cross-platform (native + web/WASM) game runtime built on **Bev
 - `crates/ironhold_native` — desktop runner calling `ironhold_core::start_app()`. ✅ 
 - `crates/ironhold_web` — WASM runner exporting `start()` via `wasm-bindgen`. ✅ 
 - `assets/` — example project + scenes + models. ✅ 
-- `docs/` — design docs, data format spec drafts, roadmap, contributing guide. ✅ 
+- `docs/` — designer docs, with engine-developer docs (architecture, roadmap, contributing) under `docs/dev/`. ✅ 
 
 ## Current implementation snapshot (today)
 
@@ -171,9 +171,11 @@ Full field reference: `docs/20_data_formats.md`.
 
 ## Where to read next
 
-- `docs/20_data_formats.md` — full field reference for all RON file types
-- `docs/15_authoring_tools.md` — check, watch and inspect your project with the optional `ironhold` tool (`watch` re-checks every time you save)
-- `docs/30_runtime_events_and_logic.md` — event/action model and FSM details (start with "Project logic: `state_machine.ron`")
-- `docs/25_custom_shaders.md` — writing WGSL shaders
-- `docs/05_art_style.md` — art style and asset guidance
-- Engine developers: `docs/dev/10_architecture.md` (current state + target architecture) and `docs/dev/50_roadmap_and_milestones.md` (milestones and feature gates)
+- [README.md](README.md) — the documentation index, with an audience tag per doc
+- [20_data_formats.md](20_data_formats.md) — full field reference for all RON file types
+- [15_authoring_tools.md](15_authoring_tools.md) — check, watch and inspect your project with the optional `ironhold` tool (`watch` re-checks every time you save)
+- [30_runtime_events_and_logic.md](30_runtime_events_and_logic.md) — event/action model and FSM details (start with "Project logic: `state_machine.ron`")
+- [25_custom_shaders.md](25_custom_shaders.md) — writing WGSL shaders
+- [05_art_style.md](05_art_style.md) — art style and asset guidance
+- [STATUS.md](STATUS.md) — what works today
+- Engine developers: [dev/10_architecture.md](dev/10_architecture.md) (current state + target architecture) and [dev/50_roadmap_and_milestones.md](dev/50_roadmap_and_milestones.md) (milestones and feature gates)

@@ -209,7 +209,7 @@ Everything is indexed, with an audience tag per doc, in [`docs/README.md`](docs/
 | [`docs/30_runtime_events_and_logic.md`](docs/30_runtime_events_and_logic.md) | Events, actions, FSM semantics |
 | [`docs/25_custom_shaders.md`](docs/25_custom_shaders.md) | Custom WGSL shaders: authoring, bindings, uniform packing |
 | [`docs/05_art_style.md`](docs/05_art_style.md) | Art style and asset guidance |
-| [`docs/00_overview.md`](docs/00_overview.md) | Getting started, goals and vision |
+| [`docs/00_overview.md`](docs/00_overview.md#getting-started-in-5-minutes) | Getting started, goals and vision |
 | [`docs/STATUS.md`](docs/STATUS.md) | Implementation status matrix |
 
 **Developing the library** (`docs/dev/`)

@@ -242,7 +242,7 @@ The claim that the animation side needs no change holds: `jump_exit` comes only 
 
 ## UX / game-design plan-review: `planning/features/airborne_ground_reacquisition.md`
 
-Reviewed against `integration` at `34803b1` (2026-10-02). Designer-facing surfaces checked: `docs/20_data_formats.md` MovementConfig table (~2288-2325) and the reserved `jump_enter`/`jump_exit` callout (~3610-3617), `docs/dev/60_contributing.md` validate checks (~279-287), and the shipped demo geometry and prefabs for every project with a player.
+Reviewed against `integration` at `34803b1` (2026-10-02). Designer-facing surfaces checked: `docs/20_data_formats.md` MovementConfig table (~2288-2325) and the reserved `jump_enter`/`jump_exit` callout (~3610-3617), `docs/60_contributing.md` validate checks (~279-287), and the shipped demo geometry and prefabs for every project with a player.
 
 #### Verdict
 **Needs more design work.** The scope is small. The fix itself is the right one from a designer's point of view: no new RON field, one definition of "landed", and flat-ground jumps, coyote time and normal landings stay the same. Both blockers are in the **playtest checklist**. One step points at a demo that has none of the terrain it asks you to test. Another step's pass condition can't be seen in the browser. As written, the most noticeable feel change (uphill re-jump cadence) would ship without anyone playing it.

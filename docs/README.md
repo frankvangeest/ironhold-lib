@@ -1,7 +1,7 @@
 # Documentation index
 
-**Making a game (no Rust needed)?** Start with [Getting started in 5 minutes](00_overview.md#getting-started-in-5-minutes),
-then read [20_data_formats.md](20_data_formats.md) (the RON reference) and, if you use the command-line tool,
+**Making a game (no Rust needed)?** Start with [Getting started in 5 minutes](00_overview.md#getting-started-in-5-minutes)
+(it assumes a checkout of this repository plus Python for the local server, since the hosted demo can only play the shipped projects), then read [20_data_formats.md](20_data_formats.md) (the RON reference) and, if you use the command-line tool,
 [15_authoring_tools.md](15_authoring_tools.md). Dig into [30_runtime_events_and_logic.md](30_runtime_events_and_logic.md)
 (see "Project logic: `state_machine.ron`" and "Entity FSM") when you wire up game logic, and into
 [25_custom_shaders.md](25_custom_shaders.md) / [05_art_style.md](05_art_style.md) as needed.
@@ -22,5 +22,5 @@ tests, architecture, determinism, profiling.
 | [dev/40_determinism_and_networking.md](dev/40_determinism_and_networking.md) | Developer | Determinism and multiplayer design |
 | [dev/50_roadmap_and_milestones.md](dev/50_roadmap_and_milestones.md) | Developer | Milestones and roadmap |
 | [dev/60_contributing.md](dev/60_contributing.md) | Developer | Workflow, tests, branching, how to add a validate check |
-| [dev/70_profiling.md](dev/70_profiling.md) | Developer (one designer section) | Profiling tools; the "Browser DevTools - GPU timing (web)" section is usable by designers |
+| [dev/70_profiling.md](dev/70_profiling.md) | Developer (one designer section) | Profiling tools; the [Browser DevTools - GPU timing (web)](dev/70_profiling.md#browser-devtools--gpu-timing-web) section is usable by designers |
 | [dev/browser_tests.md](dev/browser_tests.md) | Developer | The headless browser test suite |

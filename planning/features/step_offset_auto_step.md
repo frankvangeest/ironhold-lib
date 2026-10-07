@@ -363,7 +363,7 @@ and "land in either order" (Decision 7) are false.**
 
 Reviewed against `integration` @ `34803b1` (plan written at `9f23098`). Read-only; nothing compiled.
 Surfaces cross-checked: `docs/20_data_formats.md` MovementConfig table (~L2288-2325) and NPC block (~L3230-3260),
-`docs/dev/60_contributing.md` validate/`--strict` lists (~L255-289), `docs/STATUS.md` L51, `local_coop_demo` room9/room10 +
+`docs/15_authoring_tools.md` validate/`--strict` tables, `docs/STATUS.md` L51, `local_coop_demo` room9/room10 +
 prefabs, `3rd_person_game_demo` prefabs, `blank_project` prefabs.
 
 #### Verdict
@@ -381,7 +381,7 @@ an unmeasured guess, and by the plan's own algorithm it is probably too small.
 **B1. The docs tasks miss designer-facing surfaces and put the behaviour rules in a file designers can't read.**
 The Docs task lists `docs/20` (one row + limits + interaction note), `crates/ironhold_core/src/CLAUDE.md` and `tests/CLAUDE.md`.
 Designers can't open either `CLAUDE.md`. Add the following:
-- `docs/dev/60_contributing.md` `--strict` list (L274-289): add one bullet each for `invalid_step_height` and
+- `docs/15_authoring_tools.md` strict-only table: add one bullet each for `invalid_step_height` and
   `step_height_exceeds_collider_limit`, in the same shape as the `negative_coyote_time_secs` bullet (L281). Every existing
   MovementConfig check has a bullet there, so a new code without one breaks the pattern designers look up when a validate run fails.
 - `docs/20` MovementConfig row: write it as designer rules, not mechanism. It must say all of these explicitly:
