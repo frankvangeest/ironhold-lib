@@ -1,6 +1,6 @@
 # Memory Index
 
-- [Docs audience split](project_docs_audience_split.md) — docs/dev/ move; CLI docs live only in 60_contributing; warmup/budget missing from designer docs; no docs links in index.html
+- [Docs audience split](project_docs_audience_split.md) — docs/dev/ + docs/15 CLI page; "Checks performed" cite trap; Pages serves .md raw; no prebuilt CLI
 
 - [ocean demo plan-review](project_ocean_demo_plan_review.md) — compass vs rotation_euler_deg clash; SetParam keys must mirror RON paths; boat input vs InputMap; readout precision
 
