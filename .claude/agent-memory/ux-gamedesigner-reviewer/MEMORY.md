@@ -1,5 +1,7 @@
 # Memory Index
 
+- [Docs audience split](project_docs_audience_split.md) — docs/dev/ move; CLI docs live only in 60_contributing; warmup/budget missing from designer docs; no docs links in index.html
+
 - [ocean demo plan-review](project_ocean_demo_plan_review.md) — compass vs rotation_euler_deg clash; SetParam keys must mirror RON paths; boat input vs InputMap; readout precision
 
 - [lock-on plan-review](project_lock_on_plan_review.md) — no per-player target-clear input (gamepad can't unlock); player-in-frame unguaranteed; camera_modes prefabs default Tab
