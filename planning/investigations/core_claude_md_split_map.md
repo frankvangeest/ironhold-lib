@@ -11,8 +11,7 @@ boundaries are off by 1-2 lines, which does not matter for planning but **must b
 move time**. Char counts are the agents' (measured with `wc` for slices 3-5, estimated for a few `~` rows) and
 overlap slightly; treat totals as +/-10%. Nothing here was verified against the compiler or tests.
 
-**Destination labels** (the mechanism for "SKILL:" / "DOCS:" is decided in the plan — a path-scoped
-`.claude/rules/*.md` file is preferred over a skill if the Phase-0 spike confirms it loads by file path):
+**Destination labels** (resolved 2026-10-07: topic content lives in tool-neutral `docs/dev/<topic>.md`; Claude Code gets a thin `.claude/rules/<topic>.md` path-scoped stub and every topic a pointer line in its directory file, because OpenCode has no path-scoped rules; see the plan):
 `PARENT` = stays in `crates/ironhold_core/src/CLAUDE.md` · `CAP` = `capabilities/CLAUDE.md` · `SM` =
 `runtime/scene_manager/CLAUDE.md` (there is no content that belongs only in `runtime/`; every interpreter,
 executor and loader file lives in `runtime/scene_manager/`) · `SCH` = `schema/CLAUDE.md` · `TOPIC:<name>` =
