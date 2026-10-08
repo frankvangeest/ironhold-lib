@@ -60,6 +60,7 @@ from _opencode_common import find_opencode, not_found_message, opencode_version 
 TOOL = "opencode_probe"
 INSTR_NAMES = ("AGENTS.md", "CLAUDE.md", "CONTEXT.md")
 TEXT_EXTS = {".rs", ".py", ".wgsl", ".ron", ".toml", ".md", ".json", ".html", ".js"}
+IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 VERIFIED_RE = re.compile(r"<!--\s*opencode-verified-version:\s*([0-9][^\s>]*)\s*-->")
 BLOCK_RE = re.compile(r"Instructions from: ([^\n]+)\n(.*?)(?=\n\nInstructions from: |\n</system-reminder>|\Z)", re.S)
 COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
@@ -85,7 +86,10 @@ def instruction_file_in(folder: Path):
 
 def relposix(root: Path, path) -> str:
     """`path` relative to `root`, forward slashes, original case (display form)."""
-    return os.path.relpath(str(path), str(root)).replace("\\", "/")
+    try:
+        return os.path.relpath(str(path), str(root)).replace("\\", "/")
+    except ValueError:  # a different drive on Windows
+        return str(path).replace("\\", "/")
 
 
 def same(a: str, b: str) -> bool:
@@ -97,6 +101,8 @@ def expected_attach(root: Path, rel_file: str) -> list[str]:
     root_n = norm(root)
     folder = (root / rel_file).parent
     found = []
+    # The string-prefix guard mirrors how OpenCode decides a file is "inside the project" (fact V14): a sibling worktree whose
+    # folder name starts with the primary checkout's name counts as inside it. Change both together or neither.
     while norm(folder) != root_n and norm(folder).startswith(root_n):
         chosen = instruction_file_in(folder)
         if chosen is not None:
@@ -106,32 +112,47 @@ def expected_attach(root: Path, rel_file: str) -> list[str]:
 
 
 def tracked_files(root: Path) -> list[str]:
-    out = subprocess.run(["git", "ls-files", "-z"], cwd=root, capture_output=True, text=True, encoding="utf-8")
+    try:
+        out = subprocess.run(["git", "ls-files", "-z"], cwd=root, capture_output=True, text=True, encoding="utf-8")
+    except OSError as exc:
+        raise ProbeError(f"could not run git ({exc}); the probe needs git to list the tracked files") from exc
     if out.returncode != 0:
         raise ProbeError(f"{root} is not a git checkout (git ls-files failed); pass --dir <repo root>")
     return [f for f in out.stdout.split("\0") if f]
 
 
-def choose_probe_files(tracked: list[str]) -> tuple[list[str], list[str]]:
-    """(positives, negatives): one text file per folder that owns a CLAUDE.md (root excluded), plus files that attach nothing."""
+def choose_probe_files(tracked: list[str]) -> tuple[list[str], list[str], list[str]]:
+    """(positives, negatives, unprobed folders).
+
+    One readable file per folder that owns a CLAUDE.md (root excluded), preferring text, then a PNG/JPEG/WebP image; files that
+    attach nothing as negatives. OpenCode's read tool refuses other binaries ("Cannot read binary file", checked for .glb and
+    .avif), so a folder holding only those cannot be probed through a read and is reported, not silently skipped.
+    """
     tracked_set = set(tracked)
     folders = sorted({str(Path(f).parent.as_posix()) for f in tracked if Path(f).name == "CLAUDE.md" and Path(f).parent != Path(".")})
     positives: list[str] = []
+    unprobed: list[str] = []
     for folder in folders:
-        def is_text(f: str) -> bool:
-            return Path(f).suffix in TEXT_EXTS and Path(f).name not in INSTR_NAMES
-        direct = sorted(f for f in tracked if Path(f).parent.as_posix() == folder and is_text(f))
-        below = sorted(f for f in tracked if f.startswith(folder + "/") and is_text(f))
-        pick = (direct or below or [None])[0]
-        if pick:
-            positives.append(pick)
+        def usable(exts):
+            return lambda f: Path(f).suffix.lower() in exts and Path(f).name not in INSTR_NAMES
+        picks = []
+        for exts in (TEXT_EXTS, IMAGE_EXTS):
+            ok = usable(exts)
+            picks = sorted(f for f in tracked if Path(f).parent.as_posix() == folder and ok(f)) or sorted(
+                f for f in tracked if f.startswith(folder + "/") and ok(f))
+            if picks:
+                break
+        if picks:
+            positives.append(picks[0])
+        else:
+            unprobed.append(folder)
     if "crates/ironhold_core/src/lib.rs" in tracked_set:
         positives.append("crates/ironhold_core/src/lib.rs")  # the file that must see ONLY its own folder's CLAUDE.md
     negatives = [f for f in ("Cargo.toml", "crates/ironhold_web/src/lib.rs") if f in tracked_set]
     negatives += sorted(f for f in tracked if f.startswith("docs/dev/") and f.endswith(".md"))[:1]
     negatives += sorted(f for f in tracked if f.startswith(".claude/rules/") and f.endswith(".md"))[:1]
     seen: set[str] = set()
-    return [f for f in positives if not (f in seen or seen.add(f))], negatives
+    return [f for f in positives if not (f in seen or seen.add(f))], negatives, unprobed
 
 
 # --------------------------------------------------------------------------------------------- the model-free debug read
@@ -139,7 +160,10 @@ def normalize_only(root: Path, value: str) -> str:
     """`--only` accepts backslashes (PowerShell tab completion), `./` prefixes and absolute paths inside the repo."""
     p = Path(value)
     if p.is_absolute():
-        return relposix(root, p)
+        try:
+            return relposix(root, p)
+        except ValueError as exc:  # another drive on Windows
+            raise ProbeError(f"--only {value} is not inside {root}") from exc
     cleaned = value.replace("\\", "/")
     while cleaned.startswith("./"):
         cleaned = cleaned[2:]
@@ -177,14 +201,22 @@ def isolated_env() -> tuple[dict, str]:
 
 
 def parse_json_text(text: str) -> dict:
+    """The first JSON object in `text`; tolerates log lines before or after it (a plugin could print some)."""
     text = text.lstrip("\ufeff")
+    decoder = json.JSONDecoder()
     start = text.find("{")
-    if start < 0:
+    last_error = None
+    while start >= 0:
+        try:
+            value, _ = decoder.raw_decode(text[start:])
+            if isinstance(value, dict):
+                return value
+        except json.JSONDecodeError as exc:
+            last_error = exc
+        start = text.find("{", start + 1)
+    if last_error is None:
         raise ProbeError("OpenCode printed no JSON")
-    try:
-        return json.loads(text[start:])
-    except json.JSONDecodeError as exc:
-        raise ProbeError(f"could not parse OpenCode's JSON output: {exc}") from exc
+    raise ProbeError(f"could not parse OpenCode's JSON output: {last_error}")
 
 
 def attachments(data: dict) -> tuple[list[str], list[tuple[str, str]]]:
@@ -201,7 +233,15 @@ def attachments(data: dict) -> tuple[list[str], list[tuple[str, str]]]:
 
 
 def debug_read(binary: str, root: Path, rel: str, env: dict, pure: bool, timeout: int = 90) -> dict:
-    params = "{filePath:'%s',limit:2}" % rel  # JS-style literal, single quotes, repo-relative forward slashes
+    # The real opencode.exe takes plain JSON through the argument list (handles quotes and spaces in a path). The npm `.cmd`/`.ps1`
+    # shims re-parse their arguments (double quotes mangled, backslashes eaten), so through a shim use a JS literal in single quotes.
+    if Path(binary).suffix.lower() in (".cmd", ".bat", ".ps1"):
+        if "'" in rel:
+            raise ProbeError(f"{rel} contains a single quote and OpenCode is only reachable through its .cmd shim; "
+                             "set OPENCODE_BIN to opencode.exe (fact V9)")
+        params = "{filePath:'%s',limit:2}" % rel
+    else:
+        params = json.dumps({"filePath": rel, "limit": 2})
     cmd = [binary, "debug", "agent", "build", "--tool", "read", "--params", params] + (["--pure"] if pure else [])
     try:
         proc = subprocess.run(cmd, cwd=root, env=env, capture_output=True, text=True, encoding="utf-8", timeout=timeout)
@@ -210,7 +250,8 @@ def debug_read(binary: str, root: Path, rel: str, env: dict, pure: bool, timeout
     except OSError as exc:
         raise ProbeError(f"could not run {binary}: {exc}") from exc
     if proc.returncode != 0:
-        raise ProbeError(f"`opencode debug agent` exited {proc.returncode} on {rel}: {(proc.stderr or proc.stdout).strip()[:300]}")
+        detail = re.sub(r"\x1b\[[0-9;]*m", "", (proc.stderr or proc.stdout)).strip()[:300]  # strip ANSI colour codes
+        raise ProbeError(f"`opencode debug agent` exited {proc.returncode} on {rel}: {detail}")
     return parse_json_text(proc.stdout)
 
 
@@ -218,13 +259,17 @@ def probe_one(binary, root: Path, rel: str, env: dict, pure: bool) -> dict:
     data = debug_read(binary, root, rel, env, pure)
     loaded_abs, blocks = attachments(data)
     loaded = [relposix(root, p) for p in loaded_abs]
-    block_paths = [relposix(root, p) for p, _ in blocks]
     expected = expected_attach(root, rel)
     missing = [e for e in expected if not any(same(e, l) for l in loaded)]
     unexpected = [l for l in loaded if not any(same(l, e) for e in expected)]
     warn = []
-    if sorted(map(os.path.normcase, loaded)) != sorted(map(os.path.normcase, block_paths)):
-        raise ProbeError(f"debug interface changed: metadata.loaded and the 'Instructions from:' text disagree for {rel} (fact V6)")
+    # Every path in metadata.loaded must have its own `Instructions from:` block. Extra headers are fine: a file body may quote
+    # OpenCode's own format, which must not be mistaken for an interface change.
+    blocks = [(p, body) for p, body in blocks if any(same(relposix(root, p), l) for l in loaded)]
+    without_block = [l for l in loaded if not any(same(relposix(root, p), l) for p, _ in blocks)]
+    if without_block:
+        raise ProbeError(f"debug interface changed: {', '.join(without_block)} is in metadata.loaded but has no "
+                         f"'Instructions from:' text for {rel} (fact V6)")
     size = sum(len(body.encode("utf-8")) for _, body in blocks)
     comment_bytes = sum(len(m.group(0).encode("utf-8")) for _, body in blocks for m in COMMENT_RE.finditer(body))
     return {"file": rel, "expected": expected, "attached": loaded, "missing": missing, "unexpected": unexpected,
@@ -232,9 +277,7 @@ def probe_one(binary, root: Path, rel: str, env: dict, pure: bool) -> dict:
 
 
 # ------------------------------------------------------------------------------------------------------- static checks
-def run_static(root: Path) -> list[tuple[str, list[str]]]:
-    config_path = root / ".opencode" / "opencode.json"
-    config = json.loads(config_path.read_text(encoding="utf-8")) if config_path.is_file() else {}
+def run_static(root: Path, config: dict) -> list[tuple[str, list[str]]]:
     return [
         ("Subfolder AGENTS.md / CONTEXT.md", sync.check_no_subfolder_instruction_files(root)),
         ("`instructions` matching .claude/rules", sync.check_instructions_not_matching_rules(config, root)),
@@ -258,7 +301,7 @@ def is_free_model(model_id: str) -> bool:
 
 def parse_run_events(text: str) -> dict:
     """Summarise `opencode run --format json` output: read events, per-step tokens, summed cost, errors, reply text."""
-    summary = {"reads": 0, "attached": [], "steps": [], "cost": 0.0, "errors": [], "reply": ""}
+    summary = {"reads": 0, "attached": [], "steps": [], "cost": 0.0, "errors": [], "reply": "", "sessions": set()}
     for line in text.splitlines():
         line = line.strip()
         if not line.startswith("{"):
@@ -267,6 +310,8 @@ def parse_run_events(text: str) -> dict:
             event = json.loads(line)
         except json.JSONDecodeError:
             continue
+        if isinstance(event.get("sessionID"), str):
+            summary["sessions"].add(event["sessionID"])
         kind, part = event.get("type"), event.get("part") or {}
         if kind == "tool_use" and part.get("tool") == "read":
             summary["reads"] += 1
@@ -298,9 +343,9 @@ def session_ids(binary: str, root: Path) -> set[str]:
     return set(re.findall(r"^(ses_\S+)", listing.stdout, re.M))
 
 
-def delete_probe_sessions(binary: str, root: Path, title_prefix: str) -> int:
-    listing = subprocess.run([binary, "session", "list"], cwd=root, capture_output=True, text=True, encoding="utf-8")
-    ids = re.findall(r"^(ses_\S+)\s+" + re.escape(title_prefix), listing.stdout, re.M)
+def delete_sessions(binary: str, root: Path, ids) -> int:
+    """Delete exactly these session ids (the ones this run created, taken from its own `sessionID` events), never by title:
+    the session list is shared by every worktree of the repo, so a title match could hit someone else's session."""
     for sid in ids:
         subprocess.run([binary, "session", "delete", sid], cwd=root, capture_output=True, text=True, encoding="utf-8")
     return len(ids)
@@ -315,11 +360,11 @@ def run_live(binary: str, root: Path, config: dict, args, sample_file: str) -> d
         candidates = [m for m in candidates if is_free_model(m)]
     if not candidates:
         raise ProbeError("no free model to try; pass --model <id> (and --allow-paid for a paid one)")
-    title_prefix = "opencode-probe"
-    title = f"{title_prefix} {datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
+    title = f"opencode-probe {datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
     prompt = f"Read the first 3 lines of {sample_file} using the read tool, then reply DONE and nothing else."
-    print(f"--live: about {len(candidates)} model call(s) at most (about 20 s each); sessions titled '{title}' are deleted afterwards.", file=sys.stderr)
+    print(f"--live: about {len(candidates)} model call(s) at most (about 20 s each); the session(s) it creates ('{title}') are deleted afterwards.", file=sys.stderr)
     spent, last_error = 0.0, "no attempt"
+    created: set[str] = set()
     try:
         for model in candidates:
             if model.startswith("m365/"):
@@ -334,11 +379,15 @@ def run_live(binary: str, root: Path, config: dict, args, sample_file: str) -> d
                     last_error = f"{model}: timed out"
                     continue
                 summary = parse_run_events(proc.stdout)
+                created |= summary["sessions"]
                 spent += summary["cost"]
+                # The cap is checked after a call has already been paid for, so one call can overshoot it by its own cost.
                 if args.max_cost is not None and spent > args.max_cost:
                     raise ProbeError(f"--max-cost {args.max_cost} exceeded (spent {spent:.4f})")
-                if summary["errors"] or summary["reads"] == 0 or not summary["steps"]:
-                    last_error = f"{model}: " + (summary["errors"][0] if summary["errors"] else "no `read` tool event (empty response)")
+                if proc.returncode != 0 or summary["errors"] or summary["reads"] == 0 or not summary["steps"]:
+                    last_error = f"{model}: " + (summary["errors"][0] if summary["errors"] else
+                                                 f"opencode run exited {proc.returncode}" if proc.returncode != 0 else
+                                                 "no `read` tool event (empty response)")
                     continue  # an empty or failed run is an error to retry, never "attached nothing"
                 skills = None
                 skill_run = subprocess.run([binary, "debug", "skill"], cwd=root, capture_output=True, text=True, encoding="utf-8")
@@ -352,9 +401,12 @@ def run_live(binary: str, root: Path, config: dict, args, sample_file: str) -> d
         raise ProbeError(f"all free models failed (last: {last_error}). Re-run with --static for the no-model checks, or "
                          f"--allow-paid / --model <id> to try another model.")
     finally:
-        removed = delete_probe_sessions(binary, root, title_prefix)
+        removed = delete_sessions(binary, root, created)
         if removed:
             print(f"--live: deleted {removed} probe session(s).", file=sys.stderr)
+        elif not created:
+            print("--live: no session id was reported, so nothing was deleted; look for sessions titled "
+                  f"'{title}' in `opencode session list`.", file=sys.stderr)
 
 
 # --------------------------------------------------------------------------------------------------------- reporting
@@ -409,15 +461,23 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv=None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
     if args.selftest:
         return selftest()
+    if args.live and args.static:
+        parser.error("--live calls a model and --static never touches OpenCode; use one or the other")
     root = Path(args.dir).resolve() if args.dir else Path(__file__).resolve().parent.parent
-    if not (root / ".opencode" / "opencode.json").is_file():
+    config_path = root / ".opencode" / "opencode.json"
+    if not config_path.is_file():
         print(f"{TOOL}: {root} does not look like this repo (no .opencode/opencode.json); run from the repo root or pass --dir.")
         return 2
-    config = json.loads((root / ".opencode" / "opencode.json").read_text(encoding="utf-8"))
-    static = run_static(root)
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        print(f"{TOOL}: cannot read {config_path}: {exc}")
+        return 2
+    static = run_static(root, config)
     report = {"version": None, "verified": verified_version(root), "version_warning": None, "mode": "static" if args.static else "model-free",
               "date": datetime.date.today().isoformat(), "results": [], "static": static, "live": None, "comment_bytes": 0, "failed": 0, "warnings": []}
     failed = sum(1 for _, problems in static if problems)
@@ -433,9 +493,13 @@ def main(argv=None) -> int:
                                          f"re-check the rows in .opencode/README.md")
         try:
             tracked = tracked_files(root)
-            positives, negatives = choose_probe_files(tracked)
+            positives, negatives, unprobed = choose_probe_files(tracked)
             only = normalize_only(root, args.only) if args.only else None
+            if only and not (root / only).is_file():
+                raise ProbeError(f"--only expects a file, and {only} is not one in {root} (a directory would pass vacuously)")
             files = [only] if only else positives + negatives
+            if unprobed and not only:
+                report["warnings"].append("not probed (no file OpenCode's read tool can open, only binaries): " + ", ".join(unprobed))
             env, tmp = isolated_env()
             try:
                 check_isolation(binary, root, env, tmp)
@@ -497,10 +561,46 @@ def selftest() -> int:
         check(expected_attach(root, "CLAUDE.md") == [], "root files are never attached")
         problems = sync.check_no_subfolder_instruction_files(root)
         check(len(problems) == 2 and any("d/AGENTS.md" in p for p in problems) and any("e/CONTEXT.md" in p for p in problems), "static scan finds the stubs")
+        check(parse_json_text("log before\n{\"a\": 1}\nlog after {not json")["a"] == 1, "JSON tolerant of noise before and after")
         check(not sync.check_instructions_not_matching_rules({"instructions": ["CLAUDE.md"]}, root), "plain instructions entry is fine")
         check(len(sync.check_instructions_not_matching_rules({"instructions": [".claude/rules/*.md"]}, root)) == 1, "rules glob is flagged")
-        pos, neg = choose_probe_files(["CLAUDE.md", "a/CLAUDE.md", "a/x.rs", "Cargo.toml", "docs/dev/p.md", ".claude/rules/r.md"])
-        check(pos == ["a/x.rs"] and neg == ["Cargo.toml", "docs/dev/p.md", ".claude/rules/r.md"], "probe file selection")
+        pos, neg, unprobed = choose_probe_files(["CLAUDE.md", "a/CLAUDE.md", "a/x.rs", "Cargo.toml", "docs/dev/p.md", ".claude/rules/r.md",
+                                                  "m/CLAUDE.md", "m/x.glb", "i/CLAUDE.md", "i/p.png"])
+        check(pos == ["a/x.rs", "i/p.png"] and unprobed == ["m"], "text first, image fallback, binary-only folder reported")
+        check(neg == ["Cargo.toml", "docs/dev/p.md", ".claude/rules/r.md"], "negative probe files")
+        # case-insensitive shadowing names, and build output skipped only at the top level
+        (root / "low").mkdir()
+        (root / "low" / "agents.md").write_text("@CLAUDE.md", encoding="utf-8")
+        (root / "low" / "CLAUDE.md").write_text("x", encoding="utf-8")
+        (root / "target").mkdir()
+        (root / "target" / "AGENTS.md").write_text("top-level build output, skipped", encoding="utf-8")
+        (root / "x" / "target").mkdir(parents=True)
+        (root / "x" / "target" / "AGENTS.md").write_text("nested, a real problem", encoding="utf-8")
+        found = sync.check_no_subfolder_instruction_files(root)
+        check(any("low/agents.md" in p for p in found), "a lowercase agents.md is flagged")
+        check(not any(p.startswith("target/") for p in found) and any(p.startswith("x/target/") for p in found), "target/ skipped only at the top level")
+        check(not sync.glob_matches("*.md", ".claude/rules/x.md") and sync.glob_matches("**/*.md", ".claude/rules/x.md")
+              and sync.glob_matches("{CLAUDE.md,.claude/rules/*.md}", ".claude/rules/x.md")
+              and sync.glob_matches(".claude/rules/**/*.md", ".claude/rules/sub/x.md") and not sync.glob_matches("CLAUDE.md", "x/CLAUDE.md"), "glob semantics")
+        check(len(sync.check_instructions_not_matching_rules({"instructions": ["*.md"]}, root)) == 0, "a root-only *.md does not match rules")
+        check(len(sync.check_instructions_not_matching_rules({"instructions": ["{CLAUDE.md,.claude/rules/*.md}"]}, root)) == 1, "braces are expanded")
+        abs_entry = (root / ".claude" / "rules" / "r.md").as_posix()
+        check(len(sync.check_instructions_not_matching_rules({"instructions": [abs_entry]}, root)) == 1, "an absolute path to a rule is flagged")
+        # a file body that quotes OpenCode's own header must not be mistaken for an interface change; a loaded path with no text is
+        saved = globals()["debug_read"]
+        try:
+            quoted = ("<path>x</path>\n\n<system-reminder>\nInstructions from: " + str(root / "a" / "CLAUDE.md") + "\nbody\n\nInstructions from: X\nquoted\n"
+                      "</system-reminder>")
+            globals()["debug_read"] = lambda *a, **k: {"result": {"output": quoted, "metadata": {"loaded": [str(root / "a" / "CLAUDE.md")]}}}
+            check(probe_one(None, root, "a/x.rs", {}, False)["status"] == "PASS", "extra 'Instructions from:' text in a body is not an error")
+            globals()["debug_read"] = lambda *a, **k: {"result": {"output": "nothing here", "metadata": {"loaded": [str(root / "a" / "CLAUDE.md")]}}}
+            try:
+                probe_one(None, root, "a/x.rs", {}, False)
+                check(False, "a loaded path without text must be an error")
+            except ProbeError:
+                check(True, "loaded path without text raises")
+        finally:
+            globals()["debug_read"] = saved
 
     block = "<path>x</path>\n\n<system-reminder>\nInstructions from: C:\\r\\a\\CLAUDE.md\nbody <!-- b:1 -->\n\n\nInstructions from: C:\\r\\CLAUDE.md\nparent\n\n</system-reminder>"
     data = {"tool": "read", "result": {"output": block, "metadata": {"loaded": ["C:\\r\\a\\CLAUDE.md", "C:\\r\\CLAUDE.md"]}}}
@@ -515,6 +615,7 @@ def selftest() -> int:
     summary = parse_run_events(events)
     check(summary["reads"] == 1 and summary["steps"][0] == 31849 and abs(summary["cost"] - 0.005) < 1e-9 and summary["reply"] == "DONE", "run events parse")
     check(parse_run_events(json.dumps({"type": "error", "error": {"name": "APIError"}}))["errors"], "errors are surfaced")
+    check(parse_run_events(json.dumps({"type": "step_start", "sessionID": "ses_abc", "part": {}}))["sessions"] == {"ses_abc"}, "session ids are collected from events")
     check(parse_run_events("")["reads"] == 0, "no read event is detectable")
     check(is_free_model("openrouter/x/y:free") and is_free_model("opencode/n-free") and is_free_model("m365/gpt-5.5-think-deeper")
           and not is_free_model("openrouter/z-ai/glm-5.3-flash"), "free-model rule")

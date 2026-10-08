@@ -161,11 +161,11 @@ models; the plan had cut a fallback chain, but nothing paid can be reached); the
 and a single version marker; a missing `result.metadata.loaded` key and a `loaded`/text disagreement now exit 2 ("debug
 interface changed") instead of looking like a failing CLAUDE.md; the isolation of the temp `XDG_*` dirs is proven with
 `opencode debug paths` (V15) and the real session list is compared before and after; `--only` accepts backslashes, `./` and
-absolute paths; `--live` notes go to stderr so `--json` stays clean. Review findings deferred to `planning/claude_suggestions.md`:
+absolute paths; `--live` notes go to stderr so `--json` stays clean. A folder that holds only binaries (`assets/shared/models`) is warned about as unprobed (V16); live-run sessions are deleted by their own IDs, not by title; JSON output is parsed tolerantly of noise. Review findings deferred to `planning/claude_suggestions.md`:
 a `--facts` mode that re-tests V2/V4/V13 on a throwaway tree, `--agent`/`--agents` for the pilot, and an audit check that cited
 headings still exist.
 
-_Implementation notes (2026-10-08): the probe resolves the repo from the script's own location or `--dir` instead of exiting when run from a subfolder; it also warns if new sessions appear in the real OpenCode history (V15); `--live` showed a 25.5k-token baseline on the free F-tier model and 31.8k on GLM 5.3 flash (the baseline depends on the model too). U1, U2 and the `--pure` question are settled and are rows V12-V14 of the facts table: plugins do not change the attach set, a nested agent worktree's `CLAUDE.md` attaches like any folder file, and reading a sibling worktree's file from the primary checkout attaches that worktree's folder files and its root `AGENTS.md` (unlike Claude Code)._
+_Implementation notes (2026-10-08): the probe resolves the repo from the script's own location or `--dir` instead of exiting when run from a subfolder; it also warns if new sessions appear in the real OpenCode history (V15); `--live` showed a 25.5k-token baseline on the free F-tier model and 31.8k on GLM 5.3 flash (the baseline depends on the model too). U1, U2 and the `--pure` question are settled and are rows V12-V14 of the facts table: plugins do not change the attach set, a nested agent worktree attaches its root instruction file (in practice its `AGENTS.md`), and reading a sibling worktree's file from the primary checkout attaches that worktree's folder files and its root `AGENTS.md` (unlike Claude Code)._
 
 ## Plan-review (2026-10-08) and what changed
 **system-architect, needs more design work:** (1) the model-free debug read path replaces the model-driven probe (no empty

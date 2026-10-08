@@ -45,7 +45,6 @@ Exit code: 0 if no drift found, 1 if any check reports a problem, 2 on a tool-le
 """
 
 import argparse
-import fnmatch
 import json
 import os
 import re
@@ -64,8 +63,10 @@ CLAUDE_COMMANDS_DIR = REPO_ROOT / ".claude" / "commands"
 
 FILE_REF_RE = re.compile(r"\{file:([^}]+)\}")
 
-# Folders the static scan never enters (OpenCode would not meaningfully load from them, or they are not part of the repo).
-SKIP_DIRS = {".git", "target", "pkg", "node_modules", "__pycache__"}
+# Folder names the static scan never enters anywhere in the tree, plus build output that is only skipped at the repo top level
+# (an `AGENTS.md` under, say, `assets/projects/x/target/` is still a real problem).
+SKIP_DIRS = {".git", "node_modules", "__pycache__"}
+TOP_LEVEL_SKIP = {"target", "pkg"}
 SHADOWING_NAMES = ("AGENTS.md", "CONTEXT.md")
 
 
@@ -170,29 +171,74 @@ def check_no_subfolder_instruction_files(root: Path = REPO_ROOT) -> list[str]:
     problems = []
     for dirpath, dirnames, filenames in os.walk(root):
         rel_dir = Path(dirpath).relative_to(root)
+        at_top = rel_dir == Path(".")
         # `.claude/worktrees` holds ephemeral agent worktrees (git-excluded); never descend into them.
-        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not (rel_dir == Path(".claude") and d == "worktrees")]
-        if rel_dir == Path("."):
+        dirnames[:] = [d for d in dirnames
+                       if d not in SKIP_DIRS and not (at_top and d in TOP_LEVEL_SKIP) and not (rel_dir == Path(".claude") and d == "worktrees")]
+        if at_top:
             continue
+        # File names are matched case-insensitively: OpenCode on Windows attaches `agents.md` as `AGENTS.md` too.
+        upper = {n.upper(): n for n in filenames}
         for name in SHADOWING_NAMES:
-            if name in filenames:
-                beside = " (it shadows the CLAUDE.md beside it)" if "CLAUDE.md" in filenames else ""
+            if name.upper() in upper:
+                actual = upper[name.upper()]
+                beside = " (it shadows the CLAUDE.md beside it)" if "CLAUDE.MD" in upper else ""
                 problems.append(
-                    f"{(rel_dir / name).as_posix()}: a subfolder {name} is attached as literal text, `@CLAUDE.md` is not "
+                    f"{(rel_dir / actual).as_posix()}: a subfolder {name} is attached as literal text, `@CLAUDE.md` is not "
                     f"expanded{beside}; delete it (docs/dev/claude_md_maintenance.md)"
                 )
     return sorted(problems)
 
 
+def expand_braces(pattern: str) -> list[str]:
+    """`{a,b}` alternatives expanded (one level at a time, recursively); a pattern without braces is returned as is."""
+    m = re.search(r"\{([^{}]*)\}", pattern)
+    if not m:
+        return [pattern]
+    out: list[str] = []
+    for alt in m.group(1).split(","):
+        out += expand_braces(pattern[: m.start()] + alt + pattern[m.end():])
+    return out
+
+
+def glob_matches(pattern: str, path: str) -> bool:
+    """Glob semantics close to what OpenCode's `instructions` use: `*` and `?` stay inside one path segment, `**` crosses them."""
+    for pat in expand_braces(pattern):
+        regex, i = "", 0
+        while i < len(pat):
+            if pat.startswith("**/", i):
+                regex += "(?:.*/)?"
+                i += 3
+            elif pat.startswith("**", i):
+                regex += ".*"
+                i += 2
+            elif pat[i] == "*":
+                regex += "[^/]*"
+                i += 1
+            elif pat[i] == "?":
+                regex += "[^/]"
+                i += 1
+            else:
+                regex += re.escape(pat[i])
+                i += 1
+        if re.fullmatch(regex, path):
+            return True
+    return False
+
+
 def check_instructions_not_matching_rules(config: dict, root: Path = REPO_ROOT) -> list[str]:
     """`instructions` globs must not match `.claude/rules/*.md` (OpenCode never reads them; loading would be a mistake)."""
     problems = []
-    rules = sorted(p.relative_to(root).as_posix() for p in (root / ".claude" / "rules").glob("*.md")) if (root / ".claude" / "rules").is_dir() else []
+    rules_dir = root / ".claude" / "rules"
+    rules = sorted(p.relative_to(root).as_posix() for p in rules_dir.rglob("*.md")) if rules_dir.is_dir() else []
     for entry in config.get("instructions", []) or []:
         norm = str(entry).replace("\\", "/")
         while norm.startswith("./"):
             norm = norm[2:]
-        if norm.startswith(".claude/rules") or any(fnmatch.fnmatch(r, norm) for r in rules):
+        root_prefix = root.as_posix().rstrip("/") + "/"
+        if norm.lower().startswith(root_prefix.lower()):  # an absolute path inside this checkout
+            norm = norm[len(root_prefix):]
+        if norm.startswith(".claude/rules") or any(glob_matches(norm, r) for r in rules):
             problems.append(f"instructions entry '{entry}' matches .claude/rules (path-scoped Claude Code stubs; OpenCode must not load them)")
     return problems
 
