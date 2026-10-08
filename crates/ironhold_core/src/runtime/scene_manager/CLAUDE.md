@@ -191,6 +191,24 @@ carried by `PlayerConfig` and forwarded by `assemble_player_config`. The rule an
 `PlayerConfig` and writes it into `PlayerConfig.bound_gamepad`; do not route it through `inputs.gamepad_index`. The full
 rules are in `../CLAUDE.md`.
 
+<!-- b:1121.rule -->
+## Player construction: where a new "every player gets X" goes
+
+A component every player must get is added **once**, in `spawn_player_entity_core` after the model-source match (shared,
+unconditional code for GLB and primitive players), not at each spawn site. A new `PlayerConfig`/`PrefabDef` field must be
+forwarded by `assemble_player_config` at its two call sites (the scene-load collector and the dynamic `Action::Spawn`
+arm; hot join reuses it). The terrain-deferred and hot-join paths are GLB-only (a primitive player there is rejected
+earlier), and `spawn_player_entity` and hot join do not check `SuppressPlayerCameras`. The full site inventory is
+`docs/dev/player-spawn-sites.md`.
+
+<!-- b:1713.rule -->
+## GLB preloading handles must stay alive
+
+`Action::PreloadPrefab(key)` (a prefab key) and `Action::PreloadGlb(key)` (a **model catalog** key, for animation-source
+GLBs with no prefab) load a `Handle<Scene>` into `PreloadedGlbHandles`, avoiding the 1-2 s WASM stall of fetch plus GLTF
+decode on first use. **Those handles must stay alive** to keep the decoded GLB in the asset-server cache between preload
+and first use; the resource is cleared on `Action::LoadScene`. Designer reference: `docs/20_data_formats.md`.
+
 <!-- b:1646 -->
 ## Spawn queue
 
@@ -243,4 +261,5 @@ and both use one shared `depth_scale_factor()` so the curve cannot drift.
   out-of-range `min_scale` error and `--strict` `reference_distance` warning, and `scene_loader.rs`'s matching
   scene-load `warn!`s for designers without the CLI. `CameraModeDef::radius_range()` (`schema/camera.rs`) is the single
   source of truth for camera classification; both checks union `scene.join_prefab_keys` variants and skip player cameras
-  when a `tags: ["flycam"]` entity is present.
+  when a `tags: ["flycam"]` entity is present. The CLI additionally scans project-wide `Action::Spawn` actions for player prefabs and the runtime cannot, so the two
+  camera sets differ on purpose (a known, accepted asymmetry, not a bug; `planning/claude_suggestions.md`).

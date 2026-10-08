@@ -221,3 +221,24 @@ These paragraphs were in the crate `CLAUDE.md` and are kept here verbatim; that 
   character-select variants, and both skip player-camera collection entirely when a
   `tags: ["flycam"]` entity is present (`SuppressPlayerCameras` means no player camera ever
   spawns in that scene — see "Player-construction sites" above).
+
+### b:1695: CLI vs runtime camera-set asymmetry for label depth scale
+<!-- moved-from-claude-md: b:1695 -->
+
+  **The CLI and runtime checks still don't see identical camera sets, in either direction — this
+  is a real, accepted asymmetry, not a bug.** The CLI additionally scans every project-wide
+  `Action::Spawn` action for a player-tagged prefab, since a player is frequently spawned
+  dynamically rather than scene-placed (`3rd_person_game_demo`'s own player, the original
+  motivating example, is spawned entirely via `state_machine.ron`'s entry_actions) — the runtime
+  `warn!` has no equivalent, since it only ever sees `player_configs`/`join_prefab_keys` already
+  resolvable at the moment `spawn_scene_v2` runs. Two different failure shapes follow from this,
+  not one: **(a)** a scene whose only players are dynamically spawned (like
+  `3rd_person_game_demo`) gets zero reachable cameras at scene-load time, so the runtime check
+  skips entirely — only `ironhold_cli validate --strict`'s wider action-scan catches a bad
+  `reference_distance` there. **(b)** a scene mixing a scene-placed player with a separately,
+  more-widely-ranged dynamically-spawned one could in principle have the runtime's narrower
+  (scene-placed-only) band warn on a `reference_distance` that the CLI's wider (unioned) band
+  accepts — i.e. `validate --strict` clean, console warns anyway. No shipped project currently has
+  shape (b); shape (a) is exactly `3rd_person_game_demo`. Logged as a known, accepted scope
+  boundary in `planning/claude_suggestions.md` rather than threading `LabelDepthScaleDef` through
+  `spawn_player_entity_core`'s three call sites for one diagnostic warning.

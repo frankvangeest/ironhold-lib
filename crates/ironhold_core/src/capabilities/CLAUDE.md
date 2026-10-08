@@ -88,6 +88,16 @@ The shared `ActiveCameraMode::Party` camera (`spawn_party_orbit_camera`, also th
 carry `all_ring_layers()` when `own_viewport_only` is true; with implicit layer 0 only it renders **zero** rings the
 moment any ring restricts itself to a non-zero layer. Treat this as an invariant if the mechanism is extended.
 
+<!-- b:352 -->
+## Target-indicator ring colour
+
+In a single-player scene a ring's colour comes from three-tier precedence: `PrefabDef.indicator_color`, then
+`indicator_category` looked up in `TargetIndicatorDef.named_colors`, then `TargetIndicatorDef.color`. **With 2+ players
+every ring uses the fixed `PLAYER_LABEL_COLORS` palette instead and the per-target precedence is overridden entirely.**
+Two players on the same entity render two coincident rings, one per player colour, with **no deduplication: deliberate**
+(a per-target colour could not show whose ring is whose). `target_indicator_system` runs in `Update` and keeps one
+`TrackingTarget { target, owner }` per player.
+
 <!-- b:433 -->
 `pipeline_warmup_system`'s 4-frame `NoFrustumCulling` pass does not touch `RenderLayers`: a new `RenderLayers` consumer
 must not assume warmup covers layer-restricted entities.
@@ -105,11 +115,13 @@ system, so there is no stale frame across a `dynamic` split's merge/split transi
 ## Per-rank duplication of world-space widgets
 
 `world_label_screen_pos_system` (`lib.rs`) picks, per `WorldLabel`, the `WorldLabelRank`-th active camera whose
-`logical_viewport_rect()` contains the projected point. Scene `world_labels:` spawn `MAX_SPLIT_PLAYERS` (4) rank
-siblings unconditionally; `stat_label`, `Ascii`/`Pixel`/`Icon`/`Textured` `world_stat_bar`, `ShowDamagePopup` and
-`ShowFloatingText` duplicate per rank **only when the scene is split-screen** (they are rewritten every frame, so
-unconditional duplication is pure overhead). Nameplate anchors stay single-instance (a nameplate shows in at most one split viewport).
-A new world-space widget spawn site must follow the same rank pattern.
+`logical_viewport_rect()` contains the projected point. Scene `world_labels:` and per-entity `label:` spawn
+`MAX_SPLIT_PLAYERS` (4) rank siblings unconditionally. `stat_label`, the `Ascii`/`Pixel`/`Icon`/`Textured`
+`world_stat_bar` styles and `ShowDamagePopup`/`ShowFloatingText` spawn one `WorldLabelRank` sibling per split slot **only
+when the scene is split-screen** (`ActiveSplitScreen`/`DynamicSplitConfig` set) and exactly one rank-less entity
+otherwise (they are rewritten every frame, so unconditional duplication is pure overhead). **Nameplate anchors are the
+only `WorldLabel` widget that stays single-instance** (implicit rank 0: visible in at most one split viewport). A new
+world-space widget spawn site must follow the same rank pattern.
 
 <!-- b:1476 -->
 `click_select_system` is viewport-aware: it filters active cameras to those whose `logical_viewport_rect()` contains

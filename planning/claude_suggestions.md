@@ -594,3 +594,10 @@
   `docs/00_overview.md`'s "Getting started in 5 minutes" assumes a repository checkout plus Python (`cp -r assets/projects/...`, `serve.py`), while the hosted Pages build can only play shipped projects; a designer with only `assets/` has no documented way to view their own project.
 - **Review-agent memories still point at the old docs paths** _(observed at `ba5ea11` 2026-10-07, docs_audience_split architect review)_
   Several `alignment-reviewer` and `ux-gamedesigner-reviewer` memory entries (e.g. `validate_cross_file_blind_spots.md`) tell reviewers to add checks to `docs/60_contributing.md` "Checks performed", which now lives in `docs/15_authoring_tools.md`; fix by hand on `integration` after the Phase A merge.
+- **Two code doc comments still say damage popups are single-instance in split-screen** _(observed at `0c9bd8e` 2026-10-08, core CLAUDE.md split review)_
+  `runtime/scene_manager/mod.rs:452-454` ("Only damage popups' and nameplates' anchors remain single-instance", contradicting its own lines 446-450) and `lib.rs:608-609` (`WorldLabel` with no rank "(nameplate anchors, damage popups) always binds to rank 0") predate per_player_split_screen_targeting Phase 2; only nameplate anchors are single-instance (`action_executor.rs:684-725`). Comment-only fix, to be done with the Phase 3 `// load-bearing` edits.
+- **`docs/20_data_formats.md` contradicts itself on stat-bar depth scaling** _(observed at `0c9bd8e` 2026-10-08, UX review)_
+  The note at about line 4565 says Pixel/Icon/Textured bars never depth-scale while about line 4546 says Textured bars now do; one of them is stale.
+- **`docs/20_data_formats.md` cites developer-only files a designer cannot open** _(observed at `0c9bd8e` 2026-10-08, UX review)_
+  About line 4455 cites `planning/features/player_stat_widgets.md` and about line 3317 cites `crates/ironhold_core/src/CLAUDE.md` (the latter is also a live citation the split must repoint, map section 4).
+

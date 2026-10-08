@@ -328,6 +328,8 @@ def check_dest(root, doc, include_parent, strict, problems):
             continue
         for sub, i in zip(subs, ids):
             d0 = sub_dest(b, sub)
+            if d0 in ('DOC', 'CUT'):
+                continue  # lives in a docs page or is cut: nothing to anchor
             if d0 == 'PARENT' and not include_parent:
                 continue  # stays in the parent; destinations-only mode does not scan it
             exp = expected_files(b, sub)

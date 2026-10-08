@@ -71,3 +71,28 @@ Recommendation: ship v1 with RON-only preloading. Add asset warming as a follow-
 - Given `Action::PreloadScene("scenes/zone2.scene.ron")` fires while in zone 1, the event `scene.preloaded:zone2` fires when zone 2's assets are fully cached.
 - Given `scene.preloaded:zone2` has fired, when `Action::LoadScene("scenes/zone2.scene.ron")` fires, the scene transitions without entering `LoadingScene` state.
 - Given no prior preload, `LoadScene` behaves exactly as before (no regression).
+
+## Notes moved from `crates/ironhold_core/src/CLAUDE.md` (2026-10-08, core CLAUDE.md split)
+
+These paragraphs were in the crate `CLAUDE.md` and are kept here verbatim; that file now carries only the condensed current-state rule. Wording such as "above"/"below" refers to the old file.
+
+### b:1713: GLB preloading `PreloadPrefab`/`PreloadGlb`
+<!-- moved-from-claude-md: b:1713 -->
+
+### GLB preloading
+`Action::PreloadPrefab(key)` takes a prefab key, resolves it to a model path, calls `asset_server.load::<Scene>()`, and stores the `Handle<Scene>` in `PreloadedGlbHandles`. This prevents the ~1–2 s WASM stall caused by HTTP fetch + GLTF decode on first spawn of an uncached GLB.
+
+`Action::PreloadGlb(key)` is the model-catalog equivalent — it takes a **model catalog key** (from `assets.ron` `models:`), looks up the path, and loads it as `Handle<Scene>`. Use this for animation-source GLBs that have no prefab entry (e.g. `"anim_magic"`, `"anim_zombie"`). Loading as `Scene` triggers the full GLTF loader, which also decodes all animation clips and stores them as sub-assets — so the `Handle<Gltf>` the animation system needs is warm in the cache. The handle is stored in `PreloadedGlbHandles` alongside `PreloadPrefab` handles.
+
+**Usage pattern:** fire both in `entry_actions` of the playing state (before the player can interact) so all GLBs are decoded during the natural loading pause.
+
+```ron
+// logic/state_machine.ron — playing state entry_actions
+PreloadGlb("anim_locomotion"),
+PreloadGlb("anim_melee"),
+PreloadGlb("anim_magic"),
+PreloadGlb("anim_zombie"),
+PreloadPrefab("enemy_orc_melee"),
+```
+
+`PreloadedGlbHandles` is cleared on `Action::LoadScene` alongside `PreloadedScenes`. The handles must stay alive (not be dropped) to keep the decoded GLB in the asset server cache between the preload and the first use.

@@ -529,14 +529,14 @@
    "title": "`Targetable` test fixtures must register in `SpawnRegistry`",
    "type": "GOTCHA",
    "safety": "N",
-   "dest": "TESTS",
+   "dest": "CUT",
    "also": [],
    "dest_raw": "tests/CLAUDE.md (already there: `tests/CLAUDE.md:11` has the same rule → CUT here after verifying)",
    "governs": [],
    "subs": [],
    "text_sha1": "43b53d5d0a0fa742d35dd173c359fed6273bc502",
-   "review": true,
-   "notes": "duplicate",
+   "review": false,
+   "notes": "verified duplicate of crates/ironhold_core/tests/CLAUDE.md:11 (same rule plus the ordering reason), 2026-10-08",
    "orig_lines": [
     [
      315,
@@ -582,12 +582,14 @@
    "type": "REF+RAT",
    "safety": "N",
    "dest": "TOPIC:split-screen-cameras-and-widgets",
-   "also": [],
+   "also": [
+    "CAP"
+   ],
    "dest_raw": "TOPIC:split-screen-cameras-and-widgets (keep the \"no dedup, deliberate\" decision, 1-2 lines, in CAP)",
    "governs": [],
    "subs": [],
    "text_sha1": "019331c6a4a71f0d40b640a544aef1927aed5a71",
-   "review": true,
+   "review": false,
    "notes": "rest derivable",
    "orig_lines": [
     [
@@ -639,7 +641,7 @@
    "governs": [],
    "subs": [],
    "text_sha1": "8bdcfb0ab706a9d2c963770ae3a12a88524a22ce",
-   "review": true,
+   "review": false,
    "notes": "\"keyed on `player_index`, not loop order\" is a GOTCHA",
    "orig_lines": [
     [
@@ -931,7 +933,7 @@
    "governs": [],
    "subs": [],
    "text_sha1": "56d57f8ab39e8873e20577b9215d90b0e3dc81fa",
-   "review": true,
+   "review": false,
    "notes": "mostly history",
    "orig_lines": [
     [
@@ -985,7 +987,7 @@
    "governs": [],
    "subs": [],
    "text_sha1": "6c4a8e32d587bcc7e14fbbd718a9c3bfc3797fdd",
-   "review": true,
+   "review": false,
    "notes": "history of a retrofit; the one current-state line moves into TOPIC:lootable-corpse",
    "orig_lines": [
     [
@@ -1108,21 +1110,19 @@
    ],
    "title": "Respawn rules must be in `global_on`, not state-scoped `on:`",
    "type": "RULE+RAT",
-   "safety": "Y",
+   "safety": "N",
    "dest": "TOPIC:lootable-corpse",
    "also": [
     "PARENT"
    ],
    "dest_raw": "TOPIC:lootable-corpse (+ one runtime/ line: `tick_delayed_events_system` is pause-ungated)",
-   "governs": [
-    "crates/ironhold_core/src/**"
-   ],
+   "governs": [],
    "subs": [
     "rule",
     "ref"
    ],
    "text_sha1": "7df8c2c057b3749055d270d445086dc1ece560e5",
-   "review": true,
+   "review": false,
    "notes": "continues 563-573; keep contiguous",
    "orig_lines": [
     [
@@ -1497,7 +1497,7 @@
    "governs": [],
    "subs": [],
    "text_sha1": "84e601a2351209e6f8d41b50c7900daf81f2414b",
-   "review": true,
+   "review": false,
    "notes": "",
    "orig_lines": [
     [
@@ -1553,7 +1553,7 @@
    ],
    "subs": [],
    "text_sha1": "4b7f4b6f154cd585d056ab717c0a8087418840c0",
-   "review": true,
+   "review": false,
    "notes": "\"two separate mitigations\" intro leads into 750-764 — move 734-764 together",
    "orig_lines": [
     [
@@ -1994,7 +1994,7 @@
    "governs": [],
    "subs": [],
    "text_sha1": "ee090b9b78d44120ec5f66f538eb58a133150fbb",
-   "review": true,
+   "review": false,
    "notes": "300-2000 ms WASM stall rationale not derivable",
    "orig_lines": [
     [
@@ -2211,14 +2211,17 @@
     "ref"
    ],
    "text_sha1": "7c609b8d7b57e81b26b43eb67f55efe2aee8c4cf",
-   "review": true,
+   "review": false,
    "notes": "stale \"line 560\"; heading sits under \"Despawning\"; widely cited as \"Player-construction sites\" / \"four player-construction sites\"",
    "orig_lines": [
     [
      1121,
      1200
     ]
-   ]
+   ],
+   "sub_dest": {
+    "rule": "SM"
+   }
   },
   {
    "id": "b:1201",
@@ -2829,8 +2832,8 @@
    "governs": [],
    "subs": [],
    "text_sha1": "1499ba85f008218e59765e39b22809f25117e850",
-   "review": true,
-   "notes": "someone may \"fix\" the asymmetry",
+   "review": false,
+   "notes": "accepted CLI-vs-runtime asymmetry; one sentence kept in scene_manager/CLAUDE.md (b:1668.ref); verbatim in label_depth_scale_validation.md and claude_suggestions.md",
    "orig_lines": [
     [
      1695,
@@ -2849,25 +2852,29 @@
    "title": "GLB preloading `PreloadPrefab`/`PreloadGlb`",
    "type": "REF",
    "safety": "Y",
-   "dest": "DOC",
+   "dest": "SM",
    "also": [],
    "dest_raw": "DOC (WASM load-stall page) + 3-line GOTCHA in SM",
    "governs": [
-    "crates/ironhold_core/src/**"
+    "crates/ironhold_core/src/runtime/scene_manager/**"
    ],
    "subs": [
     "rule",
     "ref"
    ],
    "text_sha1": "6ba0871eed1d495ac0550ce9863d95991153090c",
-   "review": true,
-   "notes": "RON snippet derivable from the example project",
+   "review": false,
+   "notes": "designer reference already in docs/20 (PreloadGlb/PreloadPrefab rows); verbatim in scene_preloading.md",
    "orig_lines": [
     [
      1713,
      1729
     ]
-   ]
+   ],
+   "sub_dest": {
+    "rule": "SM",
+    "ref": "DOC"
+   }
   },
   {
    "id": "b:1731",

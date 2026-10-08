@@ -91,3 +91,18 @@ python tools/avif2png/convert.py assets/shared/models/avif/
 ## Shader authoring
 
 See [`docs/25_custom_shaders.md`](../docs/25_custom_shaders.md) for the WGSL binding contract, uniform packing rules, and step-by-step authoring guide.
+
+<!-- b:711 -->
+## WGSL shaders
+
+All shaders are authored in WGSL (native to WebGPU; identical on desktop wgpu and in the browser). Shared shaders go in
+`assets/shared/shaders/` as `custom_*.wgsl`; project shaders go in `assets/projects/{name}/shaders/`.
+
+- **Every custom fragment shader must declare the full `CustomMaterial` binding contract** (`docs/25_custom_shaders.md`);
+  a missing binding is a WebGPU validation error, not a panic.
+- **Do not add LUT-dependent shaders:** `TonyMcMapface` and `BlenderFilmic` tonemapping are excluded because they need a
+  LUT texture.
+- `CustomMaterial` overrides the **fragment shader only**; a vertex override is planned but not implemented, so do not
+  swap the vertex shader through `specialize()`.
+- **Always test WGSL changes in a web build** (`python test_web.py`): WebGPU validates binding interfaces strictly and
+  native wgpu is more permissive, so native will not catch every error.
