@@ -2,6 +2,8 @@
 
 - [Docs audience split](project_docs_audience_split.md) — Phase A shipped; code-span cross-refs dead on GitHub; Getting-started assumes repo clone; no prebuilt CLI
 
+- [opencode probe plan-review](project_opencode_probe_plan_review.md) — dev-only doc must enter docs/README via dev rows only; paid model in default fallback list; nvs recipe
+
 - [ocean demo plan-review](project_ocean_demo_plan_review.md) — compass vs rotation_euler_deg clash; SetParam keys must mirror RON paths; boat input vs InputMap; readout precision
 
 - [lock-on plan-review](project_lock_on_plan_review.md) — no per-player target-clear input (gamepad can't unlock); player-in-frame unguaranteed; camera_modes prefabs default Tab
