@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit for the split of crates/ironhold_core/src/CLAUDE.md (planning/features/core_claude_md_split.md).
+"""Audit for the split of crates/ironhold_core/src/CLAUDE.md (planning/features/done/core_claude_md_split.md).
 
 Run from the repo root. Exit 0 = no problems, 1 = problems, 2 = tool error.
 

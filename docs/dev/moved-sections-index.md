@@ -1,6 +1,6 @@
 # Moved sections: where the old `crates/ironhold_core/src/CLAUDE.md` went
 
-On 2026-10-08 the 1,752-line `crates/ironhold_core/src/CLAUDE.md` was split by directory and topic (`planning/features/core_claude_md_split.md`). Old plans, agent memory and commit messages cite its sections by name or line number; this page keeps them resolvable.
+On 2026-10-08 the 1,752-line `crates/ironhold_core/src/CLAUDE.md` was split by directory and topic (`planning/features/done/core_claude_md_split.md`). Old plans, agent memory and commit messages cite its sections by name or line number; this page keeps them resolvable.
 
 - **By line number (old plans):** use the second table. Its line numbers are those of `git show ba4088d:crates/ironhold_core/src/CLAUDE.md`, the file as it stood when those plans were written; block ids (`b:N`) are named after the first of those lines.
 - **By section name:** use the first table (headings and line numbers of `git show d222d91:crates/ironhold_core/src/CLAUDE.md`, the file after the small drift fixes).
