@@ -29,6 +29,10 @@ gamepad entity for the player's lifetime. Gamepad and keyboard are read additive
   to resolve to: `FixedUpdate` can tick zero times in a frame, so on the frame a pad first appears
   `gamepad_bind_system` may not have run and the pad would look unclaimed for one frame.
 
+Consumers of the pad (`input_translator_system` here, and the gamepad readers in `capabilities/`) take `Option<&BoundGamepad>`,
+**never a required `&BoundGamepad`** (a required one silently drops any test-built player missing it from the whole query tuple,
+not just gamepad logic), and look the pad up with `bound.and_then(|b| b.0).and_then(|e| gamepad_query.get(e).ok())`.
+
 <!-- b:1606.rule -->
 ## Gamepad-triggered hot join (`input.rs`)
 

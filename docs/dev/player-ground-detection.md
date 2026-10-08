@@ -8,7 +8,7 @@ How `capabilities/player.rs` decides what counts as ground, when a jump is allow
 
 <!-- b:779 -->
 
-### Jump reset cannot rely on a ground-check edge (`planning/features/uphill_jump_lock.md`)
+### Jump reset cannot rely on a ground-check edge (`planning/features/done/uphill_jump_lock.md`)
 
 `player_movement_system`'s ground detection (`capabilities/player.rs`) is a fixed-reach downward
 shape-cast (`collider_radius + ground_cast_length`), re-evaluated fresh every tick — **it cannot be
@@ -124,7 +124,7 @@ earlier on this page — a debounce that smooths one consumer's *feel* must neve
 
 <!-- b:883 -->
 
-### Coyote time — debounced grounding for uneven terrain (`planning/features/uphill_jump_lock.md`)
+### Coyote time — debounced grounding for uneven terrain (`planning/features/done/uphill_jump_lock.md`)
 
 Playtesting `3rd_person_game_demo` surfaced a third, distinct problem from the two earlier ones: walking
 over ordinary uneven terrain (bumps, small ledges, barely-there slope) made the character flicker

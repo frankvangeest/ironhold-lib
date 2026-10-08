@@ -40,7 +40,8 @@ access.
 ## `{target}` substitution
 
 `{target}` in any action field (key, entity, event, id, spawn_point) is replaced by the current `CurrentTarget` spawn
-id, in every interpreter system and in the action bar's own intent handling, before the action reaches `ActionQueue`. If
+id in the interpreter systems before the action reaches `ActionQueue`; the action bar instead rewrites it with the **acting
+player's own** `PlayerTarget` (per-player targeting, `action_bar.rs`). If
 `CurrentTarget` is `None` the literal `"{target}"` stays and the action usually no-ops. The substitution sites are listed
 in `../../schema/CLAUDE.md` (four sites; a new field must be handled at all of them).
 
@@ -198,7 +199,7 @@ A component every player must get is added **once**, in `spawn_player_entity_cor
 unconditional code for GLB and primitive players), not at each spawn site. A new `PlayerConfig`/`PrefabDef` field must be
 forwarded by `assemble_player_config` at its two call sites (the scene-load collector and the dynamic `Action::Spawn`
 arm; hot join reuses it). The terrain-deferred and hot-join paths are GLB-only (a primitive player there is rejected
-earlier), and `spawn_player_entity` and hot join do not check `SuppressPlayerCameras`. The full site inventory is
+earlier; those sites pass `PrimitivePlayerCtx: None` and would panic if the rejection were removed), and `spawn_player_entity` and hot join do not check `SuppressPlayerCameras`. The full site inventory is
 `docs/dev/player-spawn-sites.md`.
 
 <!-- b:1713.rule -->
@@ -208,6 +209,52 @@ earlier), and `spawn_player_entity` and hot join do not check `SuppressPlayerCam
 GLBs with no prefab) load a `Handle<Scene>` into `PreloadedGlbHandles`, avoiding the 1-2 s WASM stall of fetch plus GLTF
 decode on first use. **Those handles must stay alive** to keep the decoded GLB in the asset-server cache between preload
 and first use; the resource is cleared on `Action::LoadScene`. Designer reference: `docs/20_data_formats.md`.
+
+<!-- b:206 -->
+## Action-bar duplicate-key detectors
+
+The cross-bar duplicate-key warning (`scene_loader.rs`) and `validate`'s `cross_bar_duplicate_key` decide "same bar or a different
+bar" by **positional index, never `ActionBar.id`** (nothing enforces `id` uniqueness, so comparing ids would misclassify a real
+cross-bar collision).
+
+<!-- b:256 -->
+The same-player gamepad duplicate check (`warn_same_player_gamepad_duplicate_slots` in `scene_loader.rs` and `validate`) keys by
+`(owner_player.unwrap_or(0), GamepadButton)`: `None` and `Some(0)` both mean the primary player, and two different players
+sharing a button name are correctly not flagged.
+
+<!-- b:1261 -->
+## Local co-op camera rules (`entity_spawner.rs`)
+
+**Never spawn one `ActiveCameraMode::Orbit` per player without split viewports**: the cameras would fight over the full-window
+viewport with no RON-visible symptom (with neither `party` nor `split` set, warn and fall back to one Orbit camera for the first
+player). `ActiveSplitSlotCount` is written explicitly (`spawn_players_and_camera` at scene load, and +1 in
+`drain_spawn_queue_system`'s hot-join branch) and **never derived live** from a camera query, which would reflow the grid on
+mid-transition entity churn. `dynamic_split_screen_system` only toggles `Camera.is_active` and never spawns or despawns cameras.
+
+<!-- b:383 -->
+`ring_layer_for_player(player_index)` and `all_ring_layers()` (`capabilities/camera.rs`) are the sole owners of the `RenderLayers`
+arithmetic (`1 + player_index % MAX_SPLIT_PLAYERS`): every insertion site (four in `entity_spawner.rs`) calls one of them and never
+re-derives it, and the components are inserted only when `own_viewport_only` is true.
+
+<!-- b:1383 -->
+## Camera-mode switching
+
+`Action::SetCameraMode` (`action_executor.rs`) resolves `mode: "default"` against `AuthoredCameraMode` and every other mode
+against `LoadedCameraModes` (inserted in `scene_loader.rs`'s Replace branch only); `entity_spawner.rs::apply_camera_mode` is its
+switch-time analog. The blend ordering and `CameraModeOverride` rules are in `../../capabilities/CLAUDE.md`.
+
+<!-- b:1374 -->
+`Action::CameraShake`'s query (`SceneStateParams.orbit_cameras`, `mod.rs`) must stay `Or<(With<OrbitCameraMode>,
+With<PartyCameraMode>)>` and must **exclude** `Fixed`/`FirstPerson`/`Flycam`, so a flycam scene keeps its explicit "no orbit
+camera" `warn!`.
+
+<!-- b:1406 -->
+## World-space widget spawn sites follow the `WorldLabelRank` pattern
+
+A new world-space widget spawn site (the `world_labels:`/`label:`/stat loops in `scene_loader.rs`,
+`drain_dynamic_stat_ui_system`, `ShowDamagePopup`/`ShowFloatingText` in `action_executor.rs`) must duplicate per `WorldLabelRank`:
+`world_labels:` and `label:` unconditionally, the others only in split-screen scenes; nameplate anchors stay single-instance.
+Details in `../../capabilities/CLAUDE.md`.
 
 <!-- b:1646 -->
 ## Spawn queue

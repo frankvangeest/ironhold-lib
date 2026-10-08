@@ -625,8 +625,8 @@ fn depth_scale_factor_from(ref_dist: f32, min_floor: f32, dist: f32) -> f32 {
 /// simultaneously visible in 2+ active viewports (e.g. two split-screen players near the same
 /// portal), only that one camera's viewport shows it. Scene-level `world_labels:` (portal
 /// room-name labels) and per-entity `label:` always spawn one rank-0..N sibling per possible
-/// split slot (`scene_loader.rs`); `stat_label` and both `world_stat_bar` styles (`Ascii` and
-/// `Pixel`, the latter since `pixel_world_stat_bar_split_screen_duplication.md`) spawn the same
+/// split slot (`scene_loader.rs`); `stat_label`, all four `world_stat_bar` styles (`Ascii`, `Pixel`, `Icon`,
+/// `Textured`) and `ShowDamagePopup`/`ShowFloatingText` spawn the same
 /// ranked siblings but only in split-screen scenes (Phase 4,
 /// `split_screen_camera_followups.md`) — either way, each active viewport that can see the
 /// point gets its own visible copy — see

@@ -219,7 +219,7 @@ The claim that the animation side needs no change holds: `jump_exit` comes only 
   - Sequencing "this first" is right: smaller, no new component, and it fixes the state the step plan reads. The wrapper-rename note about the step plan's "`ground_cast` unchanged" criterion is correct.
 - **N4.** `jump_liftoff_y == None` → `Full` is the opposite convention from the reset's `unwrap_or(f32::INFINITY)` (`:557`). It is unreachable today because the only writers are `:560`/`:682`/spawn `None` (`entity_spawner.rs:1113`). Add a `debug_assert!` or a one-line comment so a future teleport/respawn writer doesn't silently pick a different meaning.
 - **N5. Docs to update beyond what the plan lists.**
-  - `src/CLAUDE.md` describes the pogo cadence as about one re-jump per grace window (~0.26 s) and has the "landing on a nearby raised platform … un-rejumpable for the remainder of the window" consequence. Both change, since resets now come at re-contact.
+  - `docs/dev/player-ground-detection.md` describes the pogo cadence as about one re-jump per grace window (~0.26 s) and has the "landing on a nearby raised platform … un-rejumpable for the remainder of the window" consequence. Both change, since resets now come at re-contact.
   - The `LocomotionState.is_grounded` doc, as the plan already notes.
   - Add the apex re-arm (B3) to the new paragraph.
 - **N6. Rejected alternatives.**

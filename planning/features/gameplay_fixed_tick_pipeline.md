@@ -68,7 +68,7 @@ Fixed-timestep v1 moved physics-adjacent systems only. Verified at `a91a080`:
    reproduced** - Phase 2's first task is a 0-tick/2-tick regression test that confirms it.
 5. **`Changed<Interaction>` is a partial latch.** `button_system`/`icon_button_click_system`
    (`lib.rs:501-526`, `:545-560`) and the action-bar click edge (`Ref<Interaction>::is_changed`,
-   `src/CLAUDE.md` "Mouse-click action-bar slots") compare against the system's *own* last run. In a
+   `capabilities/CLAUDE.md` "Mouse-click action-bar slots") compare against the system's *own* last run. In a
    fixed-rate system that spans several frames, so a press + release between two ticks collapses to the final
    `None` and the click is lost. Click capture must stay a once-per-frame system.
 6. **Tests already pin exactly one tick per `app.update()`**: `tests/support/mod.rs:79` sets

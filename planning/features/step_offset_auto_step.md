@@ -110,7 +110,7 @@ for a face-touching capsule), so the next tick's forward velocity carries the bo
 
 ### Interactions (what must not regress)
 - **Coyote / `is_grounded` / `jumps_used` / `jump_liftoff_y` / `jump_air_grace`:** never read-modified. The gate uses `raw_grounded` (not the
-  coyote-buffered value, per `src/CLAUDE.md`) and `jumps_used == 0`, which excludes the whole jump and its reset window, so a mid-ascent
+  coyote-buffered value, per `capabilities/CLAUDE.md` "Ground detection hard rules") and `jumps_used == 0`, which excludes the whole jump and its reset window, so a mid-ascent
   "grounded" reading near a platform (the Bugs entry) can never trigger a lift.
 - **Wall friction toggle:** untouched; lift runs only while moving, when `Friction` is already `0.0` (Finding 5).
 - **`mark_dirty_trees`/stale `GlobalTransform`:** the lift happens last in the loop; nothing later in the tick reads this entity's `GlobalTransform`

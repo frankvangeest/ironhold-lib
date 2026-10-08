@@ -380,11 +380,17 @@
    ],
    "title": "Per-player action bars Phase 2: `owner_player`, `owns_slot`, cost pools, duplicate-key detectors",
    "type": "REF+RAT",
-   "safety": "N",
+   "safety": "Y",
    "dest": "TOPIC:action-bar-input-routing",
-   "also": [],
+   "also": [
+    "CAP",
+    "SM"
+   ],
    "dest_raw": "TOPIC:action-bar-input-routing",
-   "governs": [],
+   "governs": [
+    "crates/ironhold_core/src/capabilities/action_bar.rs",
+    "crates/ironhold_core/src/runtime/scene_manager/scene_loader.rs"
+   ],
    "subs": [],
    "text_sha1": "b6fb82ce9e0b94b9432d70cc7fc6ccd347e9e5d3",
    "review": false,
@@ -437,11 +443,15 @@
    ],
    "title": "Gamepad-routed action-bar slots (`gamepad_key`, `BoundGamepad`)",
    "type": "REF/RAT",
-   "safety": "N",
+   "safety": "Y",
    "dest": "TOPIC:action-bar-input-routing",
-   "also": [],
+   "also": [
+    "SM"
+   ],
    "dest_raw": "TOPIC:action-bar-input-routing",
-   "governs": [],
+   "governs": [
+    "crates/ironhold_core/src/runtime/scene_manager/scene_loader.rs"
+   ],
    "subs": [],
    "text_sha1": "bd70fb2b0766b7e9a9caedb2c12f829f2b9778c7",
    "review": false,
@@ -608,11 +618,15 @@
    ],
    "title": "Per-viewport ring visibility: RenderLayers intro",
    "type": "REF",
-   "safety": "N",
+   "safety": "Y",
    "dest": "TOPIC:split-screen-cameras-and-widgets",
-   "also": [],
+   "also": [
+    "SM"
+   ],
    "dest_raw": "TOPIC:split-screen-ring-visibility",
-   "governs": [],
+   "governs": [
+    "crates/ironhold_core/src/runtime/scene_manager/entity_spawner.rs"
+   ],
    "subs": [],
    "text_sha1": "f69df7cffff5cbc4ca4fde36bd93357a78d7e977",
    "review": false,
@@ -1678,11 +1692,15 @@
    ],
    "title": "Jump reset can't rely on a ground-check edge; slope walkability gate",
    "type": "RAT/INCIDENT",
-   "safety": "N",
+   "safety": "Y",
    "dest": "TOPIC:player-ground-detection",
-   "also": [],
+   "also": [
+    "CAP"
+   ],
    "dest_raw": "TOPIC:player-ground-detection",
-   "governs": [],
+   "governs": [
+    "crates/ironhold_core/src/capabilities/player.rs"
+   ],
    "subs": [],
    "text_sha1": "b01362e3da6ce1b45879d5c95c7c1f9da17726cd",
    "review": false,
@@ -1704,11 +1722,15 @@
    ],
    "title": "`jumps_used` reset: grace ticks, velocity, liftoff height; dual-clock history",
    "type": "REF+RAT",
-   "safety": "N",
+   "safety": "Y",
    "dest": "TOPIC:player-ground-detection",
-   "also": [],
+   "also": [
+    "CAP"
+   ],
    "dest_raw": "TOPIC:player-ground-detection",
-   "governs": [],
+   "governs": [
+    "crates/ironhold_core/src/capabilities/player.rs"
+   ],
    "subs": [],
    "text_sha1": "c3949fa65d62f88e88439b5d1236d398397e62e2",
    "review": false,
@@ -1851,11 +1873,15 @@
    ],
    "title": "`ground_cast` re-query loop, \"underfoot\", `is_walkable_contact`, known gap",
    "type": "REF+RAT",
-   "safety": "N",
+   "safety": "Y",
    "dest": "TOPIC:player-ground-detection",
-   "also": [],
+   "also": [
+    "CAP"
+   ],
    "dest_raw": "TOPIC:player-ground-detection",
-   "governs": [],
+   "governs": [
+    "crates/ironhold_core/src/capabilities/player.rs"
+   ],
    "subs": [],
    "text_sha1": "f364f3b8a3e2d97fa9aa3acd5044623f3bbc07e0",
    "review": false,
@@ -2319,11 +2345,15 @@
    ],
    "title": "Local co-op: Party, split, Grid, dynamic split, fallback",
    "type": "REF",
-   "safety": "N",
+   "safety": "Y",
    "dest": "TOPIC:split-screen-cameras-and-widgets",
-   "also": [],
+   "also": [
+    "SM"
+   ],
    "dest_raw": "TOPIC:split-screen-cameras-and-widgets",
-   "governs": [],
+   "governs": [
+    "crates/ironhold_core/src/runtime/scene_manager/entity_spawner.rs"
+   ],
    "subs": [],
    "text_sha1": "9ac6010ff2aa8575e9ce2f8c70a8b9c3650bda42",
    "review": false,
@@ -2399,7 +2429,9 @@
    "type": "GOTCHA",
    "safety": "N",
    "dest": "CAP",
-   "also": [],
+   "also": [
+    "SM"
+   ],
    "dest_raw": "CAP",
    "governs": [],
    "subs": [],
@@ -2425,10 +2457,14 @@
    "type": "GOTCHA",
    "safety": "Y",
    "dest": "CAP",
-   "also": [],
+   "also": [
+    "SM"
+   ],
    "dest_raw": "CAP",
    "governs": [
-    "crates/ironhold_core/src/capabilities/camera.rs"
+    "crates/ironhold_core/src/capabilities/camera.rs",
+    "crates/ironhold_core/src/runtime/scene_manager/action_executor.rs",
+    "crates/ironhold_core/src/runtime/scene_manager/entity_spawner.rs"
    ],
    "subs": [],
    "text_sha1": "a469fb6930aedbbd1592e9e82056149fe9e52fbb",
@@ -2451,13 +2487,19 @@
    ],
    "title": "`WorldLabelRank` viewport-aware labels; per-rank widget duplication",
    "type": "REF+GOTCHA",
-   "safety": "N",
+   "safety": "Y",
    "dest": "TOPIC:split-screen-cameras-and-widgets",
    "also": [
-    "CAP"
+    "CAP",
+    "SM",
+    "PARENT"
    ],
    "dest_raw": "same TOPIC",
-   "governs": [],
+   "governs": [
+    "crates/ironhold_core/src/lib.rs",
+    "crates/ironhold_core/src/runtime/scene_manager/scene_loader.rs",
+    "crates/ironhold_core/src/runtime/scene_manager/action_executor.rs"
+   ],
    "subs": [],
    "text_sha1": "f20509252dcad59d8be27077448aed8c1d72834a",
    "review": false,

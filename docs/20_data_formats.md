@@ -2792,7 +2792,7 @@ For local co-op scenes with two or more `"player"`-tagged entities, `camera.spli
 
 > **Every player's own `camera` block matters here — not just the first player's.** With `party`, only player 1's `camera` fields (besides `party` itself) are used, because there is only one shared camera. With `split`, each player gets their own real `OrbitCamera` built from their own config, so `offset`, `look_at_offset`, `zoom_speed`, `min_radius`/`max_radius`, `orbit_button`, etc. must be set on **every** player's `camera` block. Only `split` (and `party`) themselves stay first-player-only.
 
-> **Disabling manual mouse camera control.** A single shared mouse would otherwise orbit/zoom every split-screen player's camera identically, which looks wrong. Split-screen scenes should set `orbit_button: "None"` (see the `CameraConfig` table above) and `zoom_speed: 0.0` on **every** player's `camera` block, giving each player a fixed-angle camera at their configured offset with no mouse control — each player can still independently turn their own camera via keyboard (`InputMap.look_left`/etc.), see the "Keyboard camera look" note above.
+> **Disabling manual mouse camera control.** A single shared mouse would otherwise orbit/zoom every split-screen player's camera identically, which looks wrong. Split-screen scenes should set `orbit_button: "None"` (see the `CameraConfig` table above), `zoom_speed: 0.0` and `character_rotate_button: None` on **every** player's `camera` block, giving each player a fixed-angle camera at their configured offset with no mouse control — each player can still independently turn their own camera via keyboard (`InputMap.look_left`/etc.), see the "Keyboard camera look" note above.
 
 **Example** — two-player scene with a vertical split, both cameras fixed (no manual mouse control):
 
@@ -3044,7 +3044,7 @@ This is **local, same-machine co-op** — same scope note as the sections above:
 
 > **More than `MAX_SPLIT_PLAYERS` (4) players spawn cameraless.** Consistent with the existing (pre-`Grid`) behavior when a 3rd player exists in a `Vertical`/`Horizontal` scene — extra players beyond the cap simply don't get a `SplitViewportSlot` camera, they still spawn and can still move, just without their own rendered view.
 
-> **Every player's own `camera` block matters**, same as fixed-orientation `split` — each of the (up to 4) players needs their own `offset`, `zoom_speed`, `orbit_button`, etc. authored, disabling manual *mouse* control the same way (`orbit_button: "None"`, `zoom_speed: 0.0`) so one shared mouse doesn't move every camera at once — each player can still turn their own camera via keyboard (`InputMap.look_left`/etc., see "Keyboard camera look" above). Only `split` itself is read exclusively from the first player.
+> **Every player's own `camera` block matters**, same as fixed-orientation `split` — each of the (up to 4) players needs their own `offset`, `zoom_speed`, `orbit_button`, etc. authored, disabling manual *mouse* control the same way (`orbit_button: "None"`, `zoom_speed: 0.0`, `character_rotate_button: None`) so one shared mouse doesn't move every camera at once — each player can still turn their own camera via keyboard (`InputMap.look_left`/etc., see "Keyboard camera look" above). Only `split` itself is read exclusively from the first player.
 
 **Example** — 4-player scene with a grid split, all 4 cameras fixed (no manual mouse control):
 

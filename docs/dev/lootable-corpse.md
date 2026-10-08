@@ -8,7 +8,7 @@ The corpse design, its respawn rules and the `{new_id}` id scheme.
 
 <!-- b:478 -->
 
-**Lootable corpse (loot-on-death), `planning/features/monster_corpse_loot.md`** — on death, a
+**Lootable corpse (loot-on-death), `planning/features/done/monster_corpse_loot.md`** — on death, a
 monster despawns itself and is replaced by a separate, disposable corpse entity at the same
 position/facing, so a fresh respawned monster and its still-lootable corpse can coexist as two
 independent entities (v1 shipped a same-entity version first; this superseded it once a real

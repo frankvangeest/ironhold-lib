@@ -42,7 +42,7 @@ On 2026-10-08 the 1,752-line `crates/ironhold_core/src/CLAUDE.md` was split by d
 | ## Dynamic spawning | 1647-1648 | `runtime/scene_manager/CLAUDE.md` |
 | ### Spawn queue | 1649-1657 | `runtime/scene_manager/CLAUDE.md` |
 | ### Component parity with scene-placed entities | 1658-1713 | `runtime/scene_manager/CLAUDE.md`; cut (derivable or duplicate; text archived in the owning plan) |
-| ### GLB preloading | 1714-1731 | `runtime/scene_manager/CLAUDE.md`; a `docs/` page |
+| ### GLB preloading | 1714-1731 | `runtime/scene_manager/CLAUDE.md`; `docs/20_data_formats.md` |
 | ### Particle pipeline warmup | 1732-1753 | `capabilities/CLAUDE.md` |
 
 ## By old line number
@@ -151,5 +151,5 @@ On 2026-10-08 the 1,752-line `crates/ironhold_core/src/CLAUDE.md` was split by d
 | `b:1657` | 1657-1667 | Component parity: dynamic vs scene-placed (nameplate gating) | `runtime/scene_manager/CLAUDE.md` |
 | `b:1668` | 1668-1693 | Label depth scale + validation coverage | `runtime/scene_manager/CLAUDE.md` |
 | `b:1695` | 1695-1711 | CLI vs runtime camera-set asymmetry for label depth scale | cut (derivable or duplicate; text archived in the owning plan) |
-| `b:1713` | 1713-1729 | GLB preloading `PreloadPrefab`/`PreloadGlb` | `runtime/scene_manager/CLAUDE.md`; a `docs/` page |
+| `b:1713` | 1713-1729 | GLB preloading `PreloadPrefab`/`PreloadGlb` | `runtime/scene_manager/CLAUDE.md`; `docs/20_data_formats.md` |
 | `b:1731` | 1731-1752 | Particle pipeline warmup + `ParticleBudget` footgun | `capabilities/CLAUDE.md` |

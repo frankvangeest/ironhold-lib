@@ -179,6 +179,24 @@ accepted tradeoff, not a bug.
 value the reset fired on a flat-ground jump while `linvel.y` was still positive. The buffered value is fine for
 `animation_resolver.rs`'s jump/land clip choice; the reset's grace/velocity/liftoff-height gate keeps `raw_grounded`.
 
+<!-- b:779 -->
+`jumps_used` is **not** reset on a `!was_grounded && is_grounded` edge (an edge-triggered reset can starve permanently if the
+edge never fires); the landing animation request (`jump_exit`) still fires on that real edge. The reset is a separate
+level-gated check re-evaluated every tick. A surface steeper than `CharacterController.max_walkable_slope_deg` (default 45;
+`>= 90.0` restores the old proximity-only behaviour) never counts as grounded.
+
+<!-- b:815 -->
+`CharacterController.jump_air_grace` (a `FixedUpdate` tick countdown set when the jump fires) is derived analytically by
+`jump_air_grace_ticks()` from the jump's own velocity, `GRAVITY` and the controller's `collider_radius`/`ground_cast_length`:
+**never a separate hand-tuned constant**, which would drift from a project's authored values. While it is positive a grounded
+reading is not even considered a landing.
+
+<!-- b:950 -->
+In the `ground_cast` re-query loop a hit may be excluded only if **both** conditions fail: it is not underfoot (contact at or
+under `feet_pos.y + collider_radius * 0.5`) **and** it is not walkable (`is_walkable_contact`). "Not underfoot" alone imposes a
+hidden 60-degree slope ceiling independent of `max_walkable_slope_deg` and ungrounds genuine floor contacts after a teleport or
+`at_entity` placement; requiring both keeps the loop monotone and keeps the `>= 90.0` escape hatch exact.
+
 <!-- b:912 -->
 `can_jump`'s first-jump branch is `raw_grounded || (coyote_ticks_remaining > 0 && jumps_used == 0)`; the airborne
 (double-jump) branch has no buffering and depends only on `raw_grounded`. **The coyote buffer may only ever unlock a
@@ -192,6 +210,12 @@ penetrating hit beats the real floor, and the radial normal reads as an unwalkab
 animation on flat ground near any such prop). A penetrating hit's normal is not unit length, so a bare
 `.dot(Vec3::Y).acos()` biases the angle toward 90 degrees. Any new physics query here follows the same rule. See
 `tests/prop_ground_veto_tests.rs`.
+
+<!-- b:206 -->
+## Action-bar slot cost
+
+A slot's cost check and its deferred deduct action's stat key are resolved **once** per firing slot (`resolve_cost_source` in
+`action_bar.rs`) and reused for both, so the two can never disagree about which stat pool the cost hits.
 
 <!-- b:1224 -->
 **The player `Friction` coefficient is `PLAYER_IDLE_FRICTION` (0.15, `player.rs`) only while

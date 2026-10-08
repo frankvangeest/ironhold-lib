@@ -28,7 +28,7 @@ fallback to `base.idle`, not a normal write). The full split:
 
 <!-- b:638 -->
 
-**`AnimationController.pending_seek`** (`planning/features/dynamic_animation_control.md`) exists
+**`AnimationController.pending_seek`** (`planning/features/done/dynamic_animation_control.md`) exists
 because playback only re-triggers `transitions.play()` on `current != last_played` — a no-op for
 "re-seek the *same* clip to a different fraction" (`PlayAnimationOn(..., start_at_fraction: ...)`
 called twice in a row against an already-current clip). The resolver sets `pending_seek = true`

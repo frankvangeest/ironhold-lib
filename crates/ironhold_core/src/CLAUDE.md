@@ -60,10 +60,15 @@ that sits under one**, and give any new system that touches the same state an ex
 an ordering). The ones that cross folders: the interpreter chain `fsm_interpreter_system` → `entity_fsm_interpreter_system`
 → `flush_pending_intent_system` → `action_executor_system` → … → `drain_spawn_queue_system` → `drain_dynamic_stat_ui_system`;
 `unclaimed_gamepad_trigger_system.before(fsm_interpreter_system)`; `gamepad_bind_system` before `input_translator_system`;
-`interactable_system` and `dialogue_tick_system` before the interpreters; the targeting chain before `action_bar_input_system`;
+`interactable_system` and `dialogue_tick_system` before the interpreters; the targeting chain before `action_bar_input_system` (registered in `TargetingPlugin`, see `capabilities/CLAUDE.md`);
 `camera_blend_system` last of the camera systems and `world_label_screen_pos_system` after it; `nameplate_visibility_system`
 after `world_label_screen_pos_system`; `target_hud_update_system` after `split_screen_viewport_system`; the audio-volume
 mirror after `action_executor_system` and before `update_dynamic_labels_system`.
+
+<!-- b:1406 -->
+`world_label_screen_pos_system` (`lib.rs`) picks, per `WorldLabel`, the `WorldLabelRank`-th active camera whose viewport contains
+the projected point, and stashes that camera's distance in `NameplateCameraDistance`; **`nameplate_visibility_system` must read
+that stash and never re-select a camera**. Rank-duplication rules for new widgets: `capabilities/CLAUDE.md`.
 
 <!-- b:575.rule -->
 `tick_delayed_events_system` (`lib.rs`) ticks on raw `Time` with **no pause gate**, so a delayed event (a monster respawn

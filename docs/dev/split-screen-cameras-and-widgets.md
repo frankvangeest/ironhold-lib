@@ -30,7 +30,7 @@ palette instead** (same palette the split-screen "P{n}" corner HUD label uses, s
 `capabilities/camera.rs`) — the per-target precedence just described is overridden entirely, so it's
 visually obvious whose ring belongs to whom. If two players target the same entity, both rings
 render, coincident, each in its own player's colour; there is no deduplication. This is a
-deliberate design decision (`planning/features/per_player_split_screen_targeting.md`), not an
+deliberate design decision (`planning/features/done/per_player_split_screen_targeting.md`), not an
 oversight — a per-target colour would make it impossible to tell whose ring is whose once two
 players can each select something different.
 
@@ -183,7 +183,7 @@ Option<PartyZoomDef>` and `CameraConfig.split: Option<SplitScreenDef>` as the ex
 
 **`world_label_screen_pos_system` (`lib.rs`) is viewport-aware** (fixed — this was the root cause
 of "Portal room-name labels render static and mis-positioned in every split-screen room"; see
-`planning/features/world_label_split_screen_positioning.md`). It queries every active `Camera3d`
+`planning/features/done/world_label_split_screen_positioning.md`). It queries every active `Camera3d`
 (`camera.is_active`, not `.single()`) and, per `WorldLabel`, picks the `WorldLabelRank`-th
 (default 0 when the component is absent) active camera whose own `logical_viewport_rect()`
 actually contains the point's `world_to_viewport()` projection — deterministic order:
@@ -201,7 +201,7 @@ via the `WorldLabelRank(u8)` component — instead of just one. Each sibling ind
 a different active-camera priority in `world_label_screen_pos_system`'s selection described earlier, so up to
 4 simultaneously-visible active split viewports each get their own correctly-positioned,
 independently-hideable copy. **Extended to `stat_label` and `Ascii`-style `world_stat_bar` in
-Phase 4** (`planning/features/split_screen_camera_followups.md`) — same rank-duplication
+Phase 4** (`planning/features/done/split_screen_camera_followups.md`) — same rank-duplication
 pattern, at both spawn sites (`scene_loader.rs`'s scene-load loops and
 `drain_dynamic_stat_ui_system`'s `Action::Spawn`/wave-spawn path), but gated on the loading scene
 actually being split-screen (`player_configs.first().camera.split.is_some()` at scene-load time,
@@ -243,7 +243,7 @@ only if a real project need surfaces.
 <!-- b:1463 -->
 
 **`particle_renderer.rs`'s billboard orientation is now viewport-aware** (fixed — Phase 1 of
-`planning/features/split_screen_camera_followups.md`). `rebuild_pool_meshes_system` used to call
+`planning/features/done/split_screen_camera_followups.md`). `rebuild_pool_meshes_system` used to call
 `camera_q.single()` with no `is_active` filter at all, so it fell back to unconditional world-axis
 billboarding (`Vec3::X`/`Vec3::Y`) in *every* split-screen project, not just when 2 cameras were
 simultaneously active — the widest-reaching of these sites. It now filters `is_active` and
@@ -260,7 +260,7 @@ particle meshes per viewport, out of scope for this fix.
 <!-- b:1476 -->
 
 **`targeting.rs`'s click-to-select is now viewport-aware** (fixed — Phase 2 of
-`planning/features/split_screen_camera_followups.md`). `click_select_system` used to pick the
+`planning/features/done/split_screen_camera_followups.md`). `click_select_system` used to pick the
 first active `Camera3d` via `.find(|c| c.is_active)`, ignoring where the cursor actually was — a
 click in player 2's viewport could silently be evaluated against player 1's camera. It now filters
 to active cameras whose `logical_viewport_rect()` contains the cursor position before running the
@@ -276,7 +276,7 @@ single-camera scenes (a full-window viewport covers every in-window cursor posit
 <!-- b:1488 -->
 
 **`nameplate.rs`'s distance-culling is now viewport-aware via store-and-read** (fixed — Phase 3 of
-`planning/features/split_screen_camera_followups.md`). `nameplate_visibility_system` used to call
+`planning/features/done/split_screen_camera_followups.md`). `nameplate_visibility_system` used to call
 `camera_q.single()` with no `is_active` filter at all, so it silently no-op'd whenever 2+
 `Camera3d` entities existed *at all* — not just when 2+ were simultaneously active (a merged
 dynamic split with one inactive sibling camera hit this too). It no longer queries cameras

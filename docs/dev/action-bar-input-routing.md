@@ -8,7 +8,7 @@ How targeting, the action bar and mouse clicks reach `{target}` and the interpre
 
 <!-- b:190 -->
 
-**Per-player targeting (Phase 1, `planning/features/per_player_split_screen_targeting.md`)** —
+**Per-player targeting (Phase 1, `planning/features/done/per_player_split_screen_targeting.md`)** —
 each player entity carries its own `PlayerTarget(Option<String>)` component
 (`capabilities/player.rs`), inserted in `entity_spawner.rs::spawn_player_entity_core`'s shared
 post-model-source-dispatch code — as of `player_model_source_unification.md` v1 this covers both
@@ -28,7 +28,7 @@ documented scope boundary, not a bug.
 
 <!-- b:206 -->
 
-**Per-player action bars (Phase 2, `planning/features/per_player_split_screen_targeting.md`)** —
+**Per-player action bars (Phase 2, `planning/features/done/per_player_split_screen_targeting.md`)** —
 `ActionBarDef.owner_player: Option<u32>` (`#[serde(default)]`), copied onto `ActionSlotUi` at scene
 load, scopes a bar's slots to whichever player entity carries `PlayerIndex(owner_player)`; `None`
 (or `Some(0)`) means the primary player, same definition as earlier on this page. **This did *not* need player
@@ -43,7 +43,7 @@ player_index)` resolves the acting player, and that player's own `PlayerTarget` 
 `CurrentTarget` — drives the `{target}` rewrite, the no-target gate, and the
 `intent.slot.*:{player_id}` event's player id. For the primary player this is a no-op in practice
 (`PlayerTarget` is already kept in lockstep with `CurrentTarget` for the primary player). **The
-`cost:`/`SlotCost` check/deduct is now per-player too** (`planning/features/per_player_stat_pools.md`):
+`cost:`/`SlotCost` check/deduct is now per-player too** (`planning/features/done/per_player_stat_pools.md`):
 it resolves against the acting player's own `StatMap` first — populated from `PlayerConfig.
 stat_templates`, forwarded from `PrefabDef.stat_templates` exactly like any NPC/prop prefab, and
 inserted by `spawn_player_entity_core` — falling back to the single shared `LoadedStats` resource
