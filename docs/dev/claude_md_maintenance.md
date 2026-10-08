@@ -86,7 +86,7 @@ Every OpenCode fact the repo depends on, with its re-verify command, is in the "
 
 - **The 17 stubs (2026-10-08).** The core CLAUDE.md split assumed an `AGENTS.md` containing `@CLAUDE.md` would forward to the
   real file for OpenCode. A live run showed it does not; the stubs were deleted and the probe was written so that this kind of
-  assumption is checked, not guessed. See `planning/features/done/core_claude_md_split.md` (Phase 5) and `planning/features/opencode_compat_probe.md`.
+  assumption is checked, not guessed. See `planning/features/done/core_claude_md_split.md` (Phase 5) and `planning/features/done/opencode_compat_probe.md`.
 - **Rules that loaded nowhere useful.** The review of the split found nine must-level rules that sat only in topic pages or
   in a folder that does not load for the code they govern; the audit's Safety flags had been set per block and a block marked
   "not safety" can still contain a "must".

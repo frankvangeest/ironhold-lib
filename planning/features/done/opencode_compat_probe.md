@@ -1,6 +1,6 @@
 # Feature: OpenCode compatibility probe, verified-facts table and CLAUDE.md maintenance guide
 
-_Status: In Progress (implemented 2026-10-08; awaiting Frank's check, reviews and merge)_
+_Status: Done (implemented 2026-10-08; awaiting Frank's check, reviews and merge)_
 _Planned at: `37de6f4` (2026-10-08); revised at `edc93f1` after plan-review (system-architect, ux-gamedesigner-reviewer)_
 
 The GLM 5.3 flash driver pilot that was v2 of the first draft is now its own plan,

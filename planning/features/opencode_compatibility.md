@@ -1,6 +1,6 @@
 # Feature: OpenCode compatibility (tooling)
 
-> **Update 2026-10-08:** what OpenCode actually loads (instruction attachment, `AGENTS.md` shadowing, comments, `.claude/rules`) is now verified by `tools/opencode_probe.py` and recorded with re-verify commands in the "Verified compatibility facts" table in `.opencode/README.md` (plan: `planning/features/opencode_compat_probe.md`); where this document predates that, the table wins.
+> **Update 2026-10-08:** what OpenCode actually loads (instruction attachment, `AGENTS.md` shadowing, comments, `.claude/rules`) is now verified by `tools/opencode_probe.py` and recorded with re-verify commands in the "Verified compatibility facts" table in `.opencode/README.md` (plan: `planning/features/done/opencode_compat_probe.md`); where this document predates that, the table wins.
 
 _Status: In Progress (v0/v1/v2/v3's sync-check script all Done and live-verified 2026-09-22 against opencode-ai 1.18.31 — a few checklist items still open, see below; the optional `rust-idioms`-as-skill move is not done)_
 _Planned at: `20287fc` (2026-09-22)_
