@@ -238,6 +238,9 @@ def covered_lines(blocks):
 
 def check_self(root, doc, problems):
     base = read(root, PARENT)
+    if len(base) < 0.25 * doc['base_chars']:
+        problems.append(f'{PARENT} is the slimmed parent (Phase 4 done): `self` mode only checks the pre-split monolith; run `full` instead (the frozen base is `git show d222d91:{PARENT}`)')
+        return
     lines = base.split('\n')
     if len(lines) != doc['base_lines'] or sha1(base) != doc['base_sha1']:
         problems.append(f'{PARENT} no longer equals the frozen base ({doc["base_commit"]}, {doc["base_lines"]} lines): '
