@@ -1864,6 +1864,31 @@ Particles use `AlphaMode::Add` (additive blending) by default when no sprite is 
 
 `FlameParticleMaterial` is an engine-internal material — it is not available as a `Custom(…)` shader key. Its uniforms (`color`, `elapsed_time`) are updated every frame by the particle system.
 
+**Warming up particle pipelines (web builds)**
+
+On the web build the first time each kind of particle is drawn, the browser compiles a GPU pipeline and the game
+stalls for roughly 0.3 to 1 second. Particle groups are created on first use, so the engine cannot warm them up on its
+own. Each of these compiles separately:
+
+1. **Additive** particles (`AlphaMode::Add`: sparks, glows, sprites without UV animation)
+2. **Blend** particles (`AlphaMode::Blend`: smoke, clouds, soft auras)
+3. **Flame / distort** particles (UV distort or scroll: campfires, torches)
+
+Fix it by firing one `SpawnEffect` for each kind you use while the scene loads, off-screen, next to your
+`PreloadScene` / `PreloadPrefab` calls so it happens during the natural loading pause:
+
+```ron
+// logic/state_machine.ron: playing state entry_actions
+SpawnEffect(key: "hit_spark",      position: (0.0, -100.0, 0.0)),  // warms the additive pipeline
+SpawnEffect(key: "campfire_smoke", position: (0.0, -100.0, 0.0)),  // warms the blend pipeline
+SpawnEffect(key: "campfire_body",  position: (0.0, -100.0, 0.0)),  // warms the flame pipeline
+```
+
+> **Budget footgun:** these warmup effects are real particles and count against `particle_budget`. In a scene with a
+> tight budget (for example `particle_budget: 100`), three or four warmups can each use their full `particle_count`.
+> Use low-count effects for warmup, fire them on `scene.ready` before continuous emitters fill the pool, or leave room
+> for them when you size the budget.
+
 ---
 
 **Ground decals (`decals`)**

@@ -81,6 +81,7 @@ GOVERNS = {
     '247': [SRC + 'capabilities/action_bar.rs', SRC + 'runtime/scene_manager/*.rs'],
     '711': ['assets/**/*.wgsl'],
 }
+BUDGET = {'CAP': 20000, 'PARENT': 18000}
 BAD_PHRASE = re.compile(r'\b(see above|see below|above|below)\b|\bline \d+|four-site', re.I)
 MODAL = re.compile(r"\b(must|never|do not|don't|cannot)\b|\bNOT\b|load-bearing|deliberate|hard invariant|\.before\(|\.after\(", re.I)
 ANCHOR = re.compile(r'<!--\s*(b:\d+(?:\.[a-z]+)?)\s*-->')
@@ -350,6 +351,11 @@ def check_dest(root, doc, include_parent, strict, problems):
     for i in found:
         if i not in known:
             problems.append(f'anchor {i} in {found[i]} matches no block in the sidecar')
+    # size budgets (chars) for destination files that carry hard rules
+    for key, limit in BUDGET.items():
+        rel = DEST_FILE[key]
+        if rel in texts and len(texts[rel]) > limit and (key != 'PARENT' or include_parent):
+            problems.append(f'{rel} is {len(texts[rel])} chars, over its {limit} budget')
     # topics: doc exists + pointer line in the directory file
     topics = {b['dest'][6:] for b in doc['blocks'] if b['dest'].startswith('TOPIC:') and b['dest'] != 'TOPIC:?'}
     for t in sorted(topics):

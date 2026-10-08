@@ -465,12 +465,10 @@
    "type": "GOTCHA+RAT",
    "safety": "Y",
    "dest": "TOPIC:action-bar-input-routing",
-   "also": [
-    "CAP"
-   ],
+   "also": [],
    "dest_raw": "TOPIC + 2 rules in CAP",
    "governs": [
-    "crates/ironhold_core/src/**"
+    "crates/ironhold_core/src/capabilities/action_bar.rs"
    ],
    "subs": [
     "rule",
@@ -484,7 +482,10 @@
      284,
      284
     ]
-   ]
+   ],
+   "sub_dest": {
+    "rule": "CAP"
+   }
   },
   {
    "id": "b:286",
@@ -501,15 +502,15 @@
    "also": [],
    "dest_raw": "CAP + pointer in SM",
    "governs": [
-    "crates/ironhold_core/src/**"
+    "crates/ironhold_core/src/capabilities/targeting.rs",
+    "crates/ironhold_core/src/capabilities/action_bar.rs",
+    "crates/ironhold_core/src/capabilities/target_indicator.rs",
+    "crates/ironhold_core/src/capabilities/camera.rs"
    ],
-   "subs": [
-    "rule",
-    "ref"
-   ],
+   "subs": [],
    "text_sha1": "ddc3704709f18039dabf499a92f9d51921ea363e",
-   "review": true,
-   "notes": "**not covered by a test — this text is the only guard**; consider a PARENT bullet \"any system touching `PlayerTarget`/`CurrentTarget` must be ordered explicitly\"",
+   "review": false,
+   "notes": "history of the same-frame race archived in planning/features/done/per_player_split_screen_targeting.md",
    "orig_lines": [
     [
      286,
@@ -560,7 +561,7 @@
    "governs": [],
    "subs": [],
    "text_sha1": "c1c4fa6a3c957a55ad718dffa87787d316d694e0",
-   "review": true,
+   "review": false,
    "notes": "keep: screen-space not raycast, vars blank at 2+ players, `target.changed*` primary-only",
    "orig_lines": [
     [
@@ -684,13 +685,13 @@
    "title": "`TargetRingVisibilityMode` lifecycle",
    "type": "REF+GOTCHA",
    "safety": "N",
-   "dest": "CAP",
+   "dest": "TOPIC:split-screen-cameras-and-widgets",
    "also": [],
    "dest_raw": "same topic",
    "governs": [],
    "subs": [],
    "text_sha1": "fa4d228f66cb5a0830f2c0b45627994210c0f4aa",
-   "review": true,
+   "review": false,
    "notes": "\"no mid-scene toggle without re-tagging\" → one line in SM",
    "orig_lines": [
     [
@@ -710,14 +711,14 @@
    "title": "Warnings: `player_index` collision, non-hot-join Spawn",
    "type": "REF",
    "safety": "N",
-   "dest": "CAP",
+   "dest": "CUT",
    "also": [],
    "dest_raw": "same topic",
    "governs": [],
    "subs": [],
    "text_sha1": "2422f3e37d4ffa84fd021cc4eefcf5becf13d1b0",
-   "review": true,
-   "notes": "derivable from the `warn!` sites",
+   "review": false,
+   "notes": "derivable from the two warn! sites (spawn_players_and_camera, drain_spawn_queue_system); also in the split-screen topic doc",
    "orig_lines": [
     [
      424,
@@ -768,7 +769,7 @@
    "governs": [],
    "subs": [],
    "text_sha1": "eb5a0517dd2c5477f6cd523867005e6ad17954fa",
-   "review": true,
+   "review": false,
    "notes": "",
    "orig_lines": [
     [
@@ -814,7 +815,7 @@
    "title": "Per-viewport target HUD readout",
    "type": "REF",
    "safety": "N",
-   "dest": "CAP",
+   "dest": "TOPIC:split-screen-cameras-and-widgets",
    "also": [],
    "dest_raw": "CAP (keep the `.after(split_screen_viewport_system)` ordering line)",
    "governs": [],
@@ -823,14 +824,17 @@
     "ref"
    ],
    "text_sha1": "8ae9350da99e524b6ada047b6590264ca4faa631",
-   "review": true,
+   "review": false,
    "notes": "rest derivable",
    "orig_lines": [
     [
      452,
      462
     ]
-   ]
+   ],
+   "sub_dest": {
+    "rule": "CAP"
+   }
   },
   {
    "id": "b:464",
@@ -1007,7 +1011,7 @@
    "governs": [],
    "subs": [],
    "text_sha1": "0da185ede159f26746502887688134d299323cdd",
-   "review": true,
+   "review": false,
    "notes": "cut the incident narrative",
    "orig_lines": [
     [
@@ -1244,7 +1248,7 @@
    "title": "`pending_seek` purpose",
    "type": "GOTCHA",
    "safety": "N",
-   "dest": "CAP",
+   "dest": "TOPIC:animation-pipeline",
    "also": [],
    "dest_raw": "CAP",
    "governs": [],
@@ -1351,13 +1355,13 @@
    "title": "Spawn-already-posed needs a minimal `AnimationPolicy`",
    "type": "GOTCHA",
    "safety": "N",
-   "dest": "CAP",
+   "dest": "TOPIC:animation-pipeline",
    "also": [],
    "dest_raw": "CAP or TOPIC:lootable-corpse",
    "governs": [],
    "subs": [],
    "text_sha1": "53c01246d387cf8307fc13b4b4881d68989ceec1",
-   "review": true,
+   "review": false,
    "notes": "",
    "orig_lines": [
     [
@@ -1383,7 +1387,7 @@
    "governs": [],
    "subs": [],
    "text_sha1": "d2732c77f946d3c5bb5fb928053c88ca54e56992",
-   "review": true,
+   "review": false,
    "notes": "",
    "orig_lines": [
     [
@@ -1629,7 +1633,7 @@
    "governs": [],
    "subs": [],
    "text_sha1": "bbe7db5a4829d743c20b6e9c4a18234d6c72d759",
-   "review": true,
+   "review": false,
    "notes": "",
    "orig_lines": [
     [
@@ -1727,25 +1731,29 @@
    "title": "Reset must read `raw_grounded`, never coyote-buffered `is_grounded`",
    "type": "RULE+RAT",
    "safety": "Y",
-   "dest": "CAP",
+   "dest": "TOPIC:player-ground-detection",
    "also": [],
    "dest_raw": "CAP (rule + 2-line incident; full story in TOPIC)",
    "governs": [
-    "crates/ironhold_core/src/**"
+    "crates/ironhold_core/src/capabilities/player.rs",
+    "crates/ironhold_core/src/capabilities/animation_resolver.rs"
    ],
    "subs": [
     "rule",
     "ref"
    ],
    "text_sha1": "a02e9289ee50a0968492254f30a681f7b76745fb",
-   "review": true,
+   "review": false,
    "notes": "\"a debounce that smooths feel must never leak into correctness timing\"",
    "orig_lines": [
     [
      856,
      882
     ]
-   ]
+   ],
+   "sub_dest": {
+    "rule": "CAP"
+   }
   },
   {
    "id": "b:883",
@@ -1785,14 +1793,16 @@
    "type": "RULE+RAT",
    "safety": "Y",
    "dest": "CAP",
-   "also": [],
+   "also": [
+    "TOPIC:player-ground-detection"
+   ],
    "dest_raw": "CAP (condensed)",
    "governs": [
-    "crates/ironhold_core/src/**"
+    "crates/ironhold_core/src/capabilities/player.rs"
    ],
    "subs": [],
    "text_sha1": "78b6bf442a9a40964f6ee4534a5ca45f1a48eee6",
-   "review": true,
+   "review": false,
    "notes": "keep adjacent to 856-882",
    "orig_lines": [
     [
@@ -1813,14 +1823,16 @@
    "type": "GOTCHA+RAT",
    "safety": "Y",
    "dest": "CAP",
-   "also": [],
+   "also": [
+    "TOPIC:player-ground-detection"
+   ],
    "dest_raw": "CAP (condensed)",
    "governs": [
-    "crates/ironhold_core/src/**"
+    "crates/ironhold_core/src/capabilities/player.rs"
    ],
    "subs": [],
    "text_sha1": "917782e25478fda7b18594e526ebd12d38db66af",
-   "review": true,
+   "review": false,
    "notes": "generic for any physics query in capabilities/ (`npc.rs` LOS precedent)",
    "orig_lines": [
     [
@@ -1924,7 +1936,7 @@
    "also": [],
    "dest_raw": "CAP",
    "governs": [
-    "crates/ironhold_core/src/**"
+    "crates/ironhold_core/src/capabilities/terrain*.rs"
    ],
    "subs": [],
    "text_sha1": "e74d7ba3d19aa2257cf30559a7f4ddb3af55cb4a",
@@ -2275,7 +2287,8 @@
    "safety": "Y",
    "dest": "CAP",
    "also": [
-    "SM"
+    "SM",
+    "TOPIC:player-ground-detection"
    ],
    "dest_raw": "CAP (collapse to current state)",
    "governs": [
@@ -2284,7 +2297,7 @@
    ],
    "subs": [],
    "text_sha1": "e181a7cb3f55ba3d2d01d05177e5422492512403",
-   "review": true,
+   "review": false,
    "notes": "`wall_friction_tests.rs`",
    "orig_lines": [
     [
@@ -2362,7 +2375,7 @@
    "governs": [],
    "subs": [],
    "text_sha1": "8a0fa877c6cc8984410e8b1bcd25e4864e7bac7d",
-   "review": true,
+   "review": false,
    "notes": "pitch-direction pin → one CAP line",
    "orig_lines": [
     [
@@ -2412,7 +2425,7 @@
    "also": [],
    "dest_raw": "CAP",
    "governs": [
-    "crates/ironhold_core/src/**"
+    "crates/ironhold_core/src/capabilities/camera.rs"
    ],
    "subs": [],
    "text_sha1": "a469fb6930aedbbd1592e9e82056149fe9e52fbb",
@@ -2436,13 +2449,15 @@
    "title": "`WorldLabelRank` viewport-aware labels; per-rank widget duplication",
    "type": "REF+GOTCHA",
    "safety": "N",
-   "dest": "CAP",
-   "also": [],
+   "dest": "TOPIC:split-screen-cameras-and-widgets",
+   "also": [
+    "CAP"
+   ],
    "dest_raw": "same TOPIC",
    "governs": [],
    "subs": [],
    "text_sha1": "f20509252dcad59d8be27077448aed8c1d72834a",
-   "review": true,
+   "review": false,
    "notes": "continues into 1463-1528 (one story)",
    "orig_lines": [
     [
@@ -2488,13 +2503,15 @@
    "title": "Targeting `click_select` viewport-aware (Phase 2)",
    "type": "RAT+GOTCHA",
    "safety": "N",
-   "dest": "CAP",
-   "also": [],
+   "dest": "TOPIC:split-screen-cameras-and-widgets",
+   "also": [
+    "CAP"
+   ],
    "dest_raw": "CAP (dead-quadrant click does nothing)",
    "governs": [],
    "subs": [],
    "text_sha1": "50091ec3c66f9e66e42f32fbcc4d4b857c57c102",
-   "review": true,
+   "review": false,
    "notes": "",
    "orig_lines": [
     [
@@ -2514,8 +2531,10 @@
    "title": "Nameplate distance culling via stored camera distance (Phase 3)",
    "type": "GOTCHA+RAT",
    "safety": "N",
-   "dest": "CAP",
-   "also": [],
+   "dest": "TOPIC:split-screen-cameras-and-widgets",
+   "also": [
+    "CAP"
+   ],
    "dest_raw": "CAP",
    "governs": [],
    "subs": [],
@@ -2540,13 +2559,13 @@
    "title": "Split-screen player HUD labels (P{n})",
    "type": "REF",
    "safety": "N",
-   "dest": "CAP",
+   "dest": "TOPIC:split-screen-cameras-and-widgets",
    "also": [],
    "dest_raw": "CAP (keep the ordering rule + \"relies on full-window Camera2d\" warning)",
    "governs": [],
    "subs": [],
    "text_sha1": "4c51db579461459af159d27149ae75ba067aa158",
-   "review": true,
+   "review": false,
    "notes": "\"see above\" for `PlayerIndex` will dangle",
    "orig_lines": [
     [
@@ -2585,7 +2604,7 @@
     "ref"
    ],
    "text_sha1": "36a1abed1c2a4ab1d9e875ed62c724aa201dd4da",
-   "review": true,
+   "review": false,
    "notes": "spans `capabilities/player.rs`, `runtime/input.rs`, the consumers — cross-cutting",
    "orig_lines": [
     [
@@ -2865,13 +2884,10 @@
    "also": [],
    "dest_raw": "CAP (budget footgun) / same DOC page",
    "governs": [],
-   "subs": [
-    "rule",
-    "ref"
-   ],
+   "subs": [],
    "text_sha1": "d7783e78c2852406200ff9653f0ef69156073ea7",
-   "review": true,
-   "notes": "check `docs/20` before cutting (designers need it)",
+   "review": false,
+   "notes": "check `docs/20` before cutting (designers need it) | designer recipe + budget footgun now in docs/20 \"Warming up particle pipelines\"",
    "orig_lines": [
     [
      1731,
