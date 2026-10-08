@@ -1,5 +1,6 @@
 # Memory Index
 
+- [OpenCode: AGENTS.md shadows CLAUDE.md per folder](project_opencode_agents_md_shadows_claude_md.md) — `@CLAUDE.md` stubs may replace folder rules for OpenCode (no `@` expansion); live-check before trusting
 - [determinism_lint.rs blind spots](project_determinism_lint_blind_spots.md) — `as`/type aliases, external-API maps, honor-only markers on iterated maps, `mod x;` swallow, unwrap_or_default read
 
 - [Update-schedule GlobalTransform is one tick stale](project_update_globaltransform_one_tick_stale.md) — camera reads fresh Transform, world-space UI reads stale GT; errors cancel at 0/1 ticks, break on 2-tick frames; propagating after Writeback makes it WORSE
