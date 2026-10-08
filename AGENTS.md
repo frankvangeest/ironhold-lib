@@ -9,6 +9,8 @@ in `FixedUpdate` — it actually runs in `Update`; see `crates/ironhold_core/src
 maintaining the same rules in two places is exactly the kind of drift this project's own planning
 conventions (`planning/CLAUDE.md`) exist to prevent elsewhere.
 
+Every folder `CLAUDE.md` has a one-line `AGENTS.md` (`@CLAUDE.md`) beside it, so OpenCode attaches that folder's rules lazily the first time it touches a file there.
+
 If you are OpenCode: this file is discovered first (`AGENTS.md` wins over `CLAUDE.md` in
 per-directory discovery), and the project config (`.opencode/opencode.json`) additionally loads
 the root `CLAUDE.md` via its `instructions` field specifically so you see the real rules too — read

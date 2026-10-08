@@ -54,9 +54,9 @@ loop silently misses every nested `ui:` node. Detail in `schema/CLAUDE.md`.
 
 ## `lib.rs` ordering edges are load-bearing
 
-About fifteen system-ordering edges in `lib.rs` exist only to prevent scheduling races, and `lib.rs` loads only this file.
-Each is marked with a `// load-bearing:` comment in `lib.rs`: **never remove, reorder or "simplify" an edge that carries
-one**, and give any new system that touches the same state an explicit edge against them (a passing test run does not prove
+Many system-ordering edges in `lib.rs` exist only to prevent scheduling races, and `lib.rs` loads only this file.
+Each group of them is marked with a `// load-bearing:` comment in `lib.rs`: **never remove, reorder or "simplify" an edge
+that sits under one**, and give any new system that touches the same state an explicit edge against them (a passing test run does not prove
 an ordering). The ones that cross folders: the interpreter chain `fsm_interpreter_system` → `entity_fsm_interpreter_system`
 → `flush_pending_intent_system` → `action_executor_system` → … → `drain_spawn_queue_system` → `drain_dynamic_stat_ui_system`;
 `unclaimed_gamepad_trigger_system.before(fsm_interpreter_system)`; `gamepad_bind_system` before `input_translator_system`;

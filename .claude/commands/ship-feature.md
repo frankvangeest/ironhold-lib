@@ -29,7 +29,7 @@ These steps happen **on a `feature/{slug}` branch**, in its own git worktree —
 
    **Then commit the review agents' memory right away, on `integration`, from the primary checkout** (`git add .claude/agent-memory && git commit -m "chore(agent-memory): update from {slug} review cycle"`). Review agents always write into the primary checkout's working tree, whichever branch the change is on.
 
-5. **Docs updated** — `docs/20_data_formats.md` and any relevant `CLAUDE.md` files (including `crates/ironhold_core/src/CLAUDE.md` for capability-level notes) reflect the change. New schema fields, action types and events each need a doc entry.
+5. **Docs updated** — `docs/20_data_formats.md` and any relevant `CLAUDE.md` files (the folder file for the area you touched: `capabilities/`, `runtime/`, `runtime/scene_manager/` or `schema/` under `crates/ironhold_core/src/`, plus the crate-wide `crates/ironhold_core/src/CLAUDE.md` for pipeline-wide rules; long-form notes go in a `docs/dev/` topic page) reflect the change. New schema fields, action types and events each need a doc entry.
 
 6. **Schema/CLI spot-check** _(conditional)_ — If any file in `crates/ironhold_core/src/schema/` was modified, run `cargo run -p ironhold_cli -- query actions assets/projects/3rd_person_game_demo` (the freshly built CLI, **not** the cached `tools/bin/ironhold`) and verify new kinds appear and nothing crashes.
 

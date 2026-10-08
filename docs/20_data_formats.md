@@ -3318,7 +3318,7 @@ merge/split transitions. Party-mode and single-player scenes never get a label â
 > the label's color; the two are deliberately independent.
 
 No other configuration exists for this feature today â€” no opt-out, no repositioning, no
-controller-icon variant. See `crates/ironhold_core/src/CLAUDE.md` for the underlying
+controller-icon variant. See `docs/dev/split-screen-cameras-and-widgets.md` for the engine-side
 `SplitScreenPlayerLabel`/`LinkedPlayerLabel` component pattern.
 
 > The per-viewport **target HUD readout** (`target_hud:`, see

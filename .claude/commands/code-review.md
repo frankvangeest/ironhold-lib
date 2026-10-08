@@ -2,7 +2,7 @@ Run a full pre-commit review of the current feature's code changes (implementati
 
 Feature or context: $ARGUMENTS
 
-Launch the following agents **in parallel** (single message, multiple tool calls), passing the feature name/context to each. `alignment-reviewer`, `system-architect`, and `debug-detective` always run; the rest are conditional — run each only when its trigger applies, and note in the summary which ones you skipped and why.
+Launch the following agents **in parallel** (single message, multiple tool calls), passing the feature name/context and the feature worktree path to each, and telling each to Read the `CLAUDE.md` in every directory it reviews (directory files do not load for an agent launched from the primary checkout). `alignment-reviewer`, `system-architect`, and `debug-detective` always run; the rest are conditional — run each only when its trigger applies, and note in the summary which ones you skipped and why.
 
 1. **alignment-reviewer** _(always)_ — Verify data-driven design compliance. Can a game designer use this feature entirely from RON without recompiling? Check for hardcoded asset paths, unreachable schema types, and pipeline violations.
 
