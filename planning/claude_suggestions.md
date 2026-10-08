@@ -601,3 +601,5 @@
 - **`docs/20_data_formats.md` cites developer-only files a designer cannot open** _(observed at `0c9bd8e` 2026-10-08, UX review)_
   About line 4455 cites `planning/features/player_stat_widgets.md` and about line 3317 cites `crates/ironhold_core/src/CLAUDE.md` (the latter is also a live citation the split must repoint, map section 4).
 
+- **`particles_demo`'s warmup comment and docs/20's "Particle material paths" table look stale against the pooled renderer** _(observed at `17b65f4` 2026-10-08, core CLAUDE.md split UX review)_
+  `assets/projects/particles_demo/logic/state_machine.ron:4-13` says "four variants" with `Sphere`/`FlameParticleMaterial` names, while docs/20 "Warming up particle pipelines" now says three kinds (additive, blend, flame), and the "Particle material paths" table just above it (`FlameParticleMaterial`, `custom_flame_particle.wgsl`, "Sphere mesh") needs checking against the v2 pool renderer; align the demo comment and the table with the doc.

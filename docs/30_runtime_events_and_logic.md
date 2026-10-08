@@ -863,7 +863,7 @@ A walkthrough portal between two scenes is the standard pattern for multi-scene 
 
 The `TriggerZone` radius should cover the gate opening but not the frame — 1.0–1.5 m works for a standard doorway width. The trigger fires `entity.entered:{id}` on player overlap; `LoadScene` then transitions immediately.
 
-**Quality and warmup on scene entry**: if the destination scene uses `SetParticleQuality`, include it in the `scene.ready:{name}` binding alongside any warmup `SpawnEffect` calls — quality persists across `LoadScene` and must be reset explicitly per scene.
+**Quality and warmup on scene entry**: if the destination scene uses `SetParticleQuality`, include it in the `scene.ready:{name}` binding alongside any warmup `SpawnEffect` calls (see [Warming up particle pipelines](20_data_formats.md#warming-up-particle-pipelines-web-builds)) — quality persists across `LoadScene` and must be reset explicitly per scene.
 
 ### System ordering
 

@@ -653,7 +653,7 @@ The player's own nameplate is controlled independently by `show_player_nameplate
 
 > **Two independent toggles:** `show_nameplates` covers NPCs/props; `show_player_nameplate` covers only your player. Setting `show_nameplates: true` does **not** show the player's own nameplate — you must also set `show_player_nameplate: true` (or a per-prefab `nameplate: true` on the player prefab) if you want it.
 
-> **Split-screen:** a nameplate shows in only one viewport (the first, in player-slot order, in which the entity is on screen); see [Split-screen camera](#split-screen-camera-splitscreendef-) for what every player sees.
+> **Split-screen:** a nameplate shows in only one viewport (the first one in which the entity is on screen, checking the views in the order the players are listed under `entities:`); see [Split-screen camera](#split-screen-camera-splitscreendef-) for what every player sees.
 
 > **Runtime player toggle:** `Action::ToggleOwnNameplate` lets a player flip their own nameplate on/off at runtime (e.g. bound to a settings-menu button), independent of `show_player_nameplate`. It emits `nameplate.own_shown`/`nameplate.own_hidden` — bind these to an `IconButton`'s `bind` `GameVariable` the same way `audio.muted`/`audio.unmuted` drive the mute-button toggle (see [`IconButton((...))`](#iconbutton-) above). Has no effect on NPC/prop nameplates. If the player prefab has an explicit `nameplate: Some(true)`/`Some(false)` override, that always wins — the toggle still flips internally (and the button's bound label will still change), but the nameplate's actual visibility won't change, since the override bypasses the runtime preference entirely.
 >
@@ -1866,30 +1866,42 @@ Particles use `AlphaMode::Add` (additive blending) by default when no sprite is 
 
 `FlameParticleMaterial` is an engine-internal material — it is not available as a `Custom(…)` shader key. Its uniforms (`color`, `elapsed_time`) are updated every frame by the particle system.
 
-**Warming up particle pipelines (web builds)**
+#### Warming up particle pipelines (web builds)
 
-On the web build the first time each kind of particle is drawn, the browser compiles a GPU pipeline and the game
+On the web build, the first time each kind of particle is drawn, the browser compiles a GPU pipeline and the game
 stalls for roughly 0.3 to 1 second. Particle groups are created on first use, so the engine cannot warm them up on its
-own. Each of these compiles separately:
+own. Each of these three kinds compiles separately, and you need **one warmup per kind, not per effect**:
 
-1. **Additive** particles (`AlphaMode::Add`: sparks, glows, sprites without UV animation)
-2. **Blend** particles (`AlphaMode::Blend`: smoke, clouds, soft auras)
-3. **Flame / distort** particles (UV distort or scroll: campfires, torches)
+1. **Additive**: no `sprite`, or a `sprite` with `additive: true` (sparks, glows).
+2. **Blend**: a `sprite` with `additive` left out or `false`, which is the default for sprites (smoke, clouds, soft auras).
+3. **Flame**: `uv_distort` or `uv_scroll_speed` above 0 (campfires, torches).
 
-Fix it by firing one `SpawnEffect` for each kind you use while the scene loads, off-screen, next to your
-`PreloadScene` / `PreloadPrefab` calls so it happens during the natural loading pause:
+To find which kinds your project uses, scan `effects:` in `assets.ron` (and every entry under `layers:`) for those fields.
+
+Fire one `SpawnEffect` for each kind you use as soon as the scene is ready, off-screen (`y = -100`), next to your
+`PreloadScene` / `PreloadPrefab` calls, so the stall happens during the natural loading pause:
 
 ```ron
-// logic/state_machine.ron: playing state entry_actions
-SpawnEffect(key: "hit_spark",      position: (0.0, -100.0, 0.0)),  // warms the additive pipeline
-SpawnEffect(key: "campfire_smoke", position: (0.0, -100.0, 0.0)),  // warms the blend pipeline
-SpawnEffect(key: "campfire_body",  position: (0.0, -100.0, 0.0)),  // warms the flame pipeline
+// logic/state_machine.ron, inside global_on: [ ... ]
+( event: "scene.ready:main", do_actions: [
+    SpawnEffect(key: "hit_spark",      position: (0.0, -100.0, 0.0)),  // additive
+    SpawnEffect(key: "campfire_smoke", position: (0.0, -100.0, 0.0)),  // blend
+    SpawnEffect(key: "campfire_fire",  position: (0.0, -100.0, 0.0)),  // flame
+]),
 ```
 
-> **Budget footgun:** these warmup effects are real particles and count against `particle_budget`. In a scene with a
-> tight budget (for example `particle_budget: 100`), three or four warmups can each use their full `particle_count`.
-> Use low-count effects for warmup, fire them on `scene.ready` before continuous emitters fill the pool, or leave room
-> for them when you size the budget.
+Use `scene.ready` in `global_on`: the `entry_actions` of the project's starting state do not run when the first scene
+loads ([the `initial_state` entry-actions gotcha](30_runtime_events_and_logic.md#the-initial_state-entry-actions-gotcha)), so a
+warmup placed there does nothing and gives no error. If the scene uses ground decals, also fire one
+`ProjectDecal` off-screen. Working examples: `assets/projects/particles_demo/logic/state_machine.ron` (top of
+`global_on`) and `assets/projects/3rd_person_game_demo/logic/state_machine.ron`; all three keys above exist in
+`assets/projects/primitive_world/assets.ron`.
+
+> **Budget footgun:** warmup effects are real particles and count against `particle_budget`. In a tight scene (for
+> example `particle_budget: 100`) three or four warmups can each use their full `particle_count`. Best practice: add
+> dedicated warmup keys to `assets.ron` with `particle_count: 1` and `priority: Player` (`Player` effects always fire;
+> `Ambient` ones are silently skipped when the pool is full, so an `Ambient` warmup may warm nothing). Fire them on
+> `scene.ready`, before continuous emitters fill the pool.
 
 ---
 
@@ -1946,7 +1958,7 @@ Decals use `LevelEntity` — they are automatically cleaned up on scene transiti
 
 | Format | Use for | Notes |
 |--------|---------|-------|
-| `.wav` | Short SFX (jumps, clicks, pickups) | Uncompressed PCM — zero decode overhead, instant playback. OGG and MP3 decoder start-up is most noticeable on the first play in a web build |
+| `.wav` | Short SFX (jumps, clicks, pickups) | Uncompressed PCM — zero decode overhead, instant playback. OGG/MP3 decoding adds a noticeable delay the first time a sound plays in a web build, so use WAV for anything that must feel instant |
 | `.ogg` | Music and long ambient loops | Compressed; smaller files, minor decode cost acceptable for long audio |
 | `.mp3` | Music only (avoid for new work) | Worse quality/size ratio than OGG; use OGG instead |
 
@@ -2758,7 +2770,7 @@ This is **local, same-machine co-op** — same scope note as the shared party ca
 
 For local co-op scenes with two or more `"player"`-tagged entities, `camera.split` on the **first** player switches from "one shared camera framing everyone" to **one real camera per player**, each locked to its own rectangle of the window. Unlike `party`, split-screen does not derive a shared midpoint/zoom — every player gets a fully independent `OrbitCamera` built from their **own** `camera` block, so `offset`, `zoom_speed`, `orbit_button`, etc. need to be authored correctly on **every** player's prefab, not just player 1's. Only the `split` switch field itself is read exclusively from the first player.
 
-> **What each player sees in a split-screen scene.** These appear in **every** viewport that can see the entity: portal room-name labels (`world_labels:`), per-entity `label:`, `stat_label`, all four `world_stat_bar` styles, `ShowDamagePopup` and `ShowFloatingText`. **Nameplates are the one exception:** a nameplate shows in only one viewport, the first (in player-slot order) in which the entity is on screen, so the other player may not see it. For a readout every player must see, use a `world_stat_bar` or `stat_label` on the prefab.
+> **What each player sees in a split-screen scene.** These appear in **every** viewport that can see the entity: portal room-name labels (`world_labels:`), per-entity `label:`, `stat_label`, all four `world_stat_bar` styles, `ShowDamagePopup` and `ShowFloatingText`. **Nameplates are the one exception:** a nameplate shows in only one viewport, the first one in which the entity is on screen, checking the views in the order the players are listed under `entities:` in the scene (the first player's view first), so the second player will often not see a nameplate on an enemy both players are looking at. For a readout every player must see, use a `world_stat_bar` or `stat_label` on the prefab. Target rings appear in every viewport by default (see [`own_viewport_only`](#per-viewport-target-ring-visibility-own_viewport_only)).
 
 **`SplitScreenDef` fields** (`components.camera.split`, authored on the first player only):
 
@@ -3288,7 +3300,7 @@ player's keyboard scheme** — gamepad and keyboard input are checked additively
 exclusively, everywhere in this engine, so a gamepad-joined player can freely mix their join
 slot's authored keyboard scheme and the bound pad (confirmed against source during implementation,
 not assumed). Unplugging and replugging this controller into the **same** port later resumes this
-player's gamepad input automatically — see [How a controller gets assigned to a player](#how-a-controller-gets-assigned-to-a-player) above.
+player's gamepad input automatically — see [How a controller gets assigned to a player](#how-a-controller-gets-assigned-to-a-player-) above.
 
 A full working example (gamepad join alongside the keyboard one) lives in
 `assets/projects/local_coop_demo/scenes/room8.scene.ron`.
@@ -3318,8 +3330,7 @@ merge/split transitions. Party-mode and single-player scenes never get a label �
 > the label's color; the two are deliberately independent.
 
 No other configuration exists for this feature today — no opt-out, no repositioning, no
-controller-icon variant. See `docs/dev/split-screen-cameras-and-widgets.md` for the engine-side
-`SplitScreenPlayerLabel`/`LinkedPlayerLabel` component pattern.
+controller-icon variant. (Engine developers: see [split-screen cameras and widgets](dev/split-screen-cameras-and-widgets.md#split-screen-player-hud-labels-pn).)
 
 > The per-viewport **target HUD readout** (`target_hud:`, see
 > [Per-player split-screen targeting](#per-player-split-screen-targeting) above) follows this exact
@@ -4568,7 +4579,7 @@ Texture dimensions for `icon_sheet` do **not** need to be power-of-2 — that wa
 
 > **Pixel/Icon/Textured bar depth scaling:** these three styles render at a fixed screen-pixel size regardless of camera distance. Depth-based scaling is not yet implemented for any of them (only `Ascii`/`stat_label` support it).
 
-> **Split-screen visibility:** `stat_label` and all four `world_stat_bar` styles (`Ascii`, `Pixel`, `Icon`, `Textured`) correctly duplicate across simultaneously-visible split viewports (local co-op scenes with `camera.split` configured) — each active viewport gets its own correctly-positioned copy, same as portal room-name labels. `ShowDamagePopup` and `ShowFloatingText` popups duplicate too (in split-screen scenes they appear in every viewport that can see the entity). **Nameplates do not duplicate:** an entity's nameplate shows in only one viewport, the first one (in player-slot order) in which the entity is on screen. **This applies to co-op players too**: any `world_stat_bar` style works correctly on a split-screen player prefab — pick whichever look you want, duplication is not a factor in that choice.
+> **Split-screen visibility:** `stat_label` and all four `world_stat_bar` styles (`Ascii`, `Pixel`, `Icon`, `Textured`) correctly duplicate across simultaneously-visible split viewports (local co-op scenes with `camera.split` configured) — each active viewport gets its own correctly-positioned copy, same as portal room-name labels. `ShowDamagePopup` and `ShowFloatingText` popups duplicate too (in split-screen scenes they appear in every viewport that can see the entity). **This applies to co-op players too**: any `world_stat_bar` style works correctly on a split-screen player prefab — pick whichever look you want, duplication is not a factor in that choice. **Nameplates are the exception:** an entity's nameplate shows in only one viewport (see [Split-screen camera](#split-screen-camera-splitscreendef-)).
 >
 > **`Ascii` is a prototyping/debug style; `Pixel`, `Icon`, and `Textured` are the production-quality choices.** `Ascii` is the silent default when `style` is omitted, so a `world_stat_bar` that doesn't set `style` explicitly is using the prototyping look by default — set `style: Pixel(...)` for a solid-fill bar, `style: Icon(...)` for a discrete pip/heart display, or `style: Textured(...)` for an art-directed continuous bar with rounded caps/borders. `Ascii` may be retired in a future version; existing bars with no `style` set will keep working until then.
 
