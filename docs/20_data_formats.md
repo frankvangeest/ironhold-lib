@@ -1946,7 +1946,7 @@ Decals use `LevelEntity` — they are automatically cleaned up on scene transiti
 
 | Format | Use for | Notes |
 |--------|---------|-------|
-| `.wav` | Short SFX (jumps, clicks, pickups) | Uncompressed PCM — zero decode overhead, instant playback |
+| `.wav` | Short SFX (jumps, clicks, pickups) | Uncompressed PCM — zero decode overhead, instant playback. OGG and MP3 decoder start-up is most noticeable on the first play in a web build |
 | `.ogg` | Music and long ambient loops | Compressed; smaller files, minor decode cost acceptable for long audio |
 | `.mp3` | Music only (avoid for new work) | Worse quality/size ratio than OGG; use OGG instead |
 
