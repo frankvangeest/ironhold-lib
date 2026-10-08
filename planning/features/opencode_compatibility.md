@@ -678,7 +678,7 @@ unknowns are "check it, don't assume it" items, handled in the verification chec
 - `` !`cmd` `` expansion in JSON templates;
 - the Gemini key's billing status;
 - Zen's actual free limits;
-- whether OpenRouter's 1000/day tier survives the balance dropping below $10.
+- whether OpenRouter's 1000/day tier survives the balance dropping below $10. **Resolved 2026-10-08 (Frank; third-party sources benchlm.ai and ask-coreai.com):** it does, the threshold counts lifetime purchases, not the balance; a negative balance still returns 402 even on free models.
 
 ## Acceptance criteria
 
