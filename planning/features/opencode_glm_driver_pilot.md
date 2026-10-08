@@ -47,7 +47,7 @@ section 6):**
 **Design:**
 - A short driver prompt (for example `.opencode/prompts/driver.md`) with three rules: delegate review, test-writing and
   documentation-lookup work to the named subagents; if a subagent errors or returns nothing usable, retry **once** with its
-  `-alt` twin; never use a `*-deep` agent unless the user asks for it by name.
+  next agent in the role's chain (see "Fallback chains"); never use a `*-deep` agent unless the user has said yes to it.
 - A roster table in `.opencode/README.md`: role, primary agent (free model A), twin `<role>-alt` (free model B on another
   provider, as the C tier already does on purpose), and the existing paid `-deep` twin (denied for delegation).
 - **Keep the paid driver from leaking spend to other agents:** give `general` and every command that sets no model an explicit
@@ -70,7 +70,7 @@ How it fits the routing design:
   (the paid model). A model that only works while a local process is running is a good *primary agent for a role* with a free
   OpenRouter twin as `-alt`, not the driver. Best fit: reviews (`system-architect`, `debug-detective`, `alignment-reviewer`),
   which are advisory only anyway.
-- **Proxy down looks like a 429:** the delegation errors, the driver retries once with the `-alt` twin. No extra mechanism.
+- **Proxy down looks like a 429:** the delegation errors and the driver moves to the next agent in the role's chain (the free primary, then `-alt`). No extra mechanism.
 - **Portability:** the repo's `.opencode/opencode.json` must stay valid on a machine without the proxy (the sync check
   validates model ids against `opencode models`). Decision for Frank: either (a) keep `m365/...` out of the repo config and put
   the agent overrides in the machine-local global config, or (b) add `m365` agents to the repo config with documented
@@ -131,7 +131,7 @@ and what they change (this section **overrides** the earlier sections where they
 - **Pilot worktrees** are created with `git worktree add --detach` at an `integration` commit that already has `.opencode/` (so the
   post-checkout hook adds nothing and the base stays pinned); fixtures stay in those throwaway worktrees and are never committed
   under `assets/projects/`.
-- **Thresholds, pre-registered (proposed; Frank to confirm before any run):** aggregate over 15 runs per model (5 tasks x 3): pass
+- **Thresholds, pre-registered (Frank confirmed 2026-10-08):** aggregate over the 5 core tasks x 3 runs = 15 runs per model (`toolcall` and the routing task are judged by their own criteria, not in this denominator): pass
   rate at least 80% and not below the current free default's rate; cost per task at most $0.10 on average and $0.25 worst case;
   median wall time per task no worse than twice the free default's. Tie-break: the cheaper model. If DeepSeek beats GLM within the
   budget it is eligible to become the driver (Frank may veto).
@@ -162,6 +162,48 @@ and what they change (this section **overrides** the earlier sections where they
   reviewer-only delegate of last resort (after the free primary) instead of first choice. The same task is run against GLM (as
   driver) and the free agents, so the numbers are comparable.
 
+## Re-review resolutions (2026-10-08, after the second review)
+Both reviewers: "Not ready, but close"; the points below are the editing pass. Where this section differs from an earlier one, it wins.
+
+**One rule for `*-deep`.** `*-deep` agents are paid. They are **never part of an automatic chain**: the driver may only *offer* one
+to the user (attended runs: `permission.task` is `ask`, the user answers) and a headless run keeps `deny`. So "no `*-deep` ran"
+stays true for every automatic path, and "GLM asks before paid" is the same rule.
+
+**Fallback chains** (one place; the driver prompt and the README roster are generated from this). The driver tries the next step
+at most **twice** per delegation; when the chain is exhausted it **stops and reports** (never does the work itself).
+
+| Role group | Proxy running | Proxy not running | Then |
+|---|---|---|---|
+| `system-architect`, `debug-detective` | `-m365` > free primary > `-alt` | free primary > `-alt` | stop and report; attended: offer the `-deep` agent |
+| `alignment-reviewer`, `wasm-perf-reviewer` | `-m365` > free primary > `-alt` | free primary > `-alt` | stop and report |
+| `integration-test-author`, `ron-gameplay-scripter`, `data-format-doc-writer`, `explore` | free primary > `-alt` | same | stop and report |
+| `ux-gamedesigner-reviewer`, `game-world-designer` (Gemini, no twin) | Gemini | Gemini | stop and report |
+
+(The chain is the same attended and headless; only the final "offer `-deep`" step differs, and it does not run headless.)
+
+**Credential guard does not depend on `ask`.** Besides the bash deny patterns, `read` and `external_directory` get an explicit
+`deny` for `C:\ProgramData\m365-copilot-proxy` (bash patterns are easy to bypass with `type`, `Get-Content`, `python -c`). The V18
+task verifies it with `opencode debug agent build --tool read` on a file in that folder (expected: denied), and the probe's
+`--agents` assertion checks the deny rule is present on every agent.
+
+**`toolcall` run counts match the budget.** m365 and the free agents cost nothing, so they run `toolcall` **15 times** (the 90%
+well-formed and 13-of-15 criteria stand). GLM and DeepSeek run it **5 times** each (criteria restated: 100% of calls well-formed
+is not required, at least 90% is, and each criterion met in at least 4 of 5 runs). The task count is 7 (5 core, `toolcall`, routing).
+
+**Classifier and parity.** The allow-list has a "machine-local, no extra cost" class containing exactly
+`m365/gpt-5.5-think-deeper` (never `m365/m365-copilot`), so `--agents` does not fail closed on the global `-m365` agents;
+`check_deep_twins_match` covers `-m365` prompt parity where those agents are visible. The global `-m365` agents' absolute
+`{file:}` paths tie them to the primary checkout's prompt files; that is accepted and documented in the README.
+
+**README roster legend.** One legend above the roster explains the four suffixes: none = free primary (repo config); `-alt` = free
+twin on another upstream lab (repo config); `-m365` = machine-local, needs the proxy running, free of extra cost (global config
+only, "agent not found" elsewhere); `-deep` = paid, asks first (repo config). Each roster row shows paid/free, asks-first and where
+the agent is defined. `integration-test-author` (nex) and `ron-gameplay-scripter` (laguna) get twins from a lab different from both
+their primary and the driver's fallback candidates.
+
+**Numbers.** Thresholds are confirmed. The OpenRouter key's hard spend limit is proposed at **$3** on a pilot-only key (the
+script's own cap is $2, so the script stops first); Frank to confirm the $2 and $3.
+
 ## Approach (when unblocked)
 - **Tasks** (4-5, identical prompt per model, each with a mechanical pass criterion): follow a folder rule (a change that
   must respect a "never"); edit a RON file then `validate` passes; answer a question that needs a `docs/dev` pointer; a
@@ -174,21 +216,25 @@ and what they change (this section **overrides** the earlier sections where they
   current default's rate, with cost per task under a stated amount. "At least as many as the default" over 5 tasks is mostly noise.
 - **A routing task** (the one that matters for decision 1): given a short brief, the driver must pick the right subagent,
   and when the primary agent is made to fail (a throwaway config with an invalid model id for it) it must recover through
-  the `-alt` twin and not touch a `*-deep` agent. Pass criterion: the final artifact is correct and no `*-deep` agent ran.
-- **Models:** `glm-5.3-flash` (pinned), the current free default driver, and the E-tier DeepSeek as the reference.
+  the next agent in the chain and not touch a `*-deep` agent without a yes. Pass criterion: the final artifact is correct and no
+  `*-deep` agent ran (the routing failure is injected on a role that is not `system-architect`/`debug-detective`, whose chains
+  start with m365).
+- **Models:** `glm-5.3-flash` (pinned), the current free default driver, the E-tier DeepSeek as the reference, and
+  `m365/gpt-5.5-think-deeper` as a delegate (its runs cost nothing, so they sit outside the cap ordering).
 - **Cost cap $2** (see Plan-review outcome), enforced in the script by summing `step_finish.part.cost` and aborting, plus a spend
   limit on the OpenRouter key.
 - **Known-limitations pass:** run the mandatory SAFE/CAUTION/AVOID check from `opencode_free_models.md` section 5 on GLM
   before routing anything to it. Record the date and, if `opencode export` exposes it, the upstream provider (pinning an id
   is not a snapshot).
 - **If adopted:** the model goes in the `.opencode/README.md` tier table as a new "cheap paid" tier (not in the free-models
-  catalog), with the agent from decision 1; run `python tools/opencode_sync_check.py`.
+  catalog), with the GLM driver (Decisions 1); run `python tools/opencode_sync_check.py`.
 
 ## Tasks
 - [x] Frank's two decisions (2026-10-08, above)
 - [x] Plan-review 2026-10-08 and Frank's answers (above); V17 verified
-- [ ] Verify and record V18 (prompt delivery: `agent.build.prompt` vs `instructions`) and the headless `ask` behaviour
-- [ ] Driver prompt, roster table (with the upstream lab per agent) and `-alt` twins for the roles Frank picks
+- [ ] Verify and record V18 (prompt delivery: `agent.build.prompt` vs `instructions`), the headless `ask` behaviour, and that the proxy folder is denied to `read`
+- [ ] Frank confirms the $2 cap and the $3 key limit
+- [ ] Driver prompt, roster table (with the upstream lab per agent) and `-alt` twins for the eight roles on free models (Follow-up decisions)
 - [ ] Explicit free models on `general` and the no-model commands; shared free-model classifier in `tools/_opencode_common.py`; `opencode_sync_check.py` rule for paid ids on allow-listed keys; deny rules for the m365 proxy folder; `*-deep` task permission `ask`
 - [ ] Extend the probe for agents (all model-free): an
   `--agents` assertion runs `opencode debug agent <name>` with no `--tool` for every configured agent and checks that `read`
@@ -207,6 +253,6 @@ and what they change (this section **overrides** the earlier sections where they
 ## Acceptance criteria
 - Given the pilot ran, then the plan records success, wall time, tokens and cost per task per model with at least 3 runs
   each, and the decision follows the thresholds that were written down before the run.
-- Given GLM is adopted as the driver, then the README states the changed guarantee (driver paid, delegates free unless `*-deep`
-  is named), no agent other than the driver and the `*-deep` agents has a paid model (checked by `opencode_sync_check.py`),
+- Given GLM is adopted as the driver, then the README states the changed guarantee (driver paid, delegates free, `*-deep` only
+  after a yes), no agent other than the driver and the `*-deep` agents has a paid model (checked by `opencode_sync_check.py`),
   the model id is pinned, and the routing task passes (correct subagent, recovery through `-alt`, no `*-deep` run).
