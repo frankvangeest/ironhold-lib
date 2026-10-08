@@ -52,6 +52,8 @@ def not_found_message(tool: str, static_hint: bool = True) -> str:
     lines.append(f"On this Windows machine OpenCode is installed under nvs node {NVS_VERSION}. In the same terminal run:")
     lines.append(f"    nvs use {NVS_VERSION}")
     lines.append(f"    python tools/{tool}.py")
+    lines.append("Global npm tools exist per Node version: if the active version lacks it, `nvs use` one that has it, or run "
+                 "`npm install -g opencode-ai` on the active (even-numbered LTS) version.")
     installs = nvs_installs()
     if installs:
         lines.append(f"(An nvs install exists at {installs[0]}; setting OPENCODE_BIN to it also works.)")
