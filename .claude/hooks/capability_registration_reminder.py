@@ -15,7 +15,7 @@ try:
             "  2. ironhold_core/src/lib.rs  — .add_plugins(MyCapabilityPlugin) and system scheduling\n"
             "  3. schema/                   — RON-serializable type in scene/prefab struct (if designer-configurable)\n"
             "  4. schema/actions.rs         — new Action variants (if capability dispatches actions)\n"
-            "  5. docs/ + CLAUDE.md         — crates/ironhold_core/src/CLAUDE.md capability notes\n"
+            "  5. docs/ + CLAUDE.md         — crates/ironhold_core/src/capabilities/CLAUDE.md (rules) and, for long-form notes, a docs/dev/ topic page\n"
             "For composite prefabs: wire capabilities in BOTH branches of scene_loader.rs (single-mesh AND composite)."
         )
 except Exception:
