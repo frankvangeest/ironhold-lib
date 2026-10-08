@@ -16,6 +16,15 @@ nothing enforces that automatically. This script checks for the three ways they 
      for the free/paid split (see the plan's "Naming and defaults" section) depends on both using
      the identical underlying prompt, differing only in description/model.
 
+Two static checks need no `opencode` binary at all (they guard what OpenCode loads; see the verified-facts table in
+.opencode/README.md, rows V1, V2 and V5, and tools/opencode_probe.py for the live counterpart):
+
+  5. No `AGENTS.md` or `CONTEXT.md` in a subfolder. OpenCode takes the first of AGENTS.md > CLAUDE.md > CONTEXT.md per
+     folder and does NOT expand `@CLAUDE.md` inside an AGENTS.md, so such a file shadows the folder's real CLAUDE.md and
+     the model sees only its literal text (found 2026-10-08 with OpenCode 1.18.33). The repo root is exempt.
+  6. No `instructions` entry in opencode.json that matches `.claude/rules/` (OpenCode never reads those files on its own,
+     so loading them through `instructions` would also load every stub at session start).
+
 It also checks a fourth, unrelated failure mode found the hard way during v1's live testing
 (2026-09-22: `opencode/deepseek-v4-flash-free` had already disappeared from the live Zen model
 list by the time it was tested, only a couple of hours after being verified present): every model
@@ -36,12 +45,16 @@ Exit code: 0 if no drift found, 1 if any check reports a problem, 2 on a tool-le
 """
 
 import argparse
+import fnmatch
 import json
+import os
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _opencode_common import find_opencode, not_found_message  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OPENCODE_DIR = REPO_ROOT / ".opencode"
@@ -50,6 +63,10 @@ CLAUDE_AGENTS_DIR = REPO_ROOT / ".claude" / "agents"
 CLAUDE_COMMANDS_DIR = REPO_ROOT / ".claude" / "commands"
 
 FILE_REF_RE = re.compile(r"\{file:([^}]+)\}")
+
+# Folders the static scan never enters (OpenCode would not meaningfully load from them, or they are not part of the repo).
+SKIP_DIRS = {".git", "target", "pkg", "node_modules", "__pycache__"}
+SHADOWING_NAMES = ("AGENTS.md", "CONTEXT.md")
 
 
 def load_config() -> dict:
@@ -148,14 +165,48 @@ def collect_model_ids(config: dict) -> set[str]:
     return ids
 
 
+def check_no_subfolder_instruction_files(root: Path = REPO_ROOT) -> list[str]:
+    """AGENTS.md / CONTEXT.md below the repo root shadow the CLAUDE.md beside them in OpenCode and are not @-expanded."""
+    problems = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        rel_dir = Path(dirpath).relative_to(root)
+        # `.claude/worktrees` holds ephemeral agent worktrees (git-excluded); never descend into them.
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not (rel_dir == Path(".claude") and d == "worktrees")]
+        if rel_dir == Path("."):
+            continue
+        for name in SHADOWING_NAMES:
+            if name in filenames:
+                beside = " (it shadows the CLAUDE.md beside it)" if "CLAUDE.md" in filenames else ""
+                problems.append(
+                    f"{(rel_dir / name).as_posix()}: a subfolder {name} is attached as literal text, `@CLAUDE.md` is not "
+                    f"expanded{beside}; delete it (docs/dev/claude_md_maintenance.md)"
+                )
+    return sorted(problems)
+
+
+def check_instructions_not_matching_rules(config: dict, root: Path = REPO_ROOT) -> list[str]:
+    """`instructions` globs must not match `.claude/rules/*.md` (OpenCode never reads them; loading would be a mistake)."""
+    problems = []
+    rules = sorted(p.relative_to(root).as_posix() for p in (root / ".claude" / "rules").glob("*.md")) if (root / ".claude" / "rules").is_dir() else []
+    for entry in config.get("instructions", []) or []:
+        norm = str(entry).replace("\\", "/")
+        while norm.startswith("./"):
+            norm = norm[2:]
+        if norm.startswith(".claude/rules") or any(fnmatch.fnmatch(r, norm) for r in rules):
+            problems.append(f"instructions entry '{entry}' matches .claude/rules (path-scoped Claude Code stubs; OpenCode must not load them)")
+    return problems
+
+
 def check_models_still_exist(config: dict) -> tuple[list[str], bool]:
     """Cross-check every referenced model ID against the live `opencode models` list.
 
     Returns (problems, ran) -- `ran` is False if the opencode CLI wasn't available, so the caller
     can distinguish "checked, found nothing wrong" from "couldn't check at all".
     """
-    opencode_bin = shutil.which("opencode")
+    opencode_bin = find_opencode()
     if opencode_bin is None:
+        print(not_found_message("opencode_sync_check", static_hint=False))
+        print("(Skipping the live model-availability check; everything else still runs. `--skip-models` silences this.)")
         return [], False
 
     try:
@@ -202,6 +253,8 @@ def main() -> int:
         ("Missing {file:} targets", check_missing_file_refs(config)),
         ("Unreferenced .claude/ files", check_unreferenced_claude_files(config)),
         ("-deep prompt drift", check_deep_twins_match(config)),
+        ("Subfolder AGENTS.md / CONTEXT.md", check_no_subfolder_instruction_files()),
+        ("`instructions` matching .claude/rules", check_instructions_not_matching_rules(config)),
     ]
 
     models_ran = False
