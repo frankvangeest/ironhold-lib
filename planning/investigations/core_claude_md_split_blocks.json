@@ -124,7 +124,7 @@
    "also": [],
    "dest_raw": "SM",
    "governs": [
-    "crates/ironhold_core/src/**"
+    "crates/ironhold_core/src/runtime/scene_manager/**"
    ],
    "subs": [],
    "text_sha1": "c91a2c3c94b15c8daeb99fb3e97c87658322516c",
@@ -184,7 +184,7 @@
    "also": [],
    "dest_raw": "SM",
    "governs": [
-    "crates/ironhold_core/src/**"
+    "crates/ironhold_core/src/runtime/scene_manager/**"
    ],
    "subs": [],
    "text_sha1": "7aa71ec394f0e1df3054922a4c3659470641c053",
@@ -251,7 +251,7 @@
    "also": [],
    "dest_raw": "SM",
    "governs": [
-    "crates/ironhold_core/src/**"
+    "crates/ironhold_core/src/runtime/scene_manager/**"
    ],
    "subs": [],
    "text_sha1": "fe9d8fb5736243dc904b1f8089f97bc2d945c738",
@@ -305,11 +305,11 @@
    "also": [],
    "dest_raw": "SM (trim ~40%)",
    "governs": [
-    "crates/ironhold_core/src/**"
+    "crates/ironhold_core/src/runtime/scene_manager/**"
    ],
    "subs": [],
    "text_sha1": "231eec7c225a64047d7bd6b2c8d4733e452a74bd",
-   "review": true,
+   "review": false,
    "notes": "170-175 (~500 chars) is `dialogue.rs` → CAP stub",
    "orig_lines": [
     [
@@ -335,7 +335,7 @@
    "governs": [],
    "subs": [],
    "text_sha1": "df5567db7577b08bf54a5709e0673d63a08b5d61",
-   "review": true,
+   "review": false,
    "notes": "\"same as `{self}` above\" must be rewritten",
    "orig_lines": [
     [
@@ -408,7 +408,9 @@
    "type": "GOTCHA",
    "safety": "Y",
    "dest": "CAP",
-   "also": [],
+   "also": [
+    "SM"
+   ],
    "dest_raw": "CAP",
    "governs": [
     "crates/ironhold_core/src/capabilities/action_bar.rs",
@@ -949,7 +951,7 @@
    "also": [],
    "dest_raw": "SM",
    "governs": [
-    "crates/ironhold_core/src/**"
+    "crates/ironhold_core/src/runtime/scene_manager/**"
    ],
    "subs": [],
    "text_sha1": "9359101ea56ef49d451de47aab206bbf19001ccf",
@@ -1166,7 +1168,7 @@
    "also": [],
    "dest_raw": "SM",
    "governs": [
-    "crates/ironhold_core/src/**"
+    "crates/ironhold_core/src/runtime/scene_manager/**"
    ],
    "subs": [],
    "text_sha1": "7441424887299ce0632b5d585019346c66597aaa",
@@ -2110,7 +2112,7 @@
    "also": [],
    "dest_raw": "SM",
    "governs": [
-    "crates/ironhold_core/src/**"
+    "crates/ironhold_core/src/runtime/scene_manager/**"
    ],
    "subs": [],
    "text_sha1": "c7e9f114fc6930d7ce54f92ef136a5eb11280b41",
@@ -2272,7 +2274,9 @@
    "type": "GOTCHA+RAT",
    "safety": "Y",
    "dest": "CAP",
-   "also": [],
+   "also": [
+    "SM"
+   ],
    "dest_raw": "CAP (collapse to current state)",
    "governs": [
     "crates/ironhold_core/src/capabilities/player.rs",
@@ -2718,11 +2722,11 @@
    "also": [],
    "dest_raw": "SM (or PARENT)",
    "governs": [
-    "crates/ironhold_core/src/**"
+    "crates/ironhold_core/src/runtime/scene_manager/**"
    ],
    "subs": [],
    "text_sha1": "dade0d7dee28cc92446dabb1e6ab33557c672c04",
-   "review": true,
+   "review": false,
    "notes": "Spawn must go through the queue; clear on `LoadScene`; heading \"Dynamic spawning\" may be cited",
    "orig_lines": [
     [
@@ -2751,7 +2755,7 @@
     "ref"
    ],
    "text_sha1": "731bafc848c11bbdfe22fcd6543a81efb55afc94",
-   "review": true,
+   "review": false,
    "notes": "callers span `scene_loader.rs`, `entity_spawner.rs`, `action_executor.rs` → place where all load",
    "orig_lines": [
     [
@@ -2780,7 +2784,7 @@
     "ref"
    ],
    "text_sha1": "2168f736fe430ee1a85d31f58f5e8fe6ad43100b",
-   "review": true,
+   "review": false,
    "notes": "starts as a bullet of the previous list",
    "orig_lines": [
     [
