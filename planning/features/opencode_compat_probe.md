@@ -1,6 +1,6 @@
 # Feature: OpenCode compatibility probe, verified-facts table and CLAUDE.md maintenance guide
 
-_Status: Ready (revised after plan-review, 2026-10-08)_
+_Status: In Progress (implemented 2026-10-08; awaiting Frank's check, reviews and merge)_
 _Planned at: `37de6f4` (2026-10-08); revised at `edc93f1` after plan-review (system-architect, ux-gamedesigner-reviewer)_
 
 The GLM 5.3 flash driver pilot that was v2 of the first draft is now its own plan,
@@ -142,18 +142,20 @@ One line for the `juva-nvs` skill in the `ai-workspace` repo ("opencode is insta
 are managed by that repo and are not edited from here.
 
 ## Tasks
-- [ ] `tools/_opencode_common.py` (`find_opencode()`: `OPENCODE_BIN`, `shutil.which`, nvs hint) and use it in both tools
-- [ ] `tools/opencode_probe.py`: model-free probe over the debug read path, tree-derived expectations, negative files,
+- [x] `tools/_opencode_common.py` (`find_opencode()`: `OPENCODE_BIN`, `shutil.which`, nvs hint) and use it in both tools
+- [x] `tools/opencode_probe.py`: model-free probe over the debug read path, tree-derived expectations, negative files,
   temp `XDG_*` isolation, version warning, `--static`, `--only`, `--dir`, `--json`, `--selftest`
-- [ ] `--live` (baseline tokens, skill count, retries on empty responses, free-only unless `--allow-paid`, session cleanup, `--max-cost`)
-- [ ] `tools/opencode_sync_check.py`: subfolder `AGENTS.md`/`CONTEXT.md` check and "`instructions` must not match `.claude/rules`"
-- [ ] One-off checks while implementing: attach set identical with and without plugins (`--pure`); settle U1 and U2
-- [ ] Facts table in `.opencode/README.md` (seed rows above), fold in the old tested-version line, and the drift-section sentence
-- [ ] `docs/dev/claude_md_maintenance.md` with the section order above, and the four links
-- [ ] Draft the `juva-nvs` line and hand it to Frank
-- [ ] Log a `planning/claude_suggestions.md` entry: the baseline is inflated by 27 machine-local skills and a global `AGENTS.md`
-- [ ] Tests: `--selftest` fixtures for expectation computation and debug-JSON parsing
-- [ ] Docs: `.opencode/README.md`, a cross-reference in `planning/features/opencode_compatibility.md`
+- [x] `--live` (baseline tokens, skill count, retries on empty responses, free-only unless `--allow-paid`, session cleanup, `--max-cost`)
+- [x] `tools/opencode_sync_check.py`: subfolder `AGENTS.md`/`CONTEXT.md` check and "`instructions` must not match `.claude/rules`"
+- [x] One-off checks while implementing: attach set identical with and without plugins (`--pure`); settle U1 and U2
+- [x] Facts table in `.opencode/README.md` (seed rows above), fold in the old tested-version line, and the drift-section sentence
+- [x] `docs/dev/claude_md_maintenance.md` with the section order above, and the four links
+- [x] Draft the `juva-nvs` line and hand it to Frank
+- [x] Log a `planning/claude_suggestions.md` entry: the baseline is inflated by 27 machine-local skills and a global `AGENTS.md`
+- [x] Tests: `--selftest` fixtures for expectation computation and debug-JSON parsing
+- [x] Docs: `.opencode/README.md`, a cross-reference in `planning/features/opencode_compatibility.md`
+
+_Implementation notes (2026-10-08): the probe resolves the repo from the script's own location or `--dir` instead of exiting when run from a subfolder; it also warns if new sessions appear in the real OpenCode history (V15); `--live` showed a 25.5k-token baseline on the free F-tier model and 31.8k on GLM 5.3 flash (the baseline depends on the model too). U1, U2 and the `--pure` question are settled and are rows V12-V14 of the facts table: plugins do not change the attach set, a nested agent worktree's `CLAUDE.md` attaches like any folder file, and reading a sibling worktree's file from the primary checkout attaches that worktree's folder files and its root `AGENTS.md` (unlike Claude Code)._
 
 ## Plan-review (2026-10-08) and what changed
 **system-architect, needs more design work:** (1) the model-free debug read path replaces the model-driven probe (no empty

@@ -3,11 +3,11 @@
 Design doc: `planning/features/opencode_compatibility.md` (read that first for the full reasoning
 — this file is the quick-reference for actually using the setup).
 
-**Tested OpenCode version:** `1.18.31` (confirmed 2026-09-22 — config loads clean, `instructions`/
-`{file:}`/delegation/the `-deep` permission deny were all live-tested against this exact version;
-see `planning/features/opencode_compatibility.md`'s verification checklist for what was and wasn't
-covered). The design itself was researched against the `sst/opencode@dev` source tree, so if a
-future OpenCode release changes behavior, `opencode debug config` is the first thing to check.
+**OpenCode version:** load behaviour was last verified on `1.18.33` (2026-10-08, see the table below; the probe warns when
+`opencode --version` differs). The configuration itself (`instructions`, `{file:}`, delegation, the `-deep` permission
+deny) was live-tested on `1.18.31` (2026-09-22; `planning/features/opencode_compatibility.md`'s verification checklist
+says what was and was not covered). The design was researched against `sst/opencode@dev`, so if a release changes
+behaviour, `opencode debug config` is the first thing to check.
 
 ## The rule that matters most
 
@@ -35,6 +35,36 @@ the project your key belongs to has **no billing account linked**. If billing is
 `planning/features/opencode_compatibility.md` finding F10. If billing turns out to be on, switch
 `ux-gamedesigner-reviewer`/`game-world-designer` in `opencode.json` to
 `openrouter/thinkingmachines/inkling:free` instead.
+
+## Verified compatibility facts
+
+<!-- opencode-verified-version: 1.18.33 -->
+What we depend on in OpenCode, how to re-verify it, and what breaks if it changes. **Re-verify after every OpenCode upgrade and
+after editing any `CLAUDE.md` or `.opencode/opencode.json`** with `python tools/opencode_probe.py` (model-free, about 40 s; add
+`--live` for the token baseline). Editing instruction files: `docs/dev/claude_md_maintenance.md`. All rows were verified on
+OpenCode `1.18.33` on 2026-10-08 unless the status says otherwise.
+
+**Running OpenCode on this Windows machine:** it is installed under nvs node 24.21 and is on `PATH` only after `nvs use 24.21`
+**in the same terminal** (it is not on the Bash `PATH`). Or set `OPENCODE_BIN` to
+`C:\ProgramData\nvs\node\24.21.0\x64\node_modules\opencode-ai\bin\opencode.exe`.
+
+| ID | Fact | Status | Re-verify | What breaks if it changes |
+|---|---|---|---|---|
+| V1 | Reading a file attaches, for each folder from the file's own folder up to (not including) the root, the first of `AGENTS.md` > `CLAUDE.md` > `CONTEXT.md` | verified | `python tools/opencode_probe.py` | folder rules stop reaching OpenCode and the lazy per-folder loading is lost |
+| V2 | A subfolder `AGENTS.md` shadows the `CLAUDE.md` beside it, and `@CLAUDE.md` inside it is **not** expanded: the model gets the literal text and the real rules are lost | verified | `python tools/opencode_probe.py --static` (also `python tools/opencode_sync_check.py --skip-models`) | if `@file` starts being expanded, stubs become possible and this row, the sync check and the guide must change |
+| V3 | Root files are not attached: `AGENTS.md` arrives by discovery and `CLAUDE.md` through `instructions` in `opencode.json`; nothing loads twice | verified | `python tools/opencode_probe.py --only Cargo.toml` (attaches nothing); `opencode debug config` | root rules missing or doubled (about 14.8k tokens) |
+| V4 | HTML comments are **not** stripped: `<!-- b:N -->` anchors reach the model (2.7 KB across the 21 probe files) | verified | the probe prints the byte total | wasted context; if it grows, move the anchors to a sidecar |
+| V5 | `.claude/rules/*.md` are never attached (the read tool only looks for AGENTS/CLAUDE/CONTEXT), so the pointer lines in the folder files are the only route to `docs/dev` topic pages | verified | `python tools/opencode_probe.py --only .claude/rules/lootable-corpse.md` (attaches nothing) | topic references become unreachable under OpenCode if the pointers go |
+| V6 | `opencode debug agent build --tool read --params "{filePath:'<repo path>',limit:2}"` runs the read tool with no model and lists the attached files in `result.metadata.loaded` (single quotes, repo-relative forward slashes) | verified | `python tools/opencode_probe.py` | the model-free probe stops working if the debug interface changes; `--live` is the fallback |
+| V7 | The default driver is the top-level `model` in `.opencode/opencode.json`, currently free Laguna; `build` has no model of its own | verified | `opencode debug config` | changing it changes which agents are paid (`planning/features/opencode_glm_driver_pilot.md`) |
+| V8 | The fixed token baseline of a trivial session is **machine- and model-specific**: 25.5k input tokens with `opencode/nemotron-3.5-lightning-free`, 31.8k with GLM 5.3 flash; 27-28 skills from `~/.agents/skills` and the synced `~/.claude/skills`, plus `~/.config/opencode/AGENTS.md`, are in it | verified | `python tools/opencode_probe.py --only crates/ironhold_core/src/capabilities/action_bar.rs --live` | session cost; compare only on the same machine and model |
+| V9 | OpenCode lives under nvs node 24.21 (see above) | verified | `nvs use 24.21` then `opencode --version` | the tools exit 2 with "not found" |
+| V10 | Free models can return 429 (shared upstream pool, whatever your own quota) or an empty response | verified | `python tools/opencode_probe.py --live` (retries; an empty response is never counted as a pass) | flaky free-tier runs; use a twin agent |
+| V11 | The `m365` provider in the global config (`~/.config/opencode/opencode.jsonc`, machine-local) points at a local proxy (`C:\ProgramData\m365-copilot-proxy`, `http://localhost:4141/v1`, started with `pnpm run proxy 4141`); model `m365/gpt-5.5-think-deeper`; works only while the proxy runs | verified from the config and the proxy README, not run | `python tools/opencode_probe.py --live --model m365/gpt-5.5-think-deeper` (preflights the proxy) | m365 agents fail like a 429 |
+| V12 | Plugins do not change the attach set (`--pure` gives the same files) | verified | `python tools/opencode_probe.py --pure --only crates/ironhold_core/src/runtime/scene_manager/action_executor.rs` | plugin-injected instructions would make runs diverge |
+| V13 | A nested `.claude/worktrees/agent-*/CLAUDE.md` attaches like any folder file | verified | probe a file under a temporary `.claude/worktrees/agent-x/` folder | an agent worktree inside the repo loads its own root `CLAUDE.md` |
+| V14 | Reading a sibling worktree's file from the primary checkout attaches that worktree's folder files **and its root `AGENTS.md`**; unlike Claude Code, where directory files do not load for it | verified | `python tools/opencode_probe.py --dir <worktree>`, or a debug read with an absolute path from another checkout | the "give review agents the worktree path and tell them to read the folder files" rule is Claude Code only |
+| V15 | `XDG_DATA_HOME`/`XDG_STATE_HOME` set to a temp dir keep debug runs out of the real session list | verified | compare `opencode session list` before and after a probe run (the probe warns if it changed) | session-history pollution |
 
 ## Model tiers
 
@@ -151,6 +181,10 @@ projects that have no instructions file of their own. It has no effect on this r
 own `AGENTS.md`) and isn't part of this repo's config.
 
 ## Checking for config drift
+
+Two tools, two jobs: `tools/opencode_sync_check.py` checks the **configuration** (agents, commands, prompts, model ids, plus two
+static checks: no subfolder `AGENTS.md`, no `instructions` entry matching `.claude/rules`), and `tools/opencode_probe.py` checks
+what OpenCode actually **loads** (the facts table above).
 
 `.opencode/opencode.json` pulls every prompt from `.claude/agents/*.md`/`.claude/commands/*.md`
 rather than duplicating them, so there's exactly one copy of each — but nothing stops the two

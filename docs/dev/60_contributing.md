@@ -62,6 +62,7 @@ For any capability change:
 - Update the relevant design docs under `docs/`.
 - If you introduce a new planned concept, label it 🧭.
 - If you ship an implemented subset, document it as ✅/🧪.
+- Editing a `CLAUDE.md`, a `.claude/rules` stub or an `AGENTS.md`: follow [claude_md_maintenance.md](claude_md_maintenance.md) (checklist first; how to check that Claude Code and OpenCode both load the right rules).
 
 ---
 
