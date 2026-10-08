@@ -16,13 +16,13 @@ nothing enforces that automatically. This script checks for the three ways they 
      for the free/paid split (see the plan's "Naming and defaults" section) depends on both using
      the identical underlying prompt, differing only in description/model.
 
-Two static checks need no `opencode` binary at all (they guard what OpenCode loads; see the verified-facts table in
+Two further static checks need no `opencode` binary at all (they guard what OpenCode loads; see the verified-facts table in
 .opencode/README.md, rows V1, V2 and V5, and tools/opencode_probe.py for the live counterpart):
 
-  5. No `AGENTS.md` or `CONTEXT.md` in a subfolder. OpenCode takes the first of AGENTS.md > CLAUDE.md > CONTEXT.md per
+  (a) No `AGENTS.md` or `CONTEXT.md` in a subfolder. OpenCode takes the first of AGENTS.md > CLAUDE.md > CONTEXT.md per
      folder and does NOT expand `@CLAUDE.md` inside an AGENTS.md, so such a file shadows the folder's real CLAUDE.md and
      the model sees only its literal text (found 2026-10-08 with OpenCode 1.18.33). The repo root is exempt.
-  6. No `instructions` entry in opencode.json that matches `.claude/rules/` (OpenCode never reads those files on its own,
+  (b) No `instructions` entry in opencode.json that matches `.claude/rules/` (OpenCode never reads those files on its own,
      so loading them through `instructions` would also load every stub at session start).
 
 It also checks a fourth, unrelated failure mode found the hard way during v1's live testing

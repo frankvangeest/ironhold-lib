@@ -18,8 +18,8 @@ Each item ends with how it is checked. "Human" means no tool can judge it.
 - [ ] A rule that must hold (the audit calls it Safety=Y) is in a file that loads for the files it governs, not only in a
   `docs/dev` topic page. *Check: human review; the audit only checks consistency with the `governs` globs someone wrote.*
 - [ ] Headings that code or tests cite are unchanged word for word (for example "Deterministic iteration order on gameplay
-  paths", cited by `tests/determinism_lint.rs`). *Check: `python tools/claude_md_audit.py full`, `cargo test -p ironhold_core
-  --test determinism_lint`.*
+  paths", quoted in a failure message by `tests/determinism_lint.rs`). *Check: human. Neither the audit nor that test verifies
+  that the heading still exists, so grep the old heading text across `crates/ tools/ .claude/ docs/` before renaming it.*
 - [ ] Size budgets hold: `capabilities/CLAUDE.md` at most 20,000 characters, the crate parent at most 18,000.
   *Check: `python tools/claude_md_audit.py full`.*
 - [ ] You added nothing to the root `CLAUDE.md` unless it is needed in **every** session (it is about 14.8k tokens and loads
@@ -53,15 +53,15 @@ Each item ends with how it is checked. "Human" means no tool can judge it.
 
 ## 4. Claude Code and OpenCode differ here
 
-| Behaviour | Claude Code (verified in the split's spike) | OpenCode 1.18.33 (verified by the probe) |
+| Behaviour | Claude Code (from the split's spike, or per the Claude Code docs where marked) | OpenCode 1.18.33 (verified by the probe) |
 |---|---|---|
 | Folder `CLAUDE.md` | loads lazily for files in its subtree | attached lazily on the first read of a file in the subtree (V1) |
 | `.claude/rules/*.md` with `paths:` | loads on Read/Edit/Write of a matching path | never read (V5) |
-| `@import` in `CLAUDE.md` | expanded | not applicable to subfolder files |
+| `@import` in `CLAUDE.md` | expanded (per the docs; the spike tested `@import` in a rules stub, which loads eagerly) | not applicable to subfolder files |
 | `AGENTS.md` stub | not used | shadows the `CLAUDE.md`, `@file` not expanded (V2) |
-| HTML comments in instruction files | stripped | reach the model (V4) |
+| HTML comments in instruction files | stripped (seen in a rules stub in the spike; per the docs for `CLAUDE.md`) | reach the model (V4) |
 | Reading a sibling worktree's file from the primary checkout | no folder file or rule loads (so tell review agents to read them) | the worktree's folder files **and its root `AGENTS.md`** load (V14) |
-| Subagents | get the folder files when they read files in the subtree | n/a (agents carry their own prompt) |
+| Subagents | get the folder files when they read files in the subtree | use the same read tool, so V1 applies (not separately verified per agent) |
 
 ## 5. How to verify
 

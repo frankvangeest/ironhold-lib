@@ -155,6 +155,16 @@ are managed by that repo and are not edited from here.
 - [x] Tests: `--selftest` fixtures for expectation computation and debug-JSON parsing
 - [x] Docs: `.opencode/README.md`, a cross-reference in `planning/features/opencode_compatibility.md`
 
+_Deviations from this plan, found in implementation and review (2026-10-08):_ the probe resolves the repo from its own location
+(or `--dir`) instead of exiting when run from a subfolder; `--live` tries `small_model` and then `model` (both filtered to free
+models; the plan had cut a fallback chain, but nothing paid can be reached); the facts table has a per-row "Verified on" column
+and a single version marker; a missing `result.metadata.loaded` key and a `loaded`/text disagreement now exit 2 ("debug
+interface changed") instead of looking like a failing CLAUDE.md; the isolation of the temp `XDG_*` dirs is proven with
+`opencode debug paths` (V15) and the real session list is compared before and after; `--only` accepts backslashes, `./` and
+absolute paths; `--live` notes go to stderr so `--json` stays clean. Review findings deferred to `planning/claude_suggestions.md`:
+a `--facts` mode that re-tests V2/V4/V13 on a throwaway tree, `--agent`/`--agents` for the pilot, and an audit check that cited
+headings still exist.
+
 _Implementation notes (2026-10-08): the probe resolves the repo from the script's own location or `--dir` instead of exiting when run from a subfolder; it also warns if new sessions appear in the real OpenCode history (V15); `--live` showed a 25.5k-token baseline on the free F-tier model and 31.8k on GLM 5.3 flash (the baseline depends on the model too). U1, U2 and the `--pure` question are settled and are rows V12-V14 of the facts table: plugins do not change the attach set, a nested agent worktree's `CLAUDE.md` attaches like any folder file, and reading a sibling worktree's file from the primary checkout attaches that worktree's folder files and its root `AGENTS.md` (unlike Claude Code)._
 
 ## Plan-review (2026-10-08) and what changed
@@ -172,10 +182,9 @@ checklist-first; facts table gains status, "what breaks" and row ids and moves u
 needed Frank are in the pilot plan.
 
 ## Open questions
-- Does the attach set differ with `--pure` (plugins off)? Settle during implementation (task above).
-- U1 and U2 (nested agent worktrees, sibling worktree from the primary checkout): settle with the probe, record in the table.
-- Should `opencode_probe.py` run as part of `/release`? Recommendation: no; run it manually after OpenCode upgrades or
-  `CLAUDE.md` edits, and let the static half run inside `opencode_sync_check.py`.
+All three were settled during implementation: attach set with plugins off is identical (V12); U1 and U2 are V13 and V14 of the
+facts table; the probe does not run as part of `/release` (manual after OpenCode upgrades or `CLAUDE.md` edits, the static half
+runs inside `opencode_sync_check.py`).
 
 ## Acceptance criteria
 - Given OpenCode on `PATH`, when `python tools/opencode_probe.py` runs, then for every probe file it prints the attached

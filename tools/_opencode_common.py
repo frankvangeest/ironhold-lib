@@ -44,7 +44,11 @@ def nvs_installs() -> list[str]:
 
 
 def not_found_message(tool: str, static_hint: bool = True) -> str:
-    lines = [f"{tool}: 'opencode' not found on PATH."]
+    env_bin = os.environ.get("OPENCODE_BIN")
+    if env_bin and not Path(env_bin).is_file():
+        lines = [f"{tool}: OPENCODE_BIN={env_bin} is not a file."]
+    else:
+        lines = [f"{tool}: 'opencode' not found on PATH."]
     lines.append(f"On this Windows machine OpenCode is installed under nvs node {NVS_VERSION}. In the same terminal run:")
     lines.append(f"    nvs use {NVS_VERSION}")
     lines.append(f"    python tools/{tool}.py")

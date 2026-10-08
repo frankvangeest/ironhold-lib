@@ -135,6 +135,38 @@ def choose_probe_files(tracked: list[str]) -> tuple[list[str], list[str]]:
 
 
 # --------------------------------------------------------------------------------------------- the model-free debug read
+def normalize_only(root: Path, value: str) -> str:
+    """`--only` accepts backslashes (PowerShell tab completion), `./` prefixes and absolute paths inside the repo."""
+    p = Path(value)
+    if p.is_absolute():
+        return relposix(root, p)
+    cleaned = value.replace("\\", "/")
+    while cleaned.startswith("./"):
+        cleaned = cleaned[2:]
+    return cleaned
+
+
+def parse_paths(text: str) -> dict:
+    """`opencode debug paths` prints `name   path` lines."""
+    out = {}
+    for line in text.splitlines():
+        parts = line.strip().split(None, 1)
+        if len(parts) == 2:
+            out[parts[0]] = parts[1].strip()
+    return out
+
+
+def check_isolation(binary: str, root: Path, env: dict, tmp: str) -> None:
+    """Positive proof that the XDG override is honoured (fact V15): `debug paths` must show data and state under `tmp`."""
+    proc = subprocess.run([binary, "debug", "paths"], cwd=root, env=env, capture_output=True, text=True, encoding="utf-8")
+    paths = parse_paths(proc.stdout)
+    base = os.path.normcase(os.path.normpath(tmp))
+    bad = [k for k in ("data", "state") if not os.path.normcase(os.path.normpath(paths.get(k, ""))).startswith(base)]
+    if proc.returncode != 0 or bad:
+        raise ProbeError("OpenCode did not honour XDG_DATA_HOME/XDG_STATE_HOME (`opencode debug paths` shows "
+                         f"{', '.join(bad) or 'no data'} outside {tmp}); a probe run could add sessions to your real history (fact V15)")
+
+
 def isolated_env() -> tuple[dict, str]:
     """Environment whose OpenCode data/state live in a temp dir, so debug sessions never reach the real history."""
     tmp = tempfile.mkdtemp(prefix="opencode_probe_xdg_")
@@ -158,7 +190,12 @@ def parse_json_text(text: str) -> dict:
 def attachments(data: dict) -> tuple[list[str], list[tuple[str, str]]]:
     """(metadata.loaded, [(path, body)] parsed from the `Instructions from:` blocks of the tool output), absolute paths as printed."""
     result = data.get("result") or {}
-    loaded = list((result.get("metadata") or {}).get("loaded", []))
+    meta = result.get("metadata")
+    if not isinstance(meta, dict) or "loaded" not in meta:
+        # `loaded` is [] (present) even when nothing attaches, so a missing key means OpenCode's debug interface changed.
+        raise ProbeError("debug interface changed: no result.metadata.loaded in the read output (fact V6 in .opencode/README.md); "
+                         "re-verify the facts table, or use --live")
+    loaded = list(meta["loaded"])
     blocks = [(m.group(1).strip(), m.group(2)) for m in BLOCK_RE.finditer(result.get("output", ""))]
     return loaded, blocks
 
@@ -187,7 +224,7 @@ def probe_one(binary, root: Path, rel: str, env: dict, pure: bool) -> dict:
     unexpected = [l for l in loaded if not any(same(l, e) for e in expected)]
     warn = []
     if sorted(map(os.path.normcase, loaded)) != sorted(map(os.path.normcase, block_paths)):
-        warn.append("metadata.loaded and the Instructions-from text disagree")
+        raise ProbeError(f"debug interface changed: metadata.loaded and the 'Instructions from:' text disagree for {rel} (fact V6)")
     size = sum(len(body.encode("utf-8")) for _, body in blocks)
     comment_bytes = sum(len(m.group(0).encode("utf-8")) for _, body in blocks for m in COMMENT_RE.finditer(body))
     return {"file": rel, "expected": expected, "attached": loaded, "missing": missing, "unexpected": unexpected,
@@ -214,6 +251,8 @@ def verified_version(root: Path):
 
 # ------------------------------------------------------------------------------------------------------------- --live
 def is_free_model(model_id: str) -> bool:
+    # m365/... goes through the local M365 Copilot proxy on the organisation's licence: no per-token cost (decision (a), 2026-10-08).
+    # Unknown ids fail safe: an id without a `:free`/`-free` suffix counts as paid.
     return model_id.endswith(":free") or model_id.endswith("-free") or model_id.startswith("m365/")
 
 
@@ -279,7 +318,7 @@ def run_live(binary: str, root: Path, config: dict, args, sample_file: str) -> d
     title_prefix = "opencode-probe"
     title = f"{title_prefix} {datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
     prompt = f"Read the first 3 lines of {sample_file} using the read tool, then reply DONE and nothing else."
-    print(f"--live: about {len(candidates)} model call(s) at most (about 20 s each); sessions titled '{title}' are deleted afterwards.")
+    print(f"--live: about {len(candidates)} model call(s) at most (about 20 s each); sessions titled '{title}' are deleted afterwards.", file=sys.stderr)
     spent, last_error = 0.0, "no attempt"
     try:
         for model in candidates:
@@ -315,7 +354,7 @@ def run_live(binary: str, root: Path, config: dict, args, sample_file: str) -> d
     finally:
         removed = delete_probe_sessions(binary, root, title_prefix)
         if removed:
-            print(f"--live: deleted {removed} probe session(s).")
+            print(f"--live: deleted {removed} probe session(s).", file=sys.stderr)
 
 
 # --------------------------------------------------------------------------------------------------------- reporting
@@ -395,8 +434,14 @@ def main(argv=None) -> int:
         try:
             tracked = tracked_files(root)
             positives, negatives = choose_probe_files(tracked)
-            files = [args.only] if args.only else positives + negatives
+            only = normalize_only(root, args.only) if args.only else None
+            files = [only] if only else positives + negatives
             env, tmp = isolated_env()
+            try:
+                check_isolation(binary, root, env, tmp)
+            except ProbeError:
+                shutil.rmtree(tmp, ignore_errors=True)
+                raise
             sessions_before = session_ids(binary, root)
             try:
                 for f in files:
@@ -410,7 +455,7 @@ def main(argv=None) -> int:
                                           f"(another OpenCode run in parallel, or XDG isolation stopped working; fact V15)")
             failed += sum(1 for r in report["results"] if r["status"] == "FAIL")
             if args.live:
-                sample = next((p for p in positives if "capabilities/" in p), positives[0] if positives else "Cargo.toml")
+                sample = only or next((p for p in positives if "capabilities/" in p), positives[0] if positives else "Cargo.toml")
                 report["live"] = run_live(binary, root, config, args, sample)
         except ProbeError as exc:
             print(f"{TOOL}: {exc}")
@@ -473,6 +518,14 @@ def selftest() -> int:
     check(parse_run_events("")["reads"] == 0, "no read event is detectable")
     check(is_free_model("openrouter/x/y:free") and is_free_model("opencode/n-free") and is_free_model("m365/gpt-5.5-think-deeper")
           and not is_free_model("openrouter/z-ai/glm-5.3-flash"), "free-model rule")
+    try:
+        attachments({"result": {"output": "x", "metadata": {}}})
+        check(False, "a missing metadata.loaded key must be an error")
+    except ProbeError:
+        check(True, "missing metadata.loaded raises")
+    check(attachments({"result": {"output": "x", "metadata": {"loaded": []}}}) == ([], []), "an empty loaded list is fine")
+    check(normalize_only(Path("."), "crates\\a\\b.rs") == "crates/a/b.rs" and normalize_only(Path("."), "./x/y.rs") == "x/y.rs", "--only normalisation")
+    check(parse_paths("data       C:\\t\\opencode\nstate      C:\\t\\opencode\n")["data"] == "C:\\t\\opencode", "debug paths parse")
     check(VERIFIED_RE.search("x <!-- opencode-verified-version: 1.18.33 -->").group(1) == "1.18.33", "verified-version marker")
     env, tmp = isolated_env()
     check(env["XDG_DATA_HOME"] == tmp and os.path.isdir(tmp), "isolated env")

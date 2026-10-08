@@ -110,7 +110,10 @@ How it fits the routing design:
 - [x] Frank's two decisions (2026-10-08, above)
 - [ ] Driver prompt, roster table and `-alt` twins (a free model on a different provider for each role that needs a fallback)
 - [ ] Explicit free models on `general` and the no-model commands; `opencode_sync_check.py` rule for paid ids on allow-listed keys
-- [ ] Wait for `opencode_compat_probe` (the probe checks the new agent still attaches the right instruction files)
+- [ ] Extend the probe for agents (all model-free): `--agent NAME` (repeatable) substitutes the agent in the debug read; an
+  `--agents` assertion runs `opencode debug agent <name>` with no `--tool` for every configured agent and checks that `read`
+  is not denied, that the model is free unless the name ends in `-deep`, and that an `-alt` twin is on a different provider;
+  extend `check_deep_twins_match` in `opencode_sync_check.py` so an `-alt` twin must share its base agent's `{file:}` prompt
 - [ ] Task set, fixtures, scoring script with the cost cap and the pre-registered thresholds
 - [ ] Known-limitations pass on GLM
 - [ ] Run the pilot (3 runs per task and model), write the results into this plan
