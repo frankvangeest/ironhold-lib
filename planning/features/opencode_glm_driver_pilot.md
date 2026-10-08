@@ -1,6 +1,6 @@
 # Feature: GLM 5.3 flash pilot and the OpenCode default-driver decision
 
-_Status: Draft — plan-review 2026-10-08 (system-architect, ux-gamedesigner-reviewer) found it needs more design work; Frank's answers and the resulting changes are in "Plan-review outcome"; Ready after a re-review of that section_
+_Status: Draft — plan-review 2026-10-08 (system-architect, ux-gamedesigner-reviewer) found it needs more design work; Frank's answers and the resulting changes are in "Plan-review outcome" and "Follow-up decisions"; Ready after a short re-review of those two sections_
 _Planned at: `edc93f1` (2026-10-08); split out of the compat-probe plan after its plan-review_
 
 ## What
@@ -109,7 +109,7 @@ and what they change (this section **overrides** the earlier sections where they
 - **IT confirmation is settled**: using the M365 proxy is fine. Kept anyway: explicit deny rules so no agent can read
   `C:\ProgramData\m365-copilot-proxy` (credential and TOTP files) with `cat`/`grep`/`find`, and the scoring script never logs
   request bodies and touches the proxy only through `GET /v1/models`.
-- **`-alt` roles: Frank chooses** (candidates below).
+- **`-alt` roles (decided later the same day, see "Follow-up decisions")**: twins for the roles that run on free models.
 
 **Design changes from the review**
 - **One free/paid classifier** in `tools/_opencode_common.py`: an explicit allow-list of free model ids (anything unlisted fails
@@ -142,10 +142,25 @@ and what they change (this section **overrides** the earlier sections where they
   agent a description starting "Fallback for `<role>` ..." (the driver chooses by description); `docs/dev/claude_md_maintenance.md`
   gets one row ("rules only for the OpenCode driver" -> `.opencode/prompts/driver.md`) if the prompt lands in `instructions`.
 
-**`-alt` candidates (Frank chooses)**: `system-architect`, `debug-detective`, `alignment-reviewer` (reviews: m365/DeepSeek are the
-strong options, a free twin is the fallback), `wasm-perf-reviewer`, `integration-test-author`, `ron-gameplay-scripter`,
-`data-format-doc-writer`, `explore`, `ux-gamedesigner-reviewer`/`game-world-designer` (Gemini; only if its quota proves a problem).
-Recommendation: twins only for roles that have actually had outages (the ones on `:free` OpenRouter ids).
+## Follow-up decisions (Frank, 2026-10-08, after the answers above)
+- **`-alt` twins for the roles on free models**: `system-architect`, `debug-detective`, `alignment-reviewer`, `wasm-perf-reviewer`,
+  `integration-test-author`, `ron-gameplay-scripter`, `data-format-doc-writer`, `explore`. **No twins for the Gemini roles**
+  (`ux-gamedesigner-reviewer`, `game-world-designer`): Gemini is kept for its creativity, and its free quota is the only limit.
+- **m365 takes precedence over the free models where it works well.** It reasons deeply and costs nothing extra (part of the company
+  M365 subscription). Roster order for a role on a machine with the proxy running: `<role>-m365` (machine-local, global config) >
+  `<role>` (free primary) > `<role>-alt` (free twin on another upstream lab); `*-deep` stays paid and asks first. The driver prompt
+  states this order and the preflight (`GET http://localhost:4141/v1/models`) decides whether the m365 step exists at all.
+- **Deeper thinking for `system-architect` and `debug-detective`**: their order puts m365 first, then `-deep` (DeepSeek, asks first),
+  then the free primary; the pilot's review task is scored on these two roles specifically.
+- **m365 earns that precedence by passing a tool-calling test** (the proxy emulates tool calls, so this is the weak spot, not
+  reasoning). A new task `toolcall` is part of the pilot for every delegate candidate, m365 first. Mechanical pass criteria, all read
+  from `opencode export <session>` and the resulting files: (1) a sequence of at least 4 dependent calls (grep -> read -> edit ->
+  read-back) finishes with the exact expected file content; (2) arguments are well-formed JSON every time (no call fails schema
+  validation, counted per run); (3) a call that must be **skipped** (the tool is denied by permission) is not retried in a loop;
+  (4) a read of a file that does not exist is reported, not invented; (5) two independent reads in one turn both come back. Threshold:
+  at least 90% of calls well-formed over 15 runs and every criterion met in at least 13 of 15 runs; below that m365 stays a
+  reviewer-only delegate of last resort (after the free primary) instead of first choice. The same task is run against GLM (as
+  driver) and the free agents, so the numbers are comparable.
 
 ## Approach (when unblocked)
 - **Tasks** (4-5, identical prompt per model, each with a mechanical pass criterion): follow a folder rule (a change that
@@ -179,7 +194,7 @@ Recommendation: twins only for roles that have actually had outages (the ones on
   `--agents` assertion runs `opencode debug agent <name>` with no `--tool` for every configured agent and checks that `read`
   is not denied, that the model passes the shared classifier, and that an `-alt` twin is on a different upstream lab;
   extend `check_deep_twins_match` in `opencode_sync_check.py` so an `-alt` twin must share its base agent's `{file:}` prompt
-- [ ] Task set, fixtures, scoring script with the cost cap and the pre-registered thresholds
+- [ ] Task set (including `toolcall`), fixtures, scoring script with the cost cap and the pre-registered thresholds
 - [ ] Known-limitations pass on GLM
 - [ ] Run the pilot (3 runs per task and model), write the results into this plan
 - [ ] Adopt or not per the thresholds; update `opencode.json`, the README tier table, `opencode_sync_check.py`
