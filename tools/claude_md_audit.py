@@ -341,16 +341,12 @@ def check_dest(root, doc, include_parent, strict, problems):
                 places = [d0] + (b['also'] if has_also else [])
                 if d0.startswith('TOPIC:') and not b['also']:
                     problems.append(f'{i} is Safety=Y but lives only in {d0}; add an `also` directory-file placement for the rule')
-                for d in places:
-                    if d == 'PARENT' or d.startswith('TOPIC:'):
-                        continue  # the parent loads for everything; a topic doc is never the only home
-                    dd = dir_of(d)
-                    if dd is None:
-                        continue
-                    for g in b['governs']:
-                        pre = glob_prefix(g)
-                        if not (pre == dd or pre.startswith(dd + '/')):
-                            problems.append(f'{i} is Safety=Y in {d} ({dd}) but governs {g!r}, which that directory does not cover')
+                dirs = [dir_of(d) for d in places if d == 'PARENT' or dir_of(d)]
+                dirs = ['crates/ironhold_core/src' if d == dir_of('PARENT') else d for d in dirs if d]
+                for g in b['governs']:
+                    pre = glob_prefix(g)
+                    if not any(pre == dd or pre.startswith(dd + '/') for dd in dirs):
+                        problems.append(f'{i} is Safety=Y and governs {g!r}, but no placement ({places}) is a folder file whose subtree covers it')
     for i in found:
         if i not in known:
             problems.append(f'anchor {i} in {found[i]} matches no block in the sidecar')
