@@ -1903,7 +1903,7 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
     // are scene-placed, both are hot-join slots, or one of each (a hot-joined player's
     // `gamepad_index` seed is read from its prefab exactly like a scene-placed player's, unless a
     // gamepad-triggered join instead captures the triggering pad directly — see "Gamepad-triggered
-    // hot join" in `crates/ironhold_core/src/CLAUDE.md` — so a keyboard-triggered join can still
+    // hot join" in `docs/dev/gamepad-routing.md` — so a keyboard-triggered join can still
     // collide with an already-bound scene player via this same seed). Deliberately scoped to each
     // scene's instantiated/reachable players, not the raw prefab catalog: `local_coop_demo`'s
     // catalog legitimately reuses `gamepad_index` values across different rooms' player variants
@@ -2332,8 +2332,8 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
     for (source, action) in actions {
         let Action::Spawn { spawn_point: Some(spawn_point), .. } = action else { continue };
         // `spawn_point` is substituted at interpret time for `{self}`/`{target}` tokens
-        // (action_substitution.rs, dialogue.rs) — see the supported-fields list in
-        // `crates/ironhold_core/src/CLAUDE.md`. The authored string here is pre-substitution, so a
+        // (action_substitution.rs, dialogue.rs) — see the substitution-sites rule in
+        // `crates/ironhold_core/src/schema/CLAUDE.md` (the four substitution sites). The authored string here is pre-substitution, so a
         // templated value (e.g. `"{self}_spawn"`, used to share one behavior rule across several
         // named spawn points) is not the literal key that will be looked up at runtime; skip it
         // rather than false-positive on a legal pattern.

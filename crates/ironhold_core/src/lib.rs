@@ -238,6 +238,7 @@ impl Plugin for GamePlugin {
             // Unclaimed-gamepad join trigger (gamepad equivalent of global_input_system above) —
             // must also run before the interpreter so Action::JoinPlayer sees this frame's
             // PendingJoinGamepad value, not a stale one from last frame.
+            // load-bearing: Action::JoinPlayer reads PendingJoinGamepad; this edge keeps it current.
             .add_systems(Update, unclaimed_gamepad_trigger_system.before(fsm_interpreter_system))
             // Stat pipeline: modifier ticks → regen → effective value recompute — all before
             // the interpreter chain so threshold crossings are visible in the same frame.
@@ -253,6 +254,7 @@ impl Plugin for GamePlugin {
             // action_executor_system (which applies SetVolume) and before the label system, so the
             // bound Label updates the same frame. The FSM interpreter never reads GameVariables, so
             // there is no reason to run this earlier.
+            // load-bearing: after action_executor_system (SetVolume applies there), before update_dynamic_labels_system.
             .add_systems(Update, audio_volume_var_system
                 .after(action_executor_system)
                 .before(update_dynamic_labels_system))
@@ -261,6 +263,8 @@ impl Plugin for GamePlugin {
             // ModifyStat/SetStat actions executed this frame; emitted GameEvents fire next frame.
             // drain_spawn_queue_system runs last: processes items queued by action_executor
             // this frame at a rate-limited SPAWNS_PER_FRAME to spread pipeline compile stalls.
+            // load-bearing: this .chain() IS the interpreter -> executor order; every ActionQueue pusher and reader (interpreters,
+            // flush_pending_intent, executor, the drain_* systems) depends on it. See `src/CLAUDE.md`, "`lib.rs` ordering edges".
             .add_systems(Update, (
                 fsm_interpreter_system,
                 entity_fsm_interpreter_system,
@@ -316,6 +320,8 @@ impl Plugin for GamePlugin {
             // system here reads/writes state that was last resolved by the *previous* tick's
             // physics step, not this tick's (see `planning/features/
             // deterministic_fixed_timestep.md`'s Approach section).
+            // load-bearing: order inside this FixedUpdate group matters: gamepad_bind_system before input_translator_system,
+            // player_view_box_clamp_system after player_movement_system, mark_dirty_trees last, all before Rapier's SyncBackend.
             .add_systems(FixedUpdate, (
                 gamepad_bind_system,
                 input_translator_system,
@@ -327,19 +333,26 @@ impl Plugin for GamePlugin {
                 motion_system,
                 bevy::transform::systems::mark_dirty_trees,
             ).chain().before(PhysicsSet::SyncBackend))
+            // load-bearing: interactable_system must stay before the interpreters (see the next comment).
             // Interactable input runs before all interpreters so both readers
             // see the emitted GameEvent in the same frame.
             .add_systems(Update, interactable_system.before(fsm_interpreter_system))
             // Dialogue tick: auto-wires entity.interacted→StartDialogue and manages panel UI.
             // Runs after button_system and interactable_system so all events are in the buffer.
+            // load-bearing: dialogue_tick_system after button + interactable and before the interpreters.
             .add_systems(Update, dialogue_tick_system
                 .after(button_system)
                 .after(interactable_system)
                 .before(fsm_interpreter_system))
             // Delayed events tick down each frame; emitted GameEvents are visible to both
             // interpreter systems in the same frame they fire.
+            // load-bearing: tick_delayed_events_system before the interpreters; it ticks on raw Time with no pause gate.
             .add_systems(Update, tick_delayed_events_system.before(fsm_interpreter_system))
             // Visual/animation pipeline stays in Update (rendering cadence, not physics)
+            // load-bearing: the order inside this .chain() is the camera pipeline: animation_resolver_system first and
+            // animation_playback_system last; dynamic_split_screen_system after party_camera_follow_system and before
+            // split_screen_viewport_system; split_viewport_player_label_update_system and target_hud_update_system after it;
+            // fly_camera_system after camera_shake_system; camera_blend_system LAST of the camera systems.
             .add_systems(Update, (
                 animation_resolver_system,
                 camera_orbit_system,
@@ -372,6 +385,7 @@ impl Plugin for GamePlugin {
             .add_systems(Update, pipeline_warmup_system)
             .add_systems(Update, damage_popup_system.before(world_label_screen_pos_system))
             .add_systems(Update, despawn_timer_system)
+            // load-bearing: world_label_screen_pos_system after camera_blend_system, nameplate_visibility_system after it.
             // `.after(camera_blend_system)`: must see this frame's *final* camera pose (after the
             // whole per-mode camera chain above, blended) — previously unordered relative to that
             // chain, which happened to be masked by `fresh_global_transform`'s freshness fix
@@ -606,7 +620,7 @@ fn depth_scale_factor_from(ref_dist: f32, min_floor: f32, dist: f32) -> f32 {
 /// contains the projected point — not an arbitrarily "the" camera.
 ///
 /// A `WorldLabel` with no [`WorldLabelRank`](crate::runtime::scene_manager::WorldLabelRank)
-/// (nameplate anchors, damage popups) always binds to rank 0 — the single highest-priority
+/// (nameplate anchors) always binds to rank 0 — the single highest-priority
 /// qualifying camera, by the deterministic order below. If the same world point is
 /// simultaneously visible in 2+ active viewports (e.g. two split-screen players near the same
 /// portal), only that one camera's viewport shows it. Scene-level `world_labels:` (portal
