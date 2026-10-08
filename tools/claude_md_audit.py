@@ -41,6 +41,7 @@ OPTIONS
   --hints  Also print, per block, the lines of the frozen base carrying a modal verb (must/never/do not/
            don't/NOT/cannot/load-bearing/deliberate/hard invariant/.before(/.after(). A reviewer aid, never a gate.
   --strict Treat blocks whose dest label was ambiguous (review=true) as problems.
+  --parent PATH  (full mode) audit PATH as the parent, e.g. a draft before Phase 4 replaces the live file.
   --selftest Run the built-in fixture test.
 
 BLIND SPOT: the Safety check only proves consistency with the author-written governs globs; a wrong glob
@@ -259,6 +260,8 @@ def check_self(root, doc, problems):
 
 
 def dir_of(dest_key):
+    if dest_key == 'PARENT':
+        return os.path.dirname(PARENT)  # a --parent draft lives elsewhere but stands for the real parent
     return os.path.dirname(DEST_FILE[dest_key]) if dest_key in DEST_FILE else None
 
 
@@ -478,12 +481,15 @@ def main():
     ap.add_argument('--strict', action='store_true')
     ap.add_argument('--hints', action='store_true')
     ap.add_argument('--selftest', action='store_true')
+    ap.add_argument('--parent', help='full mode: audit this file (a draft) as the parent instead of the live parent')
     a = ap.parse_args()
     if a.selftest:
         return selftest()
     if not a.mode:
         ap.error('mode required')
     root = os.getcwd()
+    if a.parent:
+        DEST_FILE['PARENT'] = a.parent.replace(chr(92), '/')
     try:
         if a.mode == 'freeze':
             return freeze(root, a.force)

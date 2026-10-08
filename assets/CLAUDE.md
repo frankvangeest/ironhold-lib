@@ -15,7 +15,7 @@ All shared assets follow a **stylized hand-painted** direction. Before adding or
 assets/
   shared/                 ← reusable across all projects
     shaders/              ← custom WGSL shaders (prefix: custom_*)
-    textures/             ← see subfolder conventions below
+    textures/             ← see the subfolder conventions here
     terrain/              ← shared terrain layers (grass, rock, dirt, snow, splatmap)
     audio/                ← music, UI sounds, footstep packs, ambient effects
     models/               ← shared GLB models (creatures, props)
