@@ -144,7 +144,7 @@ All colours/sizes for the card come from sensible engine defaults for v1 (no new
 - [ ] Carry the new schema fields through `ironhold_cli` `query` if it surfaces item/slot fields (run `cargo check -p ironhold_cli`; verify `query actions` / item queries still parse).
 - [ ] Migrate example RON: add a `description` to a few items in a demo project and a `tooltip` to action-bar slots in `3rd_person_game_demo`; sweep for any `label:` on slots and rewrite to `tooltip:`.
 - [ ] Tests (integration): item-slot hover shows item card; action-slot hover shows skill card; empty slot shows nothing; mouse-leave hides; `LoadScene` despawns overlay. Add a `ron_validation` case for an item with `description` and a slot with `tooltip`.
-- [ ] Docs: `docs/20_data_formats.md` (`ItemDef.description`, `SlotTooltipDef`, removal of `label`), `crates/ironhold_core/src/CLAUDE.md` (new pipeline-free cosmetic capability + the inventory-slot `Button` requirement).
+- [ ] Docs: `docs/20_data_formats.md` (`ItemDef.description`, `SlotTooltipDef`, removal of `label`), `crates/ironhold_core/src/capabilities/CLAUDE.md` (new pipeline-free cosmetic capability + the inventory-slot `Button` requirement).
 - [ ] WASM dev build + browser play-test (hover near right/bottom edges to verify flip).
 
 ## RON examples

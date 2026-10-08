@@ -382,3 +382,103 @@ manually-pushed `Despawn` — the gap the first round of tests missed.
 - Given a monster died at any point, then a fresh instance respawns exactly 1 minute later at its
   original patrol spot, **independent of whether its corpse was looted, is still present, or has
   already decayed**.
+
+## Notes moved from `crates/ironhold_core/src/CLAUDE.md` (2026-10-08, core CLAUDE.md split)
+
+These paragraphs were in the crate `CLAUDE.md` and are kept here verbatim; that file now carries only the condensed current-state rule. Wording such as "above"/"below" refers to the old file.
+
+### b:524: Prefer `SetDespawnTimer` over `EmitEventAfterDelay`+`Despawn`
+<!-- moved-from-claude-md: b:524 -->
+
+**Corpse decay uses `Action::SetDespawnTimer`, not `EmitEventAfterDelay` — this is load-bearing,
+not a style choice, though the specific bug it was chosen to avoid is now structurally impossible
+regardless of mechanism (see above — ids can no longer collide across corpse generations at all).**
+An earlier version of `lootable_corpse.behavior.ron` armed `EmitEventAfterDelay(event:
+"corpse.decay:{self}", ...)` and handled it with an `on:` → `Despawn`. `debug-detective` proved
+this unsafe under the *original* reused-id design specifically: a global, string-matched delayed
+event has no owner, so a decay timer armed by an *older* corpse generation could still fire and
+despawn a completely different, *newer* corpse that happened to share the same reused id — and
+because every kill cycle left one more such stale timer in the global queue, this compounded over
+extended play and eventually made a slot's loot permanently unobtainable, not just "corpse decays a
+little early." `SetDespawnTimer` (`capabilities/despawn_timer.rs`) fixes this by construction: it's
+a `DespawnTimer` component living directly on the target entity (modeled on the existing
+`DamagePopup`/`damage_popup_system` self-despawn pattern), ticked by `despawn_timer_system` and
+removed automatically when its entity despawns for any reason — a stale timer can never reach a
+different, later entity, because there is no global registry of timers for it to leak through. Now
+that ids are unique this specific hazard can't recur either way, but `SetDespawnTimer` remains the
+right default for any per-entity decay timer regardless — no global event-name bookkeeping needed
+to keep N simultaneously-decaying corpses from interfering with each other.
+Prefer `SetDespawnTimer` over `EmitEventAfterDelay` + `Despawn` for **any** timer whose target's
+spawn id might later be reused by an unrelated entity, not just this feature's corpses.
+
+### b:545: `target_auto_clear_system` clears on despawn
+<!-- moved-from-claude-md: b:545 -->
+
+**`target_auto_clear_system` (`capabilities/targeting.rs`) clears on despawn, not just on
+hidden.** It originally only checked `Visibility::Hidden` for an entity still present in
+`SpawnRegistry` — correct for the engine's older hide-in-place revival pattern, but wrong once any
+capability actually `Despawn`s a targeted entity (as this feature's death sequence does): the
+entity is removed from the registry outright, so the old check never ran, and a player's stale
+`PlayerTarget`/`CurrentTarget` selection silently survived until the same id was reused by that
+slot's next respawn. Fixed (`debug-detective` finding) by treating "not found in `SpawnRegistry`"
+the same as "hidden."
+
+### b:489: `Action::Spawn.at_entity` copies full transform; skip with warning, never origin
+<!-- moved-from-claude-md: b:489 -->
+
+**The engine change this needed: `Action::Spawn.at_entity: Option<String>`** — resolves both
+position and facing from a live entity's current `GlobalTransform`, via the same
+`SpawnRegistry`-keyed lookup `SpawnEffect.entity` already uses. Necessary because these monsters
+patrol, so the corpse's spawn transform can't be hardcoded in RON; it has to be read from wherever
+the monster actually died. Precedence and substitution mirror `SpawnEffect.entity` exactly
+(`{self}`/`{target}` supported at both `rewrite_self`/`rewrite_target` in `action_substitution.rs`,
+plus `action_bar.rs`'s `action_needs_target`) — but unlike `SpawnEffect`, `at_entity` resolves via
+`GlobalTransform::compute_transform()` and so copies the source entity's full transform —
+position, rotation, *and scale* — not just position, since it's meant to faithfully reproduce a
+live entity's whole transform, not just place a particle burst. **Skips the
+spawn with a warning, never falls back to the origin**, when the entity can't be resolved and no
+`position`/`spawn_point` was also given as an explicit fallback — placing a dynamically-important
+entity like a lootable corpse at the world origin would be worse than not spawning it at all
+(`action_executor.rs`, mirroring `SpawnEffect`'s own "no entity or position resolved; skipping").
+`Action::Spawn` already resolved its full `Transform` at executor time into `QueuedSpawn.transform`
+before `drain_spawn_queue_system` ever reads it, so resolving `at_entity` there too means a
+same-frame `Despawn("{self}")` immediately after can never race it.
+
+### b:554: `Action::Despawn` closes an open container panel
+<!-- moved-from-claude-md: b:554 -->
+
+**`Action::Despawn` closes the container panel if the despawned entity is the one currently
+open.** Without this, decaying a corpse whose loot panel is open at that moment leaves
+`LoadedContainerUi.active_container` pointing at a gone entity and
+`panels_open` stuck above 0 — the same permanently-blocked interact/pickup/tab-targeting symptom as
+the `OpenContainer` double-count bug below, just reached from the opposite direction (`Despawn`
+never closing, rather than `OpenContainer` over-opening). Fixed (`debug-detective` finding) by
+running the same teardown `CloseContainer` does whenever `Action::Despawn`'s target matches the
+open container.
+
+### b:587: `OpenContainer` must not double-count `panels_open`
+<!-- moved-from-claude-md: b:587 -->
+
+**`Action::OpenContainer` guards against double-counting `panels_open`** (found by debug-detective
+review during v1; still true and load-bearing here). `interactable_system` fires
+`entity.interacted` for *every* interactable within radius on one keypress, not just the nearest —
+two lootable corpses near each other can both queue `OpenContainer` in the same frame. The single
+`ContainerPanel` UI can only ever show one container at a time regardless, so a second
+`OpenContainer` while one is already open only re-targets `active_container` without incrementing
+`panels_open` again — previously this over-incremented a counter that only ever gets decremented
+once per `CloseContainer`, permanently suppressing interact/collectible-pickup/tab-targeting (all
+gated on `panels_open == 0`, see `capabilities/inventory.rs`'s `LoadedInventoryUi` doc comment)
+until the next `LoadScene`. General container-system fix, not specific to lootable corpses.
+
+### b:598: No `trigger_zone` on a Dynamic rigid-body prefab
+<!-- moved-from-claude-md: b:598 -->
+
+**Do NOT add `trigger_zone` to a prefab with an NPC/Dynamic rigid body** (found by debug-detective
+review during v1) — a `trigger_zone` sensor gets no `ColliderMassProperties` override at spawn
+(`entity_spawner.rs`'s `attach_prefab_features`), so its own volume-derived mass folds into the
+*whole entity's* rigid-body mass on a Dynamic body, making it wildly heavier than intended and
+effectively unpushable. Every prior `trigger_zone` usage was safe by accident — chests/merchants
+are `Fixed`-body Props, where collider mass is irrelevant; the corpse prefabs here are also
+`Fixed`-body Props (no `npc:` component), so this doesn't apply to them either, but it's why none
+of the *monster* prefabs ever carried `trigger_zone`. Real, general engine bug tracked in
+`planning/backlog.md`, not fixed here.

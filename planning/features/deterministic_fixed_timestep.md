@@ -326,3 +326,37 @@ criteria below.
   `fresh_global_transform`) and re-playtested before this criterion is considered met.
 - Given the harness's result, `planning/features/networking_multiplayer.md`'s Form 1 sync-strategy
   choice (lockstep vs. server-authoritative) is made from evidence, not assumption.
+
+## Notes moved from `crates/ironhold_core/src/CLAUDE.md` (2026-10-08, core CLAUDE.md split)
+
+These paragraphs were in the crate `CLAUDE.md` and are kept here verbatim; that file now carries only the condensed current-state rule. Wording such as "above"/"below" refers to the old file.
+
+### b:759: "Confirmed fine, deliberately unconverted" list
+<!-- moved-from-claude-md: b:759 -->
+
+  **Confirmed fine and deliberately left unconverted** (debug-detective, same playtest-fix
+  review): `capabilities/targeting.rs`'s click-ray origin and tab-target distance sort (a one-tick
+  position error on a ray cast or a `min_by` over distances is far below any perceptual/behavioral
+  threshold) and `capabilities/particle_renderer.rs`'s billboard basis (uses only the camera's
+  *rotation* — `.right()`/`.up()` — never position, so a one-frame-stale rotation is a sub-degree
+  tilt). Don't re-investigate these as if they were missed if this code is revisited.
+
+### b:765: Faster-than-64Hz displays step motion (accepted)
+<!-- moved-from-claude-md: b:765 -->
+
+On a display refreshing faster than 64Hz, motion-carrying entities (`capabilities/motion.rs`) and
+physics-driven bodies visibly step rather than updating every rendered frame — a known, accepted
+tradeoff, not a bug.
+
+### b:769: `ProjectConfig.max_frame_delta_secs` caps catch-up ticks
+<!-- moved-from-claude-md: b:769 -->
+
+A third, RON-authorable lever exists alongside those two mitigations, but for a different cause of
+multi-tick frames — a genuine stall (asset load, GC pause, shader hitch), not the routine
+refresh-rate mismatch above: `ProjectConfig.max_frame_delta_secs` (`schema/project.rs`) caps how
+many ticks a single frame's `FixedUpdate` catch-up may run after a stall. Lowering it does not
+reduce the routine 60Hz/144Hz multi-tick rate described above (that's refresh-rate math, not
+stall-driven catch-up) — it only bounds the worst case after an actual hitch, trading a smaller
+per-frame cost cap for entering visible slow-motion sooner. See
+`planning/investigations/fixed_timestep_max_delta.md` for the measurement behind it and
+`docs/20_data_formats.md#max_frame_delta_secs` for the authoring reference.

@@ -42,7 +42,7 @@ authored in RON (no corpse-specific Rust) to stay inside the designer-reachabili
    `corpse_loot_interact_tests.rs:139-140`. Not affected: `action_bar.rs:416` and `query.rs:545` (both use `{ .. }`).
    All name-destructure and rebuild, so adding fields is a compile error at each, not a silent drop. `Action` is
    `deny_unknown_fields` and derives `PartialEq` (`actions.rs:4-5`); a new `#[serde(default)]` field on an existing
-   struct variant is not a breaking RON change (only renames/removals are, `src/CLAUDE.md` "Adding new actions").
+   struct variant is not a breaking RON change (only renames/removals are, `crates/ironhold_core/src/schema/CLAUDE.md` "Adding or changing an `Action`").
 3. **GLB materials are shared and never cloned.** `model_spawner.rs:51` spawns `SceneRoot(asset_server.load(path))`;
    a grep of `src/` finds no `StandardMaterial` clone/`materials.add` on spawned GLB children (only
    `material_factory.rs`' catalog build and the decal/indicator/particle materials). `apply_material_overrides`
@@ -62,7 +62,7 @@ authored in RON (no corpse-specific Rust) to stay inside the designer-reachabili
 7. **Selection/targeting survive a fade unless removed.** `target_auto_clear_system` (`targeting.rs:373-393`) clears only
    on `Visibility::Hidden` or registry absence; `ClickSelectable` (`:25`) and `Targetable` (`:36`) are plain marker
    components; `Interactable` (`interactable.rs:19`) is distance-based, not collider-based.
-8. **Pipeline-variant risk is documented.** `src/CLAUDE.md:1644`: every new mesh+material combination costs a
+8. **Pipeline-variant risk is documented.** `runtime/scene_manager/CLAUDE.md` "Spawn queue": every new mesh+material combination costs a
    synchronous `createRenderPipeline()` (~100-300 ms) on first draw on WASM; `pipeline_warmup_system` (`lib.rs:446`) only
    toggles `NoFrustumCulling`, it does not pre-create blend variants. No `Msaa` override exists in `src/` (grep), so the
    Bevy default applies.
@@ -137,7 +137,7 @@ Progress `t = 1 - remaining/total` is a pure function of accumulated dt (same f3
   materials, so ~N materials of bind-group work per frame; cap 16 entities bounds it, anything beyond degrades to `Shrink`.
 - Pipeline: first `Fade` of a mesh class (skinned + `Blend`) compiles one extra variant (~100-300 ms stall, Finding 8).
   Not pre-warmed in v1: measure in the dev playtest; if it is visible, add a warmup following the particle-warmup pattern
-  (`src/CLAUDE.md:1724-1744`) as a follow-up task, not a prerequisite. `Shrink` has no such cost.
+  (`capabilities/CLAUDE.md` "Particle pipeline warmup") as a follow-up task, not a prerequisite. `Shrink` has no such cost.
 - Known visual risks to check in the playtest: Blend on a multi-primitive skinned mesh with depth write off can show limbs
   through the torso (acceptable for 1-2 s; if ugly, offer `AlphaToCoverage` as a third mode); the shadow of a `Blend`
   mesh may stay full strength until despawn (if so, insert `NotShadowCaster` at fade start, `scene_loader.rs:572` pattern).
@@ -164,7 +164,7 @@ Progress `t = 1 - remaining/total` is a pure function of accumulated dt (same f3
   after despawn (`Assets::len` returns to baseline), RON round-trip of both field forms in `ron_validation.rs`.
 - [ ] Update `corpse_loot_interact_tests.rs` expectations only if timings in the demo RON change (Finding 10).
 - [ ] Docs: `docs/20_data_formats.md:3820` (new fields, `fade_mode` table, "`Action::Despawn` stays instant", fallback rules),
-  `docs/30_runtime_events_and_logic.md` (corpse decay section), `src/CLAUDE.md` (despawn-timer paragraph ~L535: fade state and
+  `docs/30_runtime_events_and_logic.md` (corpse decay section), `capabilities/CLAUDE.md` (despawn-timer rule: fade state and
   per-instance clone rule), `assets/projects/CLAUDE.md` if it lists the action.
 - [ ] CLI: no new validation exists for `delay_secs` today, so none for `fade_secs` (runtime clamps); `query actions` prints
   kind names only. Run `cargo check -p ironhold_cli` (mandatory) and spot-check
@@ -249,7 +249,7 @@ Adding `#[serde(default)]` fields to an existing struct variant is non-breaking 
   - Mesh children may not exist yet. A GLB spawned via `Action::Spawn` (`model_spawner.rs:51` is `SceneRoot(asset_server.load(..))`) has no `Mesh3d` descendants until `SceneSpawner` instances it, which can take several frames on WASM.
   - The shared material can come back after the clone. `apply_material_overrides` (`material_factory.rs:198-203`) waits for children and then inserts the **shared** catalog handle on every mesh. If it runs after the clone, it overwrites the clone. The per-frame alpha writes then go to an asset nothing displays, and the entity pops at the end.
   - The plan defines no outcome for the "zero meshes found" case.
-  - A third mechanism compounds this: the WASM GLTF-hierarchy respawn path documented in `src/CLAUDE.md` (animation section) replaces mesh entities with ones that reference the original shared handles.
+  - A third mechanism compounds this: the WASM GLTF-hierarchy respawn path documented in `docs/dev/animation-pipeline.md` replaces mesh entities with ones that reference the original shared handles.
 - **Correction to the plan text:**
   - Replace `Added<FadingOut>` with a "pending until applied" query: `Query<.., (With<FadingOut>, Without<FadeApplied>)>`.
   - Treat an entity as **not ready** while it has `PendingMaterialOverride` or has zero `Mesh3d` descendants. Retry on the next frame.
@@ -285,7 +285,7 @@ Adding `#[serde(default)]` fields to an existing struct variant is non-breaking 
 8. **Expiry carry-over (optional).** The fade starts one system-run after expiry, because `FadingOut` is inserted via commands. To make `delay + fade` exact, initialise `FadingOut.remaining_secs = fade_secs + timer.remaining_secs` (the remainder is ≤ 0 at that point). It also keeps Finding 10's 20.5 s test margin comfortable.
 9. **The cross-schedule ordering edge disappears after Phase 1.** `fade_out_visual_system.after(despawn_timer_system)` has no effect once the timer is in `FixedUpdate`. Say explicitly that the visual must tolerate any order: it only reads `remaining/total`, so it does, but write it down. On >64 Hz displays the fade will step at 64 Hz. That is the accepted aliasing per `src/CLAUDE.md`.
 10. **Test detail.** "Cloned handles dropped (`Assets::len` returns to baseline)" needs one or two extra `app.update()` calls after despawn: asset removal happens on the handle-drop event, not at the moment of despawn. The test also needs `init_asset::<StandardMaterial>()`, as `particle_tests.rs` does.
-11. **Docs task.** Also update `docs/30_runtime_events_and_logic.md:774` (the `SetDespawnTimer(entity, delay_secs)` signature paragraph) and the `:757-765` RON example, not just "the corpse decay section". Add a `src/CLAUDE.md` note on the per-instance material clone rule. "Never mutate a shared GLB/catalog material in place" is a reusable invariant other features will need.
+11. **Docs task.** Also update `docs/30_runtime_events_and_logic.md:774` (the `SetDespawnTimer(entity, delay_secs)` signature paragraph) and the `:757-765` RON example, not just "the corpse decay section". Add a `capabilities/CLAUDE.md` note on the per-instance material clone rule. "Never mutate a shared GLB/catalog material in place" is a reusable invariant other features will need.
 12. **Optional data-driven hook (defer).** An `entity.fading:{id}` `GameEvent` at fade start would let designers add a sound or effect without Rust. Not needed for v1. Log it in `claude_suggestions.md` if wanted.
 
 On the parts of the brief not raised above:

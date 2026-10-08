@@ -27,7 +27,7 @@ pub struct LocomotionState {
     /// need the true, un-debounced sensor result (e.g. a future step-offset/auto-step feature —
     /// see `planning/backlog.md`), that's `player_movement_system`'s own `raw_grounded` local, not
     /// this field — it is not currently exposed outside that function. See
-    /// `crates/ironhold_core/src/CLAUDE.md`'s "Coyote time" section for the full design.
+    /// `docs/dev/player-ground-detection.md` for the full coyote-time design.
     pub is_grounded: bool,
 }
 

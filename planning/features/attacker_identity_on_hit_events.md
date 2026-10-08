@@ -52,7 +52,7 @@ nearest-player heuristic), so no existing binding or project breaks.
   `action_bar_input_system` resolves `spawn_id` (the owning player's `SpawnId`, via `owns_slot(slot.owner_player,..)`,
   `action_bar.rs:208-210`) and rewrites each action with `rewrite_target(a.clone(), target_id)` (`:267-269`)
   *before* storing it in `PendingIntentActions`. Adding a sibling rewrite here is free and per-player correct in
-  split-screen / local co-op (the same mechanism that makes `{target}` per-player, `src/CLAUDE.md` Phase 2 notes).
+  split-screen / local co-op (the same mechanism that makes `{target}` per-player, `docs/dev/action-bar-input-routing.md` Phase 2 notes).
 - **Interpreter-overridden slots lose the player.** If a `state_machine.ron` binding intercepts
   `intent.slot.K:{player_id}` its replacement `do_actions` go through `rewrite_target(.., CurrentTarget)`
   (`fsm_interpreter.rs:62,78,109`) - primary player only (documented out-of-scope boundary). The triggering event
@@ -98,7 +98,7 @@ data is the event name, the relay resolves position through `SpawnRegistry`.** L
      the same exposure `entity.attacked` has today; noted, not widened).
 4. **Demo + docs.** Switch the five `3rd_person_game_demo` slots to `entity.hit:{target}:{attacker}`; update
    `docs/30` L109, `docs/20_data_formats.md` (substitution-token table), `assets/projects/CLAUDE.md:140`, and
-   `src/CLAUDE.md` ("Supported substitutions"). Add a `local_coop_demo` hook only if it already has an NPC
+   `crates/ironhold_core/src/schema/CLAUDE.md` ("`{self}` / `{target}` substitution has four sites"). Add a `local_coop_demo` hook only if it already has an NPC
    (open question below).
 5. **Perf/WASM:** one `BTreeMap` lookup + one transform read per hit event, only on frames a hit fires; one string
    `replace` per action at slot-fire time (already done for `{target}`). No new per-frame system, no new

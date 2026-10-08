@@ -98,7 +98,7 @@ pub(crate) fn clear_target_vars(vars: &mut GameVariables) {
 /// spawned via the immediate scene-load path always gets a `PlayerIndex` (same as GLB players);
 /// the "no `PlayerIndex` at all" case is now only reachable in practice via the v3-deferred
 /// terrain/character-select paths, which don't spawn primitive players at all yet (see
-/// `crates/ironhold_core/src/CLAUDE.md`'s "player-construction" section). See
+/// `docs/dev/player-spawn-sites.md`). See
 /// `planning/features/per_player_split_screen_targeting.md`. `pub(crate)` so
 /// `action_executor.rs`'s `Action::SetTarget`/`ClearTarget` handlers can resolve the same primary
 /// player these systems do, instead of writing `CurrentTarget` directly and leaving every

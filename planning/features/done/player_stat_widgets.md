@@ -264,3 +264,22 @@ plan) — this feature only makes the primitive path's *existing* inline spawn a
   empty (unchanged runtime behavior) but the misconfiguration is no longer silent.~~ **Met** —
   confirmed by the new `missing_stat_widget_template_exits_1` CLI fixture test (added during code
   review, debug-detective finding: this check had zero test coverage until then).
+
+## Notes moved from `crates/ironhold_core/src/CLAUDE.md` (2026-10-08, core CLAUDE.md split)
+
+These paragraphs were in the crate `CLAUDE.md` and are kept here verbatim; that file now carries only the condensed current-state rule. Wording such as "above"/"below" refers to the old file.
+
+### b:1201: Player `stat_label`/`world_stat_bar` routing; 16-param ceiling
+<!-- moved-from-claude-md: b:1201 -->
+
+**`stat_label`/`world_stat_bar` on players** (`planning/features/player_stat_widgets.md`) —
+players get the exact same floating-widget mechanism NPCs/props/`Action::Spawn` entities use,
+routed through the existing `DynamicStatUiQueue`/`drain_dynamic_stat_ui_system` rather than a
+player-specific spawn path: `spawn_player_entity_core` pushes a `DynamicStatUiEntry` (with
+`{self}` already resolved against that player's own spawn ID) when
+`PlayerConfig.stat_label`/`.world_stat_bar` is set — for both GLB and primitive players as of v1,
+since this push happens in the shared post-dispatch code, not per-model-source. The actual
+`Text2d`/`Mesh2d` entity-spawning logic lives in
+`capabilities/stat_display.rs::spawn_stat_label_widget`/`spawn_world_stat_bar_widget`. Since
+`spawn_scene_v2` is already at Bevy's 16-top-level-param `SystemParam` ceiling, `DynamicStatUiQueue`
+is bundled into the existing `SceneV2Params` struct rather than added as a bare param.

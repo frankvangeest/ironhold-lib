@@ -556,7 +556,7 @@ confirmation gesture.
       `player.joined*` event names, the minimum-1-player floor, the `Grid`-only scope guard, the
       seat-index-vs-viewport-slot distinction, and "leave keys must be distinct per player because
       the keyboard is shared" (mirroring the existing per-scheme key-collision guidance)
-- [ ] Docs — `crates/ironhold_core/src/CLAUDE.md`: add a sixth player-construction-adjacent site
+- [ ] Docs — `docs/dev/player-spawn-sites.md`: add a sixth player-construction-adjacent site
       (leave is a *de*-construction site with its own multi-entity cleanup contract); correct the
       now-false "hot-join can NOT diverge here... sets both `player_index` and the spawn slot to the
       same `next_slot` value" sentence in the `per_viewport_target_ring_visibility` bullet

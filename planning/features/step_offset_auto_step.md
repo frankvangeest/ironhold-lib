@@ -110,7 +110,7 @@ for a face-touching capsule), so the next tick's forward velocity carries the bo
 
 ### Interactions (what must not regress)
 - **Coyote / `is_grounded` / `jumps_used` / `jump_liftoff_y` / `jump_air_grace`:** never read-modified. The gate uses `raw_grounded` (not the
-  coyote-buffered value, per `src/CLAUDE.md`) and `jumps_used == 0`, which excludes the whole jump and its reset window, so a mid-ascent
+  coyote-buffered value, per `capabilities/CLAUDE.md` "Ground detection hard rules") and `jumps_used == 0`, which excludes the whole jump and its reset window, so a mid-ascent
   "grounded" reading near a platform (the Bugs entry) can never trigger a lift.
 - **Wall friction toggle:** untouched; lift runs only while moving, when `Friction` is already `0.0` (Finding 5).
 - **`mark_dirty_trees`/stale `GlobalTransform`:** the lift happens last in the loop; nothing later in the tick reads this entity's `GlobalTransform`
@@ -162,7 +162,7 @@ for a face-touching capsule), so the next tick's forward velocity carries the bo
   0.45 m, a 3-riser stair (0.2 m risers, 0.5 m treads), a 0.2 m riser with 0.25 m treads (expected NOT climbed, labelled), and a 1.2 m cube
   (existing `cube_obstacle_room10`, negative control). New primitive prefabs in `prefabs.ron`; enable `step_height: 0.35` on the room10 player prefabs
   and on `3rd_person_game_demo`'s player prefabs (terrain-bump control; no new geometry there). Later mirrored into `parkour_demo`.
-- [ ] Docs: `docs/20_data_formats.md` movement table (~L2300 near `max_walkable_slope_deg`: field row, limits above, interaction note), `crates/ironhold_core/src/CLAUDE.md`
+- [ ] Docs: `docs/20_data_formats.md` movement table (~L2300 near `max_walkable_slope_deg`: field row, limits above, interaction note), `docs/dev/player-ground-detection.md` and `crates/ironhold_core/src/capabilities/CLAUDE.md`
   (new "Step-up" subsection after the coyote section: the Decision 7 rule, the `raw_grounded && jumps_used == 0` gate, why `StepOffset` is a component),
   `tests/CLAUDE.md` table row. If the CLAUDE.md "ground-sensor" prose mentions blocked ledges, update it.
 - [ ] Reviews in one parallel message after tests: `alignment-reviewer`, `system-architect`, `debug-detective` (explicit brief: ledge-edge jitter, mid-jump
@@ -334,7 +334,7 @@ and "land in either order" (Decision 7) are false.**
    after movement, a same-tick `ResetToSpawn`/teleport simply overwrites the lift. That is fine; note it.
 9. **Rebase note.** If the airborne fix lands first, the acceptance line "`ground_cast` ... unchanged in the diff"
    becomes "`ground_cast_with` / `GroundProbe` unchanged" (the airborne plan flags this itself at `:69`).
-10. **Docs.** In `src/CLAUDE.md` "Player-construction sites", note that `StepOffset` is the first *conditional*
+10. **Docs.** In `docs/dev/player-spawn-sites.md`, note that `StepOffset` is the first *conditional*
     shared-post-dispatch component (present only when `step_height > 0`). A future "every player has X" audit should
     not treat its absence as a bug.
 11. **WASM/perf.** OK as stated: 1 capsule cast per moving, in-contact, opted-in player per tick, and ≤ 4 casts (≤ 16
@@ -379,7 +379,7 @@ an unmeasured guess, and by the plan's own algorithm it is probably too small.
 #### Blocking
 
 **B1. The docs tasks miss designer-facing surfaces and put the behaviour rules in a file designers can't read.**
-The Docs task lists `docs/20` (one row + limits + interaction note), `crates/ironhold_core/src/CLAUDE.md` and `tests/CLAUDE.md`.
+The Docs task lists `docs/20` (one row + limits + interaction note), `docs/dev/player-ground-detection.md`, `crates/ironhold_core/src/capabilities/CLAUDE.md` and `tests/CLAUDE.md`.
 Designers can't open either `CLAUDE.md`. Add the following:
 - `docs/15_authoring_tools.md` strict-only table: add one bullet each for `invalid_step_height` and
   `step_height_exceeds_collider_limit`, in the same shape as the `negative_coyote_time_secs` bullet (L281). Every existing

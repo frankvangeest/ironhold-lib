@@ -228,7 +228,7 @@ docs (code.claude.com/docs/en/hooks); the live OpenRouter `/api/v1/models`, Open
   layer. It only replaces the *global* fallback; project discovery is untouched.
 - Leave the model-routing table out of instruction files. The model doesn't need it on every turn.
   Its home is this plan, plus a short `.opencode/README.md` for humans.
-- Known cost: `crates/ironhold_core/src/CLAUDE.md` is about 154 KB (roughly 38K tokens) and gets
+- Known cost: `crates/ironhold_core/src/CLAUDE.md` is about 160 KB (roughly 40K tokens) and gets
   attached the first time any core file is read. That's another reason Gemini's low daily caps
   (F9) suit only low-volume slots. Splitting that file is a separate docs job.
 

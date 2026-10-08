@@ -117,7 +117,7 @@ The name is used as-is in the rules pipeline — the caller is responsible for n
 - `"target.changed:<id>"` — fires only when that specific entity becomes the target; use for per-entity reactions (e.g. `target.changed:boss_01` → start a boss healthbar) ✅
 - `"target.changed"` — fires on every selection change; pair with `{target}` in `do_actions` for generic feedback (e.g. a `global_on` binding: `( event: "target.changed", do_actions: [ ShowFloatingText(entity: "{target}", text: "Selected!") ] )`) ✅
 - `"target.cleared"` — `CurrentTarget` was cleared (click on empty space, `ClearTarget` action, `LoadScene`, or the targeted entity becoming hidden/despawned) ✅
-- The targeting capability also writes the `target_display` / `target_name` / `target_id` `GameVariables` on every change — bind a `Label` to one of these for a HUD target frame (no rule wiring needed). ✅
+- The targeting capability also writes the `target_display` / `target_name` / `target_id` `GameVariables` on every change — bind a `Label` to one of these for a HUD target frame (no rule wiring needed; they go blank whenever 2+ players are present, so use the per-viewport `target_hud:` block described in [20_data_formats.md](20_data_formats.md) instead). ✅
 - `"audio.muted"` — emitted by `ToggleMute` when transitioning to muted ✅
 - `"audio.unmuted"` — emitted by `ToggleMute` when transitioning to unmuted ✅
 - `"audio.volume_changed"` — emitted by `SetVolume` after the active fraction changes ✅ (the audio system also keeps the `audio_volume_percent` `GameVariables` entry in sync — bind a `Label` to it, no rule needed; mute is not auto-written)
@@ -357,6 +357,7 @@ Applies actions to the world. Key design points:
 - `Log(String)` — emits an `info!` log line
 - `Spawn { prefab, id, position, spawn_point, yaw_deg }` — enqueues a prefab spawn (processed max 2/frame by `drain_spawn_queue_system`); `id` auto-generated if omitted, and supports `{self}`/`{target}` substitution plus `{new_id}` — a fresh counter value resolved at spawn time so a repeated `{self}` (e.g. a monster that always respawns under the same id) doesn't force the same derived id every time; see the `{new_id}` substitution note below for what it does and doesn't guarantee; `position: (x,y,z)` sets an explicit world position; `spawn_point: "name"` looks up a named point from the scene's `spawn_points` map; defaults to world origin when neither is given; `yaw_deg: f` rotates around the Y axis in degrees
 - `PreloadPrefab(String)` — loads a prefab's GLB model and stores the handle in `PreloadedGlbHandles`; fire on `scene.ready` to eliminate the WASM GLB-decode stall on first spawn (handles cleared on `LoadScene`)
+- `PreloadGlb(String)` — the model-catalog equivalent of `PreloadPrefab`: takes a key from `assets.ron` `models:` (use it for animation-source GLBs that have no prefab entry); the handle is stored and cleared the same way
 - `Despawn(String)` — removes a previously spawned entity by its spawn ID
 - `PlayAnimation(String)` — plays an animation by semantic ID (see AnimationPolicy)
 - `PlayAnimationOn { target, clip, start_at_fraction, freeze }` — plays a clip on one entity by spawn ID; `start_at_fraction`/`freeze` seek/pause into the clip (see the Animation/audio actions list above)
@@ -366,6 +367,7 @@ Applies actions to the world. Key design points:
 - `SetVolume(u8)` — sets global audio volume 0–100
 - `PreloadScene(String)` — warms the asset cache for a `.scene.ron` before it is needed; use on `scene.ready` so a subsequent `LoadScene` resolves without a loading pause
 - `PreloadPrefab(String)` — loads a prefab's GLB model and stores the handle in `PreloadedGlbHandles`; fire on `scene.ready` to eliminate the WASM GLB-decode stall on first spawn
+- `PreloadGlb(String)` — the model-catalog equivalent of `PreloadPrefab`: takes a key from `assets.ron` `models:` (use it for animation-source GLBs that have no prefab entry); the handle is stored and cleared the same way
 - `SetVariable(String, String)` — writes a named string value into `GameVariables`; readable by data-bound UI labels; `DebugState.score` is derived from the `"score"` key
 - `IncrementVariable(String, i32)` — parses the variable as `i32` and adds the delta; missing or unparseable values default to `0`
 - `ModifyStat { key, delta }` — adds `delta` to a stat, clamped to `[min, max]`; negative delta resets regen cooldown. **Dot-routing:** `"spawn_id.stat_name"` → entity `StatMap`; no dot → global `LoadedStats`. `{self}` in `key` is substituted in behavior contexts.
@@ -510,9 +512,9 @@ When two boxes `box_01` and `box_02` share this file, interacting with `box_01` 
 - `SetEntityVisible(entity: "{self}", visible: false)` → `entity: "box_01"`
 - `EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 15.0)` → `event: "entity.respawned:box_01"`
 
-Note: `{self}` does not currently resolve inside a dialogue choice's `do_actions` — only in
-per-entity behavior files (`entity_fsm_interpreter_system`). Project-level `state_machine.ron` has
-no `{self}` to resolve at all — there is no "self" at the project level, only `{target}`.
+Note: inside a dialogue choice's `do_actions`, `{self}` resolves to the NPC's spawn ID (the same fields as in
+behavior files, including `Spawn`'s `id`, `spawn_point` and `at_entity`), but `{target}` is **not** resolved there yet.
+Project-level `state_machine.ron` has no `{self}` to resolve at all — there is no "self" at the project level, only `{target}`.
 
 ### `{new_id}` substitution
 
@@ -863,7 +865,7 @@ A walkthrough portal between two scenes is the standard pattern for multi-scene 
 
 The `TriggerZone` radius should cover the gate opening but not the frame — 1.0–1.5 m works for a standard doorway width. The trigger fires `entity.entered:{id}` on player overlap; `LoadScene` then transitions immediately.
 
-**Quality and warmup on scene entry**: if the destination scene uses `SetParticleQuality`, include it in the `scene.ready:{name}` binding alongside any warmup `SpawnEffect` calls — quality persists across `LoadScene` and must be reset explicitly per scene.
+**Quality and warmup on scene entry**: if the destination scene uses `SetParticleQuality`, include it in the `scene.ready:{name}` binding alongside any warmup `SpawnEffect` calls (see [Warming up particle pipelines](20_data_formats.md#warming-up-particle-pipelines-web-builds)) — quality persists across `LoadScene` and must be reset explicitly per scene.
 
 ### System ordering
 

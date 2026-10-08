@@ -66,3 +66,29 @@ originate from any of those four authoring surfaces and be invisible in all of t
   fails with a clear serde field-name error instead of silently succeeding.
 - Given every currently-shipped `assets/projects/*` RON file, when parsed under the new attribute,
   then parsing still succeeds unchanged (no false positives against real, correct RON).
+
+## Notes moved from `crates/ironhold_core/src/CLAUDE.md` (2026-10-08, core CLAUDE.md split)
+
+These paragraphs were in the crate `CLAUDE.md` and are kept here verbatim; that file now carries only the condensed current-state rule. Wording such as "above"/"below" refers to the old file.
+
+### b:35: Adding new actions + `deny_unknown_fields` consequences
+<!-- moved-from-claude-md: b:35 -->
+
+### Adding new actions
+
+1. Add the variant to `schema/actions.rs` with a doc comment.
+2. Add a `match` arm to `action_executor_system` in `runtime/scene_manager/action_executor.rs`.
+3. Add `#[derive(Deserialize)]` — it's already derived on `Action`; just ensure serde can deserialize the inner types.
+4. Document the new action in this file if it has non-obvious semantics.
+
+`Action` carries `#[serde(deny_unknown_fields)]` — two consequences for a new struct variant:
+- **No `#[serde(flatten)]`** on any field (incompatible with `deny_unknown_fields`); if you need
+  shared fields across variants, duplicate them rather than flattening a shared struct in.
+- **Renaming or removing a field on an existing variant is now a hard break** for every project's
+  RON authoring that field, not a silent default — bump `schema_version` and document the
+  migration (see "Schema evolution" in `docs/20_data_formats.md`) rather than renaming in place.
+
+The same attribute is on every FSM container `Action` lives inside (`StateMachineAsset`,
+`FsmState`, `FsmTransition`, `FsmEventBinding`) and on the
+dialogue schema (`DialogueDef`, `DialogueNodeDef`, `DialogueChoiceDef`, `DialogueCondition`) — a
+typo anywhere in that chain is a parse error, not a silently-empty action list.

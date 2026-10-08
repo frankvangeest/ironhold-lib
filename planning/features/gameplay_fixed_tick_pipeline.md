@@ -68,7 +68,7 @@ Fixed-timestep v1 moved physics-adjacent systems only. Verified at `a91a080`:
    reproduced** - Phase 2's first task is a 0-tick/2-tick regression test that confirms it.
 5. **`Changed<Interaction>` is a partial latch.** `button_system`/`icon_button_click_system`
    (`lib.rs:501-526`, `:545-560`) and the action-bar click edge (`Ref<Interaction>::is_changed`,
-   `src/CLAUDE.md` "Mouse-click action-bar slots") compare against the system's *own* last run. In a
+   `capabilities/CLAUDE.md` "Mouse-click action-bar slots") compare against the system's *own* last run. In a
    fixed-rate system that spans several frames, so a press + release between two ticks collapses to the final
    `None` and the click is lost. Click capture must stay a once-per-frame system.
 6. **Tests already pin exactly one tick per `app.update()`**: `tests/support/mod.rs:79` sets
@@ -243,7 +243,7 @@ tick; Phase 4 adds the hash hook.
 - [ ] `FIXED_DT`, `SimTick`, `advance_sim_tick`; derive from `FIXED_TICK_RATE`
 - [ ] Move to `FixedUpdate` (no body changes): `tick_delayed_events`, `cooldown_tick`, `despawn_timer`,
       `stat_modifier -> stat_regen -> stat_effective_value`, dialogue timer; order before `SyncBackend`
-- [ ] Update D3 allowlist/membership and the `lib.rs:242-243` comment; `src/CLAUDE.md` timer notes
+- [ ] Update D3 allowlist/membership and the `lib.rs:242-243` comment; `capabilities/CLAUDE.md` timer notes
 - [ ] Tests: delayed event / cooldown / modifier expire on the same `SimTick` under 30/60/144 Hz cadences
 **Phase 2 (M)**
 - [ ] Reproduce finding 4 (lost jump on 0-tick frame, doubled on 2-tick frame) as failing tests first

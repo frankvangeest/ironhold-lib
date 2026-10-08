@@ -24,3 +24,5 @@ tests, architecture, determinism, profiling.
 | [dev/60_contributing.md](dev/60_contributing.md) | Developer | Workflow, tests, branching, how to add a validate check |
 | [dev/70_profiling.md](dev/70_profiling.md) | Developer (one designer section) | Profiling tools; the [Browser DevTools - GPU timing (web)](dev/70_profiling.md#browser-devtools--gpu-timing-web) section is usable by designers |
 | [dev/browser_tests.md](dev/browser_tests.md) | Developer | The headless browser test suite |
+| [dev/moved-sections-index.md](dev/moved-sections-index.md) | Developer | Where each section of the old crate `CLAUDE.md` went (old heading or line number to new home) |
+| `dev/` topic pages | Developer | Long-form engine notes per area: `player-ground-detection`, `split-screen-cameras-and-widgets`, `action-bar-input-routing`, `gamepad-routing`, `player-spawn-sites`, `animation-pipeline`, `lootable-corpse` (listed in the moved-sections index) |

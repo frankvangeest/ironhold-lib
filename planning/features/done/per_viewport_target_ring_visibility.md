@@ -221,3 +221,50 @@ hardcoded party-union literal — plus two independently-found reachable bugs an
   per-player via `PlayerTarget`, unchanged by this feature — but a pre-existing demo gap
   (`click_target_test` has no persistent health indicator, inherited unchanged from room3), logged
   to `claude_suggestions.md`.
+
+## Notes moved from `crates/ironhold_core/src/CLAUDE.md` (2026-10-08, core CLAUDE.md split)
+
+These paragraphs were in the crate `CLAUDE.md` and are kept here verbatim; that file now carries only the condensed current-state rule. Wording such as "above"/"below" refers to the old file.
+
+### b:406: Party camera must carry `all_ring_layers()`
+<!-- moved-from-claude-md: b:406 -->
+
+- The shared `ActiveCameraMode::Party` (`spawn_party_orbit_camera`, `capabilities/camera.rs` — party
+  mode's camera, also reused as `dynamic`-split's merged-state camera) gets `all_ring_layers()`
+  when `own_viewport_only` is true — layer 0 plus every reserved ring layer, so the merged/party
+  view still shows every player's ring. Leaving this camera componentless (implicit layer 0 only)
+  would make it render **zero** rings the moment any ring restricts itself to a non-zero layer —
+  this was caught during plan review, not by testing, and is the reason this camera needs its own
+  explicit `RenderLayers` at all; treat it as an invariant, not an incidental detail, if this
+  mechanism is ever extended.
+
+### b:424: Warnings: `player_index` collision, non-hot-join Spawn
+<!-- moved-from-claude-md: b:424 -->
+
+- Two collision/gap classes are warned rather than silently mishandled: `spawn_players_and_camera`
+  warns when `own_viewport_only` is true and two players' `player_index` values collide under
+  `% MAX_SPLIT_PLAYERS` (an out-of-range index, or a plain duplicate) — this would otherwise
+  silently defeat the feature for that pair, unlike `PLAYER_LABEL_COLORS`' own harmless
+  modulo-collision precedent (a cosmetic duplicate tint, not a broken guarantee). `drain_spawn_queue_system`
+  warns when a non-hot-join `Action::Spawn` of a `tags: ["player"]` prefab lands in an
+  `own_viewport_only` scene, since that path's dedicated full-window `ActiveCameraMode::Orbit` never gets a
+  ring-visibility layer and so would see zero rings, not even its own.
+
+### b:433: `pipeline_warmup_system` doesn't touch RenderLayers
+<!-- moved-from-claude-md: b:433 -->
+
+> **`pipeline_warmup_system`'s `NoFrustumCulling` warmup pass does not touch `RenderLayers`** — it
+> only inserts/removes `NoFrustumCulling` on `Mesh3d` entities for 4 frames after scene load
+> (`lib.rs`). Benign today since rings reuse an already-warm ring material/mesh, but a future
+> `RenderLayers` consumer added to this codebase should not assume warmup covers layer-restricted
+> entities — it doesn't.
+
+### b:439: Light visibility intersects light RenderLayers (shadowless lit mesh)
+<!-- moved-from-claude-md: b:439 -->
+
+> **Bevy's directional/point-light visibility check intersects the *light's* `RenderLayers`
+> (default layer 0) against each mesh's, not just camera-vs-mesh.** A mesh restricted to a non-zero
+> layer only is therefore dropped from every layer-0 light's shadow pass. Harmless for rings today
+> (`unlit: true`, and losing shadow-map membership is arguably desirable for a flat ground decal),
+> but this reserved-layer scheme only works cleanly for unlit cosmetics — a future `RenderLayers`
+> consumer restricting a *lit* prefab to a player layer would get an unexpectedly shadowless mesh.

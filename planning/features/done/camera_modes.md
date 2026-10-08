@@ -939,3 +939,76 @@ migrated shapes above pass `ironhold_cli validate` and their full existing test 
 ## Phase 2 — Cinematic mode
 
 `Cinematic` (spline/keyframe camera) is deliberately deferred. It requires a timeline or sequencer primitive that doesn't exist yet (see backlog icebox: "Timeline / sequencer"). When that feature lands, `Cinematic` can be added as a new variant of `CameraModeDef` without changing the rest of this system. A separate feature file should be written at that point.
+
+## Notes moved from `crates/ironhold_core/src/CLAUDE.md` (2026-10-08, core CLAUDE.md split)
+
+These paragraphs were in the crate `CLAUDE.md` and are kept here verbatim; that file now carries only the condensed current-state rule. Wording such as "above"/"below" refers to the old file.
+
+### b:1331: Split prefabs need `zoom_speed:0`, `orbit_button:"None"`, `character_rotate_button:None`
+<!-- moved-from-claude-md: b:1331 -->
+
+Later players' `camera.party`/`camera.split` fields are ignored entirely — only the first
+player-tagged scene entity's config is read for those two switches. Scene entity order in
+`entities:` therefore matters for local co-op. **Split-screen is the one case where every
+player's OTHER camera fields still matter** — each split-screen player gets a real `ActiveCameraMode::Orbit`
+built from their own `camera` block (offset, `zoom_speed`, `orbit_button`, etc.), not just the
+first player's. A shared mouse would otherwise rotate/zoom every split-screen camera identically
+(`camera_orbit_system` reads mouse input once per system call, applying the same delta to every
+`ActiveCameraMode::Orbit` in its query) — split-screen scenes disable manual control per-camera instead via
+RON: `zoom_speed: 0.0` (scroll × 0 has no effect) and `orbit_button: "None"` (new
+`parse_orbit_button` arm returning `(false, false)`, no warning — distinct from an actually
+unrecognized string, which warns and defaults to `"Either"`).
+
+**`character_rotate_button` needs the same treatment, and was missed on every `local_coop_demo`
+split prefab until `camera_modes.md` v1's playtest caught it live (added `character_rotate_button:
+None` to all 15 split-screen camera blocks).** It's a *separate* switch from `orbit_button` —
+`camera_orbit_system`'s `char_rotate` gate (`orbit.character_rotate_rmb && rmb`) fires independently
+of `orbit_active`, defaults to `Some("Right")` (i.e. `character_rotate_rmb: true`) when omitted, and
+rotates the **character**, not the camera's own yaw/pitch. Since it's gated only on the global RMB
+state with no per-viewport cursor check (same limitation as `orbit_button`), an unset
+`character_rotate_button` on a split-screen prefab spins *every* split player's character at once
+from either viewport — confirmed via a live runtime diagnostic added temporarily to
+`camera_orbit_system` during that playtest (compare `orbit_lmb`/`orbit_rmb`/`zoom_speed` logged at
+spawn time vs. read live in the system — both matched and were correctly `false`/`false`/`0.0`,
+which is what pointed at `character_rotate_button` as the actual unaccounted-for input). Any new
+split-screen prefab must set `character_rotate_button: None` alongside `orbit_button: "None"` and
+`zoom_speed: 0.0` — the docs (`docs/20_data_formats.md`) now state this as a three-field
+requirement, not two.
+
+### b:1374: `CameraShake` query must exclude Fixed/FirstPerson/Flycam
+<!-- moved-from-claude-md: b:1374 -->
+
+**Fixed (`camera_modes.md` v1, was a known limitation before):** `Action::CameraShake`
+(`SceneStateParams::orbit_cameras` in `scene_manager/mod.rs`) now queries `Or<(With<OrbitCameraMode>,
+With<PartyCameraMode>)>`, so it fires correctly on a `party:` scene's shared camera too, not just
+on both cameras in a `split` scene (which already worked, since those are real independent
+`Orbit`-mode cameras). Deliberately still excludes `Fixed`/`FirstPerson`/`Flycam`'s markers — a
+flycam scene must keep getting the explicit `warn!("no orbit camera in scene — shake ignored")`
+instead of a silent overwrite, since `fly_camera_system` runs after the shake system and
+unconditionally rewrites `Transform::rotation` every frame.
+
+### b:1383: `SetCameraMode`; Authored vs Active camera mode; `camera_blend_system` must be last in the chain
+<!-- moved-from-claude-md: b:1383 -->
+
+**`Action::SetCameraMode` / `camera_modes:` registry (`camera_modes.md` v2):** the runtime switch
+lives in `action_executor.rs`; `entity_spawner.rs::apply_camera_mode` (`pub(crate)`) is its
+switch-time analog of the spawn-time per-mode match arms in `spawn_active_camera_for_player` —
+some deliberate duplication between the two, logged in `planning/claude_suggestions.md` rather than
+unified in this pass (touching the shipped v1 spawn path for a v2-only feature). Three things worth
+knowing before touching this code:
+- `AuthoredCameraMode` (a camera's scene-authored starting mode, written once at spawn, never
+  mutated) and `ActiveCameraMode` (the live, per-frame-mutable state) are deliberately two separate
+  components — `SetCameraMode(mode: "default")` resolves against the former, everything else
+  against `LoadedCameraModes` (the current scene's registry, inserted in `scene_loader.rs`'s
+  Replace branch only, mirroring `LoadedSpawnPoints`).
+- `CameraBlendState`/`camera_blend_system` blend the *rendered* `Transform`/FOV from a pre-switch
+  snapshot toward whatever the *already-switched* mode's own per-frame system computes that same
+  frame (Design A: let the new mode run unsuppressed, then interpolate on top) — it does **not**
+  precompute a target pose itself, so it must run after every per-mode system in `lib.rs`'s
+  `.chain()` (it's the last entry there, right before `animation_playback_system`). Player input to
+  the new mode is not suppressed during the blend — a deliberate v2 simplification, see
+  `planning/claude_suggestions.md` ▸ Camera.
+- `CameraModeOverride` (zero-sized marker) is present on a camera only while it's under an explicit
+  registry-preset switch (cleared by `mode: "default"`); `dynamic_split_screen_system` checks it
+  per-camera and skips its automatic `is_active` merge/split toggle on any camera that has it, so a
+  scripted override survives the dynamic split system fighting it every frame.

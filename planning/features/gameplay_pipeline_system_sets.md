@@ -126,7 +126,7 @@ WASM's single-threaded executor ties break by insertion order, so moving registr
 unconstrained pairs that D3 does not touch. The plugin owns **every** `Update` system that touches
 `Messages<UiEvent>`, `Messages<GameEvent>`, `Messages<SceneEvent>` or `ActionQueue`. `ActionBarPlugin` and
 `TargetingPlugin` tag their systems with `in_set(...)` instead of `.before(fsm_interpreter_system)` (the
-transitive-ordering note in `src/CLAUDE.md` becomes an explicit edge). No signature changes; largest tuple
+transitive-ordering note in `capabilities/CLAUDE.md` becomes an explicit edge). No signature changes; largest tuple
 stays 12 (limit 20); `spawn_scene_v2`'s 16-param ceiling is untouched.
 
 **5. Tests (`crates/ironhold_core/tests/schedule_order_tests.rs`, new).** App = `MinimalPlugins` +
@@ -200,7 +200,7 @@ small).
       `dialogue_tick_system`, `npc_hit_relay_system`, `inventory_ui_system`, `container_ui_system` into sets;
       `audio_state_system` → `.before(GameplaySet::Interpret)`
 - [ ] Fix the false comment at `lib.rs:242-243`; add the cost-gate staleness comment in
-      `action_bar_input_system`; update `src/CLAUDE.md:30` to list the sanctioned `ActionQueue` pushers
+      `action_bar_input_system`; update the "Never push to `ActionQueue` from a capability system" rule in `src/CLAUDE.md` to list the sanctioned `ActionQueue` pushers
 - [ ] `tests/schedule_order_tests.rs` (structure + filtered conflicts + source scan + few behavioral tests);
       add it to `crates/ironhold_core/tests/CLAUDE.md` and the root `CLAUDE.md` test loop
 - [ ] Docs: rewrite `docs/30_runtime_events_and_logic.md` "System ordering" (~L868-884) as **"Same-frame event
@@ -212,7 +212,7 @@ small).
       `global_on` or author the transition from every state" rule; cross-link `docs/30` ~L186 and update the
       "Ordering & determinism notes" (~L309-313). Add one-line pointers from `docs/20`'s key-binding and
       `stats.ron` sections (D1 owns its own docs line)
-- [ ] Update `src/CLAUDE.md` ("The interpreter chain", the "targeting→interpreter ordering is transitive"
+- [ ] Update `runtime/scene_manager/CLAUDE.md` ("Entity FSM and the interpreter chain") and `capabilities/CLAUDE.md` (the "Targeting systems are ordered on purpose" transitive-ordering
       paragraph — now explicit)
 - [ ] Reconcile the backlog D3 entry's order text with Approach §3
 - [ ] Log the pre-existing U5 bug under `## Bugs`: `primitive_world/logic/state_machine.ron:130`

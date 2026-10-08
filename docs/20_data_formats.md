@@ -653,6 +653,8 @@ The player's own nameplate is controlled independently by `show_player_nameplate
 
 > **Two independent toggles:** `show_nameplates` covers NPCs/props; `show_player_nameplate` covers only your player. Setting `show_nameplates: true` does **not** show the player's own nameplate — you must also set `show_player_nameplate: true` (or a per-prefab `nameplate: true` on the player prefab) if you want it.
 
+> **Split-screen:** a nameplate shows in only one viewport (the first one in which the entity is on screen, checking the views in the order the players are listed under `entities:`); see [Split-screen camera](#split-screen-camera-splitscreendef-) for what every player sees.
+
 > **Runtime player toggle:** `Action::ToggleOwnNameplate` lets a player flip their own nameplate on/off at runtime (e.g. bound to a settings-menu button), independent of `show_player_nameplate`. It emits `nameplate.own_shown`/`nameplate.own_hidden` — bind these to an `IconButton`'s `bind` `GameVariable` the same way `audio.muted`/`audio.unmuted` drive the mute-button toggle (see [`IconButton((...))`](#iconbutton-) above). Has no effect on NPC/prop nameplates. If the player prefab has an explicit `nameplate: Some(true)`/`Some(false)` override, that always wins — the toggle still flips internally (and the button's bound label will still change), but the nameplate's actual visibility won't change, since the override bypasses the runtime preference entirely.
 >
 > ⚠️ **This preference does not persist across a scene transition.** It resets to the current scene's `show_player_nameplate` default on every scene load — including `LoadScene` to the same scene. If your project needs the choice to persist (e.g. across a portal or scene reload), that isn't built in yet; treat it as a per-scene runtime toggle, not a saved setting.
@@ -1864,6 +1866,43 @@ Particles use `AlphaMode::Add` (additive blending) by default when no sprite is 
 
 `FlameParticleMaterial` is an engine-internal material — it is not available as a `Custom(…)` shader key. Its uniforms (`color`, `elapsed_time`) are updated every frame by the particle system.
 
+#### Warming up particle pipelines (web builds)
+
+On the web build, the first time each kind of particle is drawn, the browser compiles a GPU pipeline and the game
+stalls for roughly 0.3 to 1 second. Particle groups are created on first use, so the engine cannot warm them up on its
+own. Each of these three kinds compiles separately, and you need **one warmup per kind, not per effect**:
+
+1. **Additive**: `additive: true` (sparks, glows), and no `uv_distort` / `uv_scroll_speed`.
+2. **Blend**: `additive` left out or `false`, which is the default, with or without a `sprite` (smoke, clouds, soft auras).
+3. **Flame**: `uv_distort` or `uv_scroll_speed` above 0 (campfires, torches), whatever `additive` says.
+
+To find which kinds your project uses, scan `effects:` in `assets.ron` (and every entry under `layers:`) for those three fields.
+
+Fire one `SpawnEffect` for each kind you use as soon as the scene is ready, off-screen (`y = -100`), next to your
+`PreloadScene` / `PreloadPrefab` calls, so the stall happens during the natural loading pause:
+
+```ron
+// logic/state_machine.ron, inside global_on: [ ... ]
+( event: "scene.ready:main", do_actions: [
+    SpawnEffect(key: "hit_spark",      position: (0.0, -100.0, 0.0)),  // additive
+    SpawnEffect(key: "campfire_smoke", position: (0.0, -100.0, 0.0)),  // blend
+    SpawnEffect(key: "campfire_fire",  position: (0.0, -100.0, 0.0)),  // flame
+]),
+```
+
+Use `scene.ready` in `global_on`: the `entry_actions` of the project's starting state do not run when the first scene
+loads ([the `initial_state` entry-actions gotcha](30_runtime_events_and_logic.md#the-initial_state-entry-actions-gotcha)), so a
+warmup placed there does nothing and gives no error. If the scene uses ground decals, also fire one
+`ProjectDecal` off-screen. Working examples: `assets/projects/particles_demo/logic/state_machine.ron` (top of
+`global_on`) and `assets/projects/3rd_person_game_demo/logic/state_machine.ron`; all three keys above exist in
+`assets/projects/primitive_world/assets.ron`.
+
+> **Budget footgun:** warmup effects are real particles and count against `particle_budget`. In a tight scene (for
+> example `particle_budget: 100`) three or four warmups can each use their full `particle_count`. Best practice: add
+> dedicated warmup keys to `assets.ron` with `particle_count: 1` and `priority: Player` (`Player` effects always fire;
+> `Ambient` ones are silently skipped when the pool is full, so an `Ambient` warmup may warm nothing). Fire them on
+> `scene.ready`, before continuous emitters fill the pool.
+
 ---
 
 **Ground decals (`decals`)**
@@ -1919,11 +1958,11 @@ Decals use `LevelEntity` — they are automatically cleaned up on scene transiti
 
 | Format | Use for | Notes |
 |--------|---------|-------|
-| `.wav` | Short SFX (jumps, clicks, pickups) | Uncompressed PCM — zero decode overhead, instant playback |
+| `.wav` | Short SFX (jumps, clicks, pickups) | Uncompressed PCM — zero decode overhead, instant playback. OGG/MP3 decoding adds a noticeable delay the first time a sound plays in a web build, so use WAV for anything that must feel instant |
 | `.ogg` | Music and long ambient loops | Compressed; smaller files, minor decode cost acceptable for long audio |
 | `.mp3` | Music only (avoid for new work) | Worse quality/size ratio than OGG; use OGG instead |
 
-Do not use `.aiff` or `.flac` — these formats are not supported and will produce a warning at load time with no audio playing.
+Do not use `.aiff` or `.flac` — these formats are not supported and will produce a warning when the sound is played (and a loader error if it is preloaded), with no audio playing.
 
 Trim any leading silence from SFX files before exporting — silence baked into the file adds perceived latency on every play.
 
@@ -2008,8 +2047,8 @@ Named entity templates. Scenes reference prefabs by key; the runtime resolves th
 | `children` | `Vec<ChildPrimitiveDef>` | Sub-meshes composing a composite primitive (e.g. lamp post + orb). Only used when `kind: Primitive`. See below. |
 | `colliders` | `Vec<ColliderDef>` | One or more static physics colliders for `kind: Actor` / `kind: Prop`. All shapes are combined into a single Rapier compound body — use multiple entries to approximate curved geometry or multi-part shapes. Empty list = no physics. See below. |
 | `behavior` | `Option<String>` | Path to a `.behavior.ron` file relative to the project root. Loads an independent per-entity FSM; `{self}` in event patterns and action keys is replaced with the entity's spawn ID. Works for all `kind` values, including composite `Primitive` prefabs with `children`. See `docs/30_runtime_events_and_logic.md`. |
-| `trigger_zone` | `Option<TriggerZoneDef>` | Spawns a Rapier sphere sensor. Emits `entity.entered:{id}` / `entity.exited:{id}` when the player overlaps. Field: `radius: f32`. Works on all prefab kinds, including composite primitives (`model: ""` + non-empty `children`). Ghost collider — excluded from player ground detection, so however large the radius, it can never be stood on and never suppresses grounding on the real floor beneath/near it. |
-| `interactable` | `Option<InteractableDef>` | Emits `entity.interacted:{id}` when the player is within `radius` metres and presses the interact key (default `"KeyF"`). Fields: `radius: f32`; `hint_text: Option<String>` (shown near the entity when the player is in range — not yet rendered, reserved for a future UI pass); `requires_item: Option<String>` — an `items.ron` catalog key the player's `PlayerInventory` must hold; when set and the player doesn't have it, emits `entity.interact_blocked:{id}` instead of `entity.interacted:{id}` (the interact still "lands" — `player.attack_missed` does not fire, see the `entity.*` event list in `docs/30_runtime_events_and_logic.md`). The item is **never consumed automatically** — possession alone unlocks it, every time; add your own `RemoveItem(entity: "player", item_key: "...", count: 1)` to the `entity.interacted:{id}` handler to make it single-use. `PlayerInventory` is a single shared resource, not per-player, so in a local co-op scene any one player carrying the item unlocks it for everyone. Worked example: the `seal_door` prefab in `3rd_person_game_demo` (buy `old_key` from `merchant_01`, then interact with the gate) — wiring in that project's `logic/state_machine.ron`. |
+| `trigger_zone` | `Option<TriggerZoneDef>` | Spawns a Rapier sphere sensor. Emits `entity.entered:{id}` / `entity.exited:{id}` when the player overlaps. Field: `radius: f32`. Works on all prefab kinds, including composite primitives (`model: ""` + non-empty `children`). Ghost collider — excluded from player ground detection, so however large the radius, it can never be stood on and never suppresses grounding on the real floor beneath/near it. **Do not put this on a prefab with a Dynamic rigid body (for example one with `components.npc`):** the sensor's volume currently adds to the body's mass, making it extremely heavy and effectively unpushable (a known engine bug); Fixed-body props such as chests and merchants are unaffected. |
+| `interactable` | `Option<InteractableDef>` | Emits `entity.interacted:{id}` when the player is within `radius` metres and presses the interact key (default `"KeyF"`). Fields: `radius: f32`; `hint_text: Option<String>` (shown near the entity when the player is in range — not yet rendered, reserved for a future UI pass); `requires_item: Option<String>` — an `items.ron` catalog key the player's `PlayerInventory` must hold; when set and the player doesn't have it, emits `entity.interact_blocked:{id}` instead of `entity.interacted:{id}` (the interact still "lands" — `player.attack_missed` does not fire, see the `entity.*` event list in `docs/30_runtime_events_and_logic.md`). The item is **never consumed automatically** — possession alone unlocks it, every time; add your own `RemoveItem(entity: "player", item_key: "...", count: 1)` to the `entity.interacted:{id}` handler to make it single-use. `PlayerInventory` is a single shared resource, not per-player, so in a local co-op scene any one player carrying the item unlocks it for everyone. Worked example: the `seal_door` prefab in `3rd_person_game_demo` (buy `old_key` from `merchant_01`, then interact with the gate) — wiring in that project's `logic/state_machine.ron`. One interact press fires for **every** interactable within its radius, not just the nearest, so keep interactables at least their radius apart (see the `seal_door`/`merchant_01` placement in `3rd_person_game_demo`). |
 | `click_selectable` | `bool` | `false` | When `true`, left-clicking near this entity on screen sets it as `CurrentTarget` and emits `target.clicked:{id}`, `target.changed:{id}`, and `target.changed`. Selection is screen-space proximity (the entity nearest the cursor within ~70px), so it works for animated/skinned GLB characters as well as primitives. Clicking empty space clears the target. |
 | `targetable` | `bool` | `false` | When `true`, this entity participates in Tab-cycle targeting. Pressing Tab selects the nearest `targetable` entity within `target_range` units and emits `target.changed:{id}` and `target.changed`. |
 | `indicator_color` | `Option<(f32,f32,f32,f32)>` | `None` | Direct RGBA override for the target-indicator ring colour when this entity is selected. Takes precedence over `indicator_category` and the scene-level `target_indicator.color`. Only meaningful when the prefab is selectable. |
@@ -2731,6 +2770,8 @@ This is **local, same-machine co-op** — same scope note as the shared party ca
 
 For local co-op scenes with two or more `"player"`-tagged entities, `camera.split` on the **first** player switches from "one shared camera framing everyone" to **one real camera per player**, each locked to its own rectangle of the window. Unlike `party`, split-screen does not derive a shared midpoint/zoom — every player gets a fully independent `OrbitCamera` built from their **own** `camera` block, so `offset`, `zoom_speed`, `orbit_button`, etc. need to be authored correctly on **every** player's prefab, not just player 1's. Only the `split` switch field itself is read exclusively from the first player.
 
+> **What each player sees in a split-screen scene.** These appear in **every** viewport that can see the entity: portal room-name labels (`world_labels:`), per-entity `label:`, `stat_label`, all four `world_stat_bar` styles, `ShowDamagePopup` and `ShowFloatingText`. **Nameplates are the one exception:** a nameplate shows in only one viewport, the first one in which the entity is on screen, checking the views in the order the players are listed under `entities:` in the scene (the first player's view first), so the second player will often not see a nameplate on an enemy both players are looking at. For a readout every player must see, use a `world_stat_bar` or `stat_label` on the prefab. Target rings appear in every viewport by default (see [`own_viewport_only`](#per-viewport-target-ring-visibility-own_viewport_only)).
+
 **`SplitScreenDef` fields** (`components.camera.split`, authored on the first player only):
 
 | Field | Type | Default | Description |
@@ -2751,7 +2792,7 @@ For local co-op scenes with two or more `"player"`-tagged entities, `camera.spli
 
 > **Every player's own `camera` block matters here — not just the first player's.** With `party`, only player 1's `camera` fields (besides `party` itself) are used, because there is only one shared camera. With `split`, each player gets their own real `OrbitCamera` built from their own config, so `offset`, `look_at_offset`, `zoom_speed`, `min_radius`/`max_radius`, `orbit_button`, etc. must be set on **every** player's `camera` block. Only `split` (and `party`) themselves stay first-player-only.
 
-> **Disabling manual mouse camera control.** A single shared mouse would otherwise orbit/zoom every split-screen player's camera identically, which looks wrong. Split-screen scenes should set `orbit_button: "None"` (see the `CameraConfig` table above) and `zoom_speed: 0.0` on **every** player's `camera` block, giving each player a fixed-angle camera at their configured offset with no mouse control — each player can still independently turn their own camera via keyboard (`InputMap.look_left`/etc.), see the "Keyboard camera look" note above.
+> **Disabling manual mouse camera control.** A single shared mouse would otherwise orbit/zoom every split-screen player's camera identically, which looks wrong. Split-screen scenes should set `orbit_button: "None"` (see the `CameraConfig` table above), `zoom_speed: 0.0` and `character_rotate_button: None` on **every** player's `camera` block, giving each player a fixed-angle camera at their configured offset with no mouse control — each player can still independently turn their own camera via keyboard (`InputMap.look_left`/etc.), see the "Keyboard camera look" note above.
 
 **Example** — two-player scene with a vertical split, both cameras fixed (no manual mouse control):
 
@@ -3003,7 +3044,7 @@ This is **local, same-machine co-op** — same scope note as the sections above:
 
 > **More than `MAX_SPLIT_PLAYERS` (4) players spawn cameraless.** Consistent with the existing (pre-`Grid`) behavior when a 3rd player exists in a `Vertical`/`Horizontal` scene — extra players beyond the cap simply don't get a `SplitViewportSlot` camera, they still spawn and can still move, just without their own rendered view.
 
-> **Every player's own `camera` block matters**, same as fixed-orientation `split` — each of the (up to 4) players needs their own `offset`, `zoom_speed`, `orbit_button`, etc. authored, disabling manual *mouse* control the same way (`orbit_button: "None"`, `zoom_speed: 0.0`) so one shared mouse doesn't move every camera at once — each player can still turn their own camera via keyboard (`InputMap.look_left`/etc., see "Keyboard camera look" above). Only `split` itself is read exclusively from the first player.
+> **Every player's own `camera` block matters**, same as fixed-orientation `split` — each of the (up to 4) players needs their own `offset`, `zoom_speed`, `orbit_button`, etc. authored, disabling manual *mouse* control the same way (`orbit_button: "None"`, `zoom_speed: 0.0`, `character_rotate_button: None`) so one shared mouse doesn't move every camera at once — each player can still turn their own camera via keyboard (`InputMap.look_left`/etc., see "Keyboard camera look" above). Only `split` itself is read exclusively from the first player.
 
 **Example** — 4-player scene with a grid split, all 4 cameras fixed (no manual mouse control):
 
@@ -3259,7 +3300,7 @@ player's keyboard scheme** — gamepad and keyboard input are checked additively
 exclusively, everywhere in this engine, so a gamepad-joined player can freely mix their join
 slot's authored keyboard scheme and the bound pad (confirmed against source during implementation,
 not assumed). Unplugging and replugging this controller into the **same** port later resumes this
-player's gamepad input automatically — see [How a controller gets assigned to a player](#how-a-controller-gets-assigned-to-a-player) above.
+player's gamepad input automatically — see [How a controller gets assigned to a player](#how-a-controller-gets-assigned-to-a-player-) above.
 
 A full working example (gamepad join alongside the keyboard one) lives in
 `assets/projects/local_coop_demo/scenes/room8.scene.ron`.
@@ -3289,8 +3330,7 @@ merge/split transitions. Party-mode and single-player scenes never get a label �
 > the label's color; the two are deliberately independent.
 
 No other configuration exists for this feature today — no opt-out, no repositioning, no
-controller-icon variant. See `crates/ironhold_core/src/CLAUDE.md` for the underlying
-`SplitScreenPlayerLabel`/`LinkedPlayerLabel` component pattern.
+controller-icon variant. (Engine developers: see [split-screen cameras and widgets](dev/split-screen-cameras-and-widgets.md#split-screen-player-hud-labels-pn).)
 
 > The per-viewport **target HUD readout** (`target_hud:`, see
 > [Per-player split-screen targeting](#per-player-split-screen-targeting) above) follows this exact
@@ -3858,6 +3898,8 @@ The full set of actions any `state_machine.ron` binding's (or a behavior/dialogu
 
 **Available actions:**
 
+**Syntax:** an action shown with named fields (`ModifyStat(key: ..., delta: ...)`) must be written with named fields, and an action shown positionally (`SetVariable("score", "0")`, `IncrementVariable("score", 1)`) must be written positionally. Named fields on a positional action (`SetVariable(key: "score", value: "0")`) are a RON parse error.
+
 **Typos in action fields are now hard errors.** Every `Action` rejects field names it doesn't
 recognise. Writing `start_at_fracton` instead of `start_at_fraction` no longer silently does
 nothing — it stops the **whole file** from loading. One typo in `logic/state_machine.ron` means
@@ -3887,7 +3929,7 @@ column.
 | `LoadSceneOverlay("path")` | Load a `.scene.ron` as an overlay on top of the current scene (e.g. pause menu) without unloading it; only the UI section spawns, tagged `OverlayEntity`; a transparent full-screen backdrop blocks clicks through to the base scene |
 | `UnloadOverlay` | Remove all `OverlayEntity` entities (dismiss the current overlay) |
 | `ToggleOverlay("path")` | If an overlay is active, unload it; otherwise load `path` as an overlay. Use for an ESC-style toggle bound to one key/button |
-| `Spawn { prefab, id, position, spawn_point, yaw_deg, at_entity }` | Enqueue a prefab spawn (max 2/frame); `id` auto-generated if omitted; supports `{self}`/`{target}` substitution (not inside a dialogue choice's `do_actions` yet) plus `{new_id}` — a fresh, monotonically increasing counter value resolved at spawn time (e.g. `id: "{self}_corpse_{new_id}"` avoids reusing the same id per spawn even when `{self}` repeats). `{new_id}` only guarantees no collision against other `{new_id}`/auto-generated ids — it can still collide with a hand-authored literal id of the same shape, and an id built with it can't be referenced by another RON file afterward (only via that entity's own `{self}`, or `{target}`). A `warn!` fires if the resolved id collides with an already-registered one, or if it still contains an unresolved `{...}` token. Resets on `LoadScene`, same as the auto-generated fallback — safe since no spawned entity survives a scene transition anyway. `spawn_point` looks up a scene-defined named point; `yaw_deg` rotates around Y axis; `at_entity: "id"` spawns using a live entity's full current transform — position, rotation, **and scale** (resolved via `SpawnRegistry` → `GlobalTransform::compute_transform()`, same registry lookup `SpawnEffect`'s `entity` field uses) — takes precedence over `position`/`spawn_point` for position and over `yaw_deg` for rotation, supports `{self}`/`{target}`, and **skips the spawn with a warning** (never falls back to the origin) if the named entity can't be resolved and no `position`/`spawn_point` was also given |
+| `Spawn { prefab, id, position, spawn_point, yaw_deg, at_entity }` | Enqueue a prefab spawn (max 2/frame); `id` auto-generated if omitted; supports `{self}`/`{target}` substitution (`{target}` is not resolved inside a dialogue choice's `do_actions` yet; `{self}` is) plus `{new_id}` — a fresh, monotonically increasing counter value resolved at spawn time (e.g. `id: "{self}_corpse_{new_id}"` avoids reusing the same id per spawn even when `{self}` repeats). `{new_id}` only guarantees no collision against other `{new_id}`/auto-generated ids — it can still collide with a hand-authored literal id of the same shape, and an id built with it can't be referenced by another RON file afterward (only via that entity's own `{self}`, or `{target}`). A `warn!` fires if the resolved id collides with an already-registered one, or if it still contains an unresolved `{...}` token. Resets on `LoadScene`, same as the auto-generated fallback — safe since no spawned entity survives a scene transition anyway. `spawn_point` looks up a scene-defined named point; `yaw_deg` rotates around Y axis; `at_entity: "id"` spawns using a live entity's full current transform — position, rotation, **and scale** (resolved via `SpawnRegistry` → `GlobalTransform::compute_transform()`, same registry lookup `SpawnEffect`'s `entity` field uses) — takes precedence over `position`/`spawn_point` for position and over `yaw_deg` for rotation, supports `{self}`/`{target}`, and **skips the spawn with a warning** (never falls back to the origin) if the named entity can't be resolved and no `position`/`spawn_point` was also given |
 | `PreloadPrefab("key")` | Load a prefab's GLB early and cache the handle; fire on `scene.ready` to eliminate the first-spawn WASM decode stall |
 | `PreloadGlb("key")` | Load a **model catalog** GLB (from `assets.ron` `models:`) early — use for animation-source GLBs that have no prefab entry. The full GLTF including all clips is decoded and cached; the handle is kept alive in `PreloadedGlbHandles` until the next scene load. Validates that the key exists in `assets.ron` |
 | `Despawn("id")` | Remove a previously spawned entity by its spawn ID |
@@ -3904,10 +3946,10 @@ column.
 | `IncrementVariable("key", i32)` | Parse the variable as `i32` and add the delta; missing or unparseable values default to `0` |
 | `ModifyStat(key: "key", delta: f32)` | Add `delta` to a stat and clamp. **Dot-routing:** `"spawn_id.stat_name"` targets that entity's `StatMap`; no dot targets global `LoadedStats`. In behavior files, `{self}` in `key` is substituted with the entity's spawn ID. |
 | `SetStat(key: "key", value: f32)` | Set a stat to an absolute value and clamp. Same dot-routing and `{self}` substitution as `ModifyStat`. |
-| `ShowDamagePopup(entity: "id", amount: f32)` | Spawns a floating `+N` / `-N` label above the entity with the given spawn ID. Positive amounts show in heal colour, negative in damage colour. Uses `{self}` substitution in behavior files. Style (font size, duration, colours) is set via `damage_popup_style` in `.project.ron`. |
-| `ShowFloatingText(entity: "id", text: "msg")` | Spawns a floating text label above the entity with the given spawn ID. Rises and fades using the same animation as `ShowDamagePopup`. Colour is warm yellow; use `ShowDamagePopup` for numeric health feedback. Uses `{self}` and `{target}` substitution. Optional `offset: (x, y, z)` overrides the default spawn height set by `damage_popup_style.spawn_offset` — useful when multiple floating texts fire at the same time and would otherwise overlap. Example: `ShowFloatingText(entity: "player_01", text: "You killed {self}!", offset: (0.0, -0.02, 0.0))` |
+| `ShowDamagePopup(entity: "id", amount: f32)` | Spawns a floating `+N` / `-N` label above the entity with the given spawn ID. Positive amounts show in heal colour, negative in damage colour. Uses `{self}` substitution in behavior files. Style (font size, duration, colours) is set via `damage_popup_style` in `.project.ron`. In split-screen scenes it appears in every viewport that can see the entity. |
+| `ShowFloatingText(entity: "id", text: "msg")` | Spawns a floating text label above the entity with the given spawn ID. Rises and fades using the same animation as `ShowDamagePopup`. Colour is warm yellow; use `ShowDamagePopup` for numeric health feedback. Uses `{self}` and `{target}` substitution. Optional `offset: (x, y, z)` overrides the default spawn height set by `damage_popup_style.spawn_offset` — useful when multiple floating texts fire at the same time and would otherwise overlap. Example: `ShowFloatingText(entity: "player_01", text: "You killed {self}!", offset: (0.0, -0.02, 0.0))` In split-screen scenes it appears in every viewport that can see the entity. |
 | `SetEntityVisible(entity: "id", visible: bool)` | Shows (`true`) or hides (`false`) a spawned entity by its spawn ID. The entity stays in the ECS — colliders and behavior FSM keep running. World-space labels tracking that entity (stat bar, stat label, and per-entity `label:`) auto-hide automatically — all three spawn as the same underlying `WorldLabel` component, which `world_label_screen_pos_system` hides whenever its tracked entity's own `Visibility` is `Hidden`. Uses `{self}` in behavior files. |
-| `EmitEventAfterDelay(event: "name", delay_secs: f32)` | Fires a `GameEvent::Trigger("name")` after `delay_secs` seconds. One-shot — fires once then is removed. Cleared on `Action::LoadScene` so delayed events do not leak across scene transitions. Uses `{self}` substitution in behavior files. |
+| `EmitEventAfterDelay(event: "name", delay_secs: f32)` | Fires a `GameEvent::Trigger("name")` after `delay_secs` seconds. One-shot — fires once then is removed. Cleared on `Action::LoadScene` so delayed events do not leak across scene transitions. Uses `{self}` substitution in behavior files. The delay keeps counting while the game is paused or in any other state, so a rule that must catch it belongs in the top-level `global_on:`, not a state's `on:` list (a state-scoped rule silently misses an event that lands while that state is not active). A delayed event cannot be cancelled; for a per-entity despawn timer prefer `SetDespawnTimer`. |
 | `SpawnEffect(key: "key", position/entity)` | Spawn a particle burst from `assets.ron effects`. Quality multiplier and budget gating are applied at spawn time. See the Particle System section. |
 | `ProjectDecal(key: "key", …)` | Spawn a flat ground-projected texture quad. See the Ground Decals section. |
 | `SetParticleQuality(Level)` | Set the global quality tier (`High`, `Medium`, `Low`, `Minimal`). Persists across scene transitions. Affects all subsequent `SpawnEffect` calls. |
@@ -4539,7 +4581,7 @@ Texture dimensions for `icon_sheet` do **not** need to be power-of-2 — that wa
 
 > **Pixel/Icon/Textured bar depth scaling:** these three styles render at a fixed screen-pixel size regardless of camera distance. Depth-based scaling is not yet implemented for any of them (only `Ascii`/`stat_label` support it).
 
-> **Split-screen visibility:** `stat_label` and all four `world_stat_bar` styles (`Ascii`, `Pixel`, `Icon`, `Textured`) correctly duplicate across simultaneously-visible split viewports (local co-op scenes with `camera.split` configured) — each active viewport gets its own correctly-positioned copy, same as portal room-name labels. Damage popups and nameplates do **not** duplicate — an entity's popup or nameplate shows in **at most one** viewport at a time. **This applies to co-op players too**: any `world_stat_bar` style works correctly on a split-screen player prefab — pick whichever look you want, duplication is not a factor in that choice.
+> **Split-screen visibility:** `stat_label` and all four `world_stat_bar` styles (`Ascii`, `Pixel`, `Icon`, `Textured`) correctly duplicate across simultaneously-visible split viewports (local co-op scenes with `camera.split` configured) — each active viewport gets its own correctly-positioned copy, same as portal room-name labels. `ShowDamagePopup` and `ShowFloatingText` popups duplicate too (in split-screen scenes they appear in every viewport that can see the entity). **This applies to co-op players too**: any `world_stat_bar` style works correctly on a split-screen player prefab — pick whichever look you want, duplication is not a factor in that choice. **Nameplates are the exception:** an entity's nameplate shows in only one viewport (see [Split-screen camera](#split-screen-camera-splitscreendef-)).
 >
 > **`Ascii` is a prototyping/debug style; `Pixel`, `Icon`, and `Textured` are the production-quality choices.** `Ascii` is the silent default when `style` is omitted, so a `world_stat_bar` that doesn't set `style` explicitly is using the prototyping look by default — set `style: Pixel(...)` for a solid-fill bar, `style: Icon(...)` for a discrete pip/heart display, or `style: Textured(...)` for an art-directed continuous bar with rounded caps/borders. `Ascii` may be retired in a future version; existing bars with no `style` set will keep working until then.
 
@@ -4628,7 +4670,7 @@ Entries with no `style` field continue to parse correctly — the default is `As
 
 ## `DamagePopupStyle`
 
-Optional block in `{name}.project.ron` that controls how `Action::ShowDamagePopup` popups look. All fields have built-in defaults — omit the block entirely to use them.
+Optional block in `{name}.project.ron` that controls how `Action::ShowDamagePopup` popups look. All fields have built-in defaults — omit the block entirely to use them. In split-screen scenes each popup appears in every viewport that can see the entity (see [Split-screen camera](#split-screen-camera-splitscreendef-)).
 
 ```ron
 // {name}.project.ron

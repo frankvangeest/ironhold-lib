@@ -100,3 +100,17 @@ _(none)_
 - Given `ToggleMute` fired while unmuted, the `audio.muted` pipeline event is emitted.
 - Given `ToggleMute` fired while muted, the `audio.unmuted` pipeline event is emitted.
 - Given `SetVolume(0.5)` fired, the `audio.volume_changed` pipeline event is emitted.
+
+## Notes moved from `crates/ironhold_core/src/CLAUDE.md` (2026-10-08, core CLAUDE.md split)
+
+These paragraphs were in the crate `CLAUDE.md` and are kept here verbatim; that file now carries only the condensed current-state rule. Wording such as "above"/"below" refers to the old file.
+
+### b:1053: Audio preloading: `preload_audio_system`, `LoadedAudioHandles`
+<!-- moved-from-claude-md: b:1053 -->
+
+## Audio
+
+### Preloading
+`preload_audio_system` fires on every `SceneEvent::Ready` and calls `asset_server.load::<AudioSource>()` for every entry in `LoadedAssetCatalog.audio`, storing the resulting handles in `LoadedAudioHandles`. This eliminates first-play I/O latency — the asset server cache is warm before the player can interact, so `Action::PlaySound` resolves instantly rather than blocking on file I/O. The handles in `LoadedAudioHandles` must stay alive (i.e. not be dropped) to prevent the asset server from evicting the audio between scene loads.
+
+On each new `SceneEvent::Ready` the resource is cleared and repopulated, so scene transitions always reflect the current catalog without accumulating stale handles.

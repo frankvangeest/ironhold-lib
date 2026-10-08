@@ -1,6 +1,6 @@
 # Feature: Split `crates/ironhold_core/src/CLAUDE.md` by directory and topic (+ docs audience split)
 
-_Status: Ready (pending the Phase-0 spike gate) — plan-reviewed twice on 2026-10-07 (system-architect, ux-gamedesigner-reviewer, Claude Code docs check; both passes "needs work"); every finding is folded in below (R1-R22) and Frank resolved the open decisions. The second revision has not been re-reviewed._
+_Status: Done (2026-10-08; Ready pending the Phase-0 spike gate on 2026-10-07) — plan-reviewed twice on 2026-10-07 (system-architect, ux-gamedesigner-reviewer, Claude Code docs check; both passes "needs work"); every finding is folded in below (R1-R22) and Frank resolved the open decisions. The second revision has not been re-reviewed._
 _Planned at: `b24078b` (2026-10-07); revised at `dd62494` (first pass) and the commit following `1ad337c` (second pass)_
 
 ## What
@@ -227,6 +227,37 @@ pointer-only), only Phase 2's stub items change. Delete the spike; record result
 Also: write the audit script (`tools/claude_md_audit.py`, header comment only) with the block-ID/sub-ID/anchor scheme,
 run it against the *unchanged* file with every block mapped to itself (0 problems expected), and freeze the base.
 
+### Phase 0 results (2026-10-07, Claude Code 2.1.292, `feature/core_claude_md_split` worktree)
+Method: throwaway rules and directory file carrying unique canary tokens (`SPIKE_<WORD><digit>`), headless `claude -p` runs on `--model haiku` (one question per session, the model reports canaries from its own context). `/context` was not used, so every result below rests on the model's self-report; the positive results were consistent across runs, and the controls (an unrelated Read, an import line removed) behaved as expected. Spike files deleted.
+
+| Question | Result | Consequence |
+|---|---|---|
+| `paths:` rule and a directory `CLAUDE.md` load on **Read** in the subtree | Yes (neither is in context at session start) | stubs and directory files work |
+| ... on **Write of a brand-new file** in the subtree | Yes (both loaded, no prior Read) | no stop condition triggered |
+| ... on an **unrelated** file (`runtime/mod.rs`) | No | negative control passes |
+| ... on **Edit** | Not isolated: Edit requires a prior Read, so it is covered by the Read result | none |
+| loaded for a **subagent** reading a subtree file | Yes (the subagent reported both; whether before or after its Read is ambiguous in its report) | reviewers get them when they Read |
+| `paths:` globs resolve from a **worktree cwd** | Yes | `.claude/rules` stubs work in `../ironhold-lib-{slug}` |
+| cwd = **primary checkout**, reading a file in a sibling worktree via `--add-dir` | **No**: neither the rule nor the directory `CLAUDE.md` loaded, nor any rule from that worktree's `.claude/` | **R18 is real**: an agent must run with cwd inside the worktree, or its prompt must tell it to Read the directory `CLAUDE.md` of each touched directory itself. Applies to every review agent launched from the primary checkout |
+| stub with **no frontmatter** | Loads at session start (always) | the R1 "every rule has a `paths:` key" check is **mandatory** |
+| stub with a **mistyped key** (`path:` for `paths:`) | Loads at session start (always) | same: the check must verify the exact key, not just that frontmatter exists |
+| `@import` inside a path-scoped rule | **Eager**: the imported file loaded at session start even though the importing rule did not; removing the import line removed it | **stubs are pointers only, never `@import`** (an import defeats the lazy loading the stubs exist for) |
+| block HTML comments `<!-- b:NNN -->` in a rule | **Stripped** from loaded context (the rule's quoted text had no comment line) | anchors cost no context tokens; the audit script reads the files, not the loaded context |
+| OpenCode directory-file attach | Not run (not cheap here) | stays an assumption from its docs; check once when OpenCode is next used |
+
+**Gate verdict: PASS, with three plan adjustments** (none stops the work): (1) stubs are pointer-only, no `@import`; (2) the R1 audit rejects any `.claude/rules/*.md` whose frontmatter lacks the exact key `paths:`; (3) R18 becomes a concrete rule: review agents and any other agent that reads worktree files must have cwd inside the worktree (or be told to Read the directory `CLAUDE.md` files for what they touch) — to be written into `ship-feature.md` / the review prompts in Phase 3.
+
+### Audit tooling (built in Phase 0)
+`python tools/claude_md_audit.py <mode>` (header comment documents the scheme). Modes: `self` (parent still holds
+everything; also detects an edit to the monolith after the freeze via per-block hashes: port it forward, decision 11),
+`dest` (Phases 1-3, parent not scanned), `full` (Phase 4, parent scanned), `freeze` (one-time sidecar build; the
+sidecar is hand-edited afterwards), `--hints` (modal-verb lines per block), `--strict` (ambiguous dest labels fail),
+`--selftest`. The sidecar carries 104 blocks, 36 Safety=Y, 13 with `.rule`/`.ref` sub-IDs, and the map section-6/7
+re-homings, `also` placements and governs lists already applied. **Phase 1 curation still owed in the sidecar:** 41
+blocks with an ambiguous destination label (`review: true`), and 30 of the 36 Safety=Y blocks still carry the default
+governs `crates/ironhold_core/src/**`, which `dest` mode rejects for any subdirectory placement until each is narrowed
+(or placed in the parent) deliberately. Running `dest` before Phase 1 lists these as its to-do list.
+
 ### Phases 1-5 — `feature/core_claude_md_split` (additive, parent slimmed last)
 - **Phase 1 — build the destinations** (first commit: the R10 fixes in the monolith; then one commit each, audit
   after each): `schema/CLAUDE.md` (adds "a new rendering `PrefabDef` field must be checked against the player path"
@@ -253,12 +284,12 @@ run it against the *unchanged* file with every block mapped to itself (0 problem
 ## Tasks
 - [x] Phase A on `feature/docs_audience_split`: A0-A4, reviews (R7), merge (`c188550`, 2026-10-07)
 - [ ] Backlog items: designer web-loading/warmup page + overview cleanup + README block; publish prebuilt `ironhold` binary
-- [ ] Phase 0 spike (hard gate) + audit script + freeze the base
-- [ ] Phase 1: R10 fixes in the monolith, then schema, runtime, scene_manager, capabilities, assets, parent draft
-- [ ] Phase 2: topic references (one commit each) + SFX cut
-- [ ] Phase 3: live citations, active plans, `lib.rs` load-bearing comments, hooks, `tests/CLAUDE.md`, `AGENTS.md`, command files
-- [ ] Phase 4: port forward, slim the parent (last), moved-sections index in `docs/dev/`, full audit, determinism_lint
-- [ ] Phase 5: `/context` measurement (worst-case files), per-phase reviews and a final full-file reviewer pass
+- [x] Phase 0 spike (hard gate) + audit script + freeze the base (2026-10-07: spike passed, results above; `tools/claude_md_audit.py` + `planning/investigations/core_claude_md_split_blocks.json`; base = the parent file as of `ba4088d`, 1752 lines / 160,039 chars; `self` mode 0 problems)
+- [x] Phase 1 (2026-10-08): R10 fixes in the monolith, then schema 5.0k, runtime, scene_manager 17k, capabilities 17.9k (budget 20k), assets (WGSL), parent draft `planning/investigations/core_claude_md_split_parent_draft.md` 13.3k (budget 18k). `self` mode 0 problems; `full --parent <draft>` reports only the 44 Phase-2 items (7 topic docs + 37 topic-doc anchors). Narrative cut from the folder files is archived verbatim in the owning plan files (`<!-- moved-from-claude-md: b:N -->` markers) and the per-block table is `core_claude_md_split_dispositions.md`. Phase 3 owes: the draft says each `lib.rs` edge carries a `// load-bearing:` comment (add them), the `docs/dev/moved-sections-index.md` the draft points at, the two stale doc comments (`scene_manager/mod.rs:452-454`, `lib.rs:608-609`), and repointing `docs/20:3317`.
+- [x] Phase 2 (2026-10-08): seven topic docs in `docs/dev/` (34 blocks, 82k chars, verbatim with relative references resolved) + seven pointer-only `.claude/rules/` stubs, one commit each; SFX cut done (decoder clause added to the `docs/20` `.wav` row). `full --parent <draft>` reports 0 problems; `dest` reports only the parent's `b:575.rule` anchor (Phase 4). Stubs carry the exact `paths:` key, no `@import`.
+- [x] Phase 3 (2026-10-08): 17 forwarding `AGENTS.md` (`@CLAUDE.md`) stubs; `docs/dev/moved-sections-index.md`; 9 `// load-bearing:` markers in `lib.rs` + 2 stale doc comments fixed + 6 code/doc citations repointed (`cargo check -p ironhold_core -p ironhold_cli`, `ron_lint`, `ron_validation`, `determinism_lint` pass); both hooks rewritten and `py_compile`d; 23 instruction-style citations in 13 active plans repointed; root `CLAUDE.md`, `AGENTS.md`, `ship-feature.md`, `code-review.md`, `tests/CLAUDE.md` updated (R18: review agents get the worktree path and read directory `CLAUDE.md` files themselves). Remaining `src/CLAUDE.md` citations all point at content that stays in the parent.
+- [x] Phase 4 (2026-10-08): no concurrent edits to port forward (`integration` untouched since the branch point); parent slimmed to 13k (`e5c5239`); moved-sections index in `docs/dev/`; `full` audit 0 problems; `determinism_lint` passes.
+- [x] Phase 5 (2026-10-08): estimated loaded memory for a core source file fell from ~51.5k to ~18k tokens (`/context` at session start in the worktree, run by Frank: only the root `CLAUDE.md`, 14.8k tokens, is loaded as project memory, nothing from `crates/ironhold_core/src/` until a core file is touched); four reviews done (architect, debug-detective, alignment, UX) and their findings applied (restored 9 must-level rules to folder files that load for the governed code, warmup recipe and split-screen docs corrected, `{self}` in dialogue choices documented correctly). **AGENTS.md stubs, settled 2026-10-08:** Frank asked for a one-line `AGENTS.md` (`@CLAUDE.md`) beside every `CLAUDE.md`; a live OpenCode 1.18.33 run showed it does not expand the reference. With a stub present it attached `capabilities/AGENTS.md` whose content was the literal `@CLAUDE.md`; with the stub removed it attached `capabilities/CLAUDE.md` with the real rules (plus the parent). The 17 stubs were deleted and R8 ("no `AGENTS.md` in subfolders") stands; root `AGENTS.md` says not to add them.
 - [ ] Backlog items for splitting `docs/20_data_formats.md` and auditing `docs/30_runtime_events_and_logic.md` (logged 2026-10-07)
 
 ## Acceptance criteria

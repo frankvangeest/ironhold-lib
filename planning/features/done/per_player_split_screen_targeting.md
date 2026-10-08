@@ -569,3 +569,83 @@ playtest checklist.
   camera regardless of which player triggered it. **Met —
   `test_show_damage_popup_duplicates_ranks_when_split_screen_active`, confirmed by Frank's playtest
   after the `WorldLabelRank` duplication fix.**
+
+## Notes moved from `crates/ironhold_core/src/CLAUDE.md` (2026-10-08, core CLAUDE.md split)
+
+These paragraphs were in the crate `CLAUDE.md` and are kept here verbatim; that file now carries only the condensed current-state rule. Wording such as "above"/"below" refers to the old file.
+
+### b:247: `action_bar_input_system` requires `PlayerTarget` on every `CharacterController`
+<!-- moved-from-claude-md: b:247 -->
+
+**`action_bar_input_system` now hard-depends on every `CharacterController` entity also carrying
+`PlayerTarget`** — its player-resolution query widened from `Query<&SpawnId, With<CharacterController>>`
+to `Query<(&SpawnId, &PlayerTarget, Option<&PlayerIndex>), With<CharacterController>>`, so a player
+entity missing `PlayerTarget` silently drops out of the match and that player's entire action bar
+never fires (not just a missing ring/HUD, as a `PlayerTarget` omission would have meant before this
+phase). Every player-construction site already inserts `PlayerTarget` (see the five-site inventory
+above), so this holds today — but check it again against both spawn paths if a future change ever
+touches player-entity construction.
+
+### b:286: Targeting chain ordering `.before(action_bar_input_system)`; transitive edge to the interpreter
+<!-- moved-from-claude-md: b:286 -->
+
+**`TargetingPlugin`'s three mutating systems are `.chain()`ed and ordered `.before(
+action_bar_input_system)` — this is load-bearing, not incidental.** `click_select_system` →
+`tab_targeting_system` → `target_auto_clear_system` all read/write `PlayerTarget`/`CurrentTarget`
+with no data dependency forcing an order between them, so before this ordering existed Bevy's
+scheduler was free to interleave them with `action_bar_input_system` (which reads `PlayerTarget`
+for `{target}` substitution) in whichever order thread availability picked each run — on the exact
+frame a targeted entity despawned, this nondeterministically raced whether the action bar saw the
+freshly-cleared target or the stale one, and surfaced as unreproducible flaky test failures (see
+`planning/backlog.md`'s former "Same-frame targeting/action-bar race" bug entry) long before it was
+root-caused. `target_indicator_system` (`capabilities/target_indicator.rs`) and `camera.rs`'s
+`target_hud_update_system` are also explicitly ordered `.after(target_auto_clear_system)` for the
+same reason (both are read-only consumers, so this costs zero parallelism). If you add another
+system that reads or writes `PlayerTarget`/`CurrentTarget` in `Update`, order it explicitly
+relative to this chain rather than leaving it ambiguous — do not assume "it passed in testing"
+proves the ordering is safe, since the failure mode is a scheduling race, not a logic bug, and can
+pass hundreds of times before flipping.
+
+**The targeting→interpreter ordering is transitive, not direct — it depends on `ActionBarPlugin`
+owning its own edge to `fsm_interpreter_system`.** `TargetingPlugin` only orders itself before
+`action_bar_input_system`; it never references any interpreter system directly. It's
+`ActionBarPlugin`'s own `(cooldown_tick_system, action_bar_input_system,
+action_bar_visual_system).chain().before(fsm_interpreter_system)` (`capabilities/action_bar.rs`)
+that pulls the whole targeting chain ahead of `fsm_interpreter_system`/`entity_fsm_interpreter_system`
+too — meaning `target.*` events are guaranteed visible to both
+interpreters in the same frame they fire, not just to the action bar. If that `ActionBarPlugin` edge
+is ever removed or restructured, this second guarantee silently disappears along with it — there is
+no test asserting the schedule graph itself, only behavioral tests that would go back to being
+flaky rather than reliably red.
+
+### b:323: `target.*` events, screen-space selection, `select_aim_height`, `target_*` vars blank at 2+ players
+<!-- moved-from-claude-md: b:323 -->
+
+**`target.*` events** — emitted by the targeting capability (`capabilities/targeting.rs`; set
+`click_selectable: true` or `targetable: true` on `PrefabDef`). Selection is **screen-space
+proximity** (project each candidate to the screen via `camera.world_to_viewport`, pick the
+nearest to the cursor) — NOT mesh raycasting, which raycasts bind-pose geometry and misses
+animated/skinned GLB characters. Tab-cycle is nearest-first by world distance, and now processes
+**every player independently each frame** — each `CharacterController`'s own `InputMap.target_next`
+key press only ever changes that player's own `PlayerTarget`. `click_select_system`'s
+viewport-aware camera resolution (see the split-screen section below) additionally maps the
+resolved camera to its **owning player** via `CameraTargets`, falling back to the primary
+player for camera modes with no single owner (`Party` mode, the no-player default camera) —
+one physical mouse can still only act for one player per click, an accepted, unavoidable
+limitation.
+`select_aim_height: f32` (default `1.0`) on `PrefabDef` controls how many metres above the entity
+origin the click-projection aim point sits. Set lower for ground-hugging creatures (e.g. `0.4` for
+a snake, `0.6` for a spider) so the selectable zone aligns with the visible body.
+- `target.clicked:{id}` / `target.changed:{id}` / `target.changed` — new target selected
+  (`target.changed*` only fires for the primary player — see "Per-player targeting" above)
+- `target.cleared` — target cleared (click on empty space, `ClearTarget` action, or `LoadScene`;
+  same primary-player-only gate)
+
+The capability also writes three `GameVariables` for UI labels (bind whichever you need):
+`target_display` (`"<prefab> <id>"`), `target_name` (prefab key), `target_id` (spawn id).
+Entities carry a `PrefabKey` component (catalog key) alongside `SpawnId` (instance id) to
+support this. **These three vars go blank whenever 2+ players are present** (computed via a plain
+`CharacterController` entity count, not gated on real split-screen camera state) — there is no
+single meaningful "the" target across independent players; use the new per-viewport `target_hud:`
+scene block (`docs/20_data_formats.md`) instead for a 2+ player scene's readout. Single-player
+scenes are unaffected — the vars keep populating exactly as before this feature.

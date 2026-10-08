@@ -574,3 +574,21 @@ explicit and diagnosable rather than a silent gap.
   downhill (**browser-observable regression check, confirmed 2026-08-06** — the terrain half of the
   Friction comparison, and the one the original v2 draft didn't test for. `0.0` failed this exact
   check on first playtest; `0.15` was the fix).
+
+## Notes moved from `crates/ironhold_core/src/CLAUDE.md` (2026-10-08, core CLAUDE.md split)
+
+These paragraphs were in the crate `CLAUDE.md` and are kept here verbatim; that file now carries only the condensed current-state rule. Wording such as "above"/"below" refers to the old file.
+
+### b:1213: `PrefabDef.material` not auto-applied on the player path
+<!-- moved-from-claude-md: b:1213 -->
+
+**`PrefabDef.material` does NOT automatically apply via the generic spawn path — it needs the
+player path's own insertion, and both model sources need it.** `spawn_prefab_instance` (the
+generic Actor/Prop/NPC path) reads `prefab.material` and inserts `PendingMaterialOverride`;
+`spawn_player_entity_core` is completely separate and needs its own insertion via
+`PlayerConfig.material: Option<String>`, forwarded by `assemble_player_config`. Before v1 this only
+worked for GLB players (the primitive/capsule path bypassed `PlayerConfig` and this insertion
+entirely — this bit Stage 6's local co-op 4-way split during playtest, for the GLB case). v1 fixed
+it for primitive players too, since the insertion is now in the shared post-dispatch code. **Any
+future `PrefabDef` field meant to affect rendering/visuals must be checked against the player path
+in addition to the generic one** — same class of bug the site inventory above exists to prevent.

@@ -815,3 +815,27 @@ of a static scene author's choice.
 - Given the view is split, when the players' relative horizontal/depth separation ordering changes
   while they remain apart (e.g. player 2 circles around player 1 without ever coming close), then
   the split orientation does NOT change until the next full merge→split cycle.
+
+## Notes moved from `crates/ironhold_core/src/CLAUDE.md` (2026-10-08, core CLAUDE.md split)
+
+These paragraphs were in the crate `CLAUDE.md` and are kept here verbatim; that file now carries only the condensed current-state rule. Wording such as "above"/"below" refers to the old file.
+
+### b:1589: Duplicate `gamepad_index`/`player_index` validation scope
+<!-- moved-from-claude-md: b:1589 -->
+
+Two players authoring the same non-`None` `gamepad_index` **in the same scene's instantiated
+`entities:` list** is caught by `scene_loader.rs::warn_duplicate_gamepad_index` (scene-load `warn!`)
+plus a matching `ironhold_cli validate` hard error — deliberately scoped to instantiated players,
+not the raw prefab catalog, since `local_coop_demo`'s catalog legitimately reuses `gamepad_index`
+across different rooms' player variants that are never co-instantiated. Largely subsumed at
+runtime by `gamepad_bind_system`'s `claimed` invariant above (the second player just stays
+pending, never silently dual-controls), so this check is now purely explanatory/early-warning
+rather than the only thing standing between a designer and broken dual-control.
+
+A sibling `player_index` collision (`ironhold_cli validate --strict`'s `duplicate_player_index`)
+is scoped to `entities:` only, unlike the gamepad check above — deliberately *not* extended to
+`join_prefab_keys`: `Action::JoinPlayer` (`action_executor.rs`) unconditionally overwrites a
+hot-joined player's `player_index` with the runtime-computed join slot, so a join prefab's own
+authored value is dead data and checking it there would false-positive on the ordinary pattern of
+reusing one prefab (or two prefabs sharing a `player_index`) across multiple join slots — unlike
+`gamepad_index`, which the join path genuinely does read from the prefab.

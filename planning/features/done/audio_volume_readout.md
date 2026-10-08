@@ -106,3 +106,13 @@ unchanged). The preset buttons are unchanged. `state_machine.ron` is **unchanged
 - Given the game is muted, when the volume preset is 75, then `audio_volume_percent` is still `"75"`.
 - Given `SetVolume(200)`, then the variable reads `"100"`, matching the clamped `active_fraction`.
 - Given a project with no label bound to it, then nothing about its behaviour changes.
+
+## Notes moved from `crates/ironhold_core/src/CLAUDE.md` (2026-10-08, core CLAUDE.md split)
+
+These paragraphs were in the crate `CLAUDE.md` and are kept here verbatim; that file now carries only the condensed current-state rule. Wording such as "above"/"below" refers to the old file.
+
+### b:1060: `audio_volume_var_system` mirrors `AudioState` to a `GameVariable`
+<!-- moved-from-claude-md: b:1060 -->
+
+### Live volume variable (`audio_volume_var_system`)
+`audio_volume_var_system` mirrors `AudioState.active_fraction` into `GameVariables[AUDIO_VOLUME_PERCENT_KEY]` (`"audio_volume_percent"`, the chosen preset as an integer string, not the effective volume) whenever `AudioState` changes, so a bound `Label` shows the live volume with no RON rules — same shape as the targeting `target_*` variables. It is scheduled `.after(action_executor_system).before(update_dynamic_labels_system)` (the FSM interpreter never reads `GameVariables`, so `.before(fsm_interpreter_system)` would only add a frame of lag). Mute is deliberately NOT mirrored here: it still goes through the `audio.muted`/`audio.unmuted` RON `global_on` bridge. Tests that stand in for the project loader's `AudioState` re-insert must insert a non-default `active_fraction`, or they pass vacuously (the test harness never completes a project load).

@@ -137,7 +137,7 @@ This means game behavior can be authored entirely in RON without recompiling the
 
 Projects live in `assets/projects/{name}/`; create new ones with `/new-project <name>`.
 
-Note: every project uses `logic/state_machine.ron` — there is no separate `rules.ron` format (removed; see `docs/20_data_formats.md`'s "Removed: rules.ron" callout for the migration mapping). A project with only `global_on` bindings and no `states`/`transitions` is exactly as valid as one with a full FSM — start flat, add states when you need modes. See the interpreter notes in `crates/ironhold_core/src/CLAUDE.md`.
+Note: every project uses `logic/state_machine.ron` — there is no separate `rules.ron` format (removed; see `docs/20_data_formats.md`'s "Removed: rules.ron" callout for the migration mapping). A project with only `global_on` bindings and no `states`/`transitions` is exactly as valid as one with a full FSM — start flat, add states when you need modes. See the interpreter notes in `crates/ironhold_core/src/runtime/scene_manager/CLAUDE.md`.
 
 ## Tools
 
@@ -182,6 +182,8 @@ After implementing any feature, capability, or schema change, always invoke thes
 | **`wasm-perf-reviewer`** | *(conditional)* For changes to runtime systems, rendering, the render/update hot path, asset-loading, per-frame work, new dependencies, or schema that drives per-frame processing — verifies no WASM frame-time or binary-size regressions |
 
 `alignment-reviewer`, `system-architect`, and `debug-detective` run after every code change — launch all three **in parallel** (single message, multiple tool calls), alongside `ux-gamedesigner-reviewer`/`wasm-perf-reviewer` when their conditional triggers apply, and alongside the test suite (steps 4/11 in the Code change workflow below — reviews and tests are independent of each other). Skip the conditional two for pure RON/asset/doc tweaks. Use `/code-review` to run the full set for a consolidated pre-commit verdict on code changes, or `/plan-review` for the feature plan before any code is written.
+
+**Give every review agent the worktree path and tell it to Read the `CLAUDE.md` in each directory it reviews.** A directory `CLAUDE.md` and a `.claude/rules` stub load only for files under the session's own project root, so an agent launched from the primary checkout that reads a file in `../ironhold-lib-{slug}` gets neither (verified 2026-10-07, core CLAUDE.md split spike).
 
 **Evaluate each finding individually** once the reviews come back: either fix it now (loop back to the Code changes step) or, if it's non-blocking, log it as its own item in `planning/backlog.md` or a `planning/claude_suggestions.md` entry for later triage — don't let a minor observation stall the feature it wasn't blocking.
 
@@ -427,11 +429,13 @@ When making new features, performance and compatibility with WASM web builds mus
 ### Updating documentation
 When asked to update or audit documentation, check **all** of the following — not just CLAUDE.md files:
 - `CLAUDE.md` (root)
-- `crates/ironhold_core/src/CLAUDE.md`
+- `crates/ironhold_core/src/CLAUDE.md` (crate-wide rules) and the folder files beside it: `capabilities/`, `runtime/`, `runtime/scene_manager/`, `schema/` (each `CLAUDE.md`), plus `assets/CLAUDE.md`
 - `crates/ironhold_core/tests/CLAUDE.md`
+- `docs/dev/*.md` topic pages (long-form notes moved out of the crate `CLAUDE.md`; `docs/dev/moved-sections-index.md` maps the old sections)
 - Every `.md` file in `docs/` and `docs/dev/`, plus `README.md`. Designer/library-user docs live directly in `docs/` (`00_overview.md`, `05_art_style.md`, `15_authoring_tools.md`, `20_data_formats.md`, `25_custom_shaders.md`, `30_runtime_events_and_logic.md`, `STATUS.md`, and the `docs/README.md` index); developer docs live in `docs/dev/` (`10_architecture.md`, `40_determinism_and_networking.md`, `50_roadmap_and_milestones.md`, `60_contributing.md`, `70_profiling.md`, `browser_tests.md`). A new validate check adds a row to `docs/15_authoring_tools.md`.
 
-> Rust-specific rules (GPU/WGSL alignment, physics, terrain, inspector) live in
-> `crates/ironhold_core/src/CLAUDE.md`.
+> Crate-wide Rust rules (pipeline, determinism, GPU/WGSL alignment, `FixedUpdate`) live in
+> `crates/ironhold_core/src/CLAUDE.md`; rules for one folder live in that folder's `CLAUDE.md`
+> (`capabilities/`, `runtime/`, `runtime/scene_manager/`, `schema/`), with long-form notes in `docs/dev/`.
 > Integration test setup rules live in `crates/ironhold_core/tests/CLAUDE.md`.
 > Browser test suite documentation lives in `docs/dev/browser_tests.md`.

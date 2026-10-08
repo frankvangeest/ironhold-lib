@@ -9,6 +9,8 @@ in `FixedUpdate` — it actually runs in `Update`; see `crates/ironhold_core/src
 maintaining the same rules in two places is exactly the kind of drift this project's own planning
 conventions (`planning/CLAUDE.md`) exist to prevent elsewhere.
 
+OpenCode attaches the nearest folder `CLAUDE.md` by itself the first time it touches a file there (the read result shows "Instructions from: ..."). **Do not add `AGENTS.md` forwarding stubs (`@CLAUDE.md`) beside them:** OpenCode does not expand `@file` inside `AGENTS.md`, so a stub shadows the real `CLAUDE.md` and the model sees only the literal text `@CLAUDE.md` (verified 2026-10-08 with OpenCode 1.18.33).
+
 If you are OpenCode: this file is discovered first (`AGENTS.md` wins over `CLAUDE.md` in
 per-directory discovery), and the project config (`.opencode/opencode.json`) additionally loads
 the root `CLAUDE.md` via its `instructions` field specifically so you see the real rules too — read

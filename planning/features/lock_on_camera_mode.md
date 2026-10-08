@@ -190,7 +190,7 @@ Runtime (`capabilities/camera.rs`):
       dependence); `SetCameraMode` Orbit → LockOn → `"default"` swaps markers and removes `LockOnFraming`; shake on a locked camera does
       not accumulate; `CurrentTarget` never mutated by the system.
 - [ ] Docs: `docs/20_data_formats.md` (`Follow.offset_space` row + OTS recipe with the +Z-is-behind note; `LockOn` payload table, registry
-      example, "movement is not changed" callout, split-screen note), `crates/ironhold_core/src/CLAUDE.md` (lock-on layer, ordering vs
+      example, "movement is not changed" callout, split-screen note), `crates/ironhold_core/src/capabilities/CLAUDE.md` (lock-on layer, ordering vs
       targeting, why camera-only), `docs/30` only if events are mentioned (none added).
 - [ ] CLI: `validate.rs` — vocab check for `LockOn` (`orbit_config_vocab_problems(&def.orbit)`), range checks that currently match
       `CameraModeDef::Orbit` (`:428`) extended to `LockOn`'s orbit, error for `focus_bias` outside 0..1 / `distance_zoom < 0` / non-positive

@@ -12,7 +12,11 @@ try:
             "  1. docs/20_data_formats.md          — 'Available actions' table (~line 1143)\n"
             "  2. docs/30_runtime_events_and_logic.md — Actions appendix + Action model section (~line 258)\n"
             "  3. docs/STATUS.md                   — Engine ABI list (~line 85)\n"
-            "Also: if the new variant targets entities, add it to the {self} targets list in crates/ironhold_core/src/CLAUDE.md."
+            "Also: a new Action field that holds an entity id, event name or spawn id must be handled at all FOUR\n"
+            "  {self}/{target} substitution sites, or the token silently stays literal in that field:\n"
+            "  rewrite_self and rewrite_target (runtime/scene_manager/action_substitution.rs),\n"
+            "  substitute_self_in_action (capabilities/dialogue.rs) and action_needs_target (capabilities/action_bar.rs).\n"
+            "  See crates/ironhold_core/src/schema/CLAUDE.md."
         )
 except Exception:
     pass
