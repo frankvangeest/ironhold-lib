@@ -3,6 +3,7 @@
 - [Docs audience split](project_docs_audience_split.md) — Phase A shipped; code-span cross-refs dead on GitHub; Getting-started assumes repo clone; no prebuilt CLI
 
 - [opencode probe plan-review](project_opencode_probe_plan_review.md) — dev-only doc must enter docs/README via dev rows only; paid model in default fallback list; nvs recipe
+- [opencode GLM driver plan-review](project_opencode_glm_driver_plan_review.md) — global<project merge breaks m365 option (a); build fails "free unless -deep"; "-alt provider" undefined
 
 - [ocean demo plan-review](project_ocean_demo_plan_review.md) — compass vs rotation_euler_deg clash; SetParam keys must mirror RON paths; boat input vs InputMap; readout precision
 

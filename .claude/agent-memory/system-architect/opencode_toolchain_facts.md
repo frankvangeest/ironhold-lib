@@ -30,6 +30,14 @@ Verified 2026-09-22 against sst/opencode@dev source + docs while writing `planni
 - **Shipped probe (`tools/opencode_probe.py`) silent-degradation spots:** `metadata.get("loaded", [])` defaults silently (a renamed key → negatives PASS, positives FAIL as exit 1 not exit 2); the V15 session-diff check; V2 (@-expansion) is only re-verifiable with a throwaway stub, never by the repo-state `--static` check. `claude_md_audit.py` does NOT check headings cited by code/tests.
 - A paid top-level `model` would also make the task-delegatable `general` subagent and model-less commands (new-project, rust-idioms) paid — it breaks the free-by-default guarantee, not just restates it.
 
+**Driver-pilot plan review traps (2026-10-08, `opencode_glm_driver_pilot.md`; precedence is per OpenCode docs, NOT verified live here):**
+- Config precedence: remote < global `~/.config/opencode` < `OPENCODE_CONFIG` < project `opencode.json` < `OPENCODE_CONFIG_CONTENT`. So a machine-local *global* override of a repo-defined agent's `model` LOSES to the repo; only new agent names (or OPENCODE_CONFIG_CONTENT) work machine-locally. Same trap for a "throwaway config" via `OPENCODE_CONFIG`. Global `{file:}` resolves relative to the global file (absolute repo path = binds one checkout).
+- `is_free_model()` (probe) is suffix-based (`:free`/`-free`/`m365/`): it classifies `google/gemini-3.8-flash` as PAID — any "paid ids only on allow-listed keys" rule using it flags ux/game-world agents on day one. Classifier + allowlist belong in `_opencode_common.py`, shared by sync_check (static) and probe (resolved).
+- "Different provider" for fallback twins must mean upstream lab, not OpenCode prefix: `opencode/nemotron-3-ultra-free` and `openrouter/nvidia/nemotron-3-ultra...:free` are the same upstream pool.
+- Subagents without a `model` inherit the INVOKING agent's model; model-less commands use the current session's model.
+- `step_finish.part.cost` in a parent `opencode run` stream is OpenCode's estimate and likely excludes child (task) sessions — not a billing-accurate cap; the OpenRouter key spend limit is the real backstop.
+- bash `cat *: allow` + a paid upstream driver = the M365 proxy's credential/TOTP files are one prompt-injection away; add explicit deny rules for that path.
+
 Frank's decisions (2026-09-22): OpenCode reviews are advisory-only (Claude `/code-review` is the merge gate); 3 providers (OpenRouter w/ $10 credit, Zen, Gemini free tier via `google/`); paid `deepseek/deepseek-v4.1-flash` is the sole paid tier — Zen `deepseek-v4-flash-free` is NOT a substitute (lighter flash-class; used for run-and-report tier); `~/.config/opencode/AGENTS.md` is machine-local, suppresses the global Juva layer. Gemini free tier only applies to non-billing GCP projects.
 
 **Why:** Frank runs OpenCode alongside Claude Code on free models; see [[claude-hooks-contract-bug]] for the related hook finding.
