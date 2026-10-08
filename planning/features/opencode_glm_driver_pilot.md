@@ -75,7 +75,7 @@ How it fits the routing design:
   validates model ids against `opencode models`). Decision for Frank: either (a) keep `m365/...` out of the repo config and put
   the agent overrides in the machine-local global config, or (b) add `m365` agents to the repo config with documented
   prerequisites and make `opencode_sync_check.py` treat an unavailable `m365` provider as informational, not as drift.
-  Recommendation: (a) first, since the provider itself is already machine-local.
+  Recommendation: (a) first, since the provider itself is already machine-local. **Decided 2026-10-08 (Frank): (a)**, machine-local overrides in the global OpenCode config; the repo config stays portable.
 - **Preflight:** the pilot and `opencode_probe.py --live` check reachability of the proxy (`GET http://localhost:4141/v1/models`)
   before routing anything to `m365/...`, and say how to start it if it is down.
 - **Account note (not a judgement):** the proxy signs in to the work Microsoft 365 account (credentials and a TOTP secret in
@@ -119,7 +119,6 @@ How it fits the routing design:
 ## Open questions
 - Is the empty-response rate of the free default high enough (about 16% was reported for a free endpoint) to justify a paid
   default for unattended work?
-- Decision (a) or (b) above for the `m365` agents (machine-local overrides or documented repo config)?
 - Which Claude Code agents/commands should ever be routed to the cheap tier (only the default build work, or also reviews)?
 
 ## Acceptance criteria
