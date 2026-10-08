@@ -243,7 +243,7 @@ tick; Phase 4 adds the hash hook.
 - [ ] `FIXED_DT`, `SimTick`, `advance_sim_tick`; derive from `FIXED_TICK_RATE`
 - [ ] Move to `FixedUpdate` (no body changes): `tick_delayed_events`, `cooldown_tick`, `despawn_timer`,
       `stat_modifier -> stat_regen -> stat_effective_value`, dialogue timer; order before `SyncBackend`
-- [ ] Update D3 allowlist/membership and the `lib.rs:242-243` comment; `src/CLAUDE.md` timer notes
+- [ ] Update D3 allowlist/membership and the `lib.rs:242-243` comment; `capabilities/CLAUDE.md` timer notes
 - [ ] Tests: delayed event / cooldown / modifier expire on the same `SimTick` under 30/60/144 Hz cadences
 **Phase 2 (M)**
 - [ ] Reproduce finding 4 (lost jump on 0-tick frame, doubled on 2-tick frame) as failing tests first

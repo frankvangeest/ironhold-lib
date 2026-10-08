@@ -234,7 +234,7 @@ designer-authored `assets.ron` shader path.
 - [ ] Add a mask-mode example to `3rd_person_game_demo` (one skill slot + one item) so it is
       exercised by the browser baseline suite.
 - [ ] Docs: `20_data_formats.md` (ActionSlotDef + ItemDef `icon_colors`), `25_custom_shaders.md`
-      (new engine UiMaterial), and the icon-system note in `crates/ironhold_core/src/CLAUDE.md`.
+      (new engine UiMaterial), and the icon-system note in the matching folder `CLAUDE.md` (`docs/dev/moved-sections-index.md` maps the old sections).
 - [ ] WASM dev build + size check; verify the new pipeline compiles on WebGPU (UiMaterial is
       strictly validated in web builds — test via `python test_web.py`).
 

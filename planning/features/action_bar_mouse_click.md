@@ -126,7 +126,7 @@ slot — nothing consumes it. It also gives touch/tap activation on web for free
     "key pressed" to "slot activated (key, `gamepad_key` or click)"; event name always uses `key`
   - `docs/20` "Per-player action bars (split-screen)" (~L1255): one-line pointer that a click acts
     for the bar's `owner_player` whichever half the cursor is in
-  - `crates/ironhold_core/src/CLAUDE.md`: paragraph next to "Gamepad-routed action-bar slots"
+  - `crates/ironhold_core/src/capabilities/CLAUDE.md`: paragraph next to "Gamepad-routed action-bar slots"
   - do not promise touch support unless tap-to-target is confirmed to work (see playtest)
 - [ ] `3rd_person_game_demo/scenes/main.scene.ron` ~L418-421: comments say "Press 2..." and claim a
       missing target is a silent no-op — reword to "Press or click" and fix the stale no-op claim

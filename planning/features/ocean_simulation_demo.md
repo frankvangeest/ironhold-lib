@@ -43,7 +43,7 @@ That item stays Icebox-parked and is only partly superseded.
 
 ## Findings (verified against code at `0eea7ab`)
 1. **`CustomMaterial` cannot do vertex displacement**: "overrides the fragment shader only ... do not attempt to swap the vertex shader via `specialize()`"
-   (`crates/ironhold_core/src/CLAUDE.md:718`). So the backlog's "or a `CustomMaterial` WGSL variant" is ruled out; the ocean is an **engine-owned material** like
+   (`crates/ironhold_core/src/CLAUDE.md`, "Engine-internal shaders must be embedded at build time"). So the backlog's "or a `CustomMaterial` WGSL variant" is ruled out; the ocean is an **engine-owned material** like
    `TerrainMaterial` (`terrain_material.rs:8-40`, shader `include_str!` at `terrain.rs:217-223`, handle via `uuid_handle!` `terrain_material.rs:8`) and `FoliageMaterial`, the
    latter being the precedent for a custom *vertex* stage (`foliage.wgsl` `@vertex`, `foliage.rs:16`) and for a per-frame sun uniform sync (`foliage.rs:183-196`).
    Engine-owned shaders must be embedded, never path strings (`CLAUDE.md:722-725`). Mesh/world matrix: `bevy_pbr::mesh_functions::get_world_from_local` as in foliage.

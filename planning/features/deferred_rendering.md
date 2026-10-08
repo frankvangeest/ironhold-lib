@@ -94,7 +94,7 @@ This is a rendering pipeline change. Designers do not control which rendering pa
 - [ ] `cargo test -p ironhold_core` passes with no regression
 - [ ] `python test_web.py` — all screenshot baselines pass (GL backend falls back cleanly)
 - [ ] Remove `MAX_FADING_LIGHTS` cap entirely once WebGPU manual test passes (or make it a project config field if a safe ceiling is needed for mobile)
-- [ ] Update `crates/ironhold_core/src/CLAUDE.md` — note that `MAX_FADING_LIGHTS` no longer applies on deferred path
+- [ ] Update `crates/ironhold_core/src/capabilities/CLAUDE.md` (or the matching folder file; `docs/dev/moved-sections-index.md` maps the old sections) — note that `MAX_FADING_LIGHTS` no longer applies on deferred path
 - [ ] Move investigation file to `planning/investigations/done/` after shipping
 
 ---
