@@ -219,3 +219,33 @@ shown/hidden via `Visibility` when the player enters/exits range.
   `GameEvent::Trigger("entity.entered:{id}")` is emitted and any RON rule matching that event
   fires its actions.
 - All new integration tests pass; all existing tests continue to pass.
+
+## Notes moved from `crates/ironhold_core/src/CLAUDE.md` (2026-10-08, core CLAUDE.md split)
+
+These paragraphs were in the crate `CLAUDE.md` and are kept here verbatim; that file now carries only the condensed current-state rule. Wording such as "above"/"below" refers to the old file.
+
+### b:111: Entity FSM overview, interpreter chain order, never bypass pipeline
+<!-- moved-from-claude-md: b:111 -->
+
+---
+
+## Entity FSM (per-entity behavior)
+
+Per-entity behavior uses the same `StateMachineAsset` schema as the global FSM. Behavior files live in `assets/projects/{name}/behaviors/` by convention.
+
+**`{self}` substitution** — in behavior files, `{self}` in any event pattern or action target string is replaced at runtime with the entity's spawn ID. This makes behavior files reusable across multiple instances of the same prefab.
+
+**The interpreter chain** (all in `Update`, chained):
+1. `fsm_interpreter_system` — project-level state_machine.ron
+2. `entity_fsm_interpreter_system` — per-entity .behavior.ron
+3. `flush_pending_intent_system` — flushes action-bar slot actions not suppressed by a matched intent
+4. `action_executor_system`
+
+**Never bypass the pipeline from entity behavior.** Entry/exit actions in `.behavior.ron` push to the global `ActionQueue` — they go through the same executor as all other actions. Do not add `Commands` access to the entity FSM interpreter.
+
+### b:464: `behavior` works on composite primitive prefabs
+<!-- moved-from-claude-md: b:464 -->
+
+**New capabilities for entity logic:**
+
+**Behavior on composite primitive prefabs** — the `behavior` field works on ALL prefab kinds, including `kind: Primitive` prefabs with a non-empty `children` list. Both the single-mesh primitive path and the composite (multi-child) path in `scene_loader.rs` attach `PendingBehavior`.

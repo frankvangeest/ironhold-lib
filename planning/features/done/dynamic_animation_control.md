@@ -403,3 +403,46 @@ baselining on purpose — see `test_web.py`'s `NON_DETERMINISTIC_SCENES`).
 - Given the same clip is re-seeked to a different fraction while already current, then the new
   seek takes effect immediately.
 - `cargo test -p ironhold_core --test '*'` and `cargo check -p ironhold_cli` both pass.
+
+## Notes moved from `crates/ironhold_core/src/CLAUDE.md` (2026-10-08, core CLAUDE.md split)
+
+These paragraphs were in the crate `CLAUDE.md` and are kept here verbatim; that file now carries only the condensed current-state rule. Wording such as "above"/"below" refers to the old file.
+
+### b:647: Paused clip must be resumed before next play
+<!-- moved-from-claude-md: b:647 -->
+
+**A frozen (paused) clip must be resumed before the *next* clip plays, or it leaks forever.**
+`AnimationTransitions::play`'s own fade-out guard explicitly skips creating a fade transition for
+an outgoing clip that `is_paused()` — so a paused `ActiveAnimation` never decays out of
+`AnimationPlayer.active_animations` on its own, and stays permanently blended at full weight
+against whatever plays next. Invisible for an entity that only ever plays one clip in its
+lifetime (a corpse), but immediately visible for one that cycles through several (the
+`dynamic_animation_control` demo). `animation_playback_system` resumes `last_played`'s
+`ActiveAnimation` (if paused) immediately before calling `transitions.play()` for the new clip —
+this is not optional cleanup, it's required for `AnimationTransitions`' own fade-out mechanism to
+engage at all.
+
+### b:658: `set_seek_time` not `seek_to`; duration via the live graph
+<!-- moved-from-claude-md: b:658 -->
+
+**Seeking uses `ActiveAnimation::set_seek_time`, not `seek_to`.** `seek_to` intentionally replays
+every animation event between the old and new time on the next update; a `0 → duration` jump
+would replay a clip's entire event track. `set_seek_time` is the no-events variant — use it for
+any future seek-like feature in this pipeline, even though no GLB in this project currently
+declares animation events.
+
+**Clip duration for a seek is resolved via the live `AnimationGraph`/`AnimationNodeType::Clip`,
+not a separate `clip name → Handle<AnimationClip>` map.** `animation_playback_system` already has
+the graph handle and node index in scope at the point it needs the duration; a second map keyed
+by clip name would duplicate `node_indices`' key space and risks the exact "two maps built from
+one source, allowed to desync" shape `tag_spawned_entity`'s own doc comment warns about.
+
+### b:670: `ActiveOverride.seek_fraction`/`frozen` must be durable
+<!-- moved-from-claude-md: b:670 -->
+
+**`ActiveOverride.seek_fraction`/`.frozen` are durable, not consumed-and-cleared on first
+apply.** They must survive `animation.rs`'s documented GLTF-hierarchy-respawn recovery path (a
+WASM-specific case: Bevy's `SceneSpawner` replaces the animated hierarchy after sub-assets finish
+loading, forcing a second `transitions.play()` later in the entity's lifetime) — a one-shot seek
+would silently un-freeze a frozen pose (e.g. a corpse) the moment that recovery path fires on the
+web, which would be a hard-to-reproduce, web-only regression.

@@ -287,3 +287,18 @@ None outstanding — resolved during system-architect and ux-gamedesigner-review
 - Given all 4 players, when viewed on screen, then each renders as a distinct solid color (blue,
   pink, dark green, red) regardless of which of the two base models (`character_male`/
   `character_female`) it uses underneath.
+
+## Notes moved from `crates/ironhold_core/src/CLAUDE.md` (2026-10-08, core CLAUDE.md split)
+
+These paragraphs were in the crate `CLAUDE.md` and are kept here verbatim; that file now carries only the condensed current-state rule. Wording such as "above"/"below" refers to the old file.
+
+### b:1638: View-box clamp
+<!-- moved-from-claude-md: b:1638 -->
+
+**View-box clamp** — `GameSceneV2.max_view_box: Option<(f32, f32, f32, f32)>` (`min_x, min_z,
+max_x, max_z`) is read into the `ActiveViewBox` resource on scene load (cleared on `LoadScene`,
+same pattern as `LoadedTargetIndicator`). `player_view_box_clamp_system` (`capabilities/player.rs`,
+`FixedUpdate`, after `player_movement_system`) clamps every `CharacterController`'s XZ position
+into the box (Y/jump untouched) and zeroes the clamped axis's `Velocity.linvel` — without the
+velocity zero, Rapier keeps re-integrating the outward velocity every tick and the player jitters
+against the edge instead of stopping cleanly.

@@ -342,3 +342,28 @@ The designer does not need to write this manually — `PrefabDef.dialogue` being
 - Given `body: "Hello, {self}!"` and `npc_id: "merchant_01"`, the rendered text reads "Hello, merchant_01!".
 - Given a scene transition (`LoadScene`), the dialogue panel is hidden and `ActiveDialogue` is cleared.
 - Given `StartDialogue` with no `DialoguePanel` node in the scene, a warning is logged and no panel is shown.
+
+## Notes moved from `crates/ironhold_core/src/CLAUDE.md` (2026-10-08, core CLAUDE.md split)
+
+These paragraphs were in the crate `CLAUDE.md` and are kept here verbatim; that file now carries only the condensed current-state rule. Wording such as "above"/"below" refers to the old file.
+
+### b:686: Dialogue system
+<!-- moved-from-claude-md: b:686 -->
+
+### Dialogue system (`capabilities/dialogue.rs`)
+
+**`DialoguePath(String)` component** — inserted by the scene loader on entities whose `PrefabDef.dialogue` is set. `dialogue_tick_system` reads `entity.interacted:{id}` events and matches them against `DialoguePath` entities to auto-fire `Action::StartDialogue`.
+
+**`ActiveDialogue` resource** — tracks the current conversation: `npc_id`, `dialogue_path`, `current_node_index`, `auto_advance_timer`, `handle: Option<Handle<DialogueDef>>`, `last_rendered_node`. Cleared on `EndDialogue` and `LoadScene`.
+
+**System ordering**: `dialogue_tick_system` runs `.after(button_system).after(interactable_system).before(fsm_interpreter_system)`.
+
+**Auto-advance guard**: `advance_delay_secs` only applies when `node.choices.is_empty()`. Nodes with choices never auto-advance.
+
+**`do_actions` substitution**: `{self}` in choice `do_actions` is replaced with `active.npc_id` by `substitute_self_in_action()` before pushing to `ActionQueue`. Mirrors behavior-file substitution so dialogue choices and behaviors behave consistently.
+
+**Pipeline events emitted:**
+- `dialogue.started:{npc_id}` — fired by `Action::StartDialogue` in the executor
+- `dialogue.ended:{dialogue_path}` — fired by `Action::EndDialogue` and on `LoadScene`
+
+**`portrait` field**: reserved in `DialogueNodeDef`, not yet rendered. Mark as not-implemented in authoring docs.

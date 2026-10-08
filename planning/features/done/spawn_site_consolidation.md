@@ -85,3 +85,27 @@ Each of the 7 sites replaces its bespoke insert list + registry call with one `t
 - **Behavior change (D4):** adding `LevelEntity` to dynamic spawns changes scene-unload cleanup — could break a project that relied on dynamic entities persisting across `LoadScene`. Verify against existing projects (none currently rely on this, but confirm).
 - **EntityCommands lifetime/borrow:** `ec.id()` + mutating the `registry` resource in the same helper is fine (disjoint), but the call sites must have `&mut SpawnRegistry` in scope — `spawn_player_entity` does not currently take it; signature change needed.
 - Pure refactor otherwise — covered by the existing integration suite plus the new spawn-coverage test.
+
+## Notes moved from `crates/ironhold_core/src/CLAUDE.md` (2026-10-08, core CLAUDE.md split)
+
+These paragraphs were in the crate `CLAUDE.md` and are kept here verbatim; that file now carries only the condensed current-state rule. Wording such as "above"/"below" refers to the old file.
+
+### b:1067: `tag_spawned_entity` is the single spawn-metadata source
+<!-- moved-from-claude-md: b:1067 -->
+
+## Spawning: standard entity metadata
+
+**`tag_spawned_entity` (in `runtime/scene_manager/mod.rs`) is the single source of truth for the
+metadata every addressable spawned entity gets.** Every spawn site routes through it — GLB
+actor/prop, single-mesh primitive, composite primitive, foliage root, every player spawn path
+(see the five-site inventory below), and dynamic `Action::Spawn`. It always inserts `SpawnId` +
+`PrefabKey` + `LevelEntity` and registers the entity in `SpawnRegistry`; it inserts the
+`ClickSelectable`/`Targetable` markers per the prefab flags (players pass `false`).
+Player-specific components (CharacterController, physics, camera) stay at the call site.
+
+Do **not** hand-insert `SpawnId`/`PrefabKey`/`LevelEntity` or call `spawn_registry.entities.insert`
+at a spawn site — call `tag_spawned_entity`. The 5-way divergence this replaced caused real bugs
+(GLB actors missing `SpawnId`, the GLB player missing `SpeedMultiplier`/`SpawnId`, dynamic spawns
+missing `PrefabKey`/`LevelEntity`). Adding a new "every entity gets X" field means editing the
+helper once, not every site. `PrefabKey` (catalog key, e.g. `"enemy_orc_melee"`) is distinct from
+`SpawnId` (instance id, e.g. `"orc_01"`).

@@ -190,3 +190,28 @@ When `child_def.prefab` is `Some(key)`:
   inspector, then the well's Torus and Cylinder children are oriented 45° around Y relative to
   the world, matching expectations for multiplicative composition.
 - All existing RON files (no `prefab:` field) load identically to before.
+
+## Notes moved from `crates/ironhold_core/src/CLAUDE.md` (2026-10-08, core CLAUDE.md split)
+
+These paragraphs were in the crate `CLAUDE.md` and are kept here verbatim; that file now carries only the condensed current-state rule. Wording such as "above"/"below" refers to the old file.
+
+### b:92: Composite/nested prefab spawning via `spawn_primitive_children`
+<!-- moved-from-claude-md: b:92 -->
+
+---
+
+## Composite and nested prefab spawning
+
+`runtime/scene_manager/scene_loader.rs` contains a free function `spawn_primitive_children` that handles both **inline primitive children** and **nested prefab references** (`ChildPrimitiveDef.prefab`). It takes a `ChildSpawnCtx` struct (split-out asset refs from `SceneMaterialParams` plus the GLB-dispatch refs) and recurses into referenced prefabs via the `PrefabCatalog`.
+
+When a nested prefab reference is resolved, the spawner dispatches on `nested_prefab.kind`:
+- **`Primitive` with `children`** — spawns an anchor entity, recurses into children (existing path).
+- **`Primitive` with no `children`** — spawns an anchor + one mesh child using `build_primitive_mesh` (reads `nested_prefab.shape`).
+- **`Actor` / `Prop`** — calls `spawn_prefab_instance` with the resolved GLB model path; the returned entity is parented directly under the composite parent at the child `offset`/`rotation_euler_deg`/`scale`.
+
+**`ChildSpawnCtx<'a>`** fields: `meshes`, `standard`, `built_mats`, `custom_mats`, `primitive_default_color` (material/mesh refs) plus `asset_server`, `model_spawner`, `fixes`, `asset_catalog`, `project_root`, `item_catalog` (needed for GLB dispatch — `item_catalog` specifically so a nested `Actor`/`Prop` prefab reference's `attach_prefab_features` call can stack its `inventory.initial_items` against the real `ItemCatalog` instead of falling back to `max_stack: 99`).
+
+- Cycle detection and depth limit (8 levels) are enforced inside `spawn_primitive_children`.
+- Cycle detection at **load time** is in `PrefabCatalog::validate()` (DFS via `prefab_has_cycle()`).
+- All child-spawning code must go through `spawn_primitive_children` — do **not** duplicate the mesh/material dispatch match arms. The two call sites are: composite non-player prefabs and player cosmetic children.
+- Transform composition is **multiplicative** (standard Bevy hierarchy). Non-uniform scale on parent anchors causes shearing in rotated children — document this in RON comments when relevant.

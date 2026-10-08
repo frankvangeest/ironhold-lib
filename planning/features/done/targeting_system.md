@@ -239,3 +239,12 @@ The substitution pass in `message_interpreter.rs` resolves `{target}` in the sam
 - Given a rule with `do_actions: [EmitEvent("selected:{target}")]` and `CurrentTarget` set, the emitted event contains the actual spawn ID.
 - Given `Action::ClearTarget` in a rule, `CurrentTarget` is set to `None` and `target.cleared` is emitted.
 - Given a scene transition (`LoadScene`), `CurrentTarget` is cleared.
+
+## Notes moved from `crates/ironhold_core/src/CLAUDE.md` (2026-10-08, core CLAUDE.md split)
+
+These paragraphs were in the crate `CLAUDE.md` and are kept here verbatim; that file now carries only the condensed current-state rule. Wording such as "above"/"below" refers to the old file.
+
+### b:188: `{target}` substitution via `CurrentTarget`
+<!-- moved-from-claude-md: b:188 -->
+
+**`{target}` substitution** — in state_machine.ron and behavior files, `{target}` in any action field is replaced with the current `CurrentTarget` spawn ID. If `CurrentTarget` is `None`, the literal `"{target}"` is left as-is (action will likely no-op gracefully). The substitution runs in every interpreter system (and action_bar's own built-in intent handling) before pushing to `ActionQueue`. Supported action fields: same as `{self}` above (key, entity, event, id, spawn_point).

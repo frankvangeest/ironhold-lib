@@ -153,3 +153,16 @@ see `docs/20_data_formats.md`'s Label section.)
 - Given a `requires_item` value with no matching `items.ron` entry, both `ironhold_cli validate`
   (a `missing_reference` error) and a scene-load `warn!` report it — the latter so a WASM-only
   designer with no CLI access still gets a signal before shipping a permanently-unopenable door.
+
+## Notes moved from `crates/ironhold_core/src/CLAUDE.md` (2026-10-08, core CLAUDE.md split)
+
+These paragraphs were in the crate `CLAUDE.md` and are kept here verbatim; that file now carries only the condensed current-state rule. Wording such as "above"/"below" refers to the old file.
+
+### b:472: `Interactable` fires for every in-range interactable
+<!-- moved-from-claude-md: b:472 -->
+
+`Interactable` — set `interactable: (radius: 2.5)` on a `PrefabDef`. No collider needed. Emits one of:
+- `GameEvent::Trigger("entity.interacted:{id}")` when player is within `radius` metres and presses the interact key (configured via `inputs.interact` in the player prefab, default `"KeyF"`)
+- `GameEvent::Trigger("entity.interact_blocked:{id}")` instead, when `requires_item: Option<String>` names an `items.ron` key the player's `PlayerInventory` doesn't hold (item-gated interactable) — never both for the same press. A blocked interact still counts as "hit something" for `interactable_system`'s own miss-detection (`player.attack_missed` doesn't fire), since the press landed on a real entity and was correctly refused.
+
+`interactable_system` runs in `Update` before the interpreter chain (`.before(fsm_interpreter_system)`), and fires one of the two events above for *every* in-range `Interactable` on one keypress, not just the nearest — placing two interactables within a few metres of each other means both can fire on the same press (see `3rd_person_game_demo`'s `seal_door`/`merchant_01` placement note in `main.scene.ron`, which exists specifically to avoid this). `trigger_zone_system` runs in `FixedUpdate`.

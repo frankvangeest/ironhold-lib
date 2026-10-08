@@ -781,3 +781,21 @@ below. Everything else was already decided in the plan or by Frank during plan-r
   baselines, no `--update-baselines`), when run on `integration`, then all pass.
 - Given the playtest checklist, when Frank runs each project in the WASM dev build, then every
   rule-driven interaction behaves as it does on `main`.
+
+## Notes moved from `crates/ironhold_core/src/CLAUDE.md` (2026-10-08, core CLAUDE.md split)
+
+These paragraphs were in the crate `CLAUDE.md` and are kept here verbatim; that file now carries only the condensed current-state rule. Wording such as "above"/"below" refers to the old file.
+
+### b:70: Conditions on rules: only `LogicState`; `EnterState` removed
+<!-- moved-from-claude-md: b:70 -->
+
+### Conditions on rules
+
+The only runtime condition available to the FSM is `LogicState` — a single named string (e.g. `"playing"`, `"hp_low"`). A binding inside a state's `on:` list only fires while the FSM is in that named state. To add a condition, don't reach for a gameplay system directly setting the state (there is no `Action::EnterState` — removed, see below) — instead:
+- Have a gameplay system emit a `GameEvent` (e.g. `"hp.low"` when HP drops below threshold — `stat_threshold_system` already does this pattern for stat-threshold conditions).
+- Add a `transitions` entry: `( from: None, on: "hp.low", to: "hp_low" )` (`from: None` matches from any current state).
+- Put the conditional logic inside `hp_low`'s own `on:` list, or in its `entry_actions` if it should fire once on entering the state.
+
+This is deliberate: a transition is the only thing that actually changes `LogicState`, and only a transition's firing runs the destination state's `entry_actions` and the source state's `exit_actions`. A gameplay system directly forcing a state change (the old `Action::EnterState`) skipped both of those side effects — a silent-desync bug class closed by removing it (2026-09, `rules_to_state_machine_consolidation`). See `docs/20_data_formats.md`'s "Removed: rules.ron" callout for the full `EmitEvent` + transition worked example.
+
+Do not add a general condition system to the interpreter unless the above pattern is genuinely insufficient.

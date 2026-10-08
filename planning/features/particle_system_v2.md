@@ -513,3 +513,32 @@ All changes are additive. No existing RON files require migration.
   no paired SpawnEffect calls in the behavior file).
 - Bloom is opt-in and off by default; existing scene screenshots are pixel-identical
   when `post_processing` is absent.
+
+## Notes moved from `crates/ironhold_core/src/CLAUDE.md` (2026-10-08, core CLAUDE.md split)
+
+These paragraphs were in the crate `CLAUDE.md` and are kept here verbatim; that file now carries only the condensed current-state rule. Wording such as "above"/"below" refers to the old file.
+
+### b:1731: Particle pipeline warmup + `ParticleBudget` footgun
+<!-- moved-from-claude-md: b:1731 -->
+
+### Particle pipeline warmup
+`Action::SpawnEffect` uses GPU-compiled render pipelines. WebGPU compiles a pipeline for each material+blend combination the first time it is drawn — this stall (~300–1000 ms) happens synchronously on WASM. Pool group entities (`NoFrustumCulling` + `LevelEntity`) are created lazily on first use, so the existing `pipeline_warmup_system` cannot pre-warm them on its own.
+
+**v2 pool renderer pipeline variants** (each compiles separately):
+
+1. **Additive particles** — `StandardMaterial + AlphaMode::Add` (sphere-like quads, sprites without UV animation)
+2. **Blend particles** — `StandardMaterial + AlphaMode::Blend` (smoke, cloud, soft auras)
+3. **Flame distort particles** — `PoolFlameMaterial + AlphaMode::Add` (UV distort/scroll — campfire, torches)
+
+**Fix:** fire a `SpawnEffect` for each variant you use during scene load. The pool group entity is created and its pipeline compiled on the first update after the effect lands in the pool. Since the group entity gets `NoFrustumCulling`, the warmup system's 4-frame pass then pre-warms subsequent frames.
+
+```ron
+// logic/state_machine.ron — playing state entry_actions
+SpawnEffect(key: "hit_spark",     position: (0.0, -100.0, 0.0)),  // warms additive pipeline
+SpawnEffect(key: "campfire_smoke",position: (0.0, -100.0, 0.0)),  // warms blend pipeline
+SpawnEffect(key: "campfire_body", position: (0.0, -100.0, 0.0)),  // warms PoolFlameMaterial pipeline
+```
+
+Place these alongside `PreloadScene` / `PreloadPrefab` calls so they fire during the natural loading pause, before the player can interact.
+
+**Budget footgun**: warmup `SpawnEffect` calls at `y=-100` are real particle allocations and consume `ParticleBudget`. In scenes with a tight budget (e.g. `particle_budget: 100`), 3–4 warmup effects can each fire their full `particle_count` against the cap. Either use low-count effects for warmup, place warmup calls on `scene.ready` before continuous emitters fill the pool, or account for warmup cost when sizing the budget.

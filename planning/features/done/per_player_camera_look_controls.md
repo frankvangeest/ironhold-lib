@@ -227,3 +227,25 @@ None outstanding — the arrow-scheme key question and all other reviewer findin
 - Given a player's `look_up`/`look_down` keys held continuously, then pitch moves in the direction
   pinned above and never exceeds `min_pitch`/`max_pitch` (no clipping through the ground or
   flipping past the character).
+
+## Notes moved from `crates/ironhold_core/src/CLAUDE.md` (2026-10-08, core CLAUDE.md split)
+
+These paragraphs were in the crate `CLAUDE.md` and are kept here verbatim; that file now carries only the condensed current-state rule. Wording such as "above"/"below" refers to the old file.
+
+### b:1359: Keyboard camera look
+<!-- moved-from-claude-md: b:1359 -->
+
+**Keyboard camera look (`per_player_camera_look_controls.md`, shipped)** closes the gap this leaves
+— `orbit_button: "None"` only disables *mouse* orbit; each player can still independently turn
+their own camera via `InputMap.look_left`/`look_right`/`look_up`/`look_down`, pre-resolved once at
+spawn onto `OrbitState.look_left_key`/etc. (mirroring how `orbit_lmb`/`orbit_rmb` are already
+pre-resolved rather than re-parsed every frame) and applied in `camera_orbit_system` independently
+of the mouse `orbit_active` gate. `CameraConfig.look_speed` (rad/sec, default 2.0) is the shared
+rate dial for this — deliberately not `orbit_speed`, which is tuned as a mouse-pixel-delta
+multiplier and would be far too slow reused as a keyboard-hold rate. Pitch direction is pinned to
+match the existing mouse convention (`look_up` increases `pitch` toward `max_pitch`, i.e. mirrors
+"mouse down" in this codebase's convention, not a literal "up = sky" reading) — see the regression
+test asserting direction, not just clamp bounds. `ActiveCameraMode::Party` deliberately has no equivalent
+— it's shared by every player at once, with no single owner to attribute a look binding to.
+Designer-facing docs (RON fields, the demo scheme table) live in `docs/20_data_formats.md`'s
+"Keyboard camera look" note — this paragraph is the implementation-side summary only.

@@ -528,3 +528,12 @@ on this feature's v1; **v2 (portrait/touch)** is blocked on the v2 items above.
   shrink, `flex_shrink: 0`) rather than silently collapsing the spacing.
 - Given a `Group` subtree deeper than 16 levels, when `ironhold validate` runs, then it reports the
   path of the truncated subtree.
+
+## Notes moved from `crates/ironhold_core/src/CLAUDE.md` (2026-10-08, core CLAUDE.md split)
+
+These paragraphs were in the crate `CLAUDE.md` and are kept here verbatim; that file now carries only the condensed current-state rule. Wording such as "above"/"below" refers to the old file.
+
+### b:108: `scene.ui` must be walked via `walk_ui_nodes`
+<!-- moved-from-claude-md: b:108 -->
+
+- **`scene.ui` must be walked via `schema::scene_v2::walk_ui_nodes` (or `walk_ui_nodes_pathed` for diagnostics), never iterated flat.** Same class of invariant as the rule above: a consumer that loops over the top-level `Vec` silently under-covers any nested `ui:` node (e.g. a `StatRadar` inside a future `Group` would get no material, an `ActionBar` would escape every duplicate-key warning). The walker is pre-order, depth-capped at `MAX_UI_DEPTH` (16, a top-level node is depth 1) so diagnostics cover exactly the nodes that spawn, and yields nodes only -- `.enumerate()` it if you need a per-node tag. The one deliberate exception is the spawn loops in `scene_loader.rs`, which recurse structurally. See `planning/features/ui_flex_group.md`.
