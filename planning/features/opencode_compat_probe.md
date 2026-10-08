@@ -76,7 +76,7 @@ simply calls these.
 
 **`--live` (the only mode that calls a model):** runs `opencode run --format json -m <model> "<read three lines of FILE and
 reply DONE>"` for the *token baseline* (`step_finish.part.tokens.input`; machine-specific, see V8) and the skill count
-(`opencode debug skill`). Defaults to free models only; a paid fallback needs an explicit `--allow-paid`. A run without
+(`opencode debug skill`). When the chosen model is `m365/...` it first checks that the proxy answers (`GET http://localhost:4141/v1/models`) and, if not, exits 2 saying how to start it. Defaults to free models only; a paid fallback needs an explicit `--allow-paid`. A run without
 a `read` tool event is an **error to retry**, never "attached nothing" (free endpoints sometimes return an empty
 response). Each run uses `--title "opencode-probe <utc>"` and deletes its own sessions afterwards
 (`session list` + `session delete`). It enforces an optional `--max-cost` by summing `step_finish.part.cost`.
@@ -111,6 +111,7 @@ changes**, OpenCode version, date. The existing "Tested OpenCode version: 1.18.3
 | V8 | The session token baseline (31.8k input tokens in a trivial GLM run) is **machine-specific**: 27 skills from `~/.agents/skills` and the synced `~/.claude/skills`, plus `~/.config/opencode/AGENTS.md`, are in it | verified |
 | V9 | OpenCode here lives under nvs node 24.21 (`nvs use 24.21` in the same terminal first); not on the Bash PATH | verified |
 | V10 | Free models can return 429 or an empty response | verified |
+| V11 | The `m365` provider (global config, machine-local) points at a local proxy, `C:\ProgramData\m365-copilot-proxy`, `http://localhost:4141/v1`, started with `pnpm run proxy 4141`; model `m365/gpt-5.5-think-deeper`; works only while the proxy runs; tool calls are emulated | verified (config and README read; not run) |
 | U1 | A nested `.claude/worktrees/agent-*` attaches that worktree's root `CLAUDE.md` as an ancestor | unverified |
 | U2 | Reading a sibling worktree's file from the primary checkout attaches that worktree's folder files | unverified |
 

@@ -57,6 +57,33 @@ section 6):**
 - The driver's own turns dominate the cost: a trivial GLM 5.3 flash turn is about $0.005 with a 31.8k-token machine-specific
   baseline, so the number of turns matters more than the model price. The pilot measures it.
 
+## M365 Copilot through a local proxy (added 2026-10-08)
+Frank has a proxy at `C:\ProgramData\m365-copilot-proxy` that serves M365 Copilot as an OpenAI-compatible endpoint at
+`http://localhost:4141/v1` (start it with `pnpm run proxy 4141` in that folder; default host `127.0.0.1`, unauthenticated, so
+never expose it). It costs nothing extra. The global OpenCode config (`~/.config/opencode/opencode.jsonc`, machine-local) already
+defines an `m365` provider with `m365/gpt-5.5-think-deeper`, the proxy README's recommended tool-calling model (its own
+benchmarks, not ours; the default `m365-copilot` auto tone is reported to confabulate and must not be used). Tool calls are
+**emulated** by the proxy, so tool reliability must be measured, not assumed.
+
+How it fits the routing design:
+- **A delegate, never the driver.** The driver is the one model nothing can fall back for, so it must be always available
+  (the paid model). A model that only works while a local process is running is a good *primary agent for a role* with a free
+  OpenRouter twin as `-alt`, not the driver. Best fit: reviews (`system-architect`, `debug-detective`, `alignment-reviewer`),
+  which are advisory only anyway.
+- **Proxy down looks like a 429:** the delegation errors, the driver retries once with the `-alt` twin. No extra mechanism.
+- **Portability:** the repo's `.opencode/opencode.json` must stay valid on a machine without the proxy (the sync check
+  validates model ids against `opencode models`). Decision for Frank: either (a) keep `m365/...` out of the repo config and put
+  the agent overrides in the machine-local global config, or (b) add `m365` agents to the repo config with documented
+  prerequisites and make `opencode_sync_check.py` treat an unavailable `m365` provider as informational, not as drift.
+  Recommendation: (a) first, since the provider itself is already machine-local.
+- **Preflight:** the pilot and `opencode_probe.py --live` check reachability of the proxy (`GET http://localhost:4141/v1/models`)
+  before routing anything to `m365/...`, and say how to start it if it is down.
+- **Account note (not a judgement):** the proxy signs in to the work Microsoft 365 account (credentials and a TOTP secret in
+  local config files, an automated browser login) and sends repository content to Copilot. Worth confirming with IT that this
+  use is acceptable; never put its credential files in the repo.
+- **Pilot addition:** run the review task and the routing task against `m365/gpt-5.5-think-deeper` too, with the same
+  pass criteria, and record empty/throttled responses (the proxy has its own degradation backoff).
+
 ## Approach (when unblocked)
 - **Tasks** (4-5, identical prompt per model, each with a mechanical pass criterion): follow a folder rule (a change that
   must respect a "never"); edit a RON file then `validate` passes; answer a question that needs a `docs/dev` pointer; a
@@ -92,6 +119,7 @@ section 6):**
 ## Open questions
 - Is the empty-response rate of the free default high enough (about 16% was reported for a free endpoint) to justify a paid
   default for unattended work?
+- Decision (a) or (b) above for the `m365` agents (machine-local overrides or documented repo config)?
 - Which Claude Code agents/commands should ever be routed to the cheap tier (only the default build work, or also reviews)?
 
 ## Acceptance criteria
