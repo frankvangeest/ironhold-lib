@@ -212,6 +212,130 @@
         "task": "deny"
       }
     },
+    "system-architect-alt": {
+      "mode": "subagent",
+      "description": "Fallback for `system-architect`: use only after `system-architect` errored or returned nothing usable (free, a different upstream lab). Same prompt and permissions.",
+      "model": "openrouter/thinkingmachines/inkling:free",
+      "prompt": "{file:./prompts/agent_preamble.md}\n\n{file:../.claude/agents/system-architect.md}",
+      "permission": {
+        "task": "deny",
+        "edit": {
+          "*": "deny",
+          ".opencode/memory-inbox/*": "allow"
+        },
+        "bash": {
+          "*": "deny",
+          "git diff*": "allow",
+          "git log*": "allow",
+          "git show*": "allow",
+          "git status*": "allow",
+          "tools/bin/ironhold*": "allow"
+        }
+      }
+    },
+    "debug-detective-alt": {
+      "mode": "subagent",
+      "description": "Fallback for `debug-detective`: use only after `debug-detective` errored or returned nothing usable (free, a different upstream lab). Same prompt and permissions.",
+      "model": "openrouter/thinkingmachines/inkling:free",
+      "prompt": "{file:./prompts/agent_preamble.md}\n\n{file:../.claude/agents/debug-detective.md}",
+      "permission": {
+        "task": "deny",
+        "edit": {
+          "*": "ask",
+          ".opencode/memory-inbox/*": "allow"
+        }
+      }
+    },
+    "alignment-reviewer-alt": {
+      "mode": "subagent",
+      "description": "Fallback for `alignment-reviewer`: use only after `alignment-reviewer` errored or returned nothing usable (free, a different upstream lab). Same prompt and permissions.",
+      "model": "openrouter/thinkingmachines/inkling-small:free",
+      "prompt": "{file:./prompts/agent_preamble.md}\n\n{file:../.claude/agents/alignment-reviewer.md}",
+      "permission": {
+        "task": "deny",
+        "edit": {
+          "*": "deny",
+          ".opencode/memory-inbox/*": "allow"
+        },
+        "bash": {
+          "*": "deny",
+          "git diff*": "allow",
+          "git log*": "allow",
+          "git show*": "allow",
+          "git status*": "allow",
+          "tools/bin/ironhold*": "allow"
+        }
+      }
+    },
+    "wasm-perf-reviewer-alt": {
+      "mode": "subagent",
+      "description": "Fallback for `wasm-perf-reviewer`: use only after `wasm-perf-reviewer` errored or returned nothing usable (free, a different upstream lab). Same prompt and permissions.",
+      "model": "openrouter/thinkingmachines/inkling-small:free",
+      "prompt": "{file:./prompts/agent_preamble.md}\n\n{file:../.claude/agents/wasm-perf-reviewer.md}",
+      "permission": {
+        "task": "deny",
+        "edit": {
+          "*": "deny",
+          ".opencode/memory-inbox/*": "allow"
+        },
+        "bash": {
+          "*": "deny",
+          "git diff*": "allow",
+          "git log*": "allow",
+          "git show*": "allow",
+          "git status*": "allow",
+          "tools/bin/ironhold*": "allow"
+        }
+      }
+    },
+    "integration-test-author-alt": {
+      "mode": "subagent",
+      "description": "Fallback for `integration-test-author`: use only after `integration-test-author` errored or returned nothing usable (free, a different upstream lab). Same prompt and permissions.",
+      "model": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+      "prompt": "{file:./prompts/agent_preamble.md}\n\n{file:../.claude/agents/integration-test-author.md}",
+      "permission": {
+        "task": "deny"
+      }
+    },
+    "ron-gameplay-scripter-alt": {
+      "mode": "subagent",
+      "description": "Fallback for `ron-gameplay-scripter`: use only after `ron-gameplay-scripter` errored or returned nothing usable (free, a different upstream lab). Same prompt and permissions.",
+      "model": "opencode/nemotron-3-ultra-free",
+      "prompt": "{file:./prompts/agent_preamble.md}\n\n{file:../.claude/agents/ron-gameplay-scripter.md}",
+      "permission": {
+        "task": "deny"
+      }
+    },
+    "data-format-doc-writer-alt": {
+      "mode": "subagent",
+      "description": "Fallback for `data-format-doc-writer`: use only after `data-format-doc-writer` errored or returned nothing usable (free, a different upstream lab). Same prompt and permissions.",
+      "model": "opencode/nemotron-3.5-lightning-free",
+      "prompt": "{file:./prompts/agent_preamble.md}\n\n{file:../.claude/agents/data-format-doc-writer.md}",
+      "permission": {
+        "task": "deny"
+      }
+    },
+    "explore-alt": {
+      "mode": "subagent",
+      "description": "Fallback for `explore`: use only after `explore` errored or returned nothing usable (free, a different upstream lab). Read-only code exploration.",
+      "model": "opencode/nemotron-3.5-lightning-free",
+      "prompt": "You are a read-only code explorer for this repository. Search with grep and glob, read files, and report the file paths and the facts you were asked for. Never edit files.",
+      "permission": {
+        "task": "deny",
+        "edit": {
+          "*": "deny",
+          ".opencode/memory-inbox/*": "allow"
+        },
+        "bash": {
+          "*": "deny",
+          "git diff*": "allow",
+          "git log*": "allow",
+          "git show*": "allow",
+          "git status*": "allow",
+          "tools/bin/ironhold*": "allow"
+        }
+      }
+    },
     "plan": {
       "model": "opencode/nemotron-3-ultra-free"
     },

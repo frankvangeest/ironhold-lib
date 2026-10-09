@@ -147,6 +147,44 @@ only the model differs. `-deep` agents cannot be auto-delegated to (`permission.
 `*-deep` globally), so no run — including the orchestrator inside `/code-review` — can pick the
 paid tier for you. Estimated cost: about $0.06 per `-deep` run.
 
+## Agent roster and fallbacks
+
+There is **no automatic fallback** between models in OpenCode (V-table: a model is bound to an agent), so a fallback is a second
+agent for the same role on a different upstream lab, and the driver is told when to use it (`.opencode/prompts/driver.md`, kept
+in step with this table by `opencode_sync_check.py`). The driver prompt is **not wired into `build` yet**: the GLM pilot
+(`planning/features/opencode_glm_driver_pilot.md`) first measures a session with and without it (V18).
+
+**Name suffixes**
+
+| Suffix | Meaning | Cost | Defined in |
+|---|---|---|---|
+| none (`system-architect`) | the free primary agent for the role | free | `.opencode/opencode.json` |
+| `-alt` | fallback twin: same prompt and permissions, a model from a **different upstream lab** | free | `.opencode/opencode.json` |
+| `-m365` | machine-local: the same role on the M365 Copilot model through the local proxy; needs the proxy running, so on any other machine the agent does not exist (an "agent not found" error is expected there) | no extra cost (company licence) | your global OpenCode config only (V17: it cannot override the repo's agents, so it has its own name) |
+| `-deep` | the paid DeepSeek version, only on request and after a yes; never in an automatic chain | about $0.06 per run | `.opencode/opencode.json` (`permission.task` denies it; headless runs auto-approve `ask`, V20, so unattended runs must keep `deny`) |
+
+**Roster** (the upstream lab decides whether the twin really fails differently; the gateway does not)
+
+| Role | Primary (lab) | `-alt` twin (lab) |
+|---|---|---|
+| `system-architect` | `opencode/nemotron-3-ultra-free` (NVIDIA) | `openrouter/thinkingmachines/inkling:free` (Thinking Machines) |
+| `debug-detective` | `opencode/nemotron-3-ultra-free` (NVIDIA) | `openrouter/thinkingmachines/inkling:free` (Thinking Machines) |
+| `alignment-reviewer` | `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` (NVIDIA) | `openrouter/thinkingmachines/inkling-small:free` (Thinking Machines) |
+| `wasm-perf-reviewer` | `openrouter/nvidia/nemotron-3-super-120b-a12b:free` (NVIDIA) | `openrouter/thinkingmachines/inkling-small:free` (Thinking Machines) |
+| `integration-test-author` | `openrouter/nex-agi/nex-n2.5-pro:free` (Nex AGI) | `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` (NVIDIA) |
+| `ron-gameplay-scripter` | `openrouter/poolside/laguna-s-2.1:free` (Poolside) | `opencode/nemotron-3-ultra-free` (NVIDIA) |
+| `data-format-doc-writer` | `openrouter/nex-agi/nex-n2.5-mini:free` (Nex AGI) | `opencode/nemotron-3.5-lightning-free` (NVIDIA) |
+| `explore` | `openrouter/thinkingmachines/inkling-small:free` (Thinking Machines) | `opencode/nemotron-3.5-lightning-free` (NVIDIA) |
+| `ux-gamedesigner-reviewer`, `game-world-designer` | `google/gemini-3.8-flash` (Google) | none: stop and report (Gemini is kept for its creativity) |
+
+The twins reuse only models that already went through the known-issue research in `opencode_free_models.md` (all CAUTION, none
+AVOID). Several twins share one free model, so a burst of fallbacks can hit that model's rate limit; the pilot records it.
+
+**Order the driver tries** (at most two further steps, then it stops and reports; it never does the delegated work itself):
+`<role>-m365` (only if it exists) then `<role>` then `<role>-alt`. `system-architect` and `debug-detective` prefer `-m365` because
+the M365 model reasons deeply at no extra cost, once the pilot's tool-calling test shows it earns that place; if every step fails the
+driver offers the `-deep` agent and waits for a yes.
+
 ## Memory inbox
 
 OpenCode agents can **read** `.claude/agent-memory/<name>/` (the same knowledge base Claude's

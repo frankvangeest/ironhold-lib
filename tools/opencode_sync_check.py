@@ -33,6 +33,9 @@ Every agent (except `build`), the built-in `general` subagent and every command 
 paid driver; and `permission.external_directory` must deny the M365 proxy folder (its credential files), with no agent or
 command overriding that.
 
+Each role in ALT_ROLES (tools/_opencode_common.py) needs a `<role>-alt` twin with the same prompt, a description starting
+'Fallback for', and a model on a different upstream lab; the driver prompt (.opencode/prompts/driver.md) must name every such role.
+
 It also checks a fourth, unrelated failure mode found the hard way during v1's live testing
 (2026-09-22: `opencode/deepseek-v4-flash-free` had already disappeared from the live Zen model
 list by the time it was tested, only a couple of hours after being verified present): every model
@@ -61,7 +64,14 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _opencode_common import PAID_ALLOWED_AGENTS, find_opencode, not_found_message, paid_model_problems  # noqa: E402
+from _opencode_common import (  # noqa: E402
+    ALT_ROLES,
+    PAID_ALLOWED_AGENTS,
+    find_opencode,
+    model_lab,
+    not_found_message,
+    paid_model_problems,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OPENCODE_DIR = REPO_ROOT / ".opencode"
@@ -200,6 +210,48 @@ def check_proxy_folder_denied(config: dict) -> list[str]:
             override = entry.get("permission", {}).get("external_directory") if isinstance(entry.get("permission"), dict) else None
             if override is not None and (not isinstance(override, dict) or override.get(PROXY_FOLDER_PATTERN) != "deny"):
                 problems.append(f"{section} '{name}' overrides external_directory without denying '{PROXY_FOLDER_PATTERN}'")
+    return problems
+
+
+def check_alt_twins(config: dict) -> list[str]:
+    """Every role in ALT_ROLES has a `<role>-alt` twin: same prompt, on a different upstream lab, described as a fallback.
+
+    A twin only helps when it fails differently from its primary: Nemotron via `opencode/` and via `openrouter/` is one upstream
+    pool (planning/features/opencode_glm_driver_pilot.md), so the check compares labs, not gateways. The driver prompt must name
+    every role so it can tell the driver which agents have a fallback.
+    """
+    problems = []
+    agents = config.get("agent", {})
+    for role in ALT_ROLES:
+        twin_name = role + "-alt"
+        twin = agents.get(twin_name)
+        if twin is None:
+            problems.append(f"role '{role}' has no '{twin_name}' fallback agent")
+            continue
+        base = agents.get(role, {})
+        if base.get("prompt") is not None and twin.get("prompt") != base.get("prompt"):
+            problems.append(f"agent '{twin_name}' must use the same prompt as '{role}' (only description/model may differ)")
+        if twin.get("mode") != "subagent":
+            problems.append(f"agent '{twin_name}' must have mode 'subagent'")
+        if not str(twin.get("description", "")).startswith("Fallback for"):
+            problems.append(f"agent '{twin_name}' description must start with 'Fallback for' (the driver picks agents by description)")
+        twin_model, base_model = twin.get("model", ""), base.get("model", "")
+        twin_lab, base_lab = model_lab(twin_model), model_lab(base_model)
+        if twin_lab is None or base_lab is None:
+            problems.append(f"cannot tell the upstream lab of '{twin_model}' or '{base_model}' (extend ZEN_LABS in tools/_opencode_common.py)")
+        elif twin_lab == base_lab:
+            problems.append(f"agent '{twin_name}' ({twin_model}) is on the same upstream lab ('{twin_lab}') as '{role}'; a fallback must fail differently")
+    for name in agents:
+        if name.endswith("-alt") and name[: -len("-alt")] not in ALT_ROLES:
+            problems.append(f"agent '{name}' is not for a role in ALT_ROLES (tools/_opencode_common.py)")
+    driver = OPENCODE_DIR / "prompts" / "driver.md"
+    if not driver.is_file():
+        problems.append(".opencode/prompts/driver.md is missing")
+    else:
+        text = driver.read_text(encoding="utf-8")
+        for role in ALT_ROLES:
+            if f"`{role}`" not in text:
+                problems.append(f".opencode/prompts/driver.md does not name the role `{role}`")
     return problems
 
 
@@ -351,6 +403,7 @@ def main() -> int:
         ("Paid models outside the allowed keys", paid_model_problems(config)),
         ("Agents/commands without an explicit model", check_explicit_models(config)),
         ("M365 proxy folder denied", check_proxy_folder_denied(config)),
+        ("-alt fallback twins", check_alt_twins(config)),
         ("Subfolder AGENTS.md / CONTEXT.md", check_no_subfolder_instruction_files()),
         ("`instructions` matching .claude/rules", check_instructions_not_matching_rules(config)),
     ]

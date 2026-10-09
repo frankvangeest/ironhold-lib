@@ -128,3 +128,38 @@ def paid_model_problems(config: dict) -> list[str]:
     for name, entry in config.get("command", {}).items():
         check(f"command '{name}'", entry.get("model"), False)
     return problems
+
+
+# ---------------------------------------------------------------------------------------------------- roster / fallback twins
+# Roles that have a free `<role>-alt` twin on a DIFFERENT upstream lab (decided 2026-10-08: the roles that run on free models; the
+# Gemini roles have none and simply stop and report). Keep in sync with the roster in .opencode/README.md and
+# .opencode/prompts/driver.md (opencode_sync_check.py checks both).
+ALT_ROLES = (
+    "system-architect",
+    "debug-detective",
+    "alignment-reviewer",
+    "wasm-perf-reviewer",
+    "integration-test-author",
+    "ron-gameplay-scripter",
+    "data-format-doc-writer",
+    "explore",
+)
+# OpenCode Zen ids carry no vendor segment, so map their name prefix to the upstream lab (extend when a new Zen model is routed).
+ZEN_LABS = {"nemotron": "nvidia", "ling": "inclusionai", "deepseek": "deepseek", "mimo": "xiaomi", "muse": "meta"}
+
+
+def model_lab(model_id: str):
+    """Upstream model vendor ('nvidia', 'poolside', 'thinkingmachines', 'nex-agi', 'google', ...), or None when unknown.
+
+    The gateway prefix (`opencode/` vs `openrouter/`) is NOT the lab: Nemotron through either is one upstream capacity pool, so a
+    rate limit hits both. A fallback twin only helps if it is on another lab.
+    """
+    provider, _, rest = model_id.partition("/")
+    if provider == "openrouter":
+        return rest.split("/")[0] or None
+    if provider == "opencode":
+        for prefix, lab in ZEN_LABS.items():
+            if rest.startswith(prefix):
+                return lab
+        return None
+    return provider or None
