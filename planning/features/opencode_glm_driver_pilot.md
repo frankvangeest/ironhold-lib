@@ -218,9 +218,28 @@ script's own cap is $2, so the script stops first); Frank to confirm the $2 and 
 | `routing` (3 runs, driver prompt on, `alignment-reviewer` made invalid) | **3/3**: recovered through `alignment-reviewer-alt`, no `-deep` agent, correct answer |
 
 Thresholds met so far: pass >= 80%, mean cost <= $0.10, worst cost <= $0.25, toolcall well-formed >= 90% and every criterion >= 4/5.
-**Not yet evaluable:** "pass rate not below the free default's" and "median wall <= 2x the free default's" need the `free` arm
-(Laguna, costs nothing; it was upstream rate-limited earlier on 2026-10-09). Still to run: `glm_driver` (with/without driver prompt on
-tool use), `free`, `deepseek` (reference), `m365`.
+### Free default (Laguna S 2.1) and the driver-prompt arm (same day)
+`glm_driver`: 5/5 `toolcall` runs passed with the driver prompt wired into `build` (about $0.009 each), so the driver prompt did not hurt GLM's
+tool use (V18: replacement of the built-in prompt is still unverified in itself, but the measured effect is neutral here).
+
+`free`: 33 runs, 21 completed and 12 ended in **HTTP 429 (upstream rate limit, shared Poolside pool)**, so *every* free failure was an outage, none a wrong
+answer: 21 of 21 completed runs passed their criteria (core 10/10 completed, 5 of 15 core runs lost to 429; `toolcall` 15 runs, 7 lost). Counted as
+the thresholds require (a run lost to a rate limit is a failed run), the free default scores **67%** on core tasks against GLM's **93%**, with a median wall
+time of 79 s against 28 s. All thresholds therefore pass, but the honest reading is about *availability*, not model quality: when the free endpoint answers it
+is as good, and 36% of its runs did not get answered in this window. That is the outage pattern that motivated a paid driver.
+
+| Threshold (pre-registered) | GLM | Met |
+|---|---|---|
+| core pass >= 80% | 93% | yes |
+| core pass >= the free default's | 93% vs 67% | yes |
+| median wall <= 2x the free default's | 28 s vs 79 s | yes |
+| mean cost per task <= $0.10 | $0.012 | yes |
+| worst cost per task <= $0.25 | $0.048 | yes |
+| toolcall: >= 90% of calls well-formed, every criterion >= 4/5 | 100%, 5/5 | yes |
+
+Open: `deepseek` (reference, about $1.2) and `m365` (costs nothing; the proxy was not running when checked, so unmeasured). The global OpenCode config now lists
+14 `m365/*` models (new: `gpt-5.6-think-deeper`, `claude-sonnet`, `claude-sonnet-think-deeper`, `gpt-5.2/5.3/5.4` variants); the runner has opt-in arms `m365_gpt56` and
+`m365_claude` for the two most promising new ones.
 
 ## Approach (when unblocked)
 - **Tasks** (4-5, identical prompt per model, each with a mechanical pass criterion): follow a folder rule (a change that

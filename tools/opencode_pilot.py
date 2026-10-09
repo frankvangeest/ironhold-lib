@@ -54,11 +54,14 @@ ARMS = {
     "free_alt":   {"model": "opencode/nemotron-3-ultra-free", "driver": False, "paid": False, "core": 0, "toolcall": 0, "routing": 0},
     "deepseek":   {"model": "openrouter/deepseek/deepseek-v4.1-flash", "driver": False, "paid": True, "core": 3, "toolcall": 5, "routing": 0},
     "m365":       {"model": "m365/gpt-5.5-think-deeper", "driver": False, "paid": False, "core": 3, "toolcall": 15, "routing": 3},
+    # opt-in m365 candidates that became available later (2026-10-09, listed in the global OpenCode config): counts 0 by default
+    "m365_gpt56": {"model": "m365/gpt-5.6-think-deeper", "driver": False, "paid": False, "core": 0, "toolcall": 0, "routing": 0},
+    "m365_claude": {"model": "m365/claude-sonnet-think-deeper", "driver": False, "paid": False, "core": 0, "toolcall": 0, "routing": 0},
 }
-ARM_ORDER = ["glm", "glm_driver", "free", "free_alt", "deepseek", "m365"]
+ARM_ORDER = ["glm", "glm_driver", "free", "free_alt", "deepseek", "m365", "m365_gpt56", "m365_claude"]
 DEFAULT_ARMS = [a for a in ARM_ORDER if any(ARMS[a][k] for k in ("core", "toolcall", "routing"))]
 # rough cost per run in USD, for the plan printout only (GLM: ~$0.005 per trivial turn at a 31.8k-token baseline; DeepSeek ~$0.06 per review run)
-EST_COST = {"glm": 0.03, "glm_driver": 0.03, "deepseek": 0.06, "free": 0.0, "free_alt": 0.0, "m365": 0.0}
+EST_COST = {"glm": 0.03, "glm_driver": 0.03, "deepseek": 0.06, "free": 0.0, "free_alt": 0.0, "m365": 0.0, "m365_gpt56": 0.0, "m365_claude": 0.0}
 
 
 class PilotError(Exception):
@@ -323,7 +326,7 @@ def main(argv=None) -> int:
         if binary is None:
             print(not_found_message(TOOL, static_hint=False))
             return 2
-        if "m365" in arm_ids:
+        if any(a.startswith("m365") for a in arm_ids):
             m365_preflight()
         base = args.base or run_git(["rev-parse", "HEAD"])
         wt = Path(args.worktree).resolve() if args.worktree else (REPO_ROOT.parent / "ironhold-pilot-wt")
