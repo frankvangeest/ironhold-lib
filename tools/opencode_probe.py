@@ -42,6 +42,7 @@ Caveat: `opencode debug ...` is not a documented contract and may change between
 
 import argparse
 import datetime
+import fnmatch
 import json
 import os
 import re
@@ -55,7 +56,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import opencode_sync_check as sync  # noqa: E402
-from _opencode_common import find_opencode, not_found_message, opencode_version, is_free_model, paid_model_problems, model_class  # noqa: E402
+from _opencode_common import (  # noqa: E402
+    ALT_ROLES,
+    PAID_ALLOWED_AGENTS,
+    PAID_ALLOWED_SUFFIX,
+    find_opencode,
+    is_free_model,
+    model_class,
+    model_lab,
+    not_found_message,
+    opencode_version,
+    paid_model_problems,
+)
 
 TOOL = "opencode_probe"
 INSTR_NAMES = ("AGENTS.md", "CLAUDE.md", "CONTEXT.md")
@@ -284,6 +296,90 @@ def run_static(root: Path, config: dict) -> list[tuple[str, list[str]]]:
     ]
 
 
+# ------------------------------------------------------------------------------------------------------------ --agents
+PROXY_SAMPLE = "C:/ProgramData/m365-copilot-proxy/README.md"
+READ_SAMPLE = "crates/ironhold_core/src/lib.rs"
+
+
+def rule_action(rules: list, permission: str, target: str):
+    """Action of the last rule whose permission and pattern match `target` (OpenCode: the last matching rule wins), or None."""
+    action = None
+    target = target.replace("\\", "/")
+    for rule in rules:
+        if rule.get("permission") != permission:
+            continue
+        pattern = str(rule.get("pattern", "*")).replace("\\", "/")
+        if fnmatch.fnmatchcase(target, pattern):
+            action = rule.get("action")
+    return action
+
+
+def agent_model(data: dict, top_model: str) -> str:
+    """The model an agent really runs: its own, else the top-level `model` it inherits."""
+    m = data.get("model")
+    if isinstance(m, dict) and m.get("providerID") and m.get("modelID"):
+        return f"{m['providerID']}/{m['modelID']}"
+    return top_model
+
+
+def agent_problems(name: str, data: dict, top_model: str) -> list[str]:
+    """Assertions on one resolved agent (`opencode debug agent <name>`): read is usable, the proxy folder is denied, the model is allowed."""
+    problems = []
+    rules = data.get("permission") or []
+    if rule_action(rules, "read", READ_SAMPLE) == "deny":
+        problems.append("the read tool is denied (the agent could not load instruction files or read code)")
+    if rule_action(rules, "external_directory", PROXY_SAMPLE) != "deny":
+        problems.append("the M365 proxy folder is not denied by external_directory (fact V19)")
+    model = agent_model(data, top_model)
+    if model_class(model) == "paid" and not (name in PAID_ALLOWED_AGENTS or name.endswith(PAID_ALLOWED_SUFFIX)):
+        problems.append(f"runs the paid model '{model}' but is not `build` or a `*{PAID_ALLOWED_SUFFIX}` agent")
+    return problems
+
+
+def twin_problems(models: dict) -> list[str]:
+    """`<role>-alt` twins (resolved models) must sit on another upstream lab than `<role>`."""
+    problems = []
+    for role in ALT_ROLES:
+        twin = role + "-alt"
+        if twin in models and role in models:
+            twin_lab, base_lab = model_lab(models[twin]), model_lab(models[role])
+            if twin_lab is None or base_lab is None:
+                problems.append(f"cannot tell the lab of {models[twin]} or {models[role]} (extend ZEN_LABS)")
+            elif twin_lab == base_lab:
+                problems.append(f"'{twin}' ({models[twin]}) is on the same lab '{twin_lab}' as '{role}'")
+    return problems
+
+
+def debug_json(binary: str, root: Path, args: list, env: dict, timeout: int = 90) -> dict:
+    try:
+        proc = subprocess.run([binary, "debug"] + args, cwd=root, env=env, capture_output=True, text=True, encoding="utf-8", timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        raise ProbeError(f"`opencode debug {' '.join(args)}` timed out after {timeout}s") from exc
+    except OSError as exc:
+        raise ProbeError(f"could not run {binary}: {exc}") from exc
+    if proc.returncode != 0:
+        detail = re.sub(r"\x1b\[[0-9;]*m", "", (proc.stderr or proc.stdout)).strip()[:300]
+        raise ProbeError(f"`opencode debug {' '.join(args)}` exited {proc.returncode}: {detail}")
+    return parse_json_text(proc.stdout)
+
+
+def run_agents(binary: str, root: Path, env: dict) -> list[dict]:
+    """Model-free: resolve every configured agent (repo plus any machine-local ones such as `<role>-m365`) and assert on it."""
+    config = debug_json(binary, root, ["config"], env)
+    top_model = config.get("model") or ""
+    names = sorted(set(config.get("agent", {})) | {"build"})
+    results, models = [], {}
+    for name in names:
+        data = debug_json(binary, root, ["agent", name], env)
+        models[name] = agent_model(data, top_model)
+        problems = agent_problems(name, data, top_model)
+        results.append({"agent": name, "model": models[name], "status": "FAIL" if problems else "PASS", "problems": problems})
+    twin = twin_problems(models)
+    if twin:
+        results.append({"agent": "(fallback twins)", "model": "", "status": "FAIL", "problems": twin})
+    return results
+
+
 def verified_version(root: Path):
     readme = root / ".opencode" / "README.md"
     if not readme.is_file():
@@ -442,6 +538,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description="Check which instruction files OpenCode attaches (see the module docstring).",
                                  epilog="Exit codes: 0 all checks passed, 1 a check failed, 2 tool error.")
     ap.add_argument("--static", action="store_true", help="only the checks that need no OpenCode (subfolder AGENTS.md, instructions globs)")
+    ap.add_argument("--agents", action="store_true", help="only the agent checks (model-free): every configured agent resolves, read is usable, the M365 proxy folder is denied, paid models only where allowed, `-alt` twins on another lab")
     ap.add_argument("--live", action="store_true", help="also run one model call for the token baseline (free models unless --allow-paid)")
     ap.add_argument("--only", metavar="PATH", help="probe a single repo-relative file")
     ap.add_argument("--dir", metavar="DIR", help="repo/worktree to probe (default: the checkout this script lives in)")
@@ -461,6 +558,8 @@ def main(argv=None) -> int:
         return selftest()
     if args.live and args.static:
         parser.error("--live calls a model and --static never touches OpenCode; use one or the other")
+    if args.agents and (args.live or args.static or args.only):
+        parser.error("--agents is a mode of its own; do not combine it with --live, --static or --only")
     root = Path(args.dir).resolve() if args.dir else Path(__file__).resolve().parent.parent
     config_path = root / ".opencode" / "opencode.json"
     if not config_path.is_file():
@@ -471,6 +570,31 @@ def main(argv=None) -> int:
     except (json.JSONDecodeError, OSError) as exc:
         print(f"{TOOL}: cannot read {config_path}: {exc}")
         return 2
+    if args.agents:
+        binary = find_opencode()
+        if binary is None:
+            print(not_found_message(TOOL))
+            return 2
+        env, tmp = isolated_env()
+        try:
+            check_isolation(binary, root, env, tmp)
+            agent_results = run_agents(binary, root, env)
+        except ProbeError as exc:
+            print(f"{TOOL}: {exc}")
+            return 2
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+        failed_agents = [r for r in agent_results if r["status"] == "FAIL"]
+        if args.json:
+            print(json.dumps({"mode": "agents", "results": agent_results, "failed": len(failed_agents)}, indent=1))
+        else:
+            print(f"{TOOL}: OpenCode {opencode_version(binary)}, mode agents (model-free), {datetime.date.today().isoformat()}")
+            for r in agent_results:
+                print(f"{r['status']} {r['agent']}  {r['model']}")
+                for problem in r["problems"]:
+                    print("  -", problem)
+            print(f"{len(failed_agents)} check(s) failed.")
+        return 1 if failed_agents else 0
     static = run_static(root, config)
     report = {"version": None, "verified": verified_version(root), "version_warning": None, "mode": "static" if args.static else "model-free",
               "date": datetime.date.today().isoformat(), "results": [], "static": static, "live": None, "comment_bytes": 0, "failed": 0, "warnings": []}
@@ -617,6 +741,19 @@ def selftest() -> int:
           and model_class("brand/new-model") == "paid", "m365 auto tone and unknown ids are not free")
     check(not paid_model_problems({"model": "openrouter/z-ai/glm-5.3-flash", "agent": {"x-deep": {"model": "openrouter/deepseek/deepseek-v4.1-flash"},
                                    "build": {"model": "openrouter/z-ai/glm-5.3-flash"}}}), "paid models on the allowed keys pass")
+    rules = [{"permission": "read", "pattern": "*", "action": "allow"},
+             {"permission": "external_directory", "pattern": "*", "action": "ask"},
+             {"permission": "external_directory", "pattern": "C:/ProgramData/m365-copilot-proxy/**", "action": "deny"}]
+    check(rule_action(rules, "external_directory", PROXY_SAMPLE) == "deny" and rule_action(rules, "external_directory", "C:/x/y.txt") == "ask"
+          and rule_action(rules, "read", READ_SAMPLE) == "allow" and rule_action(rules, "edit", "a") is None, "last matching rule wins")
+    check(not agent_problems("explore", {"permission": rules, "model": {"providerID": "opencode", "modelID": "nemotron-3-ultra-free"}}, "openrouter/x/y:free"),
+          "a good agent passes")
+    check(len(agent_problems("plain", {"permission": [{"permission": "read", "pattern": "*", "action": "deny"}],
+                                      "model": {"providerID": "paid", "modelID": "m"}}, "x")) == 3, "denied read, open proxy folder and paid model are reported")
+    check(not agent_problems("build", {"permission": rules}, "openrouter/z-ai/glm-5.3-flash"), "build may run the paid driver model")
+    check(len(twin_problems({"system-architect": "opencode/nemotron-3-ultra-free", "system-architect-alt": "openrouter/nvidia/nemotron-3.5-lightning:free"})) == 1
+          and not twin_problems({"system-architect": "opencode/nemotron-3-ultra-free", "system-architect-alt": "openrouter/thinkingmachines/inkling:free"}),
+          "twins on the same lab are reported")
     check(len(paid_model_problems({"small_model": "paid/a", "agent": {"y": {"model": "paid/b"}}, "command": {"z": {"model": "paid/c"}}})) == 3,
           "paid models on small_model, a plain agent and a command are reported")
     try:

@@ -188,7 +188,7 @@
     "integration-test-author": {
       "mode": "subagent",
       "description": "Writes ironhold_core integration tests following this repo's test-harness conventions (free tier).",
-      "model": "openrouter/nex-agi/nex-n2.5-pro:free",
+      "model": "openrouter/poolside/laguna-s-2.1:free",
       "prompt": "{file:./prompts/agent_preamble.md}\n\n{file:../.claude/agents/integration-test-author.md}",
       "permission": {
         "task": "deny"
@@ -206,7 +206,7 @@
     "data-format-doc-writer": {
       "mode": "subagent",
       "description": "Documents new schema fields/actions/events in docs/20_data_formats.md (free tier).",
-      "model": "openrouter/nex-agi/nex-n2.5-mini:free",
+      "model": "openrouter/poolside/laguna-s-2.1:free",
       "prompt": "{file:./prompts/agent_preamble.md}\n\n{file:../.claude/agents/data-format-doc-writer.md}",
       "permission": {
         "task": "deny"

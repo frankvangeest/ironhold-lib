@@ -171,9 +171,9 @@ in step with this table by `opencode_sync_check.py`). The driver prompt is **not
 | `debug-detective` | `opencode/nemotron-3-ultra-free` (NVIDIA) | `openrouter/thinkingmachines/inkling:free` (Thinking Machines) |
 | `alignment-reviewer` | `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` (NVIDIA) | `openrouter/thinkingmachines/inkling-small:free` (Thinking Machines) |
 | `wasm-perf-reviewer` | `openrouter/nvidia/nemotron-3-super-120b-a12b:free` (NVIDIA) | `openrouter/thinkingmachines/inkling-small:free` (Thinking Machines) |
-| `integration-test-author` | `openrouter/nex-agi/nex-n2.5-pro:free` (Nex AGI) | `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` (NVIDIA) |
+| `integration-test-author` | `openrouter/poolside/laguna-s-2.1:free` (Poolside) | `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` (NVIDIA) |
 | `ron-gameplay-scripter` | `openrouter/poolside/laguna-s-2.1:free` (Poolside) | `opencode/nemotron-3-ultra-free` (NVIDIA) |
-| `data-format-doc-writer` | `openrouter/nex-agi/nex-n2.5-mini:free` (Nex AGI) | `opencode/nemotron-3.5-lightning-free` (NVIDIA) |
+| `data-format-doc-writer` | `openrouter/poolside/laguna-s-2.1:free` (Poolside) | `opencode/nemotron-3.5-lightning-free` (NVIDIA) |
 | `explore` | `openrouter/thinkingmachines/inkling-small:free` (Thinking Machines) | `opencode/nemotron-3.5-lightning-free` (NVIDIA) |
 | `ux-gamedesigner-reviewer`, `game-world-designer` | `google/gemini-3.8-flash` (Google) | none: stop and report (Gemini is kept for its creativity) |
 
@@ -228,6 +228,9 @@ own `AGENTS.md`) and isn't part of this repo's config.
 Two tools, two jobs: `tools/opencode_sync_check.py` checks the **configuration** (agents, commands, prompts, model ids, plus two
 static checks: no subfolder `AGENTS.md`, no `instructions` entry matching `.claude/rules`), and `tools/opencode_probe.py` checks
 what OpenCode actually **loads** (the facts table above).
+`python tools/opencode_probe.py --agents` is the model-free check of the **resolved** agents (what OpenCode really runs, including
+machine-local ones such as `<role>-m365`): each agent resolves, the read tool is usable, the M365 proxy folder is denied, a paid model
+sits only on `build` or `*-deep`, and every `<role>-alt` is on another upstream lab than `<role>`. It takes about a minute.
 
 `.opencode/opencode.json` pulls every prompt from `.claude/agents/*.md`/`.claude/commands/*.md`
 rather than duplicating them, so there's exactly one copy of each — but nothing stops the two
