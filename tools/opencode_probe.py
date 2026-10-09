@@ -55,7 +55,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import opencode_sync_check as sync  # noqa: E402
-from _opencode_common import find_opencode, not_found_message, opencode_version  # noqa: E402
+from _opencode_common import find_opencode, not_found_message, opencode_version, is_free_model, paid_model_problems, model_class  # noqa: E402
 
 TOOL = "opencode_probe"
 INSTR_NAMES = ("AGENTS.md", "CLAUDE.md", "CONTEXT.md")
@@ -293,12 +293,6 @@ def verified_version(root: Path):
 
 
 # ------------------------------------------------------------------------------------------------------------- --live
-def is_free_model(model_id: str) -> bool:
-    # m365/... goes through the local M365 Copilot proxy on the organisation's licence: no per-token cost (decision (a), 2026-10-08).
-    # Unknown ids fail safe: an id without a `:free`/`-free` suffix counts as paid.
-    return model_id.endswith(":free") or model_id.endswith("-free") or model_id.startswith("m365/")
-
-
 def parse_run_events(text: str) -> dict:
     """Summarise `opencode run --format json` output: read events, per-step tokens, summed cost, errors, reply text."""
     summary = {"reads": 0, "attached": [], "steps": [], "cost": 0.0, "errors": [], "reply": "", "sessions": set()}
@@ -618,7 +612,13 @@ def selftest() -> int:
     check(parse_run_events(json.dumps({"type": "step_start", "sessionID": "ses_abc", "part": {}}))["sessions"] == {"ses_abc"}, "session ids are collected from events")
     check(parse_run_events("")["reads"] == 0, "no read event is detectable")
     check(is_free_model("openrouter/x/y:free") and is_free_model("opencode/n-free") and is_free_model("m365/gpt-5.5-think-deeper")
-          and not is_free_model("openrouter/z-ai/glm-5.3-flash"), "free-model rule")
+          and is_free_model("google/gemini-3.8-flash") and not is_free_model("openrouter/z-ai/glm-5.3-flash"), "free-model rule")
+    check(model_class("m365/m365-copilot") == "paid" and model_class("m365/gpt-5.5-think-deeper") == "machine-local"
+          and model_class("brand/new-model") == "paid", "m365 auto tone and unknown ids are not free")
+    check(not paid_model_problems({"model": "openrouter/z-ai/glm-5.3-flash", "agent": {"x-deep": {"model": "openrouter/deepseek/deepseek-v4.1-flash"},
+                                   "build": {"model": "openrouter/z-ai/glm-5.3-flash"}}}), "paid models on the allowed keys pass")
+    check(len(paid_model_problems({"small_model": "paid/a", "agent": {"y": {"model": "paid/b"}}, "command": {"z": {"model": "paid/c"}}})) == 3,
+          "paid models on small_model, a plain agent and a command are reported")
     try:
         attachments({"result": {"output": "x", "metadata": {}}})
         check(False, "a missing metadata.loaded key must be an error")

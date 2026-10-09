@@ -25,6 +25,10 @@ Two further static checks need no `opencode` binary at all (they guard what Open
   (b) No `instructions` entry in opencode.json that matches `.claude/rules/` (OpenCode never reads those files on its own,
      so loading them through `instructions` would also load every stub at session start).
 
+A paid model id may only sit on the top-level `model`, the `build` agent and `*-deep` agents; every other agent, every
+command and `small_model` must use a free model (classifier in tools/_opencode_common.py), because the driver is paid
+and everything it delegates to is meant to be free (planning/features/opencode_glm_driver_pilot.md).
+
 It also checks a fourth, unrelated failure mode found the hard way during v1's live testing
 (2026-09-22: `opencode/deepseek-v4-flash-free` had already disappeared from the live Zen model
 list by the time it was tested, only a couple of hours after being verified present): every model
@@ -53,7 +57,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _opencode_common import find_opencode, not_found_message  # noqa: E402
+from _opencode_common import find_opencode, not_found_message, paid_model_problems  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OPENCODE_DIR = REPO_ROOT / ".opencode"
@@ -299,6 +303,7 @@ def main() -> int:
         ("Missing {file:} targets", check_missing_file_refs(config)),
         ("Unreferenced .claude/ files", check_unreferenced_claude_files(config)),
         ("-deep prompt drift", check_deep_twins_match(config)),
+        ("Paid models outside the allowed keys", paid_model_problems(config)),
         ("Subfolder AGENTS.md / CONTEXT.md", check_no_subfolder_instruction_files()),
         ("`instructions` matching .claude/rules", check_instructions_not_matching_rules(config)),
     ]

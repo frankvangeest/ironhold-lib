@@ -5,6 +5,10 @@ Finding the `opencode` binary on this Windows machine is the awkward part: OpenC
 (it would only change a child process's PATH), so `find_opencode()` looks, in order, at the `OPENCODE_BIN` environment
 variable, then PATH, and `not_found_message()` says exactly what to run (and where it found an nvs install, if one is
 present, so the fix is one `set OPENCODE_BIN=...` away).
+
+It also holds the one free/paid model classifier (`model_class`) and the rule for where a paid model may appear
+(`paid_model_problems`), shared by `opencode_sync_check.py` (static repo config) and `opencode_probe.py` (live run
+filter), so the two cannot disagree.
 """
 
 import glob
@@ -69,3 +73,58 @@ def opencode_version(binary: str) -> str | None:
         return None
     text = (out.stdout or "").strip().splitlines()
     return text[-1].strip() if out.returncode == 0 and text else None
+
+
+# ------------------------------------------------------------------------------------------------ free / paid classifier
+# Three classes. Anything not recognised is "paid": a new model fails closed instead of being spent on by accident.
+#   free          costs nothing per token for this repo. Either an id carrying the OpenRouter `:free` / OpenCode Zen `-free`
+#                 convention, or an id listed in FREE_MODELS below.
+#   machine-local costs nothing extra but only exists on a machine that runs the local M365 Copilot proxy (provider `m365`,
+#                 127.0.0.1:4141, part of the company licence). Exactly the ids in MACHINE_LOCAL_MODELS; never `m365/m365-copilot`
+#                 (the auto tone, reported to confabulate).
+#   paid          everything else.
+FREE_MODELS = {
+    # Free only while no billing account is linked to the Google AI key (Frank, 2026-10-08: none is). Remove this entry if one is.
+    "google/gemini-3.8-flash",
+}
+MACHINE_LOCAL_MODELS = {
+    "m365/gpt-5.5-think-deeper",
+}
+# Where a paid model may appear in .opencode/opencode.json: the top-level `model` (the driver), the `build` agent (inherits it)
+# and any agent whose name ends in `-deep` (explicit, asks first, never in an automatic chain).
+PAID_ALLOWED_TOP_KEYS = {"model"}
+PAID_ALLOWED_AGENTS = {"build"}
+PAID_ALLOWED_SUFFIX = "-deep"
+
+
+def model_class(model_id: str) -> str:
+    """'free', 'machine-local' or 'paid' (the default for anything unknown)."""
+    if model_id in MACHINE_LOCAL_MODELS:
+        return "machine-local"
+    if model_id in FREE_MODELS or model_id.endswith(":free") or model_id.endswith("-free"):
+        return "free"
+    return "paid"
+
+
+def is_free_model(model_id: str) -> bool:
+    """True when using the model costs nothing extra (free or machine-local)."""
+    return model_class(model_id) != "paid"
+
+
+def paid_model_problems(config: dict) -> list[str]:
+    """Paid model ids outside the allowed places (see PAID_ALLOWED_*): small_model, other agents, commands."""
+    problems = []
+
+    def check(where: str, model_id, allowed: bool) -> None:
+        if model_id and model_class(model_id) == "paid" and not allowed:
+            problems.append(f"{where} uses '{model_id}', which is not on the free list (paid models may only be the top-level "
+                            f"`model`, `build` and `*{PAID_ALLOWED_SUFFIX}` agents; add the id to FREE_MODELS in "
+                            f"tools/_opencode_common.py only if it really costs nothing)")
+
+    check("small_model", config.get("small_model"), False)
+    check("model", config.get("model"), True)
+    for name, entry in config.get("agent", {}).items():
+        check(f"agent '{name}'", entry.get("model"), name in PAID_ALLOWED_AGENTS or name.endswith(PAID_ALLOWED_SUFFIX))
+    for name, entry in config.get("command", {}).items():
+        check(f"command '{name}'", entry.get("model"), False)
+    return problems
