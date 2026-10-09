@@ -29,6 +29,10 @@ A paid model id may only sit on the top-level `model`, the `build` agent and `*-
 command and `small_model` must use a free model (classifier in tools/_opencode_common.py), because the driver is paid
 and everything it delegates to is meant to be free (planning/features/opencode_glm_driver_pilot.md).
 
+Every agent (except `build`), the built-in `general` subagent and every command must name its own `model`, or it inherits the
+paid driver; and `permission.external_directory` must deny the M365 proxy folder (its credential files), with no agent or
+command overriding that.
+
 It also checks a fourth, unrelated failure mode found the hard way during v1's live testing
 (2026-09-22: `opencode/deepseek-v4-flash-free` had already disappeared from the live Zen model
 list by the time it was tested, only a couple of hours after being verified present): every model
@@ -57,7 +61,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _opencode_common import find_opencode, not_found_message, paid_model_problems  # noqa: E402
+from _opencode_common import PAID_ALLOWED_AGENTS, find_opencode, not_found_message, paid_model_problems  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OPENCODE_DIR = REPO_ROOT / ".opencode"
@@ -155,6 +159,47 @@ def check_deep_twins_match(config: dict) -> list[str]:
                 f"per the design (opencode_compatibility.md, 'Naming and defaults'), a '-deep' "
                 f"agent should differ only in description/model, never in prompt content"
             )
+    return problems
+
+
+PROXY_FOLDER_PATTERN = "C:/ProgramData/m365-copilot-proxy/**"
+
+
+def check_explicit_models(config: dict) -> list[str]:
+    """Every agent except `build`, the built-in `general` subagent and every command names its own model.
+
+    The driver (the top-level `model`) may become a paid model; anything without an explicit `model` inherits it and would
+    silently become paid too (verified: `general` and the model-less commands inherit the default, planning/features/
+    opencode_glm_driver_pilot.md, 'Facts established').
+    """
+    problems = []
+    agents = config.get("agent", {})
+    for name, entry in agents.items():
+        if name not in PAID_ALLOWED_AGENTS and name != "general" and not entry.get("model"):
+            problems.append(f"agent '{name}' has no explicit `model` and would inherit the (possibly paid) driver model")
+    if not agents.get("general", {}).get("model"):
+        problems.append("the built-in `general` subagent has no explicit `model` (add `agent.general.model` with a free model)")
+    for name, entry in config.get("command", {}).items():
+        if not entry.get("model"):
+            problems.append(f"command '{name}' has no explicit `model` and would inherit the (possibly paid) driver model")
+    return problems
+
+
+def check_proxy_folder_denied(config: dict) -> list[str]:
+    """`external_directory` must deny the M365 proxy folder (its credential and TOTP files live there), and nothing may override it.
+
+    A `read` deny with the same absolute pattern does NOT work (the read tool matches a project-relative path); the
+    `external_directory` deny does (fact V19 in .opencode/README.md). The rule is harmless on a machine without the proxy.
+    """
+    problems = []
+    perm = config.get("permission", {}).get("external_directory")
+    if not isinstance(perm, dict) or perm.get(PROXY_FOLDER_PATTERN) != "deny":
+        problems.append(f"top-level permission.external_directory must be an object that denies '{PROXY_FOLDER_PATTERN}' (fact V19)")
+    for section in ("agent", "command"):
+        for name, entry in config.get(section, {}).items():
+            override = entry.get("permission", {}).get("external_directory") if isinstance(entry.get("permission"), dict) else None
+            if override is not None and (not isinstance(override, dict) or override.get(PROXY_FOLDER_PATTERN) != "deny"):
+                problems.append(f"{section} '{name}' overrides external_directory without denying '{PROXY_FOLDER_PATTERN}'")
     return problems
 
 
@@ -304,6 +349,8 @@ def main() -> int:
         ("Unreferenced .claude/ files", check_unreferenced_claude_files(config)),
         ("-deep prompt drift", check_deep_twins_match(config)),
         ("Paid models outside the allowed keys", paid_model_problems(config)),
+        ("Agents/commands without an explicit model", check_explicit_models(config)),
+        ("M365 proxy folder denied", check_proxy_folder_denied(config)),
         ("Subfolder AGENTS.md / CONTEXT.md", check_no_subfolder_instruction_files()),
         ("`instructions` matching .claude/rules", check_instructions_not_matching_rules(config)),
     ]
