@@ -265,7 +265,7 @@ anywhere; an m365 model could only help with a short text-only review that has t
 ### Screening of the other m365 models (2026-10-09, after registering all 24 proxy models in the global OpenCode config; `toolcall` task, 5 runs each)
 | Model | Result |
 |---|---|
-| `gpt-6-think-deeper`, `claude-opus-5`, `claude-sonnet` | 0 tool calls in 15 of 15 runs: every run ended in `upstream_empty_response` (the proxy's "throttle n/600" counter rose by 3 per arm) |
+| `gpt-6-think-deeper`, `claude-opus-5`, `claude-sonnet` | 0 tool calls in 15 of 15 runs: every run ended in `upstream_empty_response` (the "throttle n/600" figure in the error text read 3, 6 and 9 on the first run of each of the three arms, so it counts up across the whole sweep) |
 | `gpt-5.5`, `gpt-5.5-quick` | 0 tool calls in 10 of 10 runs: the model answered that it has no file or shell tools ("I do not have access to the repository files or the execution tools") |
 
 The proxy README predicts both failures when its Copilot Studio agent is not doing its job ("robust with the agent, unreliable without it": the model

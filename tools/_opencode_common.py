@@ -87,6 +87,8 @@ FREE_MODELS = {
     # Free only while no billing account is linked to the Google AI key (Frank, 2026-10-08: none is). Remove this entry if one is.
     "google/gemini-3.8-flash",
 }
+# NOTE: this list is about COST only. "Never preferred" for the m365 models is a driver-prompt convention (driver.md), not enforced here:
+# a listed id may sit on any key of the repo config without a paid-model problem.
 MACHINE_LOCAL_MODELS = {
     "m365/gpt-5.5-think-deeper",
     "m365/gpt-5.6-think-deeper",        # pilot candidates (2026-10-09): free of cost, not preferred (tool calling failed the pilot rule)
