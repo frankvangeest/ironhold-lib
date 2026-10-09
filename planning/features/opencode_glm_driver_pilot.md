@@ -1,7 +1,7 @@
 # Feature: GLM 5.3 flash pilot and the OpenCode default-driver decision
 
-_Status: Draft — plan-review 2026-10-08 (system-architect, ux-gamedesigner-reviewer) found it needs more design work; Frank's answers and the resulting changes are in "Plan-review outcome" and "Follow-up decisions"; Ready after a short re-review of those two sections_
-_Planned at: `edc93f1` (2026-10-08); split out of the compat-probe plan after its plan-review_
+_Status: Ready — plan-review 2026-10-08 (two rounds: system-architect, ux-gamedesigner-reviewer); Frank confirmed the thresholds, the $2 script cap and the $3 OpenRouter key limit (set on the key)_
+_Planned at: `1a4fa55` (2026-10-09); first drafted at `edc93f1` (2026-10-08), split out of the compat-probe plan after its plan-review_
 
 ## What
 Measure whether `openrouter/z-ai/glm-5.3-flash` can be the cheap, capable driver for OpenCode work in this repo, and decide
@@ -233,7 +233,7 @@ script's own cap is $2, so the script stops first); Frank to confirm the $2 and 
 - [x] Frank's two decisions (2026-10-08, above)
 - [x] Plan-review 2026-10-08 and Frank's answers (above); V17 verified
 - [ ] Verify and record V18 (prompt delivery: `agent.build.prompt` vs `instructions`), the headless `ask` behaviour, and that the proxy folder is denied to `read`
-- [ ] Frank confirms the $2 cap and the $3 key limit
+- [x] Frank confirms the $2 cap and the $3 key limit (2026-10-09; the $3 limit is set on the OpenRouter key)
 - [ ] Driver prompt, roster table (with the upstream lab per agent) and `-alt` twins for the eight roles on free models (Follow-up decisions)
 - [ ] Explicit free models on `general` and the no-model commands; shared free-model classifier in `tools/_opencode_common.py`; `opencode_sync_check.py` rule for paid ids on allow-listed keys; deny rules for the m365 proxy folder; `*-deep` task permission `ask`
 - [ ] Extend the probe for agents (all model-free): an
