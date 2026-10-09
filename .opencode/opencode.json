@@ -1,14 +1,14 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "instructions": ["CLAUDE.md"],
-  "model": "openrouter/poolside/laguna-s-2.1:free",
+  "model": "openrouter/z-ai/glm-5.3-flash",
   "small_model": "opencode/nemotron-3.5-lightning-free",
   "permission": {
     "edit": "allow",
     "webfetch": "allow",
     "websearch": "allow",
     "external_directory": { "*": "ask", "C:/ProgramData/m365-copilot-proxy/**": "deny" },
-    "task": { "*": "allow", "*-deep": "deny" },
+    "task": { "*": "allow", "*-deep": "ask" },
     "bash": {
       "*": "ask",
       "cargo test*": "allow",
@@ -57,6 +57,9 @@
     }
   },
   "agent": {
+    "build": {
+      "prompt": "{file:./prompts/driver.md}"
+    },
     "system-architect": {
       "mode": "subagent",
       "description": "Architecture/maintainability review: crate boundaries, WASM compat, schema stability (free tier, advisory).",

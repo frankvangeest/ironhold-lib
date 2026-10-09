@@ -77,10 +77,11 @@ OpenCode `1.18.33` on 2026-10-08 unless the status says otherwise.
 
 | Tier | Model | Used by |
 |---|---|---|
+| D (cheap paid driver) | `openrouter/z-ai/glm-5.3-flash` (adopted 2026-10-09 after the pilot) | The top-level `model`, so the default `build` session |
 | E (paid) | `openrouter/deepseek/deepseek-v4.1-flash` | Only `system-architect-deep` / `debug-detective-deep` |
 | R (free reasoning) | `opencode/nemotron-3-ultra-free` or `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` | `system-architect`, `debug-detective`, `alignment-reviewer`, `/code-review`/`/plan-review`/`/ship-feature`/`/release` orchestration, the built-in `plan` agent |
 | R-lite | `openrouter/nvidia/nemotron-3-super-120b-a12b:free` | `wasm-perf-reviewer` |
-| C (free code) | Split across 3 providers (2026-09-23), see below | `integration-test-author`, `ron-gameplay-scripter`, `data-format-doc-writer`, the default `build`/`general` agents |
+| C (free code) | Split across 3 providers (2026-09-23), see below | `integration-test-author`, `ron-gameplay-scripter`, `data-format-doc-writer`, the built-in `general` subagent (the default `build` is tier D now) |
 | G (free, low-volume) | `google/gemini-3.8-flash` | `ux-gamedesigner-reviewer`, `game-world-designer` |
 | F (free, light) | `opencode/nemotron-3.5-lightning-free` | `/query`, `/validate`, `/wasm-dev`, `/rust-docs` |
 | T (titles) | `opencode/nemotron-3.5-lightning-free` | `small_model` (background title generation) only |
@@ -118,10 +119,10 @@ Code is not used anywhere in this repo's routing anymore.
 
 | Consumer | Model | Provider |
 |---|---|---|
-| Default `model` (`build`/`general`) | `openrouter/poolside/laguna-s-2.1:free` | Poolside (reverted; if it rate-limits again, `nex-agi/nex-n2.5-pro:free` is the next thing to try, not `cohere/north-mini-code:free`) |
-| `integration-test-author` | `openrouter/nex-agi/nex-n2.5-pro:free` | Nex AGI |
+| `general` (the default model before 2026-10-09, now explicit) | `openrouter/poolside/laguna-s-2.1:free` | Poolside (the `build` default moved to the paid GLM driver, tier D) |
+| `integration-test-author` | `openrouter/poolside/laguna-s-2.1:free` | Poolside (was Nex until `nex-n2.5-pro:free` left the live model list on 2026-10-09) |
 | `ron-gameplay-scripter` | `openrouter/poolside/laguna-s-2.1:free` | Poolside |
-| `data-format-doc-writer` | `openrouter/nex-agi/nex-n2.5-mini:free` | Nex AGI (lighter sibling of the test-author's model — doc writing needs less than active Rust authoring) |
+| `data-format-doc-writer` | `openrouter/poolside/laguna-s-2.1:free` | Poolside (was Nex until `nex-n2.5-mini:free` left the list). Four consumers now share Poolside's pool, the bottleneck this split was meant to avoid; each has an NVIDIA or Thinking Machines `-alt` twin to absorb a 429 |
 
 If one of these starts rate-limiting (or, per the above, misbehaving) again, the fix is the same:
 edit that agent's `model` in `opencode.json` to a different provider's free model — there's no
@@ -130,24 +131,34 @@ it's free and rated well for coding; check for known agentic-loop/tool-call reli
 first, the way this one was found. `.opencode/opencode_free_models.md` has the fuller candidate
 list.
 
-## The paid escalation opt-in
+## What costs money
 
-Every agent's **plain name** (`system-architect`, `debug-detective`) is the **free** tier — this is
-what every shared command template and any automatic delegation invokes. Nothing can accidentally
-spend money.
+**The driver is paid; everything it delegates to is free, and the paid DeepSeek agents need a yes.** (Adopted 2026-10-09 after the pilot in
+`planning/features/opencode_glm_driver_pilot.md`: the free default stalled on upstream 429s for about a third of its runs.)
 
-To get the paid DeepSeek-backed review, you have to ask for it by name, on purpose:
+| What | Model | Cost |
+|---|---|---|
+| The default session (`build`, plain `opencode`, `opencode run` without `--agent`) | `openrouter/z-ai/glm-5.3-flash`, the top-level `model`, with the delegation rules in `.opencode/prompts/driver.md` | **paid**: about $0.012 per task in the pilot (worst $0.048); set a spend limit on the OpenRouter key |
+| `plan` (Tab), every subagent, `general`, every command that sets its own model, `small_model` | free models (tiers R, R-lite, C, G, F, T, X) | free |
+| `*-deep` agents (`system-architect-deep`, `debug-detective-deep`) | DeepSeek v4.1 flash | **paid**, about $0.06 per run, **only after a yes** |
+
+`opencode_sync_check.py` enforces the split: a paid model may only sit on the top-level `model`, `build` and `*-deep` agents; every other agent,
+command and `small_model` must use a free model; the driver prompt must stay wired into `build`.
+
+**`-deep` asks first.** `permission.task` sets `*-deep` to `ask`, and the driver prompt says never to call one without your yes. Ask for one
+on purpose too:
 ```
 @system-architect-deep is this design actually sound?
 ```
-or
-```
-opencode run --agent system-architect-deep "..."
-```
-The plain and `-deep` names share the exact same underlying prompt (`.claude/agents/<name>.md`) —
-only the model differs. `-deep` agents cannot be auto-delegated to (`permission.task` denies
-`*-deep` globally), so no run — including the orchestrator inside `/code-review` — can pick the
-paid tier for you. Estimated cost: about $0.06 per `-deep` run.
+**Unattended runs must override that to `deny`.** A headless `opencode run` auto-approves `ask` (fact V20), so a script, a scheduled job or
+`opencode run` without a terminal would spend on `-deep` without a prompt. Pass `OPENCODE_CONFIG_CONTENT='{"permission":{"task":{"*":"allow","*-deep":"deny"}}}'`
+(`tools/opencode_pilot.py` does this for every run).
+
+The plain and `-deep` names share the exact same underlying prompt (`.claude/agents/<name>.md`), only the model differs. Because the driver is
+paid, GLM's own turns dominate the cost: about 31.8k input tokens of machine-specific baseline per turn, so fewer turns matter more than the model price.
+The model id cannot be pinned to a snapshot (OpenCode lists no dated id); do not use the `~z-ai/glm-flash-latest` alias. Known risks and the
+research behind them: `opencode_free_models.md`, "Cheap paid driver candidate". Rollback if GLM misbehaves: set the top-level `model` back to
+`openrouter/poolside/laguna-s-2.1:free` (and consider removing the `build.prompt` line while the result is judged).
 
 ## Agent roster and fallbacks
 

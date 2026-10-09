@@ -213,6 +213,18 @@ def check_proxy_folder_denied(config: dict) -> list[str]:
     return problems
 
 
+def check_driver_wired(config: dict) -> list[str]:
+    """The paid driver (`build`) must carry the delegation rules from .opencode/prompts/driver.md, and `*-deep` must not be allowed silently."""
+    problems = []
+    prompt = config.get("agent", {}).get("build", {}).get("prompt", "")
+    if "prompts/driver.md" not in prompt:
+        problems.append("agent 'build' must set prompt to {file:./prompts/driver.md} (the driver rules; fact V18)")
+    task = config.get("permission", {}).get("task")
+    if not isinstance(task, dict) or task.get("*-deep") not in ("ask", "deny"):
+        problems.append("permission.task must set '*-deep' to 'ask' or 'deny' (paid agents are never allowed silently)")
+    return problems
+
+
 def check_alt_twins(config: dict) -> list[str]:
     """Every role in ALT_ROLES has a `<role>-alt` twin: same prompt, on a different upstream lab, described as a fallback.
 
@@ -404,6 +416,7 @@ def main() -> int:
         ("Agents/commands without an explicit model", check_explicit_models(config)),
         ("M365 proxy folder denied", check_proxy_folder_denied(config)),
         ("-alt fallback twins", check_alt_twins(config)),
+        ("Driver prompt wired, -deep not silent", check_driver_wired(config)),
         ("Subfolder AGENTS.md / CONTEXT.md", check_no_subfolder_instruction_files()),
         ("`instructions` matching .claude/rules", check_instructions_not_matching_rules(config)),
     ]

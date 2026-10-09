@@ -145,7 +145,7 @@ Python CLI tools live in `tools/` (run them from the repo root); each has its ow
 
 ### Using OpenCode alongside Claude Code
 
-This repo also runs under [OpenCode](https://opencode.ai), mostly on free models, as a second
+This repo also runs under [OpenCode](https://opencode.ai), with a cheap paid driver (GLM 5.3 flash) and free subagents, as a second
 toolchain alongside Claude Code — see `.opencode/README.md` for setup and model routing, and
 `planning/features/opencode_compatibility.md` for the full design. Two things worth knowing from
 the Claude Code side:
