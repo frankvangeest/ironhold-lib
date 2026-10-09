@@ -44,3 +44,9 @@ Frank's decisions (2026-09-22): OpenCode reviews are advisory-only (Claude `/cod
 
 **Why:** Frank runs OpenCode alongside Claude Code on free models; see [[claude-hooks-contract-bug]] for the related hook finding.
 **How to apply:** when reviewing any `.opencode/` change, check it against these facts; flag any hand-copied agent prompt (drift) or any OpenCode agent granted write access to `.claude/agent-memory/` (plan decision: read-only + `.opencode/memory-inbox/`).
+
+**GLM driver pilot code review (2026-10-09, `feature/opencode_glm_driver_pilot`):** README V19-V22 now hold the live facts (external_directory deny works where a read deny does not; it is bypassed by `python -c` with an assembled path; headless `opencode run` AUTO-APPROVES `ask`; opencode takes cwd from `PWD`/`--dir`, not process cwd; isolated XDG_DATA_HOME hides auth.json). Review traps found:
+- Repo default moved `*-deep` from deny to `ask`; since headless ask = allow (V20), every unattended caller must inject a deny via OPENCODE_CONFIG_CONTENT. The pilot does; `opencode_probe.py --live` did not. A sync-check that accepts `ask` as "not silent" contradicts V20.
+- Once a pilot's winning config (e.g. `build.prompt`) is adopted into the repo, a pilot runner that toggles it by *adding* OPENCODE_CONFIG_CONTENT (merge, never removes) can no longer produce its "without" arm — re-runs are silently contaminated.
+- The V21 PWD fix must be applied to EVERY opencode subprocess call (probe fixed debug_* but not run/session list/debug skill).
+- Classifier is single-sourced in `tools/_opencode_common.py` (`model_class`, `paid_model_problems`, `model_lab`, ALT_ROLES); twin "same permissions" is claimed in descriptions but only the prompt is checked.

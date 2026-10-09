@@ -17,6 +17,9 @@ designer-leak check, project-rule bookkeeping, and plan-vs-built drift. Reach fo
   grep the table for prose cells ("the probe prints...", "probe a file under a temporary...").
 - Plan "Open questions" sections are often left stale after implementation notes settle them.
 - No shell tool in this agent: read the worktree files directly instead of `git diff`.
+- Model-routing changes (feature/opencode_glm_driver_pilot, 2026-10-09): cross-check root CLAUDE.md wording against
+  `.opencode/opencode.json` top-level `model` AND the `.opencode/README.md` facts table (V-rows); fact rows describing
+  "the current default" go stale when the tiers table is updated. "Free subagents" wording omits the paid `-deep` twins.
 
 **Why:** these reviews are cheap only if scoped; designer-reachability checklists produce noise here.
 **How to apply:** when the caller says "no engine code, no schema, no RON", use this list, not the full methodology.
