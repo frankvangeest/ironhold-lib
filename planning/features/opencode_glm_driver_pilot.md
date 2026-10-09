@@ -203,6 +203,25 @@ their primary and the driver's fallback candidates.
 **Numbers.** Thresholds are confirmed. The OpenRouter key's hard spend limit is proposed at **$3** on a pilot-only key (the
 script's own cap is $2, so the script stops first); Frank to confirm the $2 and $3.
 
+## Results
+
+### GLM arm (2026-10-09, `glm-5.3-flash`, base `5db115f`, no driver prompt except on `routing`, default effort)
+23 runs, sequential, reported cost **$0.249** (script cap $2, key limit $3; reconcile against the OpenRouter activity page). Raw events and
+`results.jsonl` are in `ironhold-pilot-results-glm/` next to the repo (not committed).
+
+| Group | Result |
+|---|---|
+| Core tasks (15 runs) | **93%** pass (14/15). The one failure: `folder_rule` run 2 added no entry to `planning/backlog.md` |
+| Cost per core task | mean **$0.012**, worst **$0.048** (the longest run took 314 s) |
+| Median wall time, core | 28 s; largest input seen 31.2k tokens |
+| `toolcall` (5 runs) | all five criteria met in **5/5** runs, 100% of calls well-formed |
+| `routing` (3 runs, driver prompt on, `alignment-reviewer` made invalid) | **3/3**: recovered through `alignment-reviewer-alt`, no `-deep` agent, correct answer |
+
+Thresholds met so far: pass >= 80%, mean cost <= $0.10, worst cost <= $0.25, toolcall well-formed >= 90% and every criterion >= 4/5.
+**Not yet evaluable:** "pass rate not below the free default's" and "median wall <= 2x the free default's" need the `free` arm
+(Laguna, costs nothing; it was upstream rate-limited earlier on 2026-10-09). Still to run: `glm_driver` (with/without driver prompt on
+tool use), `free`, `deepseek` (reference), `m365`.
+
 ## Approach (when unblocked)
 - **Tasks** (4-5, identical prompt per model, each with a mechanical pass criterion): follow a folder rule (a change that
   must respect a "never"); edit a RON file then `validate` passes; answer a question that needs a `docs/dev` pointer; a
