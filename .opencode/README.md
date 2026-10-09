@@ -183,9 +183,10 @@ The twins reuse only models that already went through the known-issue research i
 AVOID). Several twins share one free model, so a burst of fallbacks can hit that model's rate limit; the pilot records it.
 
 **Order the driver tries** (at most two further steps, then it stops and reports; it never does the delegated work itself):
-`<role>-m365` (only if it exists) then `<role>` then `<role>-alt`. `system-architect` and `debug-detective` prefer `-m365` because
-the M365 model reasons deeply at no extra cost, once the pilot's tool-calling test shows it earns that place; if every step fails the
-driver offers the `-deep` agent and waits for a yes.
+`<role>` then `<role>-alt`, and `<role>-m365` (only if it exists) as a last resort. The plan wanted `-m365` first for
+`system-architect` and `debug-detective` (deep reasoning at no extra cost) but only if it passed the pilot's tool-calling test, and it did not
+(2026-10-09: `gpt-5.5-think-deeper` met 0 of 15 `toolcall` chains), so it is not preferred anywhere. If every step fails the driver
+offers the `-deep` agent and waits for a yes.
 
 ## Memory inbox
 

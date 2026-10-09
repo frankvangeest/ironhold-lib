@@ -241,6 +241,21 @@ Open: `deepseek` (reference, about $1.2) and `m365` (costs nothing; the proxy wa
 14 `m365/*` models (new: `gpt-5.6-think-deeper`, `claude-sonnet`, `claude-sonnet-think-deeper`, `gpt-5.2/5.3/5.4` variants); the runner has opt-in arms `m365_gpt56` and
 `m365_claude` for the two most promising new ones.
 
+### m365 arms (2026-10-09, proxy at localhost:4141 up; 33 runs each, no cost)
+**m365 does not earn first place.** The pre-registered rule (toolcall >= 90% well-formed and every criterion in >= 13 of 15 runs) was missed by a wide margin:
+
+| Arm | Core | `toolcall` | `routing` | Notes |
+|---|---|---|---|---|
+| `m365/gpt-5.5-think-deeper` | 8/15 | **0/15** chains, `missing_file_reported` 2/15, `two_reads` 2/15, denied-call 8/15 | 0/3 | 33 runs completed. The emulated tool calls went to `bash` for file work (denied in unattended runs), and `docs_pointer` answered with an invented path without reading anything |
+| `m365/gpt-5.6-think-deeper` | 0/15 | 0/15 | 0/3 | 10 of 33 runs ended in `upstream_empty_response` (proxy throttle); the others answered without tools and got the file name wrong |
+| `m365/claude-sonnet-think-deeper` | 0/15 | 0/15 | 0/3 | **all 33 runs** ended in `upstream_empty_response (throttle 9/600)`: the proxy's throttle was already engaged by the earlier arms, so this arm measures the throttle, not the model; re-run after a cool-down before judging it |
+
+Decision (follows the rule written before the run): `-m365` agents stay at most a last-resort reviewer after the free primary and `-alt` twin
+(driver prompt and README updated). Caveats that keep this from being a final verdict on M365 as a model: the proxy emulates tool calls, the bash
+deny of the unattended profile blocks the way it prefers to work, and its throttle makes long sequential sweeps unreliable; a short, interactive,
+text-only review (a diff pasted into the prompt) was not tested. Also: the proxy offers 24 models but the global OpenCode config registers 14
+(`claude-opus`, `claude-opus-5`, `gpt-6-think-deeper`, `gpt-5.4-think-deeper` are missing from it).
+
 ## Approach (when unblocked)
 - **Tasks** (4-5, identical prompt per model, each with a mechanical pass criterion): follow a folder rule (a change that
   must respect a "never"); edit a RON file then `validate` passes; answer a question that needs a `docs/dev` pointer; a

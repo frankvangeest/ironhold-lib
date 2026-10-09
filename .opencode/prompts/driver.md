@@ -11,10 +11,10 @@ vendor: `system-architect`, `debug-detective`, `alignment-reviewer`, `wasm-perf-
 
 ## Order to try, per delegation
 
-1. If an agent named `<role>-m365` is in your subagent list, use it first. It only exists on a machine that runs the local M365
-   Copilot proxy. If it errors (for example connection refused), go to step 2.
-2. The plain `<role>` agent.
-3. The `<role>-alt` twin.
+1. The plain `<role>` agent.
+2. The `<role>-alt` twin.
+3. Last resort only: if an agent named `<role>-m365` is in your subagent list, try it. It only exists on a machine that runs the
+   local M365 Copilot proxy, and in the pilot it did not call tools reliably, so never prefer it over steps 1 and 2.
 
 Move to the next step when a subagent **errors** or returns **nothing usable** (empty, or it did not answer the question). Try at
 most two further steps per delegation. If the last step also fails, **stop and report** what you tried and what failed; do
