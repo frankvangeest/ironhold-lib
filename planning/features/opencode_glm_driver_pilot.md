@@ -102,8 +102,7 @@ and what they change (this section **overrides** the earlier sections where they
   key's spend limit is the real backstop. Long-session compaction runs on the paid model and is part of the measured cost.
 - **Reviews and architecture go to a strong reasoning model**, not to GLM: m365 `gpt-5.5-think-deeper` where the proxy runs, the
   `*-deep` DeepSeek agents otherwise. **GLM asks the user before using a paid model**: `permission.task` for `*-deep` changes
-  from `deny` to `ask`. Open check (task below): how `opencode run` treats `ask` without a TTY (auto-reject or hang); until it is
-  known, unattended runs keep `deny`.
+  from `deny` to `ask`. Checked 2026-10-09 (V20): headless `opencode run` auto-approves `ask`, so unattended runs must override `*-deep` to `deny`.
 - **Both the primary agent and its `-alt` twin fail: stop and report.** The driver must not do the work itself.
 - **Gemini counts as free** (no billing account is linked; if one is ever linked the allow-list entry must be removed).
 - **IT confirmation is settled**: using the M365 proxy is fine. Kept anyway: explicit deny rules so no agent can read
@@ -232,7 +231,7 @@ script's own cap is $2, so the script stops first); Frank to confirm the $2 and 
 ## Tasks
 - [x] Frank's two decisions (2026-10-08, above)
 - [x] Plan-review 2026-10-08 and Frank's answers (above); V17 verified
-- [ ] Verify and record V18 (prompt delivery: `agent.build.prompt` vs `instructions`), the headless `ask` behaviour, and that the proxy folder is denied to `read`
+- [x] Facts checks done 2026-10-09, recorded as V18-V20 in `.opencode/README.md`: the driver prompt goes on `agent.build.prompt` (replacement of the built-in prompt unverified, so the pilot gets a with/without-driver-prompt arm for GLM); the proxy folder is guarded by an `external_directory` deny (a `read` deny with an absolute pattern does not match); **headless `opencode run` auto-approves `ask`**, so `*-deep: ask` would silently allow paid delegation in unattended runs: the pilot scripts and any unattended run must override it to `deny` (via `OPENCODE_CONFIG_CONTENT`, which wins over the project config), and the repo config keeps `deny` for `*-deep` until a human-attended mode is decided
 - [x] Frank confirms the $2 cap and the $3 key limit (2026-10-09; the $3 limit is set on the OpenRouter key)
 - [ ] Driver prompt, roster table (with the upstream lab per agent) and `-alt` twins for the eight roles on free models (Follow-up decisions)
 - [ ] Explicit free models on `general` and the no-model commands; shared free-model classifier in `tools/_opencode_common.py`; `opencode_sync_check.py` rule for paid ids on allow-listed keys; deny rules for the m365 proxy folder; `*-deep` task permission `ask`
