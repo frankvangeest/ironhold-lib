@@ -63,13 +63,19 @@ ARMS = {
     # opt-in m365 candidates that became available later (2026-10-09, listed in the global OpenCode config): counts 0 by default
     "m365_gpt56": {"model": "m365/gpt-5.6-think-deeper", "driver": False, "paid": False, "core": 0, "toolcall": 0, "routing": 0},
     "m365_claude": {"model": "m365/claude-sonnet-think-deeper", "driver": False, "paid": False, "core": 0, "toolcall": 0, "routing": 0},
+    # screening candidates (2026-10-09), ranked by the proxy README's own tool-calling notes; run with --toolcall-runs 5 first
+    "m365_gpt6":    {"model": "m365/gpt-6-think-deeper", "driver": False, "paid": False, "core": 0, "toolcall": 0, "routing": 0},
+    "m365_opus":    {"model": "m365/claude-opus-5", "driver": False, "paid": False, "core": 0, "toolcall": 0, "routing": 0},
+    "m365_sonnet":  {"model": "m365/claude-sonnet", "driver": False, "paid": False, "core": 0, "toolcall": 0, "routing": 0},
+    "m365_gpt55":   {"model": "m365/gpt-5.5", "driver": False, "paid": False, "core": 0, "toolcall": 0, "routing": 0},
+    "m365_gpt55q":  {"model": "m365/gpt-5.5-quick", "driver": False, "paid": False, "core": 0, "toolcall": 0, "routing": 0},
 }
 for _arm in ARMS.values():  # one source of truth for free vs paid (tools/_opencode_common.py)
     _arm["paid"] = model_class(_arm["model"]) == "paid"
-ARM_ORDER = ["glm", "glm_driver", "free", "free_alt", "deepseek", "m365", "m365_gpt56", "m365_claude"]
+ARM_ORDER = ["glm", "glm_driver", "free", "free_alt", "deepseek", "m365", "m365_gpt56", "m365_claude", "m365_gpt6", "m365_opus", "m365_sonnet", "m365_gpt55", "m365_gpt55q"]
 DEFAULT_ARMS = [a for a in ARM_ORDER if any(ARMS[a][k] for k in ("core", "toolcall", "routing"))]
 # rough cost per run in USD, for the plan printout only (GLM: ~$0.005 per trivial turn at a 31.8k-token baseline; DeepSeek ~$0.06 per review run)
-EST_COST = {"glm": 0.03, "glm_driver": 0.03, "deepseek": 0.06, "free": 0.0, "free_alt": 0.0, "m365": 0.0, "m365_gpt56": 0.0, "m365_claude": 0.0}
+EST_COST = {"glm": 0.03, "glm_driver": 0.03, "deepseek": 0.06, "free": 0.0, "free_alt": 0.0, "m365": 0.0, "m365_gpt56": 0.0, "m365_claude": 0.0, "m365_gpt6": 0.0, "m365_opus": 0.0, "m365_sonnet": 0.0, "m365_gpt55": 0.0, "m365_gpt55q": 0.0}
 
 
 class PilotError(Exception):

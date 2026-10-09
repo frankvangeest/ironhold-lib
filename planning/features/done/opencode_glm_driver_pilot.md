@@ -262,6 +262,19 @@ model still fails: core **3/15** (20%), `toolcall` **0/15** (chain 0, denied-cal
 It makes 0 to 2 tool calls per run, so it answers instead of working through a multi-step task. The decision stands: no `-m365` agent is preferred
 anywhere; an m365 model could only help with a short text-only review that has the material in the prompt, which this pilot does not measure.
 
+### Screening of the other m365 models (2026-10-09, after registering all 24 proxy models in the global OpenCode config; `toolcall` task, 5 runs each)
+| Model | Result |
+|---|---|
+| `gpt-6-think-deeper`, `claude-opus-5`, `claude-sonnet` | 0 tool calls in 15 of 15 runs: every run ended in `upstream_empty_response` (the proxy's "throttle n/600" counter rose by 3 per arm) |
+| `gpt-5.5`, `gpt-5.5-quick` | 0 tool calls in 10 of 10 runs: the model answered that it has no file or shell tools ("I do not have access to the repository files or the execution tools") |
+
+The proxy README predicts both failures when its Copilot Studio agent is not doing its job ("robust with the agent, unreliable without it": the model
+confabulates an inability, or M365 disengages). A direct call to the proxy **without OpenCode**, with a lean two-tool request (`read`, `bash`), got the same
+answer from `gpt-5.5-think-deeper` ("no shell tool is enabled in this conversation", 2 of 2), and `gpt-6-think-deeper` and `claude-sonnet` returned HTTP 502. So the
+cause is on the proxy/M365 side, not OpenCode's ~15-tool prompt, and the pilot's earlier m365 numbers measure a proxy whose tool emulation was not working
+here. Open for Frank: check the proxy's Copilot Studio agent (the README says it is created on first use) and its logs; m365 can be re-measured with
+`python tools/opencode_pilot.py --go --arms m365_gpt6,... --tasks toolcall --toolcall-runs 5 --pause 30` once tool calls work in a plain `curl` test.
+
 ### Post-implementation review (2026-10-09: system-architect, debug-detective, alignment-reviewer) and the re-score
 Findings fixed on the branch: three scorers could not fail (`missing_file_reported_not_invented` matched the file's own name `missing.txt`,
 `denied_call_not_looped` accepted a command that actually ran, `reported_the_result` matched "invalid"), the routing answer check was too loose;

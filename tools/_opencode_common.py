@@ -91,6 +91,11 @@ MACHINE_LOCAL_MODELS = {
     "m365/gpt-5.5-think-deeper",
     "m365/gpt-5.6-think-deeper",        # pilot candidates (2026-10-09): free of cost, not preferred (tool calling failed the pilot rule)
     "m365/claude-sonnet-think-deeper",
+    "m365/gpt-6-think-deeper",           # screening candidates (2026-10-09), see planning/features/done/opencode_glm_driver_pilot.md
+    "m365/claude-opus-5",
+    "m365/claude-sonnet",
+    "m365/gpt-5.5",
+    "m365/gpt-5.5-quick",
 }
 # Where a paid model may appear in .opencode/opencode.json: the top-level `model` (the driver), the `build` agent (inherits it)
 # and any agent whose name ends in `-deep` (explicit, asks first, never in an automatic chain).
