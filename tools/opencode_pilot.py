@@ -348,13 +348,9 @@ def scripted_solutions(wt: Path) -> dict:
         text = p.read_text(encoding="utf-8")
         head = run_git(["rev-parse", "--short", "HEAD"], cwd=wt)
         entry = (f"- [ ] **Pause menu opens twice in co-op** _(found at `{head}` 2026-10-09)_ — two players pressing pause in the same frame open it twice; "
-                 f"Reproduce: local_coop_demo, both players press pause on the same frame; wrong: two menus, expected: one.
-")
-        p.write_text(text.replace("## Bugs
-
-", "## Bugs
-
-" + entry, 1), encoding="utf-8")
+                 f"Reproduce: local_coop_demo, both players press pause on the same frame; wrong: two menus, expected: one.")
+        marker = "## Bugs" + chr(10) + chr(10)
+        p.write_text(text.replace(marker, marker + entry + chr(10), 1), encoding="utf-8")
 
     def ron(wt):
         p = wt / "assets" / "projects" / "primitive_world" / "primitive_world.project.ron"
