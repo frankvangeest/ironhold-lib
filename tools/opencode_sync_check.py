@@ -205,6 +205,8 @@ def check_proxy_folder_denied(config: dict) -> list[str]:
     perm = config.get("permission", {}).get("external_directory")
     if not isinstance(perm, dict) or perm.get(PROXY_FOLDER_PATTERN) != "deny":
         problems.append(f"top-level permission.external_directory must be an object that denies '{PROXY_FOLDER_PATTERN}' (fact V19)")
+    elif list(perm)[-1] != PROXY_FOLDER_PATTERN:
+        problems.append(f"the '{PROXY_FOLDER_PATTERN}' deny must be the LAST external_directory rule: the last matching rule wins, so a later broader allow would undo it")
     for section in ("agent", "command"):
         for name, entry in config.get(section, {}).items():
             override = entry.get("permission", {}).get("external_directory") if isinstance(entry.get("permission"), dict) else None
@@ -214,14 +216,18 @@ def check_proxy_folder_denied(config: dict) -> list[str]:
 
 
 def check_driver_wired(config: dict) -> list[str]:
-    """The paid driver (`build`) must carry the delegation rules from .opencode/prompts/driver.md, and `*-deep` must not be allowed silently."""
+    """The paid driver (`build`) must carry the delegation rules from .opencode/prompts/driver.md, and `*-deep` must be `ask` or `deny`.
+
+    `ask` only protects an attended session: a headless `opencode run` auto-approves it (fact V20), so unattended callers must inject a
+    deny (see UNATTENDED_TASK_DENY in _opencode_common.py; the pilot runner and `opencode_probe.py --live` do).
+    """
     problems = []
     prompt = config.get("agent", {}).get("build", {}).get("prompt", "")
     if "prompts/driver.md" not in prompt:
         problems.append("agent 'build' must set prompt to {file:./prompts/driver.md} (the driver rules; fact V18)")
     task = config.get("permission", {}).get("task")
     if not isinstance(task, dict) or task.get("*-deep") not in ("ask", "deny"):
-        problems.append("permission.task must set '*-deep' to 'ask' or 'deny' (paid agents are never allowed silently)")
+        problems.append("permission.task must set '*-deep' to 'ask' or 'deny' (never 'allow')")
     return problems
 
 
@@ -243,6 +249,8 @@ def check_alt_twins(config: dict) -> list[str]:
         base = agents.get(role, {})
         if base.get("prompt") is not None and twin.get("prompt") != base.get("prompt"):
             problems.append(f"agent '{twin_name}' must use the same prompt as '{role}' (only description/model may differ)")
+        if base.get("permission") is not None and twin.get("permission") != base.get("permission"):
+            problems.append(f"agent '{twin_name}' must have the same permission block as '{role}' (its description promises the same permissions)")
         if twin.get("mode") != "subagent":
             problems.append(f"agent '{twin_name}' must have mode 'subagent'")
         if not str(twin.get("description", "")).startswith("Fallback for"):
@@ -416,7 +424,7 @@ def main() -> int:
         ("Agents/commands without an explicit model", check_explicit_models(config)),
         ("M365 proxy folder denied", check_proxy_folder_denied(config)),
         ("-alt fallback twins", check_alt_twins(config)),
-        ("Driver prompt wired, -deep not silent", check_driver_wired(config)),
+        ("Driver prompt wired, -deep asks or denies", check_driver_wired(config)),
         ("Subfolder AGENTS.md / CONTEXT.md", check_no_subfolder_instruction_files()),
         ("`instructions` matching .claude/rules", check_instructions_not_matching_rules(config)),
     ]

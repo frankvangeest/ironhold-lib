@@ -89,6 +89,8 @@ FREE_MODELS = {
 }
 MACHINE_LOCAL_MODELS = {
     "m365/gpt-5.5-think-deeper",
+    "m365/gpt-5.6-think-deeper",        # pilot candidates (2026-10-09): free of cost, not preferred (tool calling failed the pilot rule)
+    "m365/claude-sonnet-think-deeper",
 }
 # Where a paid model may appear in .opencode/opencode.json: the top-level `model` (the driver), the `build` agent (inherits it)
 # and any agent whose name ends in `-deep` (explicit, asks first, never in an automatic chain).
@@ -101,7 +103,9 @@ def model_class(model_id: str) -> str:
     """'free', 'machine-local' or 'paid' (the default for anything unknown)."""
     if model_id in MACHINE_LOCAL_MODELS:
         return "machine-local"
-    if model_id in FREE_MODELS or model_id.endswith(":free") or model_id.endswith("-free"):
+    # `:free` is OpenRouter's convention and `-free` is OpenCode Zen's; each only counts on its own gateway.
+    if model_id in FREE_MODELS or (model_id.startswith("openrouter/") and model_id.endswith(":free")) \
+            or (model_id.startswith("opencode/") and model_id.endswith("-free")):
         return "free"
     return "paid"
 
@@ -132,8 +136,8 @@ def paid_model_problems(config: dict) -> list[str]:
 
 # ---------------------------------------------------------------------------------------------------- roster / fallback twins
 # Roles that have a free `<role>-alt` twin on a DIFFERENT upstream lab (decided 2026-10-08: the roles that run on free models; the
-# Gemini roles have none and simply stop and report). Keep in sync with the roster in .opencode/README.md and
-# .opencode/prompts/driver.md (opencode_sync_check.py checks both).
+# Gemini roles have none and simply stop and report). The roster table in .opencode/README.md is kept by hand;
+# opencode_sync_check.py checks the twins in opencode.json and that .opencode/prompts/driver.md names every role.
 ALT_ROLES = (
     "system-architect",
     "debug-detective",
@@ -163,3 +167,15 @@ def model_lab(model_id: str):
                 return lab
         return None
     return provider or None
+
+
+# `opencode run` / `opencode debug` take their working directory from PWD or --dir, not from the process cwd (fact V21), so every call
+# that targets a checkout other than the caller's must set it.
+def opencode_env(root, base=None) -> dict:
+    env = dict(os.environ if base is None else base)
+    env["PWD"] = str(root)
+    return env
+
+
+# Unattended `opencode run` auto-approves `ask` (fact V20): a script that does not want a paid `*-deep` agent must deny it explicitly.
+UNATTENDED_TASK_DENY = '{"permission":{"task":{"*":"allow","*-deep":"deny"}}}'

@@ -17,6 +17,7 @@ Usage:
     python tools/opencode_pilot.py                      # print the plan and the cost estimate, run nothing
     python tools/opencode_pilot.py --go --arms glm      # run one arm (after `nvs use 24.21`)
     python tools/opencode_pilot.py --report DIR         # evaluate DIR/results.jsonl against the pre-registered thresholds
+    python tools/opencode_pilot.py --rescore DIR        # re-score DIR's saved events with the current scorers (results_rescored.jsonl)
     python tools/opencode_pilot.py --selftest           # fixture tests, no OpenCode, no money
     python tools/opencode_pilot.py --verify-tasks       # scorers against a real throwaway worktree (git only, no model, no money)
 Exit codes: 0 ok, 1 a check failed (selftest, or thresholds not met in --report), 2 tool error.
@@ -28,6 +29,7 @@ import argparse
 import datetime
 import json
 import os
+import re
 import shutil
 import statistics
 import subprocess
@@ -37,12 +39,16 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _opencode_common import find_opencode, not_found_message, opencode_version  # noqa: E402
+from _opencode_common import find_opencode, model_class, not_found_message, opencode_env, opencode_version  # noqa: E402
 import opencode_pilot_tasks as T  # noqa: E402
 
 TOOL = "opencode_pilot"
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROXY_URL = "http://localhost:4141/v1/models"
+# The pilot measured GLM, so a re-run must start from the config as it was BEFORE GLM and the driver prompt were adopted: the repo config now has
+# `agent.build.prompt` and OPENCODE_CONFIG_CONTENT can only add to it. `--base` can override, but never with a config that has the driver prompt
+# unless every selected arm is meant to use it (checked in main).
+PRE_ADOPTION_BASE = "5db115f24c"
 INVALID_MODEL = "openrouter/invalid-lab/does-not-exist:free"
 
 # arm id -> model, whether the driver prompt is wired into `build`, whether it counts against the cap, runs per task group
@@ -58,6 +64,8 @@ ARMS = {
     "m365_gpt56": {"model": "m365/gpt-5.6-think-deeper", "driver": False, "paid": False, "core": 0, "toolcall": 0, "routing": 0},
     "m365_claude": {"model": "m365/claude-sonnet-think-deeper", "driver": False, "paid": False, "core": 0, "toolcall": 0, "routing": 0},
 }
+for _arm in ARMS.values():  # one source of truth for free vs paid (tools/_opencode_common.py)
+    _arm["paid"] = model_class(_arm["model"]) == "paid"
 ARM_ORDER = ["glm", "glm_driver", "free", "free_alt", "deepseek", "m365", "m365_gpt56", "m365_claude"]
 DEFAULT_ARMS = [a for a in ARM_ORDER if any(ARMS[a][k] for k in ("core", "toolcall", "routing"))]
 # rough cost per run in USD, for the plan printout only (GLM: ~$0.005 per trivial turn at a 31.8k-token baseline; DeepSeek ~$0.06 per review run)
@@ -96,12 +104,32 @@ def estimate(runs) -> dict:
 
 
 # ----------------------------------------------------------------------------------------------------------------- config
-def build_config(task: T.Task, arm: dict, driver_prompt_path: Path) -> dict:
-    """OPENCODE_CONFIG_CONTENT for one run (it wins over the project config and merges into it)."""
-    bash = {"*": "deny"}
+def harden(node):
+    """Rewrite every `ask` leaf of a permission tree to `deny` (a headless run auto-approves `ask`, fact V20), keeping the key order
+    (OPENCODE_CONFIG_CONTENT merges in place, and the last matching rule wins)."""
+    if isinstance(node, dict):
+        return {k: harden(v) for k, v in node.items()}
+    return "deny" if node == "ask" else node
+
+
+def build_config(task: T.Task, arm: dict, driver_prompt_path: Path, repo_permission: dict = None) -> dict:
+    """OPENCODE_CONFIG_CONTENT for one run (it wins over the project config and merges into it).
+
+    Deny-by-default really means every `ask` of the repo's own permission block becomes `deny` (`git push*`, `cargo clean*`,
+    `git worktree remove*`, external directories, ...), and cargo and wasm-pack are denied too: the shared target dir must never see two
+    cargo runs, and the pilot's tasks need none."""
+    base_perm = harden(repo_permission or {})
+    bash = dict(base_perm.get("bash") or {})
+    bash["*"] = "deny"
+    for key in list(bash):
+        if key.startswith(("cargo", "wasm-pack")):
+            bash[key] = "deny"
     for pattern in task.bash_deny:
         bash[pattern] = "deny"
-    cfg: dict = {"permission": {"bash": bash, "task": {"*": "allow", "*-deep": "deny"}}}
+    perm = {k: v for k, v in base_perm.items() if k not in ("bash", "task")}
+    ext = perm.get("external_directory")
+    perm["external_directory"] = dict(ext, **{"*": "deny"}) if isinstance(ext, dict) else "deny"
+    cfg: dict = {"permission": {**perm, "bash": bash, "task": {"*": "allow", "*-deep": "deny"}}}
     if arm["driver"] or task.needs_driver_prompt:
         cfg["agent"] = {"build": {"prompt": "{file:%s}" % driver_prompt_path.as_posix()}}  # absolute: relative file refs resolve against the cwd here
     if task.break_agent:
@@ -124,7 +152,10 @@ def create_worktree(path: Path, base: str) -> None:
 
 
 def remove_worktree(path: Path) -> None:
-    subprocess.run(["git", "worktree", "remove", "--force", str(path)], cwd=REPO_ROOT, capture_output=True, text=True)
+    gone = subprocess.run(["git", "worktree", "remove", "--force", str(path)], cwd=REPO_ROOT, capture_output=True, text=True)
+    subprocess.run(["git", "worktree", "prune"], cwd=REPO_ROOT, capture_output=True, text=True)
+    if gone.returncode != 0 and path.exists():
+        print(f"warning: could not remove {path} ({gone.stderr.strip()[:200]}); remove it by hand before the next run", file=sys.stderr)
 
 
 def reset_worktree(path: Path, base: str) -> None:
@@ -157,28 +188,42 @@ def run_one(binary: str, wt: Path, base: str, arm_id: str, task: T.Task, run: in
     task.setup(wt, ctx)
     # The real OpenCode data dir is used on purpose: a temporary XDG_DATA_HOME hides auth.json, so every `openrouter/*` model would
     # fail (fact V22). The sessions this run creates are deleted afterwards by their own ids (unless --keep-sessions).
-    env = os.environ.copy()
-    env["PWD"] = str(wt)  # opencode takes its working directory from PWD / --dir, not from the process cwd (fact V21)
-    env["OPENCODE_CONFIG_CONTENT"] = json.dumps(build_config(task, arm, wt / ".opencode" / "prompts" / "driver.md"))
+    env = opencode_env(wt)  # opencode takes its working directory from PWD / --dir, not from the process cwd (fact V21)
+    repo_cfg = json.loads(T.read_text(wt / ".opencode" / "opencode.json") or "{}")
+    driver_md = wt / ".opencode" / "prompts" / "driver.md"
+    if (arm["driver"] or task.needs_driver_prompt) and not driver_md.is_file():
+        raise PilotError(f"{driver_md} does not exist at the base commit; use a base that has the driver prompt for driver arms and the routing task")
+    env["OPENCODE_CONFIG_CONTENT"] = json.dumps(build_config(task, arm, driver_md, repo_cfg.get("permission")))
     cmd = [binary, "run", "--format", "json", "--dir", str(wt), "-m", arm["model"], "--title", f"opencode-pilot {arm_id} {task.id} {run}"]
     if variant:
         cmd += ["--variant", variant]
     cmd.append(task.prompt(ctx))
     started = time.time()
     status, raw = "ok", ""
+    flags = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
+    child = subprocess.Popen(cmd, cwd=wt, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+                             stdin=subprocess.DEVNULL, creationflags=flags)
     try:
-        proc = subprocess.run(cmd, cwd=wt, env=env, capture_output=True, text=True, encoding="utf-8", stdin=subprocess.DEVNULL, timeout=task.timeout)
-        raw = proc.stdout
-        if proc.returncode != 0:
-            status = f"exit {proc.returncode}"
-    except subprocess.TimeoutExpired as exc:
-        raw = (exc.stdout.decode("utf-8", "replace") if isinstance(exc.stdout, bytes) else exc.stdout) or ""
+        raw, _ = child.communicate(timeout=task.timeout)
+        if child.returncode != 0:
+            status = f"exit {child.returncode}"
+    except subprocess.TimeoutExpired:
         status = "timeout"
+        if sys.platform == "win32":  # kill the whole tree: bash/node children would otherwise hold the pipe and lock worktree files
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(child.pid)], capture_output=True)
+        else:
+            child.kill()
+        try:
+            raw, _ = child.communicate(timeout=30)
+        except subprocess.TimeoutExpired:
+            raw = ""
     wall = time.time() - started
     ev = T.parse_events(raw)
     if not keep_sessions:
         for sid in ev["sessions"]:
-            subprocess.run([binary, "session", "delete", sid], cwd=wt, env=env, capture_output=True, text=True, encoding="utf-8")
+            gone = subprocess.run([binary, "session", "delete", sid], cwd=wt, env=env, capture_output=True, text=True, encoding="utf-8")
+            if gone.returncode != 0:
+                print(f"warning: could not delete session {sid}; sub-agent sessions are never deleted, look for 'opencode-pilot' titles", file=sys.stderr)
     try:
         criteria = task.score(wt, ev, ctx)
     except Exception as exc:  # a scorer bug must not kill a paid sweep: record it and carry on
@@ -231,6 +276,8 @@ def evaluate(summary: dict, candidate: str = "glm", reference: str = "free") -> 
     if not c or c["core_pass_rate"] is None:
         return [("core tasks ran", False, f"no core runs for {candidate}")]
     checks.append(("pass rate >= 80%", c["core_pass_rate"] >= 0.8, f"{c['core_pass_rate']:.0%}"))
+    if not ref or ref["core_pass_rate"] is None:
+        checks.append(("pass rate >= the free default's", False, f"reference arm '{reference}' has no core runs, so the comparison cannot be made"))
     if ref and ref["core_pass_rate"] is not None:
         checks.append(("pass rate >= the free default's", c["core_pass_rate"] >= ref["core_pass_rate"], f"{c['core_pass_rate']:.0%} vs {ref['core_pass_rate']:.0%}"))
         if ref["wall_median"]:
@@ -256,6 +303,29 @@ def print_report(rows: list[dict]) -> int:
         print(f"  {'PASS' if ok else 'FAIL'} {name}: {detail}")
         failed += 0 if ok else 1
     return 1 if failed else 0
+
+
+def rescore(directory: Path) -> list[dict]:
+    """Recompute the event-based criteria whose scorers were tightened after the first run (2026-10-09 review) from the saved events,
+    keeping every other stored criterion; writes results_rescored.jsonl and returns the rows."""
+    rows = read_rows(directory)
+    out = []
+    for r in rows:
+        events = directory / "events" / f"{r['arm']}_{r['task']}_{r['run']}.jsonl"
+        raw = events.read_text(encoding="utf-8") if events.is_file() else ""
+        ev = T.parse_events(raw)
+        ctx = T.make_ctx(r["task"], r["run"])
+        crit = dict(r["criteria"])
+        if r["task"] == "toolcall":
+            crit.update(T.toolcall_criteria(ev, ctx, None))
+        elif r["task"] == "ron_edit" and "reported_the_result" in crit:
+            crit["reported_the_result"] = bool(re.search(r"\b(passed|passes|exit code 0|no errors|succeeded|is valid|validated)\b", ev["text"], re.I)) \
+                and not re.search(r"\b(failed|fails|errors? found|invalid)\b", ev["text"], re.I)
+        elif r["task"] == "routing":
+            crit.update(T.TASK_BY_ID["routing"].score(Path("."), ev, ctx))
+        out.append({**r, "criteria": crit, "pass": all(crit.values()) and r["status"].split()[0] == "ok", "rescored": True})
+    (directory / "results_rescored.jsonl").write_text("\n".join(json.dumps(x) for x in out) + "\n", encoding="utf-8")
+    return out
 
 
 def read_rows(directory: Path) -> list[dict]:
@@ -286,12 +356,13 @@ def main(argv=None) -> int:
     ap.add_argument("--cap", type=float, default=2.0, help="stop starting runs once the paid arms' summed cost reaches this (USD, default 2.0)")
     ap.add_argument("--out", default=None, help="result folder (default: a timestamped folder next to the worktree)")
     ap.add_argument("--worktree", default=None, help="throwaway worktree path (default: ../ironhold-pilot-wt)")
-    ap.add_argument("--base", default=None, help="base commit every run starts from (default: HEAD of this checkout)")
+    ap.add_argument("--base", default=None, help="base commit every run starts from (default: the pre-adoption commit %s, so arms without the driver prompt really have none)" % PRE_ADOPTION_BASE)
     ap.add_argument("--variant", default=None, help="OpenCode --variant (reasoning effort) passed to every run; recorded as unset when omitted")
     ap.add_argument("--keep-sessions", action="store_true", help="keep the OpenCode sessions the runs create (default: delete them by id after each run; the events are saved either way)")
     ap.add_argument("--pause", type=float, default=3.0, help="seconds between runs (free models allow 20 requests per minute)")
     ap.add_argument("--report", metavar="DIR", help="evaluate DIR/results.jsonl against the pre-registered thresholds and exit")
     ap.add_argument("--verify-tasks", action="store_true", help="model-free: check each core task's scorer against an untouched fixture (must fail) and a scripted correct outcome (must pass)")
+    ap.add_argument("--rescore", metavar="DIR", help="re-score DIR's saved events with the current (tightened) scorers, write results_rescored.jsonl and report on it")
     ap.add_argument("--selftest", action="store_true", help="run the fixture tests (no OpenCode, no money)")
     args = ap.parse_args(argv)
 
@@ -300,8 +371,10 @@ def main(argv=None) -> int:
     try:
         if args.report:
             return print_report(read_rows(Path(args.report)))
+        if args.rescore:
+            return print_report(rescore(Path(args.rescore)))
         if args.verify_tasks:
-            return verify_tasks(args.base or run_git(["rev-parse", "HEAD"]),
+            return verify_tasks(run_git(["rev-parse", args.base or "HEAD"]),
                                 Path(args.worktree).resolve() if args.worktree else REPO_ROOT.parent / "ironhold-pilot-verify")
         arm_ids = [a for a in args.arms.split(",") if a]
         task_ids = [t for t in args.tasks.split(",") if t]
@@ -328,7 +401,11 @@ def main(argv=None) -> int:
             return 2
         if any(a.startswith("m365") for a in arm_ids):
             m365_preflight()
-        base = args.base or run_git(["rev-parse", "HEAD"])
+        base = run_git(["rev-parse", args.base or PRE_ADOPTION_BASE])
+        base_cfg = json.loads(run_git(["show", f"{base}:.opencode/opencode.json"]))
+        if "prompt" in base_cfg.get("agent", {}).get("build", {}) and any(not ARMS[a]["driver"] for a in arm_ids):
+            raise PilotError(f"base {base[:10]} already wires agent.build.prompt, so the arms without the driver prompt would get it too; "
+                             f"use a base before the adoption (default {PRE_ADOPTION_BASE}) or select only driver arms")
         wt = Path(args.worktree).resolve() if args.worktree else (REPO_ROOT.parent / "ironhold-pilot-wt")
         out = Path(args.out) if args.out else REPO_ROOT.parent / f"ironhold-pilot-results-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}"
         out.mkdir(parents=True, exist_ok=True)
@@ -441,8 +518,15 @@ def selftest() -> int:
     runs = plan_runs(["glm"], ["toolcall", "routing", "docs_pointer"])
     check([r[1] for r in runs].count("toolcall") == 5 and [r[1] for r in runs].count("routing") == 3 and [r[1] for r in runs].count("docs_pointer") == 3, "run counts per arm")
     check(plan_runs(["free"], ["toolcall"], toolcall_runs=2) == [("free", "toolcall", 1), ("free", "toolcall", 2)], "run count override")
-    cfg = build_config(T.TASK_BY_ID["toolcall"], ARMS["glm"], Path("C:/x/driver.md"))
-    check(cfg["permission"]["bash"] == {"*": "deny", "echo FORBIDDEN*": "deny"} and cfg["permission"]["task"]["*-deep"] == "deny" and "agent" not in cfg, "toolcall config")
+    repo_perm = {"edit": "allow", "external_directory": {"*": "ask", "C:/p/**": "deny"}, "task": {"*": "allow", "*-deep": "ask"},
+                 "bash": {"*": "ask", "cargo test*": "allow", "wasm-pack build*": "allow", "git push*": "ask", "ls*": "allow", "git add*pkg*": "deny"}}
+    cfg = build_config(T.TASK_BY_ID["toolcall"], ARMS["glm"], Path("C:/x/driver.md"), repo_perm)
+    b = cfg["permission"]["bash"]
+    check(b["*"] == "deny" and b["git push*"] == "deny" and b["cargo test*"] == "deny" and b["wasm-pack build*"] == "deny" and b["ls*"] == "allow"
+          and b["echo FORBIDDEN*"] == "deny" and list(b)[-1] == "echo FORBIDDEN*", "unattended bash: every ask and every cargo/wasm-pack entry denied, the allow-list kept")
+    check(cfg["permission"]["external_directory"] == {"*": "deny", "C:/p/**": "deny"} and cfg["permission"]["task"]["*-deep"] == "deny" and "agent" not in cfg
+          and cfg["permission"]["edit"] == "allow", "unattended external directories and -deep denied, the rest kept")
+    check(harden({"a": {"b": "ask", "c": "allow"}, "d": "ask"}) == {"a": {"b": "deny", "c": "allow"}, "d": "deny"}, "harden rewrites every ask")
     cfg = build_config(T.TASK_BY_ID["routing"], ARMS["glm"], Path("C:/x/driver.md"))
     check(cfg["agent"]["build"]["prompt"] == "{file:C:/x/driver.md}" and cfg["agent"]["alignment-reviewer"]["model"] == INVALID_MODEL, "routing config wires the driver prompt and breaks the primary")
     check(build_config(T.TASK_BY_ID["docs_pointer"], ARMS["glm_driver"], Path("d"))["agent"]["build"]["prompt"] == "{file:d}", "an arm can wire the driver prompt")
@@ -465,8 +549,11 @@ def selftest() -> int:
         check(all(score.values()) and len(score) == 5, f"a perfect toolcall run passes all five criteria {score}")
         looped = T.parse_events("\n".join([call("bash", {"command": f"echo FORBIDDEN-{n}"}, "error", "rule which prevents you")] * 4 + [ev_line("text", {"text": "refused"})]))
         check(T.TASK_BY_ID["toolcall"].score(wt, looped, ctx)["denied_call_not_looped"] is False, "a looped denied call fails the criterion")
-        invented = T.parse_events(ev_line("text", {"text": "missing.txt contains hello"}))
-        check(T.TASK_BY_ID["toolcall"].score(wt, invented, ctx)["missing_file_reported_not_invented"] is False, "an invented file content fails")
+        invented = T.parse_events(call("read", {"filePath": "pilot/chain/missing.txt"}, "error", "File not found") + "\n" + ev_line("text", {"text": "missing.txt contains hello world"}))
+        check(T.TASK_BY_ID["toolcall"].score(wt, invented, ctx)["missing_file_reported_not_invented"] is False, "an invented file content fails (the file's own name does not count as 'missing')")
+        done = T.parse_events(call("bash", {"command": f"echo FORBIDDEN-{n}"}, "completed", "", f"FORBIDDEN-{n}") + "\n" + ev_line("text", {"text": "I could not find the file"}))
+        check(T.TASK_BY_ID["toolcall"].score(wt, done, ctx)["denied_call_not_looped"] is False, "a denied command that actually ran, or no attempt, fails")
+        check(T.TASK_BY_ID["ron_edit"].score(wt, T.parse_events(ev_line("text", {"text": "validation failed: invalid value"})), ctx)["reported_the_result"] is False, "'invalid' is not a pass report")
 
         T.TASK_BY_ID["planted_review"].setup(wt, ctx)
         check(T.TASK_BY_ID["planted_review"].score(wt, T.parse_events(ev_line("text", {"text": "average divides by len(values) + 1"})), ctx)["finds_the_planted_bug"]
@@ -476,6 +563,8 @@ def selftest() -> int:
         r = T.TASK_BY_ID["routing"].score(wt, T.parse_events("\n".join([call("task", {"subagent_type": "alignment-reviewer"}, "error", "model not found"),
                                                                        call("task", {"subagent_type": "alignment-reviewer-alt"}), ev_line("text", {"text": "the bounds are swapped"})])), ctx)
         check(all(r.values()), f"routing scorer accepts recovery through the alt twin {r}")
+        r = T.TASK_BY_ID["routing"].score(wt, T.parse_events("\n".join([call("task", {"subagent_type": "alignment-reviewer-alt"}), ev_line("text", {"text": "the bounds handling is correct"})])), ctx)
+        check(r["final_answer_correct"] is False, "a vague 'bounds' answer is not the planted bug")
         r = T.TASK_BY_ID["routing"].score(wt, T.parse_events("\n".join([call("task", {"subagent_type": "alignment-reviewer-deep"}), ev_line("text", {"text": "swapped"})])), ctx)
         check(r["no_deep_agent_ran"] is False and r["recovered_through_the_alt_twin"] is False, "a -deep run fails the routing task")
 
@@ -486,6 +575,7 @@ def selftest() -> int:
             + [row("glm", "toolcall", True, crit={"chain_of_dependent_calls": True}) for _ in range(5)])
     res = evaluate(summarise(rows))
     check(all(ok for _, ok, _ in res), f"a good candidate passes every threshold {res}")
+    check(any(not ok and "reference arm" in detail for _, ok, detail in evaluate(summarise([row("glm", t, True) for t in T.CORE_IDS]))), "a missing reference arm is a FAIL row")
     bad_rows = [row("glm", t, False, 0.3) for t in T.CORE_IDS for _ in range(3)] + [row("free", t, True, 0.0, 10.0) for t in T.CORE_IDS for _ in range(3)]
     res = evaluate(summarise(bad_rows))
     check(not any(ok for name, ok, _ in res if name.startswith(("pass", "mean", "worst", "median"))), "a bad candidate fails the thresholds")

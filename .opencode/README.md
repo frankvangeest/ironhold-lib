@@ -56,7 +56,7 @@ OpenCode `1.18.33` on 2026-10-08 unless the status says otherwise.
 | V4 | HTML comments are **not** stripped: `<!-- b:N -->` anchors reach the model (2.7 KB across the 21 probe files) | verified | 1.18.33, 2026-10-08 | `python tools/opencode_probe.py --only crates/ironhold_core/src/capabilities/action_bar.rs` prints the line `HTML comments inside the attached files ... N bytes` (the full run prints the 2769-byte total) | wasted context; if it grows, move the anchors to a sidecar |
 | V5 | `.claude/rules/*.md` are never attached (the read tool only looks for AGENTS/CLAUDE/CONTEXT), so the pointer lines in the folder files are the only route to `docs/dev` topic pages | verified | 1.18.33, 2026-10-08 | `python tools/opencode_probe.py --only .claude/rules/lootable-corpse.md` (attaches nothing) | topic references become unreachable under OpenCode if the pointers go |
 | V6 | `opencode debug agent build --tool read --params "{filePath:'<repo path>',limit:2}"` runs the read tool with no model and lists the attached files in `result.metadata.loaded` (single quotes, repo-relative forward slashes) | verified | 1.18.33, 2026-10-08 | `python tools/opencode_probe.py` | the model-free probe stops working if the debug interface changes; `--live` is the fallback |
-| V7 | The default driver is the top-level `model` in `.opencode/opencode.json`, currently free Laguna; `build` has no model of its own | verified | 1.18.33, 2026-10-08 | `opencode debug config` | changing it changes which agents are paid (`planning/features/opencode_glm_driver_pilot.md`) |
+| V7 | The default driver is the top-level `model` in `.opencode/opencode.json`, GLM 5.3 flash since 2026-10-09 (free Laguna before); `build` has no model of its own | verified | 1.18.33, 2026-10-08 | `opencode debug config` | changing it changes which agents are paid (`planning/features/done/opencode_glm_driver_pilot.md`) |
 | V8 | The fixed token baseline of a trivial session is **machine- and model-specific**: 25.5k input tokens with `opencode/nemotron-3.5-lightning-free`, 31.8k with GLM 5.3 flash; 27-28 skills from `~/.agents/skills` and the synced `~/.claude/skills`, plus `~/.config/opencode/AGENTS.md`, are in it | verified | 1.18.33, 2026-10-08 | `python tools/opencode_probe.py --only crates/ironhold_core/src/capabilities/action_bar.rs --live` | session cost; compare only on the same machine and model |
 | V9 | OpenCode lives under nvs node 24.21 (see above) | verified | 1.18.33, 2026-10-08 | `nvs use 24.21` then `opencode --version` | the tools exit 2 with "not found" |
 | V10 | Free models can return 429 (shared upstream pool, whatever your own quota) or an empty response | verified | 1.18.33, 2026-10-08 | `python tools/opencode_probe.py --live` (retries; an empty response is never counted as a pass) | flaky free-tier runs; use a twin agent |
@@ -163,9 +163,9 @@ research behind them: `opencode_free_models.md`, "Cheap paid driver candidate". 
 ## Agent roster and fallbacks
 
 There is **no automatic fallback** between models in OpenCode (V-table: a model is bound to an agent), so a fallback is a second
-agent for the same role on a different upstream lab, and the driver is told when to use it (`.opencode/prompts/driver.md`, kept
-in step with this table by `opencode_sync_check.py`). The driver prompt is **not wired into `build` yet**: the GLM pilot
-(`planning/features/opencode_glm_driver_pilot.md`) first measures a session with and without it (V18).
+agent for the same role on a different upstream lab, and the driver is told when to use it (`.opencode/prompts/driver.md`, wired into
+`build`; `opencode_sync_check.py` checks the twins and that the prompt names every role, this table is kept by hand). The pilot
+(`planning/features/done/opencode_glm_driver_pilot.md`) measured a session with and without the prompt (V18) and found no harm.
 
 **Name suffixes**
 
@@ -174,7 +174,7 @@ in step with this table by `opencode_sync_check.py`). The driver prompt is **not
 | none (`system-architect`) | the free primary agent for the role | free | `.opencode/opencode.json` |
 | `-alt` | fallback twin: same prompt and permissions, a model from a **different upstream lab** | free | `.opencode/opencode.json` |
 | `-m365` | machine-local: the same role on the M365 Copilot model through the local proxy; needs the proxy running, so on any other machine the agent does not exist (an "agent not found" error is expected there) | no extra cost (company licence) | your global OpenCode config only (V17: it cannot override the repo's agents, so it has its own name) |
-| `-deep` | the paid DeepSeek version, only on request and after a yes; never in an automatic chain | about $0.06 per run | `.opencode/opencode.json` (`permission.task` denies it; headless runs auto-approve `ask`, V20, so unattended runs must keep `deny`) |
+| `-deep` | the paid DeepSeek version, only on request and after a yes; never in an automatic chain | about $0.06 per run | `.opencode/opencode.json` (`permission.task` is `ask`; headless runs auto-approve `ask`, V20, so unattended runs must override it to `deny`) |
 
 **Roster** (the upstream lab decides whether the twin really fails differently; the gateway does not)
 

@@ -66,6 +66,8 @@ from _opencode_common import (  # noqa: E402
     model_lab,
     not_found_message,
     opencode_version,
+    UNATTENDED_TASK_DENY,
+    opencode_env,
     paid_model_problems,
 )
 
@@ -431,7 +433,7 @@ def m365_preflight() -> None:
 
 
 def session_ids(binary: str, root: Path) -> set[str]:
-    listing = subprocess.run([binary, "session", "list"], cwd=root, capture_output=True, text=True, encoding="utf-8")
+    listing = subprocess.run([binary, "session", "list"], cwd=root, env=opencode_env(root), capture_output=True, text=True, encoding="utf-8")
     return set(re.findall(r"^(ses_\S+)", listing.stdout, re.M))
 
 
@@ -439,7 +441,7 @@ def delete_sessions(binary: str, root: Path, ids) -> int:
     """Delete exactly these session ids (the ones this run created, taken from its own `sessionID` events), never by title:
     the session list is shared by every worktree of the repo, so a title match could hit someone else's session."""
     for sid in ids:
-        subprocess.run([binary, "session", "delete", sid], cwd=root, capture_output=True, text=True, encoding="utf-8")
+        subprocess.run([binary, "session", "delete", sid], cwd=root, env=opencode_env(root), capture_output=True, text=True, encoding="utf-8")
     return len(ids)
 
 
@@ -466,7 +468,9 @@ def run_live(binary: str, root: Path, config: dict, args, sample_file: str) -> d
                 if args.pure:
                     cmd.insert(2, "--pure")
                 try:
-                    proc = subprocess.run(cmd, cwd=root, capture_output=True, text=True, encoding="utf-8", timeout=240)
+                    live_env = opencode_env(root)
+                    live_env["OPENCODE_CONFIG_CONTENT"] = UNATTENDED_TASK_DENY  # headless runs auto-approve `ask` (V20): never let one reach a -deep agent
+                    proc = subprocess.run(cmd, cwd=root, env=live_env, capture_output=True, text=True, encoding="utf-8", timeout=240)
                 except subprocess.TimeoutExpired:
                     last_error = f"{model}: timed out"
                     continue
@@ -482,7 +486,7 @@ def run_live(binary: str, root: Path, config: dict, args, sample_file: str) -> d
                                                  "no `read` tool event (empty response)")
                     continue  # an empty or failed run is an error to retry, never "attached nothing"
                 skills = None
-                skill_run = subprocess.run([binary, "debug", "skill"], cwd=root, capture_output=True, text=True, encoding="utf-8")
+                skill_run = subprocess.run([binary, "debug", "skill"], cwd=root, env=opencode_env(root), capture_output=True, text=True, encoding="utf-8")
                 try:
                     parsed = json.loads(skill_run.stdout[skill_run.stdout.find("["):]) if "[" in skill_run.stdout else None
                     skills = len(parsed) if isinstance(parsed, list) else None
@@ -737,6 +741,8 @@ def selftest() -> int:
     check(parse_run_events(json.dumps({"type": "error", "error": {"name": "APIError"}}))["errors"], "errors are surfaced")
     check(parse_run_events(json.dumps({"type": "step_start", "sessionID": "ses_abc", "part": {}}))["sessions"] == {"ses_abc"}, "session ids are collected from events")
     check(parse_run_events("")["reads"] == 0, "no read event is detectable")
+    check(model_class("openrouter/x/y-free") == "paid" and model_class("opencode/x:free") == "paid", "each gateway's free suffix only counts on that gateway")
+    check(opencode_env("C:/x")["PWD"] == "C:/x" and "-deep" in UNATTENDED_TASK_DENY, "env helper and unattended deny")
     check(is_free_model("openrouter/x/y:free") and is_free_model("opencode/n-free") and is_free_model("m365/gpt-5.5-think-deeper")
           and is_free_model("google/gemini-3.8-flash") and not is_free_model("openrouter/z-ai/glm-5.3-flash"), "free-model rule")
     check(model_class("m365/m365-copilot") == "paid" and model_class("m365/gpt-5.5-think-deeper") == "machine-local"

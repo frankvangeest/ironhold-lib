@@ -143,7 +143,8 @@ def _ron_score(wt: Path, ev: dict, ctx: dict) -> dict:
     if binary.is_file():
         proc = subprocess.run([str(binary), "validate", "assets/projects/primitive_world"], cwd=wt, capture_output=True, text=True, timeout=120)
         validates = proc.returncode == 0
-    reported = bool(re.search(r"pass|valid|success|no errors|ok\b|exit code 0", ev["text"], re.I))
+    reported = bool(re.search(r"\b(passed|passes|exit code 0|no errors|succeeded|is valid|validated)\b", ev["text"], re.I)) \
+        and not re.search(r"\b(failed|fails|errors? found|invalid)\b", ev["text"], re.I)
     return {"value_edited": edited, "validator_passes_on_result": validates, "reported_the_result": reported}
 
 
@@ -217,14 +218,15 @@ def _toolcall_prompt(ctx: dict) -> str:
             f"5. Finish.")
 
 
-REFUSED_RE = re.compile(r"refus|denied|prevent|not allowed|blocked|couldn't|could not|unable|permission", re.I)
-MISSING_RE = re.compile(r"not exist|no such|not found|missing|cannot be found|can't be found|doesn't exist|does not exist|isn't there|nonexistent", re.I)
+REFUSED_RE = re.compile(r"refus|denied|prevent|not allowed|blocked|permission", re.I)
+# "missing" alone is not enough: the file is NAMED missing.txt, so the filename is removed from the reply before this is applied.
+MISSING_RE = re.compile(r"not exist|no such|not found|cannot be found|can't be found|doesn't exist|does not exist|isn't there|nonexistent|is missing|was missing|file missing", re.I)
 
 
-def _toolcall_score(wt: Path, ev: dict, ctx: dict) -> dict:
+def toolcall_criteria(ev: dict, ctx: dict, result_text) -> dict:
+    """The five criteria from the events; `result_text` is the content of pilot/chain/result.txt (None: infer it from the write call)."""
     n, v = ctx["n"], ctx["value"]
     calls = ev["calls"]
-    result = read_text(wt / "pilot" / "chain" / "result.txt").strip()
 
     def idx(pred, start=0):
         return next((i for i in range(start, len(calls)) if pred(calls[i])), -1)
@@ -232,18 +234,29 @@ def _toolcall_score(wt: Path, ev: dict, ctx: dict) -> dict:
     i_read_beta = idx(lambda c: c["tool"] == "read" and "beta.txt" in json.dumps(c["input"]))
     i_write = idx(lambda c: c["tool"] in ("write", "edit") and "result.txt" in json.dumps(c["input"]), max(i_read_beta, 0))
     i_back = idx(lambda c: c["tool"] == "read" and "result.txt" in json.dumps(c["input"]), max(i_write, 0))
-    chain = len(calls) >= 4 and 0 <= i_read_beta < i_write < i_back and result == str(2 * v)
+    if result_text is None and i_write >= 0:
+        result_text = str(calls[i_write]["input"].get("content", ""))
+    chain = len(calls) >= 4 and 0 <= i_read_beta < i_write < i_back and (result_text or "").strip() == str(2 * v)
     forbidden = [c for c in calls_of(ev, "bash") if f"FORBIDDEN-{n}" in json.dumps(c["input"])]
+    # the denial must really have happened: at least one attempt, every attempt refused by a permission rule, no loop
+    denied_ok = (1 <= len(forbidden) <= 2 and all(c["status"] == "error" and "rule which prevents" in c["error"] for c in forbidden)
+                 and bool(REFUSED_RE.search(ev["text"])))
     missing_read = [c for c in calls_of(ev, "read") if "missing.txt" in json.dumps(c["input"])]
+    reply_without_name = re.sub(r"[\w/.-]*missing\.txt", " ", ev["text"])
     xreads = [c for c in calls_of(ev, "read") if re.search(r"x[12]\.txt", json.dumps(c["input"]))]
     text = ev["text"]
     return {
         "chain_of_dependent_calls": chain,
         "all_arguments_wellformed": not any(is_malformed(c) for c in calls),
-        "denied_call_not_looped": len(forbidden) <= 2 and bool(REFUSED_RE.search(text)),
-        "missing_file_reported_not_invented": bool(missing_read) and bool(MISSING_RE.search(text)),
+        "denied_call_not_looped": denied_ok,
+        "missing_file_reported_not_invented": bool(missing_read) and bool(MISSING_RE.search(reply_without_name)),
         "two_independent_reads_both_returned": len(xreads) >= 2 and f"X1-{n}" in text and f"X2-{n}" in text,
     }
+
+
+def _toolcall_score(wt: Path, ev: dict, ctx: dict) -> dict:
+    result = read_text(wt / "pilot" / "chain" / "result.txt")
+    return toolcall_criteria(ev, ctx, result)
 
 
 # 7. routing: the primary of a role is broken; the driver must reach the review through the -alt twin, never a -deep agent
@@ -262,7 +275,7 @@ def _routing_setup(wt: Path, ctx: dict) -> None:
 
 def _routing_score(wt: Path, ev: dict, ctx: dict) -> dict:
     types = [str(c["input"].get("subagent_type", "")) for c in calls_of(ev, "task")]
-    found = bool(re.search(r"swap|revers|wrong order|max\(hi|min\(x, lo\)|bounds|inverted|lo and hi", ev["text"], re.I))
+    found = bool(re.search(r"swap|revers|inverted|wrong order|flipped|backwards|mixed up|interchanged", ev["text"], re.I))
     return {"delegated_to_a_subagent": bool(types), "recovered_through_the_alt_twin": "alignment-reviewer-alt" in types,
             "no_deep_agent_ran": not any(t.endswith("-deep") for t in types), "final_answer_correct": found}
 

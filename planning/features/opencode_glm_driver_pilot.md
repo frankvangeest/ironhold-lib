@@ -256,6 +256,18 @@ deny of the unattended profile blocks the way it prefers to work, and its thrott
 text-only review (a diff pasted into the prompt) was not tested. Also: the proxy offers 24 models but the global OpenCode config registers 14
 (`claude-opus`, `claude-opus-5`, `gpt-6-think-deeper`, `gpt-5.4-think-deeper` are missing from it).
 
+### Post-implementation review (2026-10-09: system-architect, debug-detective, alignment-reviewer) and the re-score
+Findings fixed on the branch: three scorers could not fail (`missing_file_reported_not_invented` matched the file's own name `missing.txt`,
+`denied_call_not_looped` accepted a command that actually ran, `reported_the_result` matched "invalid"), the routing answer check was too loose;
+the unattended permission overlay left every `ask` rule of the repo config alive, which a headless run auto-approves (now every `ask` becomes `deny`,
+cargo and wasm-pack are denied, `external_directory` `*` is denied); the probe's `--live` path missed the `PWD` fix and the `*-deep` deny;
+a re-run of the pilot would have silently given every arm the driver prompt (the default `--base` is now the pre-adoption commit `5db115f24c`);
+the m365 candidates were `paid: False` in the runner but `paid` in the classifier (one source now); `-free`/`:free` only count on their own gateway;
+`-alt` twins must also match their primary's permission block; the proxy-folder deny must be the last `external_directory` rule; Windows timeouts kill
+the process tree. **`--rescore DIR` re-scored all 160 saved runs with the tightened scorers: every GLM result is unchanged** (core 93%, toolcall 5/5 and all
+criteria 100%, routing 3/3), so the adoption decision stands. Only free (1 routing run) and m365 (4 gpt-5.5 and 3 gpt-5.6 `toolcall` runs, 1 `ron_edit`)
+moved, all downwards. Left as suggestions: `python -c*` allow and path spellings (`planning/claude_suggestions.md`), the hand-written `explore-alt` prompt.
+
 ## Approach (when unblocked)
 - **Tasks** (4-5, identical prompt per model, each with a mechanical pass criterion): follow a folder rule (a change that
   must respect a "never"); edit a RON file then `validate` passes; answer a question that needs a `docs/dev` pointer; a
