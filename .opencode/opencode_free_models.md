@@ -265,7 +265,7 @@ a correctness risk, but expect occasional stalls, not silent wrong output.
 
 ### Cheap paid driver candidate (research pass 2026-10-09, for the GLM pilot)
 
-**`z-ai/glm-5.3-flash`** (paid, OpenRouter; candidate for the top-level `model`, see `planning/features/opencode_glm_driver_pilot.md`) —
+**`z-ai/glm-5.3-flash`** (paid, OpenRouter; candidate for the top-level `model`, see `planning/features/done/opencode_glm_driver_pilot.md`) —
 **CAUTION**, not AVOID. Findings per research item (all web sources are third-party aggregators or blogs unless noted; Z.ai's own model
 card was not reachable through search, so re-check it before adopting):
 

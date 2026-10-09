@@ -1,6 +1,6 @@
 # Feature: GLM 5.3 flash pilot and the OpenCode default-driver decision
 
-_Status: Ready — plan-review 2026-10-08 (two rounds: system-architect, ux-gamedesigner-reviewer); Frank confirmed the thresholds, the $2 script cap and the $3 OpenRouter key limit (set on the key)_
+_Status: Done (2026-10-09; GLM 5.3 flash adopted as the default OpenCode driver, results below; a fair gpt-5.6 m365 retest follows separately)_
 _Planned at: `1a4fa55` (2026-10-09); first drafted at `edc93f1` (2026-10-08), split out of the compat-probe plan after its plan-review_
 
 ## What

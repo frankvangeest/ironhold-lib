@@ -1,6 +1,6 @@
 # Feature: OpenCode compatibility (tooling)
 
-> **Update 2026-10-09:** the default driver is now the paid `openrouter/z-ai/glm-5.3-flash` with free subagents and `-alt` fallback twins (`.opencode/README.md`, "What costs money"; `planning/features/opencode_glm_driver_pilot.md`); statements here that the default is free are superseded.
+> **Update 2026-10-09:** the default driver is now the paid `openrouter/z-ai/glm-5.3-flash` with free subagents and `-alt` fallback twins (`.opencode/README.md`, "What costs money"; `planning/features/done/opencode_glm_driver_pilot.md`); statements here that the default is free are superseded.
 >
 > **Update 2026-10-08:** what OpenCode actually loads (instruction attachment, `AGENTS.md` shadowing, comments, `.claude/rules`) is now verified by `tools/opencode_probe.py` and recorded with re-verify commands in the "Verified compatibility facts" table in `.opencode/README.md` (plan: `planning/features/done/opencode_compat_probe.md`); where this document predates that, the table wins.
 

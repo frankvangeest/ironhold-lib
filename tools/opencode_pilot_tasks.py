@@ -1,4 +1,4 @@
-"""Task set, fixtures and scorers for the OpenCode GLM pilot (planning/features/opencode_glm_driver_pilot.md).
+"""Task set, fixtures and scorers for the OpenCode GLM pilot (planning/features/done/opencode_glm_driver_pilot.md).
 
 Pure and model-free: everything here can be tested with fake events (`python tools/opencode_pilot.py --selftest`). The runner
 (`tools/opencode_pilot.py`) creates a throwaway worktree, calls `setup`, runs `opencode run`, parses the JSON events with

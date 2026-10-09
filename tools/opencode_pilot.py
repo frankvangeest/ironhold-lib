@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Runner and report for the OpenCode GLM pilot (planning/features/opencode_glm_driver_pilot.md).
+"""Runner and report for the OpenCode GLM pilot (planning/features/done/opencode_glm_driver_pilot.md).
 
 It spends money, so nothing runs without `--go`. Without it the script only prints the plan (arms, tasks, run counts, a cost
 estimate). Safety rules from the plan, all enforced here:

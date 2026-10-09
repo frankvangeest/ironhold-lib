@@ -27,7 +27,7 @@ Two further static checks need no `opencode` binary at all (they guard what Open
 
 A paid model id may only sit on the top-level `model`, the `build` agent and `*-deep` agents; every other agent, every
 command and `small_model` must use a free model (classifier in tools/_opencode_common.py), because the driver is paid
-and everything it delegates to is meant to be free (planning/features/opencode_glm_driver_pilot.md).
+and everything it delegates to is meant to be free (planning/features/done/opencode_glm_driver_pilot.md).
 
 Every agent (except `build`), the built-in `general` subagent and every command must name its own `model`, or it inherits the
 paid driver; and `permission.external_directory` must deny the M365 proxy folder (its credential files), with no agent or
@@ -235,7 +235,7 @@ def check_alt_twins(config: dict) -> list[str]:
     """Every role in ALT_ROLES has a `<role>-alt` twin: same prompt, on a different upstream lab, described as a fallback.
 
     A twin only helps when it fails differently from its primary: Nemotron via `opencode/` and via `openrouter/` is one upstream
-    pool (planning/features/opencode_glm_driver_pilot.md), so the check compares labs, not gateways. The driver prompt must name
+    pool (planning/features/done/opencode_glm_driver_pilot.md), so the check compares labs, not gateways. The driver prompt must name
     every role so it can tell the driver which agents have a fallback.
     """
     problems = []
