@@ -263,6 +263,41 @@ tool-calling itself (confirmed supported, no agentic-loop fabrication reports fo
 minute — an OpenCode agentic loop making rapid tool-call round-trips could hit 429s mid-task. Not
 a correctness risk, but expect occasional stalls, not silent wrong output.
 
+### Cheap paid driver candidate (research pass 2026-10-09, for the GLM pilot)
+
+**`z-ai/glm-5.3-flash`** (paid, OpenRouter; candidate for the top-level `model`, see `planning/features/opencode_glm_driver_pilot.md`) —
+**CAUTION**, not AVOID. Findings per research item (all web sources are third-party aggregators or blogs unless noted; Z.ai's own model
+card was not reachable through search, so re-check it before adopting):
+
+- **Tool calling:** OpenRouter lists `tools`/`tool_choice` as supported; `response_format` JSON works only as "soft" JSON, **no JSON-schema
+  enforcement**. The only independent tool-call test found is of the *larger* GLM 5.3, not Flash (mcpplaygroundonline.com, 24 calls on a live
+  MCP server with deeply nested schemas): 24/24 schema-valid for GLM 5.3, 20/24 for GLM 5.2, 6/24 for GLM 5.1 (truncated JSON). **Nothing
+  independent exists for Flash itself**, so the pilot's `toolcall` task is the evidence. Parallel tool calls worked in that test even though
+  the parameter is not listed.
+- **Reasoning state across tool calls (the north-mini-code failure class):** thinking cannot be disabled, and the providers recommend sending the
+  `reasoning_content` back unchanged on later turns (Together's docs). Whether OpenCode's OpenRouter route does that is **not known**; if it
+  drops it, expect the symptom from the cohere incident (re-describing a plan instead of acting). The `toolcall` and routing tasks would show it.
+- **Silent truncation and cost:** at `max_tokens` 4,000 GLM 5.3 spent its budget reasoning and was cut off mid-tool-call while
+  `finish_reason` still said `tool_calls` (fixed at 16,000). The same blog measured about 3x the completion tokens of GLM 5.2. Effort has no
+  "medium" (a passed `medium` silently becomes max). So cost per task can run well above the $0.005 trivial-turn figure; the pilot's cap and
+  its cost thresholds exist for this. Do not assume `--variant` helps until it is tested.
+- **Benchmarks:** vendor-reported only for the headline numbers (Terminal-Bench 2.1: 84.3, DeepSWE v1.1: 63.4). The one independent figure
+  found, Vals AI via BenchLM, puts Terminal-Bench 2.1 at **62.9%**, far below the vendor's 84.3 (harness difference not explained). Artificial
+  Analysis Intelligence Index 57 (secondary source, unverified at the primary).
+- **Fabrication / multi-turn behaviour:** no independent hallucination or multi-turn study found for Flash. One review says it was tuned around a
+  Claude-Code-style harness and reportedly works well in Claude Code and OpenCode.
+- **Rate limits / availability:** paid, so no free-tier cap, but providers differ (21-23 on OpenRouter, failover automatic) and the context window is
+  quoted as 1,000,000 / 1,048,576 / 1,310,720 depending on provider; max output 131,072. Treat 1M as the safe figure.
+- **Price:** sources disagree ($0.07-0.15 per million input, $0.25-0.50 output); the 50%-off promotion listed on OpenRouter ended 2026-09-09, so the
+  undiscounted $0.15 / $0.50 is the safe assumption for budgeting. Confirm on openrouter.ai before the run.
+- **Identity:** OpenCode lists only `openrouter/z-ai/glm-5.3-flash` (no dated snapshot id), so the id cannot be pinned to a snapshot; the alias
+  `openrouter/~z-ai/glm-flash-latest` must not be used. Record the date and, if `opencode export` exposes it, the upstream provider with each result.
+
+Sources: [OpenRouter listing](https://openrouter.ai/z-ai/glm-5.3-flash), [Together GLM 5.3 quickstart](https://docs.together.ai/docs/glm-5.3-quickstart),
+[GLM 5.3 MCP tool-calling test](https://mcpplaygroundonline.com/blog/glm-5-3-mcp-servers.md),
+[Qubrid benchmark roundup](https://www.qubrid.com/blog-news/glm-53-flash-benchmarks-official-and-independent-results),
+[DataCamp](https://www.datacamp.com/blog/glm-5-3-flash), [Qubrid API guide](https://www.qubrid.com/blog-news/glm-53-flash-api-the-complete-developer-guide).
+
 ### Not yet re-verified against this methodology
 
 `inclusionai/ling-3.0-flash-*` variants, `mimo-v2.5/2.6-flash-free`, `muse-spark-1.2/1.3-free`,
