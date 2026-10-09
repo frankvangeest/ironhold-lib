@@ -256,6 +256,12 @@ deny of the unattended profile blocks the way it prefers to work, and its thrott
 text-only review (a diff pasted into the prompt) was not tested. Also: the proxy offers 24 models but the global OpenCode config registers 14
 (`claude-opus`, `claude-opus-5`, `gpt-6-think-deeper`, `gpt-5.4-think-deeper` are missing from it).
 
+### Fair retest of `m365/gpt-5.6-think-deeper` (2026-10-09, after the adoption; one arm alone, 30 s between runs, base `5db115f24c`)
+All 33 runs completed with **no** `upstream_empty_response` (so the earlier empty answers really were the proxy's throttle under back-to-back arms), and the
+model still fails: core **3/15** (20%), `toolcall` **0/15** (chain 0, denied-call 0, missing-file 0, two-reads 0; arguments always well-formed), routing **0/3**.
+It makes 0 to 2 tool calls per run, so it answers instead of working through a multi-step task. The decision stands: no `-m365` agent is preferred
+anywhere; an m365 model could only help with a short text-only review that has the material in the prompt, which this pilot does not measure.
+
 ### Post-implementation review (2026-10-09: system-architect, debug-detective, alignment-reviewer) and the re-score
 Findings fixed on the branch: three scorers could not fail (`missing_file_reported_not_invented` matched the file's own name `missing.txt`,
 `denied_call_not_looped` accepted a command that actually ran, `reported_the_result` matched "invalid"), the routing answer check was too loose;
