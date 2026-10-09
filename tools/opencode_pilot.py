@@ -391,6 +391,8 @@ def main(argv=None) -> int:
             if t not in T.TASK_BY_ID:
                 raise PilotError(f"unknown task {t}")
         runs = plan_runs(arm_ids, task_ids, args.core_runs, args.toolcall_runs, args.routing_runs)
+        if not runs:
+            raise PilotError("0 runs planned: opt-in arms (free_alt, m365_*) have run counts of 0 by default; pass --core-runs, --toolcall-runs and/or --routing-runs")
         est = estimate(runs)
         print(f"{TOOL}: {len(runs)} run(s) planned; estimated cost per arm (rough, the cap is what counts):")
         for arm_id, (n, cost) in est.items():
