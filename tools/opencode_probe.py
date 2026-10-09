@@ -255,6 +255,7 @@ def debug_read(binary: str, root: Path, rel: str, env: dict, pure: bool, timeout
     else:
         params = json.dumps({"filePath": rel, "limit": 2})
     cmd = [binary, "debug", "agent", "build", "--tool", "read", "--params", params] + (["--pure"] if pure else [])
+    env = {**env, "PWD": str(root)}  # opencode takes its working directory from PWD, not the process cwd (fact V21)
     try:
         proc = subprocess.run(cmd, cwd=root, env=env, capture_output=True, text=True, encoding="utf-8", timeout=timeout)
     except subprocess.TimeoutExpired as exc:
@@ -351,6 +352,7 @@ def twin_problems(models: dict) -> list[str]:
 
 
 def debug_json(binary: str, root: Path, args: list, env: dict, timeout: int = 90) -> dict:
+    env = {**env, "PWD": str(root)}  # see debug_read
     try:
         proc = subprocess.run([binary, "debug"] + args, cwd=root, env=env, capture_output=True, text=True, encoding="utf-8", timeout=timeout)
     except subprocess.TimeoutExpired as exc:

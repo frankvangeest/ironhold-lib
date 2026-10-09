@@ -156,12 +156,9 @@ def _docs_score(wt: Path, ev: dict, ctx: dict) -> dict:
 # 4. refactor_py: rename a function across files; the selftest must still pass
 def _refactor_score(wt: Path, ev: dict, ctx: dict) -> dict:
     tools = wt / "tools"
-    leftovers = 0
-    for f in tools.rglob("*.py"):
-        if "__pycache__" in f.parts:
-            continue
-        leftovers += read_text(f).count("is_free_model")
-    defs = sum(read_text(f).count("def costs_nothing") for f in tools.rglob("*.py") if "__pycache__" not in f.parts)
+    files = [f for f in tools.rglob("*.py") if "__pycache__" not in f.parts and not f.name.startswith("opencode_pilot")]  # the pilot's own files quote the name
+    leftovers = sum(read_text(f).count("is_free_model") for f in files)
+    defs = sum(len(re.findall(r"^def costs_nothing\(", read_text(f), re.M)) for f in files)
     changed = [ln for ln in git(wt, "diff", "--name-only").stdout.split() if ln.endswith(".py")]
     proc = subprocess.run([sys.executable, "tools/opencode_probe.py", "--selftest"], cwd=wt, capture_output=True, text=True, timeout=300)
     return {"no_old_name_left": leftovers == 0, "defined_exactly_once": defs == 1, "at_least_two_files_changed": len(changed) >= 2,
@@ -193,7 +190,7 @@ def _review_setup(wt: Path, ctx: dict) -> None:
 
 
 def _review_score(wt: Path, ev: dict, ctx: dict) -> dict:
-    found = bool(re.search(r"\+\s*1|off[- ]by[- ]one|wrong (divisor|denominator)|incorrect (divisor|denominator)|divides by (one )?(more|too)", ev["text"], re.I))
+    found = bool(re.search(r"len\(\s*values\s*\)\s*\+\s*1|off[- ]by[- ]one|wrong (divisor|denominator)|incorrect (divisor|denominator)|divides by (one )?(more|too)", ev["text"], re.I))
     return {"finds_the_planted_bug": found}
 
 
@@ -281,7 +278,7 @@ TASKS = [
          lambda ctx: "Where is the long-form note about the animation resolver/playback pipeline now documented? Reply with the file path only.",
          lambda wt, ctx: None, _docs_score, timeout=300),
     Task("refactor_py", True,
-         lambda ctx: "Rename the Python function `is_free_model` to `costs_nothing` everywhere under tools/ (the definition and every use, including selftests). Keep the behaviour identical, then run `python tools/opencode_probe.py --selftest` and report the result.",
+         lambda ctx: "Rename the Python function `is_free_model` to `costs_nothing` everywhere under tools/ (the definition and every use, including selftests; leave the tools/opencode_pilot*.py files alone). Keep the behaviour identical, then run `python tools/opencode_probe.py --selftest` and report the result.",
          lambda wt, ctx: None, _refactor_score, timeout=900),
     Task("planted_review", True,
          lambda ctx: "Review tools/_pilot_review.py. List the real bugs you find, one line each, most serious first.",

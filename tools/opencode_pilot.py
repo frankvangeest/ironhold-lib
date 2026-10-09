@@ -9,6 +9,8 @@ estimate). Safety rules from the plan, all enforced here:
   - a **script cap** (default $2) on the summed `step_finish` cost of the paid arms; it stops before the next run. The OpenRouter key's
     own spend limit is the real backstop, and OpenCode's cost figure probably leaves out sub-agent sessions, so reconcile the totals
     against the OpenRouter activity page afterwards. The m365 arm costs nothing and sits outside the cap;
+  - `opencode run` gets `--dir` and `PWD` set to the throwaway worktree (it ignores the process cwd, fact V21), and uses the real
+    OpenCode data dir, because a temporary one hides the OpenRouter credentials (fact V22); each run's sessions are deleted by id afterwards;
   - the M365 proxy is only touched through `GET /v1/models` (preflight); request bodies are never logged by this script.
 
 Usage:
@@ -48,12 +50,15 @@ ARMS = {
     "glm":        {"model": "openrouter/z-ai/glm-5.3-flash", "driver": False, "paid": True, "core": 3, "toolcall": 5, "routing": 3},
     "glm_driver": {"model": "openrouter/z-ai/glm-5.3-flash", "driver": True, "paid": True, "core": 0, "toolcall": 5, "routing": 0},
     "free":       {"model": "openrouter/poolside/laguna-s-2.1:free", "driver": False, "paid": False, "core": 3, "toolcall": 15, "routing": 3},
+    # opt-in extra reference (all counts 0 by default; use --arms free_alt with --core-runs/--toolcall-runs/--routing-runs): another free lab
+    "free_alt":   {"model": "opencode/nemotron-3-ultra-free", "driver": False, "paid": False, "core": 0, "toolcall": 0, "routing": 0},
     "deepseek":   {"model": "openrouter/deepseek/deepseek-v4.1-flash", "driver": False, "paid": True, "core": 3, "toolcall": 5, "routing": 0},
     "m365":       {"model": "m365/gpt-5.5-think-deeper", "driver": False, "paid": False, "core": 3, "toolcall": 15, "routing": 3},
 }
-ARM_ORDER = ["glm", "glm_driver", "free", "deepseek", "m365"]
+ARM_ORDER = ["glm", "glm_driver", "free", "free_alt", "deepseek", "m365"]
+DEFAULT_ARMS = [a for a in ARM_ORDER if any(ARMS[a][k] for k in ("core", "toolcall", "routing"))]
 # rough cost per run in USD, for the plan printout only (GLM: ~$0.005 per trivial turn at a 31.8k-token baseline; DeepSeek ~$0.06 per review run)
-EST_COST = {"glm": 0.03, "glm_driver": 0.03, "deepseek": 0.06, "free": 0.0, "m365": 0.0}
+EST_COST = {"glm": 0.03, "glm_driver": 0.03, "deepseek": 0.06, "free": 0.0, "free_alt": 0.0, "m365": 0.0}
 
 
 class PilotError(Exception):
@@ -124,28 +129,35 @@ def reset_worktree(path: Path, base: str) -> None:
     run_git(["clean", "-fd"], cwd=path)
 
 
+def primary_root() -> Path:
+    """The primary checkout (the gitignored tools/bin cache lives there, not in a feature worktree)."""
+    return Path(run_git(["rev-parse", "--path-format=absolute", "--git-common-dir"])).parent
+
+
 def copy_cli_binary(path: Path) -> None:
     """The ironhold binary is gitignored (tools/bin/); the `ron_edit` task needs it."""
     name = "ironhold.exe" if sys.platform == "win32" else "ironhold"
-    src = REPO_ROOT / "tools" / "bin" / name
+    src = primary_root() / "tools" / "bin" / name
     if src.is_file():
         (path / "tools" / "bin").mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, path / "tools" / "bin" / name)
+        dst = path / "tools" / "bin" / name
+        if not (dst.is_file() and dst.stat().st_size == src.stat().st_size):  # `git clean` keeps ignored files; a just-run binary can still be locked
+            shutil.copy2(src, dst)
 
 
 # ----------------------------------------------------------------------------------------------------------------- one run
-def run_one(binary: str, wt: Path, base: str, arm_id: str, task: T.Task, run: int, variant, out: Path) -> dict:
+def run_one(binary: str, wt: Path, base: str, arm_id: str, task: T.Task, run: int, variant, out: Path, keep_sessions: bool = False) -> dict:
     arm = ARMS[arm_id]
     reset_worktree(wt, base)
     copy_cli_binary(wt)
     ctx = T.make_ctx(task.id, run)
     task.setup(wt, ctx)
-    tmp = tempfile.mkdtemp(prefix="opencode_pilot_xdg_")
+    # The real OpenCode data dir is used on purpose: a temporary XDG_DATA_HOME hides auth.json, so every `openrouter/*` model would
+    # fail (fact V22). The sessions this run creates are deleted afterwards by their own ids (unless --keep-sessions).
     env = os.environ.copy()
-    env["XDG_DATA_HOME"] = tmp
-    env["XDG_STATE_HOME"] = tmp
+    env["PWD"] = str(wt)  # opencode takes its working directory from PWD / --dir, not from the process cwd (fact V21)
     env["OPENCODE_CONFIG_CONTENT"] = json.dumps(build_config(task, arm, wt / ".opencode" / "prompts" / "driver.md"))
-    cmd = [binary, "run", "--format", "json", "-m", arm["model"], "--title", f"opencode-pilot {arm_id} {task.id} {run}"]
+    cmd = [binary, "run", "--format", "json", "--dir", str(wt), "-m", arm["model"], "--title", f"opencode-pilot {arm_id} {task.id} {run}"]
     if variant:
         cmd += ["--variant", variant]
     cmd.append(task.prompt(ctx))
@@ -160,8 +172,10 @@ def run_one(binary: str, wt: Path, base: str, arm_id: str, task: T.Task, run: in
         raw = (exc.stdout.decode("utf-8", "replace") if isinstance(exc.stdout, bytes) else exc.stdout) or ""
         status = "timeout"
     wall = time.time() - started
-    shutil.rmtree(tmp, ignore_errors=True)
     ev = T.parse_events(raw)
+    if not keep_sessions:
+        for sid in ev["sessions"]:
+            subprocess.run([binary, "session", "delete", sid], cwd=wt, env=env, capture_output=True, text=True, encoding="utf-8")
     try:
         criteria = task.score(wt, ev, ctx)
     except Exception as exc:  # a scorer bug must not kill a paid sweep: record it and carry on
@@ -172,7 +186,7 @@ def run_one(binary: str, wt: Path, base: str, arm_id: str, task: T.Task, run: in
     return {"arm": arm_id, "task": task.id, "run": run, "model": arm["model"], "status": status, "pass": all(criteria.values()) and status.split()[0] == "ok",
             "criteria": criteria, "wall_s": round(wall, 1), "cost": round(ev["cost"], 5), "tokens_in": ev["tokens_in"], "calls": len(ev["calls"]),
             "wellformed_ratio": round(T.wellformed_ratio(ev), 3), "malformed_calls": sum(1 for c in ev["calls"] if T.is_malformed(c)),
-            "total_calls": len(ev["calls"]), "errors": ev["errors"][:3], "driver_prompt": arm["driver"] or task.needs_driver_prompt, "base": base,
+            "total_calls": len(ev["calls"]), "errors": [e[:300] for e in ev["errors"][:3]], "driver_prompt": arm["driver"] or task.needs_driver_prompt, "base": base,
             "at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")}
 
 
@@ -261,7 +275,7 @@ def m365_preflight() -> None:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--go", action="store_true", help="really run (spends money on the paid arms); without it only the plan is printed")
-    ap.add_argument("--arms", default=",".join(ARM_ORDER), help="comma list of: " + ", ".join(ARM_ORDER))
+    ap.add_argument("--arms", default=",".join(DEFAULT_ARMS), help="comma list of: " + ", ".join(ARM_ORDER))
     ap.add_argument("--tasks", default=",".join(t.id for t in T.TASKS), help="comma list of: " + ", ".join(t.id for t in T.TASKS))
     ap.add_argument("--core-runs", type=int, help="runs per core task (default per arm: 3)")
     ap.add_argument("--toolcall-runs", type=int, help="runs of the toolcall task (default per arm: 15 free/m365, 5 paid)")
@@ -271,6 +285,7 @@ def main(argv=None) -> int:
     ap.add_argument("--worktree", default=None, help="throwaway worktree path (default: ../ironhold-pilot-wt)")
     ap.add_argument("--base", default=None, help="base commit every run starts from (default: HEAD of this checkout)")
     ap.add_argument("--variant", default=None, help="OpenCode --variant (reasoning effort) passed to every run; recorded as unset when omitted")
+    ap.add_argument("--keep-sessions", action="store_true", help="keep the OpenCode sessions the runs create (default: delete them by id after each run; the events are saved either way)")
     ap.add_argument("--pause", type=float, default=3.0, help="seconds between runs (free models allow 20 requests per minute)")
     ap.add_argument("--report", metavar="DIR", help="evaluate DIR/results.jsonl against the pre-registered thresholds and exit")
     ap.add_argument("--verify-tasks", action="store_true", help="model-free: check each core task's scorer against an untouched fixture (must fail) and a scripted correct outcome (must pass)")
@@ -324,7 +339,7 @@ def main(argv=None) -> int:
                     # the cap stops every further PAID run; unpaid arms (free models, m365) cost nothing and carry on
                     aborted = aborted or f"cap ${args.cap:.2f} reached at {arm_id}/{task_id}/{run}; the remaining paid runs were not started"
                     continue
-                result = run_one(binary, wt, base, arm_id, T.TASK_BY_ID[task_id], run, args.variant, out)
+                result = run_one(binary, wt, base, arm_id, T.TASK_BY_ID[task_id], run, args.variant, out, args.keep_sessions)
                 spent += result["cost"] if arm["paid"] else 0.0
                 with open(out / "results.jsonl", "a", encoding="utf-8") as fh:
                     fh.write(json.dumps(result) + "\n")
@@ -358,7 +373,7 @@ def scripted_solutions(wt: Path) -> dict:
 
     def refactor(wt):
         for f in (wt / "tools").rglob("*.py"):
-            if "__pycache__" in f.parts:
+            if "__pycache__" in f.parts or f.name.startswith("opencode_pilot"):
                 continue
             t = f.read_text(encoding="utf-8")
             if "is_free_model" in t:
