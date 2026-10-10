@@ -1,0 +1,42 @@
+// Click target (room 3, 9 and 10 play-test prop) — a hit, kill, respawn loop, so the per-player
+// action bar slots visibly do something to the target they hit.
+//
+// The "hide + delay + restore" pattern from docs/30_runtime_events_and_logic.md (attack_dummy): the
+// entity stays in the world the whole time, so its spawn id, StatMap and position survive. Death
+// needs the `thresholds` entry on the prefab's `health` stat (prefabs.ron): a per-entity stat only
+// emits the events written on its own template.
+(
+  schema_version: 1,
+  initial_state: "alive",
+  global_on: [],
+  states: [
+    (
+      name: "alive",
+      // On every entry, including the first spawn. Health is reset BEFORE the target is shown
+      // again (entry actions run in order), so it is never selectable at 0.
+      entry_actions: [
+        SetStat(key: "{self}.health", value: 30.0),
+        SetEntityVisible(entity: "{self}", visible: true),
+      ],
+      exit_actions: [],
+      on: [],
+    ),
+    (
+      name: "dead",
+      // Hiding also hides the entity's stat label, bar, nameplate and popups, and clears every
+      // player's selection of it. The respawn event is dropped if another scene loads first.
+      entry_actions: [
+        SetEntityVisible(entity: "{self}", visible: false),
+        EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 5.0),
+      ],
+      exit_actions: [],
+      on: [],
+    ),
+  ],
+  transitions: [
+    ( from: Some("alive"), on: "stat.{self}.health.depleted", to: "dead" ),
+    // `from: Some("dead")` so a respawn timer left over from a previous room (delayed events are not
+    // cleared on LoadScene, and rooms 9/10 reuse these ids) does nothing.
+    ( from: Some("dead"),  on: "entity.respawned:{self}",     to: "alive" ),
+  ],
+)

@@ -108,17 +108,46 @@
       targetable: true,
       // Phase 2 (per_player_split_screen_targeting.md) playtest aid: gives this prop a real
       // StatMap so the per-player action bars' ModifyStat({target}.health, ...) slot has
-      // something to subtract from instead of warning "no StatMap component" every press. No
-      // stat_label/world_stat_bar attached — invisible on its own, matching the "reuse existing
-      // playtest aids without changing what Phase 1's playtest already looks like" intent.
+      // something to subtract from. Since room3_click_target_health.md it is also VISIBLE and
+      // mortal: a red health bar and number above the target, and behaviors/click_target.behavior.ron
+      // hides it at 0 health and brings it back at full health after 5 s. 30 health = three
+      // 10-damage hits, which both players' mana pools (5 and 3 casts) can afford; 100 took
+      // player 2 about 45 s of mana regen per kill.
+      //
+      // The `thresholds` entry is what makes death possible: a per-entity stat only emits the
+      // events written on its own template, so without it `stat.{self}.health.depleted` never fires.
       stat_templates: [
         (
           key: "health",
-          base: 100.0,
+          base: 30.0,
           min: 0.0,
-          max: 100.0,
+          max: 30.0,
+          thresholds: [
+            ( when: BelowOrEqual(0.0), emit: "stat.{self}.health.depleted" ),
+          ],
         ),
       ],
+      behavior: "behaviors/click_target.behavior.ron",
+      // Name (the forced nameplate), then the health number, then the bar, stacked upward with
+      // screen_offset. All three share one world `offset` (2.4, the scene-wide nameplate offset)
+      // so they cannot drift apart as the camera zooms — see docs/20_data_formats.md "Label depth
+      // scaling". Health is red, mana is blue (the players' bars further down).
+      stat_label: (
+        stat_key: "{self}.health",
+        offset: (0.0, 2.4, 0.0),
+        screen_offset: (0.0, 26.0),
+        font_size: 14.0,
+        color: (0.95, 0.45, 0.45, 0.95),
+        show_max: true,
+      ),
+      world_stat_bar: (
+        stat_key: "{self}.health",
+        offset: (0.0, 2.4, 0.0),
+        screen_offset: (0.0, 46.0),
+        fill_color: (0.85, 0.15, 0.15, 0.95),
+        bg_color: (0.20, 0.05, 0.05, 0.85),
+        style: Pixel( size: (60.0, 6.0) ),
+      ),
     ),
 
     // Phase 4 (split_screen_camera_followups.md) playtest aid: floating stat_label +
@@ -520,7 +549,7 @@
       world_stat_bar: (
         stat_key: "{self}.mana",
         offset: (0.0, 2.8, 0.0),
-        fill_color: (0.95, 0.35, 0.55, 0.95),
+        fill_color: (0.35, 0.45, 0.95, 0.95),  // mana is blue for both players (health is red)
         style: Pixel( size: (60.0, 6.0) ),
       ),
       components: (
