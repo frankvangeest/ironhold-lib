@@ -1,0 +1,46 @@
+// Click target (room 3, 9 and 10 play-test prop) — a hit, kill, respawn loop, so the per-player
+// action bar slots visibly do something to the target they hit.
+//
+// The "hide + delay + restore" pattern from docs/30_runtime_events_and_logic.md (attack_dummy): the
+// entity stays in the world the whole time, so its spawn id, StatMap and position survive. Death
+// needs the `thresholds` entry on the prefab's `health` stat (prefabs.ron): a per-entity stat only
+// emits the events written on its own template.
+(
+  schema_version: 1,
+  initial_state: "alive",
+  global_on: [],
+  states: [
+    (
+      name: "alive",
+      // Runs on every respawn. An entity behavior also runs its initial state's entry actions when
+      // it loads (the global state_machine.ron does not, docs/30 "entry-actions gotcha"); either way
+      // the 30 below must match the prefab's `base`/`max` in prefabs.ron. Health is reset BEFORE the
+      // target is shown again (entry actions run in order), so it is never selectable at 0.
+      entry_actions: [
+        SetStat(key: "{self}.health", value: 30.0),
+        SetEntityVisible(entity: "{self}", visible: true),
+      ],
+      exit_actions: [],
+      on: [],
+    ),
+    (
+      name: "dead",
+      // Hiding also hides the entity's stat label, bar, nameplate and popups, and clears every
+      // player's selection of it.
+      entry_actions: [
+        SetEntityVisible(entity: "{self}", visible: false),
+        EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 5.0),
+      ],
+      exit_actions: [],
+      on: [],
+    ),
+  ],
+  transitions: [
+    ( from: "alive", on: "stat.{self}.health.depleted", to: "dead" ),
+    // `from: "dead"` so a respawn timer left over from a previous room (delayed events are not
+    // cleared on LoadScene, and rooms 3/9/10 reuse these ids) does nothing. Known limit: it cannot
+    // stop a stale timer from reviving a same-id target that died in the new room in the meantime
+    // (it comes back early, cosmetic only) — that needs cancellable/scoped delayed events (backlog).
+    ( from: "dead",  on: "entity.respawned:{self}",     to: "alive" ),
+  ],
+)
