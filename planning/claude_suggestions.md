@@ -623,3 +623,5 @@
   `check_alt_twins` skips prompt parity when the base has no prompt, so `explore-alt` can drift unnoticed; pin its text in a prompt file or test it in the sync check.
 - **`docs/30` "initial_state entry-actions gotcha" reads as universal but only holds for the global `state_machine.ron`** _(observed at `4288024` 2026-10-10, room3_click_target_health UX review)_
   An entity `.behavior.ron` DOES run its initial state's `entry_actions` on load (`entity_spawner.rs:599-605`). Say which FSM the gotcha covers.
+- **`docs/30` examples write `from: Some("...")` in transitions, which `ron_lint` rejects (`implicit_some`)** _(observed at `f298a7b` 2026-10-10, room3_click_target_health: copying the attack_dummy example failed `ron_lint`)_
+  Use the bare `from: "alive"` form shown in the shipped behaviors (`enemy_snake.behavior.ron`) in every docs example.

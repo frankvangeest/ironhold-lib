@@ -36,11 +36,11 @@
     ),
   ],
   transitions: [
-    ( from: Some("alive"), on: "stat.{self}.health.depleted", to: "dead" ),
-    // `from: Some("dead")` so a respawn timer left over from a previous room (delayed events are not
+    ( from: "alive", on: "stat.{self}.health.depleted", to: "dead" ),
+    // `from: "dead"` so a respawn timer left over from a previous room (delayed events are not
     // cleared on LoadScene, and rooms 3/9/10 reuse these ids) does nothing. Known limit: it cannot
     // stop a stale timer from reviving a same-id target that died in the new room in the meantime
     // (it comes back early, cosmetic only) — that needs cancellable/scoped delayed events (backlog).
-    ( from: Some("dead"),  on: "entity.respawned:{self}",     to: "alive" ),
+    ( from: "dead",  on: "entity.respawned:{self}",     to: "alive" ),
   ],
 )
