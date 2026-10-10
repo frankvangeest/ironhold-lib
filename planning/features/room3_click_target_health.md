@@ -1,6 +1,6 @@
 # Feature: Room 3 click targets with a health bar, death and respawn
 
-_Status: Draft (plan-review 2026-10-10: both reviewers Needs work, fixes below applied; awaiting Frank's answer to the open question)_
+_Status: Ready (plan-review 2026-10-10: both reviewers Needs work, fixes applied; Frank answered the open question and added the player health bars and colours, same day)_
 _Planned at: `ebc338c` (2026-10-10)_
 
 ## What
@@ -15,7 +15,7 @@ nothing else visibly happened, and the player's own mana bar drained at the same
 `ModifyStat(key: "{target}.health", delta: -10.0)` and `ShowDamagePopup(entity: "{target}", ...)`, and `click_target_test` already declares a
 `health` stat (base 100). What the designer cannot see is that damage: the stat has no `stat_label`/`world_stat_bar` (the prefab comment says
 "invisible on its own" on purpose), the only visible bar is the caster's own mana, and at 0 health nothing happens, so a target takes
-hits forever. Frank's report needs a one-line confirmation of what he saw (see open questions); the fix below addresses both readings.
+hits forever. Frank confirmed (2026-10-10): the target's popup showed while his own mana dropped, which read as self damage. He asked for a health bar on every player and target, health red and mana blue.
 
 ## Approach
 Reuse the documented hide + delay + restore pattern (`docs/30_runtime_events_and_logic.md`, "attack_dummy"), no new schema.
@@ -24,8 +24,10 @@ Reuse the documented hide + delay + restore pattern (`docs/30_runtime_events_and
    - **add a threshold to the health template**: `thresholds: [( when: BelowOrEqual(0.0), emit: "stat.{self}.health.depleted" )]`. Per-entity stats emit only the thresholds
      written on the template (`capabilities/stats.rs:127-147`); without it `dead` can never be entered (architect review, verified). The docs' attack_dummy example omits it (logged in `claude_suggestions.md`);
    - health `base`/`max` **30** (was 100), so three 10-damage hits kill: P1's mana affords 5 casts and P2's only 3 (60 mana, 20 per cast, slow regen), and 100 HP made a kill take about 45 s for P2;
-   - add `stat_label` and an **Ascii** `world_stat_bar` on `{self}.health` (Ascii follows `label_depth_scale`, Pixel does not, and Ascii is the proven duplication path), with
-     `offset: (0.0, 2.4, 0.0)`, the scene-wide nameplate offset the forced "Click Target" nameplate uses, stacked with `screen_offset` (name, number, bar) per docs/20 "Label depth scaling";
+   - add `stat_label` and a red **Pixel** `world_stat_bar` (`fill_color: (0.85, 0.15, 0.15, 0.95)`, same size and style as the players' mana bars) on `{self}.health`, with
+     `offset: (0.0, 2.4, 0.0)`, the scene-wide nameplate offset the forced "Click Target" nameplate uses, stacked with `screen_offset` (name, number, bar) per docs/20 "Label depth scaling".
+     (The UX review preferred Ascii because it believed Pixel bars do not depth-scale; docs/20 lines 165 and 4534 say they now do and line 4582 still says they don't. The play-test decides; the stale line is logged.);
+   - **players:** `player_p1_split` and `player_p2_split` (the prefabs room 3 uses) get a `health` stat (base/max 100, no thresholds, nothing hurts them here) and a red Pixel `world_stat_bar` stacked above the existing blue mana bar. Only these two prefabs, not the other player prefabs in the demo;
 2. New `behaviors/click_target.behavior.ron`: `alive` (entry: `SetStat` health 30, then `SetEntityVisible` true, in that order) and `dead` (entry: hide, `EmitEventAfterDelay` `entity.respawned:{self}` 5 s).
    Transitions on `stat.{self}.health.depleted` (from `alive`) and the respawn event with `from: Some("dead")`, so a stale delayed event after a room change (delayed events are not cleared on LoadScene and rooms 9 and 10 reuse the ids) does nothing.
 3. Update the stale prefab/scene comments ("invisible on its own", "no damage source in this demo").
@@ -39,14 +41,15 @@ That is the point (every damage demo shows the same loop), so no room 3-only var
 - Labels and the bar must not collide with `stat_widget_test` (centre line, 4 m away), the nameplate, `target_hud` or the hints; check at max zoom-out (radius 9) before re-baselining.
 
 ## Tasks
-- [ ] Prefab: behavior, threshold, base 30, stat_label, Ascii world_stat_bar at offset 2.4, comments
+- [ ] Prefab: behavior, threshold, base 30, stat_label, red Pixel world_stat_bar at offset 2.4, comments
+- [ ] Players `player_p1_split`/`player_p2_split`: health stat and red bar above the blue mana bar
 - [ ] Behavior file
 - [ ] Tests: `ron_validation`/`ron_lint` pass; a `local_coop_tests` case if the harness can drive health to 0 (otherwise note why not)
 - [ ] Docs: none expected (no schema change); fix the stale comments
 - [ ] `local_coop_demo_room3`, `_room9` and `_room10` baselines, only the ones whose screenshot changes (`--real-gpu --update-baseline`)
 
 ## Open questions
-- What exactly did Frank see: the target's popup with the *caster's* mana dropping (reads as self damage), or did the caster's health change? Frank to confirm. If a stat on the caster really dropped, that is a separate bug.
+- (answered) What Frank saw: the target's popup with the caster's mana dropping.
 - Respawn delay: 5 s and 30 health unless Frank prefers otherwise (both reviewers think 5 s is right for a play-test).
 
 ## Acceptance criteria

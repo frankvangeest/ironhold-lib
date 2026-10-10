@@ -625,3 +625,5 @@
   The example's transition waits for that event, but a per-entity stat only emits the `thresholds` written on its `stat_templates` entry (`capabilities/stats.rs:127-147`) and the example's prefab has none, so a designer copying it gets a dummy that never dies. Add the `thresholds: [( when: BelowOrEqual(0.0), emit: "stat.{self}.health.depleted" )]` line and a note.
 - **`assets/projects/CLAUDE.md` still has a "Rules file structure" section for the removed `rules.ron`** _(observed at `13f0380` 2026-10-10, same review)_
   Replace with the `state_machine.ron` `global_on` form.
+- **`docs/20_data_formats.md` ~4582 says Pixel/Icon/Textured bars do not depth-scale, contradicting lines ~165 and ~4534/4563** _(observed at `30448b8` 2026-10-10, room3_click_target_health planning)_
+  Check which is true in `stat_display.rs` and fix the stale note.
