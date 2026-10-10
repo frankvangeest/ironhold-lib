@@ -128,14 +128,16 @@
         ),
       ],
       behavior: "behaviors/click_target.behavior.ron",
-      // Name (the forced nameplate), then the health number, then the bar, stacked upward with
-      // screen_offset. All three share one world `offset` (2.4, the scene-wide nameplate offset)
-      // so they cannot drift apart as the camera zooms — see docs/20_data_formats.md "Label depth
-      // scaling". Health is red, mana is blue (the players' bars further down).
+      // Name (the forced nameplate), then the health number, then the bar, stacked DOWNWARD toward
+      // the sphere with a negative screen_offset (positive is up). All three share one world
+      // `offset` (2.4, the scene-wide nameplate offset) so they cannot drift apart as the camera
+      // zooms — see docs/20_data_formats.md "Label depth scaling". Stacking upward instead put the
+      // bar at the very top of each viewport, under the HUD text. Health is red, mana is blue (the
+      // players' bars further down).
       stat_label: (
         stat_key: "{self}.health",
         offset: (0.0, 2.4, 0.0),
-        screen_offset: (0.0, 26.0),
+        screen_offset: (0.0, -20.0),
         font_size: 14.0,
         color: (0.95, 0.45, 0.45, 0.95),
         show_max: true,
@@ -143,7 +145,7 @@
       world_stat_bar: (
         stat_key: "{self}.health",
         offset: (0.0, 2.4, 0.0),
-        screen_offset: (0.0, 46.0),
+        screen_offset: (0.0, -38.0),
         fill_color: (0.85, 0.15, 0.15, 0.95),
         bg_color: (0.20, 0.05, 0.05, 0.85),
         style: Pixel( size: (60.0, 6.0) ),
