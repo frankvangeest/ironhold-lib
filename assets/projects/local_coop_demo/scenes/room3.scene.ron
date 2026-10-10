@@ -223,7 +223,7 @@
     // used by either player's movement/jump/run/target_next bindings above, and not the shared
     // "KeyF" interact default both players otherwise use). Each slot fires against its own
     // player's PlayerTarget (Tab/click-selected via T/M above). ShowDamagePopup gives an
-    // immediate visual confirmation without needing a stat bar widget on click_target_test — a
+    // immediate visual confirmation next to click_target_test's own red health bar — a
     // real playtest issue surfaced that damage popups were single-instance (no WorldLabelRank),
     // so a popup rendered in the *other* player's viewport half whenever both were simultaneously
     // active, even though the hit was per-player-correct underneath. Fixed the same day by

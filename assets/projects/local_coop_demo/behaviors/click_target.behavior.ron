@@ -12,8 +12,10 @@
   states: [
     (
       name: "alive",
-      // On every entry, including the first spawn. Health is reset BEFORE the target is shown
-      // again (entry actions run in order), so it is never selectable at 0.
+      // Runs on every respawn. An entity behavior also runs its initial state's entry actions when
+      // it loads (the global state_machine.ron does not, docs/30 "entry-actions gotcha"); either way
+      // the 30 below must match the prefab's `base`/`max` in prefabs.ron. Health is reset BEFORE the
+      // target is shown again (entry actions run in order), so it is never selectable at 0.
       entry_actions: [
         SetStat(key: "{self}.health", value: 30.0),
         SetEntityVisible(entity: "{self}", visible: true),
@@ -24,7 +26,7 @@
     (
       name: "dead",
       // Hiding also hides the entity's stat label, bar, nameplate and popups, and clears every
-      // player's selection of it. The respawn event is dropped if another scene loads first.
+      // player's selection of it.
       entry_actions: [
         SetEntityVisible(entity: "{self}", visible: false),
         EmitEventAfterDelay(event: "entity.respawned:{self}", delay_secs: 5.0),
@@ -36,7 +38,9 @@
   transitions: [
     ( from: Some("alive"), on: "stat.{self}.health.depleted", to: "dead" ),
     // `from: Some("dead")` so a respawn timer left over from a previous room (delayed events are not
-    // cleared on LoadScene, and rooms 9/10 reuse these ids) does nothing.
+    // cleared on LoadScene, and rooms 3/9/10 reuse these ids) does nothing. Known limit: it cannot
+    // stop a stale timer from reviving a same-id target that died in the new room in the meantime
+    // (it comes back early, cosmetic only) — that needs cancellable/scoped delayed events (backlog).
     ( from: Some("dead"),  on: "entity.respawned:{self}",     to: "alive" ),
   ],
 )

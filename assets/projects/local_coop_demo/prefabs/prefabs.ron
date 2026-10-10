@@ -155,8 +155,9 @@
     // same instance simultaneously (mirrors the portal-label bug's original repro condition).
     // One copy is scene-placed (room3.scene.ron); another is fired dynamically via
     // Action::Spawn on scene.ready:room3 (state_machine.ron) to exercise drain_dynamic_stat_ui_system's
-    // duplication path too. A fixed base health value is used (no damage source in this demo) —
-    // the point of this aid is duplication across viewports, not stat gameplay.
+    // duplication path too. A fixed base health value is used (nothing damages this prop; the
+    // damageable one is click_target_test) — the point of this aid is duplication across viewports,
+    // not stat gameplay.
     "stat_widget_test": (
       kind: Primitive,
       model: "",
@@ -549,7 +550,7 @@
       world_stat_bar: (
         stat_key: "{self}.mana",
         offset: (0.0, 2.8, 0.0),
-        fill_color: (0.35, 0.45, 0.95, 0.95),  // mana is blue for both players (health is red)
+        fill_color: (0.35, 0.45, 0.95, 0.95),  // mana is blue (red is health, see click_target_test)
         style: Pixel( size: (60.0, 6.0) ),
       ),
       components: (
@@ -1140,7 +1141,7 @@
       world_stat_bar: (
         stat_key: "{self}.mana",
         offset: (0.0, 2.3, 0.0),
-        fill_color: (0.90, 0.25, 0.20, 0.95),
+        fill_color: (0.35, 0.45, 0.95, 0.95),  // mana is blue (red is health, see click_target_test)
         style: Pixel( size: (60.0, 6.0) ),
       ),
       components: (
@@ -1343,7 +1344,7 @@
       world_stat_bar: (
         stat_key: "{self}.mana",
         offset: (0.0, 2.8, 0.0),
-        fill_color: (0.95, 0.35, 0.55, 0.95),
+        fill_color: (0.35, 0.45, 0.95, 0.95),  // mana is blue (red is health, see click_target_test)
         style: Pixel( size: (60.0, 6.0) ),
       ),
       components: (
@@ -1481,7 +1482,7 @@
         // top (debug-detective review: 2.3 was copied from the bare-capsule prefab and sat too
         // close to this body's head). Matches player_p2_split_ring's own 2.8 for visual parity.
         offset: (0.0, 2.8, 0.0),
-        fill_color: (0.95, 0.35, 0.55, 0.95),
+        fill_color: (0.35, 0.45, 0.95, 0.95),  // mana is blue (red is health, see click_target_test)
         style: Pixel( size: (60.0, 6.0) ),
       ),
       components: (

@@ -621,3 +621,5 @@
   V19 shows `python -c` with a built path reads the m365 proxy folder anyway, and the `external_directory` pattern `C:/ProgramData/m365-copilot-proxy/**` was only verified in that spelling (`c:\programdata\...` untested). Options: `python -c*` to `ask` for attended sessions, test the other spellings, or a Windows ACL on the credential files.
 - **`-alt` twin of `explore` has a hand-written prompt (the built-in `explore` has none to compare against)** _(observed at `2b8a011` 2026-10-09, opencode_glm_driver_pilot architect review)_
   `check_alt_twins` skips prompt parity when the base has no prompt, so `explore-alt` can drift unnoticed; pin its text in a prompt file or test it in the sync check.
+- **`docs/30` "initial_state entry-actions gotcha" reads as universal but only holds for the global `state_machine.ron`** _(observed at `4288024` 2026-10-10, room3_click_target_health UX review)_
+  An entity `.behavior.ron` DOES run its initial state's `entry_actions` on load (`entity_spawner.rs:599-605`). Say which FSM the gotcha covers.

@@ -27,7 +27,9 @@ Reuse the documented hide + delay + restore pattern (`docs/30_runtime_events_and
    - add `stat_label` and a red **Pixel** `world_stat_bar` (`fill_color: (0.85, 0.15, 0.15, 0.95)`, same size and style as the players' mana bars) on `{self}.health`, with
      `offset: (0.0, 2.4, 0.0)`, the scene-wide nameplate offset the forced "Click Target" nameplate uses, stacked with `screen_offset` (name, number, bar) per docs/20 "Label depth scaling".
      (The UX review preferred Ascii because it believed Pixel bars do not depth-scale; docs/20 lines 165 and 4534 say they now do and line 4582 still says they don't. The play-test decides; the stale line is logged.);
-   - **players:** `player_p1_split` and `player_p2_split` (the prefabs room 3 uses) get a `health` stat (base/max 100, no thresholds, nothing hurts them here) and a red Pixel `world_stat_bar` stacked above the existing blue mana bar. Only these two prefabs, not the other player prefabs in the demo;
+   - **players (changed from the Ready plan, Frank informed 2026-10-10):** health bars on players are NOT in this feature. A prefab has a single `world_stat_bar` slot (players use it for mana) and
+     the nameplate's multi-bar widget shows in only one split viewport (docs/20 nameplate section). Queued instead as an engine feature (several bars per prefab). What this feature does for the colour request: every
+     player mana bar in `local_coop_demo` is blue (`player_p2_split`, `player_p2_primitive`, `player_p2_split_ring`, `player_p2_primitive_split_ring` were pink or red), so red means health everywhere;
 2. New `behaviors/click_target.behavior.ron`: `alive` (entry: `SetStat` health 30, then `SetEntityVisible` true, in that order) and `dead` (entry: hide, `EmitEventAfterDelay` `entity.respawned:{self}` 5 s).
    Transitions on `stat.{self}.health.depleted` (from `alive`) and the respawn event with `from: Some("dead")`, so a stale delayed event after a room change (delayed events are not cleared on LoadScene and rooms 9 and 10 reuse the ids) does nothing.
 3. Update the stale prefab/scene comments ("invisible on its own", "no damage source in this demo").
@@ -42,7 +44,7 @@ That is the point (every damage demo shows the same loop), so no room 3-only var
 
 ## Tasks
 - [ ] Prefab: behavior, threshold, base 30, stat_label, red Pixel world_stat_bar at offset 2.4, comments
-- [ ] Players `player_p1_split`/`player_p2_split`: health stat and red bar above the blue mana bar
+- [ ] Every player mana bar blue (4 prefabs changed); player health bars deferred (backlog)
 - [ ] Behavior file
 - [ ] Tests: `ron_validation`/`ron_lint` pass; a `local_coop_tests` case if the harness can drive health to 0 (otherwise note why not)
 - [ ] Docs: none expected (no schema change); fix the stale comments
