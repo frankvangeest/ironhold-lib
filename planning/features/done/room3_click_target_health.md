@@ -1,6 +1,6 @@
 # Feature: Room 3 click targets with a health bar, death and respawn
 
-_Status: Ready (plan-review 2026-10-10: both reviewers Needs work, fixes applied; Frank answered the open question and added the player health bars and colours, same day)_
+_Status: Done (2026-10-10, play-tested by Frank)_
 _Planned at: `ebc338c` (2026-10-10)_
 
 ## What
@@ -43,12 +43,12 @@ That is the point (every damage demo shows the same loop), so no room 3-only var
 - Labels and the bar must not collide with `stat_widget_test` (centre line, 4 m away), the nameplate, `target_hud` or the hints; check at max zoom-out (radius 9) before re-baselining.
 
 ## Tasks
-- [ ] Prefab: behavior, threshold, base 30, stat_label, red Pixel world_stat_bar at offset 2.4, comments
-- [ ] Every player mana bar blue (4 prefabs changed); player health bars deferred (backlog)
-- [ ] Behavior file
-- [ ] Tests: `ron_validation`/`ron_lint` pass; a `local_coop_tests` case if the harness can drive health to 0 (otherwise note why not)
-- [ ] Docs: none expected (no schema change); fix the stale comments
-- [ ] `local_coop_demo_room3`, `_room9` and `_room10` baselines, only the ones whose screenshot changes (`--real-gpu --update-baseline`)
+- [x] Prefab: behavior, threshold, base 30, stat_label, red Pixel world_stat_bar at offset 2.4, comments
+- [x] Every player mana bar blue (4 prefabs changed); player health bars deferred (backlog)
+- [x] Behavior file
+- [x] Tests: `ron_validation`/`ron_lint` pass; a `local_coop_tests` case if the harness can drive health to 0 (otherwise note why not)
+- [x] Docs: none expected (no schema change); fix the stale comments
+- [x] `local_coop_demo_room3`, `_room9` and `_room10` baselines, only the ones whose screenshot changes (`--real-gpu --update-baseline`)
 
 ## Open questions
 - (answered) What Frank saw: the target's popup with the caster's mana dropping.
@@ -58,3 +58,6 @@ That is the point (every damage demo shows the same loop), so no room 3-only var
 - Given room 3 with a selected target, when a slot is fired, then the target's health bar drops 10 per hit and the popup shows above that target; the third hit kills it.
 - Given a target at 0 health, then it disappears, its player's selection clears, and it returns at full health after the delay, selectable again.
 - Given both players hitting different targets, then each viewport shows the right bars and popups.
+
+## Result
+Shipped at `d9f9ae0` (RON-only). Differences from the plan: no player health bars (a prefab has one `world_stat_bar` slot; multi-bar queued); the label stack runs *downward* from the name (negative `screen_offset`) because upward put the bar under the HUD text; every player mana bar is blue (4 prefabs), not just room 3's. Review findings applied: the `thresholds` entry, health 30, shared-prefab rooms, bare `from:` (`ron_lint`). Logged: delayed events survive `LoadScene`, docs/30 examples (`Some(` in `from:`, entry-actions scope, missing thresholds), docs/20 Pixel depth-scaling contradiction.
