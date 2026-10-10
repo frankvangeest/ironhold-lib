@@ -621,3 +621,7 @@
   V19 shows `python -c` with a built path reads the m365 proxy folder anyway, and the `external_directory` pattern `C:/ProgramData/m365-copilot-proxy/**` was only verified in that spelling (`c:\programdata\...` untested). Options: `python -c*` to `ask` for attended sessions, test the other spellings, or a Windows ACL on the credential files.
 - **`-alt` twin of `explore` has a hand-written prompt (the built-in `explore` has none to compare against)** _(observed at `2b8a011` 2026-10-09, opencode_glm_driver_pilot architect review)_
   `check_alt_twins` skips prompt parity when the base has no prompt, so `explore-alt` can drift unnoticed; pin its text in a prompt file or test it in the sync check.
+- **`docs/30_runtime_events_and_logic.md` attack_dummy example never emits `stat.{self}.health.depleted`** _(observed at `13f0380` 2026-10-10, room3_click_target_health plan review)_
+  The example's transition waits for that event, but a per-entity stat only emits the `thresholds` written on its `stat_templates` entry (`capabilities/stats.rs:127-147`) and the example's prefab has none, so a designer copying it gets a dummy that never dies. Add the `thresholds: [( when: BelowOrEqual(0.0), emit: "stat.{self}.health.depleted" )]` line and a note.
+- **`assets/projects/CLAUDE.md` still has a "Rules file structure" section for the removed `rules.ron`** _(observed at `13f0380` 2026-10-10, same review)_
+  Replace with the `state_machine.ron` `global_on` form.

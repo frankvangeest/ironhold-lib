@@ -1,6 +1,6 @@
 # Feature: Room 3 click targets with a health bar, death and respawn
 
-_Status: Draft_
+_Status: Draft (plan-review 2026-10-10: both reviewers Needs work, fixes below applied; awaiting Frank's answer to the open question)_
 _Planned at: `ebc338c` (2026-10-10)_
 
 ## What
@@ -19,31 +19,37 @@ hits forever. Frank's report needs a one-line confirmation of what he saw (see o
 
 ## Approach
 Reuse the documented hide + delay + restore pattern (`docs/30_runtime_events_and_logic.md`, "attack_dummy"), no new schema.
-1. `prefabs.ron` `click_target_test`: add `behavior: "behaviors/click_target.behavior.ron"`, a `stat_label` and a Pixel or Ascii `world_stat_bar`
-   on `{self}.health` (offsets like `stat_widget_test`, same label-depth-scale rules).
-2. New `behaviors/click_target.behavior.ron`: `alive` (entry: `SetStat` health 100, `SetEntityVisible` true) and `dead` (entry: hide, `EmitEventAfterDelay`
-   respawn 5 s), transitions on `stat.{self}.health.depleted` and the respawn event.
+1. `prefabs.ron` `click_target_test`:
+   - add `behavior: "behaviors/click_target.behavior.ron"`;
+   - **add a threshold to the health template**: `thresholds: [( when: BelowOrEqual(0.0), emit: "stat.{self}.health.depleted" )]`. Per-entity stats emit only the thresholds
+     written on the template (`capabilities/stats.rs:127-147`); without it `dead` can never be entered (architect review, verified). The docs' attack_dummy example omits it (logged in `claude_suggestions.md`);
+   - health `base`/`max` **30** (was 100), so three 10-damage hits kill: P1's mana affords 5 casts and P2's only 3 (60 mana, 20 per cast, slow regen), and 100 HP made a kill take about 45 s for P2;
+   - add `stat_label` and an **Ascii** `world_stat_bar` on `{self}.health` (Ascii follows `label_depth_scale`, Pixel does not, and Ascii is the proven duplication path), with
+     `offset: (0.0, 2.4, 0.0)`, the scene-wide nameplate offset the forced "Click Target" nameplate uses, stacked with `screen_offset` (name, number, bar) per docs/20 "Label depth scaling";
+2. New `behaviors/click_target.behavior.ron`: `alive` (entry: `SetStat` health 30, then `SetEntityVisible` true, in that order) and `dead` (entry: hide, `EmitEventAfterDelay` `entity.respawned:{self}` 5 s).
+   Transitions on `stat.{self}.health.depleted` (from `alive`) and the respawn event with `from: Some("dead")`, so a stale delayed event after a room change (delayed events are not cleared on LoadScene and rooms 9 and 10 reuse the ids) does nothing.
 3. Update the stale prefab/scene comments ("invisible on its own", "no damage source in this demo").
 
+**Shared prefab (accepted):** `click_target_test` is also placed in `room9.scene.ron` and `room10.scene.ron`, which have damaging action bars of their own, so they get the bar and the loop too.
+That is the point (every damage demo shows the same loop), so no room 3-only variant; their baselines are checked and updated with room 3's.
+
 ## Risks to check in code before building
-- The depleted event for a per-entity `StatMap` is emitted once per crossing, and a hidden target is auto-cleared by `target_auto_clear_system` (it already skips hidden
-  entities for Tab and click). Verify a hit on the last frame cannot re-trigger `dead`.
-- `behavior:` on a `kind: Primitive` prop: confirm `entity_spawner` honours it (the docs example uses an interactable prop).
-- Two instances share one behavior file via `{self}`; the popup/label duplication across the two split viewports (`WorldLabelRank`) must still work for the bar.
-- `stat_widget_test` sits on the room's centerline and the new bars must not overlap its label or the target hud text.
+- Edge-triggered once per crossing (verified), further hits at 0 are clamped and emit nothing. Accepted: the threshold event reaches the entity FSM one frame after the hit, so one more press in that frame costs mana and makes a popup that is never seen.
+- `behavior:` on a `kind: Primitive` prop is honoured and `{self}` is the scene-placed id (verified, `entity_spawner.rs:53-58`, `scene_loader.rs:477-482`). Hidden targets auto-clear per player (`targeting.rs:381-391`) and WorldLabels of a hidden entity hide, including the nameplate anchor and popup (`lib.rs:688-691`); confirm in the play-test.
+- Labels and the bar must not collide with `stat_widget_test` (centre line, 4 m away), the nameplate, `target_hud` or the hints; check at max zoom-out (radius 9) before re-baselining.
 
 ## Tasks
-- [ ] Prefab: behavior, stat_label, world_stat_bar, comments
+- [ ] Prefab: behavior, threshold, base 30, stat_label, Ascii world_stat_bar at offset 2.4, comments
 - [ ] Behavior file
 - [ ] Tests: `ron_validation`/`ron_lint` pass; a `local_coop_tests` case if the harness can drive health to 0 (otherwise note why not)
 - [ ] Docs: none expected (no schema change); fix the stale comments
-- [ ] `local_coop_demo_room3` baseline only if the screenshot changes (`--real-gpu --update-baseline`)
+- [ ] `local_coop_demo_room3`, `_room9` and `_room10` baselines, only the ones whose screenshot changes (`--real-gpu --update-baseline`)
 
 ## Open questions
 - What exactly did Frank see: the target's popup with the *caster's* mana dropping (reads as self damage), or did the caster's health change? Frank to confirm. If a stat on the caster really dropped, that is a separate bug.
-- Respawn delay: 5 s unless Frank prefers otherwise.
+- Respawn delay: 5 s and 30 health unless Frank prefers otherwise (both reviewers think 5 s is right for a play-test).
 
 ## Acceptance criteria
-- Given room 3 with a selected target, when a slot is fired five times, then the target's health bar drops 10 per hit and the popup shows above that target.
+- Given room 3 with a selected target, when a slot is fired, then the target's health bar drops 10 per hit and the popup shows above that target; the third hit kills it.
 - Given a target at 0 health, then it disappears, its player's selection clears, and it returns at full health after the delay, selectable again.
 - Given both players hitting different targets, then each viewport shows the right bars and popups.
