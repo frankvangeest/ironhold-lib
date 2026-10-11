@@ -391,10 +391,32 @@ with a hard size check (mismatch returns `1.0`, `:230`).
       `--responsive`, dead DSF column dropped, docs (`docs/30`, `docs/STATUS.md`, `docs/20` designer note,
       host-page contract in `docs/dev/browser_tests.md`). Follow-ups logged in `claude_suggestions.md`; the
       pre-existing debug-JSON escaping bug is in `## Bugs`.
-- [ ] Phase 2: `ui_scale` schema + `ProjectConfig::validate()` + `ui_scale_system` (snap down, clamp,
-      write-on-change, reset-to-1.0, clamp warning) + `ui_demo` block (1280x720 reference).
-- [ ] Phase 2: pixel-site audit (grep `/ scale_factor` feeding `Val::Px`); fix `camera.rs` ~874 and ~987; test both.
-- [ ] Phase 2 gate: full suite green with no baseline changes; responsive baselines captured.
+- [x] Phase 2: `ui_scale` schema + `ProjectConfig::validate()` + `ui_scale_system` (snap down, clamp,
+      write-on-change, reset-to-1.0, clamp warning) + `ui_demo` block (1280x720 reference). Done 2026-10-11.
+      `UiScaleConfig`/`UiScaleFit` + `ProjectConfig.ui_scale` (additive, `deny_unknown_fields`, no schema bump, no
+      `Some(`), `capabilities/ui_scale.rs` (`valid_window_size`, `compute_ui_scale`, `ui_scale_system`), 3 CLI
+      fixtures, `ui_demo` block. Deviations from the plan text, all deliberate: (1) the system **polls every frame**
+      instead of reading `WindowResized` (a few float ops; also covers project load, hot-reload and the first frame);
+      (2) it divides by `window.scale_factor() * UiScale` where the plan said `ComputedUiRenderTargetInfo` (equivalent
+      while all RON UI renders through the one primary-window `Camera2d`); (3) the floor warning fires once on each
+      transition **into** the floored state (not per window-size class), and compares the **unsnapped** need against
+      `min_scale` (the snapped value warned falsely when `min_scale` was not a multiple of `snap`); (4) an **invalid
+      block is treated as off** (UiScale stays 1.0) because the runtime only logs a failed `validate()` and never
+      re-validates a hot-reload, and `f32::clamp` panics on min > max (found by all three reviews; the clamp is now
+      `max().min()`); (5) extra validation: `min_scale >= 0.05`, `snap <= max_scale`, positive `max_scale`.
+- [x] Phase 2: pixel-site audit (grep `/ scale_factor` feeding `Val::Px`); fix `camera.rs` ~874 and ~987; test both.
+      Done: only those two sites convert viewport px to UI units (`lib.rs` world labels are `Text2d`, `targeting.rs`
+      is a cursor-vs-viewport ray, bevy_ui focus/picking apply `UiScale` themselves); both fixed and tested in
+      `local_coop_tests.rs` (the HUD one end to end through the real system; mutation-checked).
+- [x] Phase 2 gate: full suite green with no baseline changes; responsive baselines captured. Done 2026-10-11:
+      all 25 core test files (`ui_scale_tests` 15/15, `local_coop_tests` 164/164), 46 lib unit tests, CLI check +
+      tests (12/188/15), `ron_validation`/`ron_lint`; `test_web.py --real-gpu` 56/59 with only the same 3
+      pre-existing failures (so `ui_demo`'s main baseline, at exactly 1280x720 = scale 1.0, is unchanged);
+      `--responsive` 14/14 after re-capturing the five `ui_demo` baselines (scale 1.5 at 1920x1080, 0.75 at
+      1024x768, 0.5 at the rest; `test_web.py` checks the engine value against an independent Python copy of the
+      formula). Reviews: system-architect (approve once the panic was fixed), debug-detective (same blocker + the
+      false warning), ux-gamedesigner-reviewer (docs good, same blocker). A background gate was killed once by
+      memory pressure and re-run in pieces (build, then each browser suite alone).
 - [ ] **Prerequisite for Phase 3:** `ui_set_visible.md` planned, reviewed and shipped (`SetUiVisible`,
       `UiNodeId`, validate checks, `Action::is_presentation_only()`).
 - [ ] Phase 3: `UiEvent::Presentation(String)` + the four named destructure sites (`fsm_interpreter.rs:36`,
