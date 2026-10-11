@@ -76,4 +76,5 @@
 - [max_frame_delta_secs](project_max_fixed_delta_secs.md) — renamed from max_fixed_; validate now enforces ~0.03..60s; doc surfaces list
 - [Default mouse-binding test projects](project_mouse_default_binding_test_projects.md) — 3rd_person/local_coop override orbit_button; primitive_world/stats_demo use defaults + have ActionBars
 - [responsive_ui plan-review](project_responsive_ui_plan_review.md) — r1+r2 resolved; r3 open: recipe on:/do: vs event:/do_actions:, shared ActionBar/panels stuck at landscape px
+- [SetUiVisible plan-review](project_ui_set_visible_plan_review.md) — bool-only vs toggle demo; docs/30 ShowUi/HideUi placeholder; docs/20 ~3215 stale callout; scene.ready recipe
 - [UI nesting breaks 11 flat scene.ui scans](project_ui_nesting_flat_scan_sites.md) — StatRadar pre-pass + 4 warns + 6 CLI checks skip nested children; Container/ContainerPanel name clash; auto-size+SpaceBetween is a no-op; Group shipped 2026-10-06 (open doc nits listed)
