@@ -72,3 +72,4 @@
 - [rules.ron vs FSM consolidation](rules_vs_fsm_consolidation.md) — SHIPPED 2026-09-28; batch review: doc commits made directly on integration can bring removed concepts back with no merge conflict, so grep docs
 - [UiScale & overlay-slot facts](ui_scale_and_overlay_slot_facts.md) — UiScale folds into per-root scale; camera.rs hand Val::Px sites break; overlays are one global slot; UiEvent is single-variant (button prefix); no runtime UI-id component; panels/ActionBars vs Display::None; minimize=0x0 verified
 - [UI Display::None & UiNodeId facts](ui_display_none_and_ui_id_facts.md) — SetUiVisible review: Display::None hit-test via zero rect; overlay id collision; no Ready for overlays; validate skips ActionBar slot actions
+- [Web canvas host contract](web_canvas_host_contract.md) — start_app hardcodes canvas "#ironhold-canvas"; bevy_winit 0.18 panics if a host page lacks it; native unaffected

@@ -76,3 +76,4 @@
 - [validate code docs drift](project_validate_codes_doc_coverage_drift.md) — docs/15 "canonical" check list missed 16 error codes at creation; audit by grepping kind: strings in validate.rs, severity by struct
 - [Interaction press-edge semantics](project_bevy_interaction_press_edge_semantics.md) — Bevy 0.18 focus.rs never rewrites Pressed->Pressed, never spawns Pressed; stuck-Pressed after missed release swallows one click
 - [OPENCODE_CONFIG_CONTENT keeps repo "ask" keys](project_opencode_config_content_merge_keeps_ask.md) — flipping bash "*" to deny leaves git push/cargo clean/external_directory asks, auto-approved headless (V20)
+- [play.html ready signal never fires on adapter failure](project_play_html_ready_signal_never_fires_on_adapter_failure.md) — overlay waits on first #debug-state write; no WebGPU adapter = no update ever = eternal spinner, no error

@@ -53,3 +53,4 @@
 - [UI flex Group + walk_ui_nodes](ui_flex_group_walker_pattern.md) — scene.ui is a tree: never iterate flat; layout diags shared fn, CLI warnings only under --strict
 - [Dev-tooling feature review scope](dev_tooling_feature_review.md) — narrow checklist for tools/.opencode/CLAUDE.md-maintenance changes: docs/README dev-row rule, root budget, paste-able-cell trap
 - [Dev-doc split designer-leak audit](dev_doc_split_designer_leak_audit.md) — use moved-sections-index as checklist; {self}-in-dialogue 3-way doc contradiction; particle `additive` doc staleness; corpse-only caveats
+- [Web host-page contract](web_host_page_contract.md) — canvas selector/fit/data-ready/DebugState test fields need no RON; flag missing-id embeds + designer note on non-fixed play area
