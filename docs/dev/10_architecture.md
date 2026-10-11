@@ -28,6 +28,8 @@ The runtime expects an `assets/` directory relative to the executable's working 
 | `scene` | Asset path of the most recently fully-loaded scene (from `SceneEvent::Ready`) |
 | `logic_state` | Current named FSM state, advanced by `state_machine.ron` transitions; empty string means stateless (flat `global_on`-only projects) |
 | `score` | Running score total, derived from `GameVariables["score"]` each frame |
+| `window_size` | Logical `(width, height)` of the primary window this frame; `(0, 0)` for a minimized window or when no window exists (headless tests). Serialised as `"window_size":[w,h]` |
+| `ui_scale` | Current `UiScale` multiplier (`1.0` unless a project sets one; `0.0` if the resource does not exist, e.g. a headless test app without `UiPlugin`) |
 
 On WASM, a second system (`sync_debug_state_to_dom`, compiled only for `wasm32`) serialises this to JSON and writes it into `<div id="debug-state">` in the page, making it readable by browser automation (see `test_web.py`).
 

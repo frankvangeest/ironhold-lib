@@ -9,8 +9,11 @@ Runs five test categories against a locally served build:
 
 Usage:
     python test_web.py [--skip-build] [--update-baselines] [--project NAME] [--screenshot-dir DIR]
+    python test_web.py --responsive --real-gpu --skip-build   # viewport/device matrix instead
 
 Options:
+    --responsive        Run the responsive matrix (resize + touch + per-viewport baselines in
+                        screenshot_baselines/responsive/) INSTEAD of the main suite
     --skip-build        Skip wasm-pack build (use existing pkg/)
     --update-baselines  Overwrite stored baseline screenshots
     --update-baseline   Overwrite baseline for a specific target (repeatable)
@@ -69,6 +72,35 @@ NON_DETERMINISTIC_SCENES = {
 #   pause_nav/  — one PNG per navigation step
 # Current/comparison screenshots go in the --screenshot-dir (gitignored).
 BASELINE_DIR = Path("screenshot_baselines")
+
+# --responsive mode: a small viewport/device matrix, kept out of the main suite (it would multiply
+# a ~20-minute run). Baselines live in their own folder so the gallery (which reads scenes/) never
+# picks them up. Entries: (label, viewport width, viewport height, device_scale_factor, mobile).
+# `mobile` turns on Chromium's mobile emulation and touch. Captured and compared with --real-gpu only,
+# like every other baseline. See planning/features/responsive_ui.md ("Playwright screenshot impact").
+RESPONSIVE_BASELINE_DIR = BASELINE_DIR / "responsive"
+#
+# The last field marks a KNOWN failing entry: it still runs and is reported as XFAIL (not counted as a
+# failure); if it ever passes it is reported as a failure (XPASS) so the marker gets removed.
+HIDPI_XFAIL = (
+    "at devicePixelRatio 2 the engine's logical window is half the CSS size (640x360 for a 1280x720 "
+    "viewport) and the canvas backing store stays at CSS size, so UI renders 2x too large and is cut off. "
+    "Pre-existing (identical before the canvas-fit change); see the HiDPI bug in planning/backlog.md"
+)
+RESPONSIVE_MATRIX = [
+    ("1920x1080",      1920, 1080, 1, False, None),         # PC
+    ("1024x768",       1024,  768, 1, False, None),         # tablet, landscape
+    ("768x1024",        768, 1024, 1, False, None),         # tablet, portrait
+    ("844x390",         844,  390, 1, True,  None),         # phone, landscape
+    ("390x844",         390,  844, 1, True,  None),         # phone, portrait
+    ("1280x720_dpr2",  1280,  720, 2, False, HIDPI_XFAIL),  # HiDPI
+]
+# (project, scene) pairs the matrix runs. `ui_demo` is the Group-layout showcase; the 3rd_person
+# main scene is the real HUD (its baselines change when that HUD is retrofitted onto `Group`).
+RESPONSIVE_TARGETS = [
+    ("ui_demo", "scenes/main.scene.ron"),
+    ("3rd_person_game_demo", "scenes/main.scene.ron"),
+]
 
 # Seconds to wait for <canvas> / InGame state
 CANVAS_TIMEOUT = 180
@@ -625,6 +657,196 @@ async def run_all(
     return results
 
 
+# ---------------------------------------------------------------------------
+# --responsive mode
+# ---------------------------------------------------------------------------
+
+CANVAS_RECT_JS = """() => {
+  const all = document.querySelectorAll('canvas');
+  const c = document.getElementById('ironhold-canvas');
+  const r = c.getBoundingClientRect();
+  return {count: all.length, x: r.x, y: r.y, w: r.width, h: r.height,
+          scrollH: document.documentElement.scrollHeight, scrollW: document.documentElement.scrollWidth};
+}"""
+
+
+async def assert_canvas_fills_viewport(page: Page, w: int, h: int) -> None:
+    """The single canvas is exactly the viewport (the bar is hidden under ?testing=1), no scrolling."""
+    r = await page.evaluate(CANVAS_RECT_JS)
+    if r["count"] != 1:
+        raise TestFailure(f"expected exactly 1 <canvas>, found {r['count']} (stale pkg/? see docs/dev/browser_tests.md)")
+    if abs(r["w"] - w) > 1 or abs(r["h"] - h) > 1 or abs(r["x"]) > 1 or abs(r["y"]) > 1:
+        raise TestFailure(f"canvas is {r['w']:.0f}x{r['h']:.0f} at ({r['x']:.0f},{r['y']:.0f}), expected {w}x{h} at (0,0)")
+    if r["scrollH"] > h + 1 or r["scrollW"] > w + 1:
+        raise TestFailure(f"page scrolls: {r['scrollW']}x{r['scrollH']} for a {w}x{h} viewport")
+
+
+def assert_debug_window(state: dict, w: int, h: int) -> None:
+    """`window_size` (logical) and `ui_scale` from #debug-state match the viewport / 1.0."""
+    if "window_size" not in state or "ui_scale" not in state:
+        raise TestFailure("debug state has no window_size/ui_scale: stale pkg/ (rebuild)")
+    ww, wh = state["window_size"]
+    if abs(ww - w) > 1 or abs(wh - h) > 1:
+        raise TestFailure(f"engine window_size is {ww}x{wh}, expected {w}x{h}")
+    # Projects in the matrix set no `ui_scale` block yet, so the scale stays at Bevy's default.
+    if state["ui_scale"] != 1.0:
+        raise TestFailure(f"ui_scale is {state['ui_scale']}, expected 1.0 (no ui_scale block)")
+
+
+async def test_responsive_entry(
+    browser: Browser,
+    project: str,
+    scene: str,
+    label: str,
+    width: int,
+    height: int,
+    dpr: int,
+    mobile: bool,
+    screenshot_dir: Path,
+    update: bool,
+) -> None:
+    context = await browser.new_context(
+        viewport={"width": width, "height": height},
+        device_scale_factor=dpr,
+        is_mobile=mobile,
+        has_touch=mobile,
+    )
+    try:
+        page, errors = await open_project(context, project, scene=scene)
+        try:
+            await wait_for_scene_ready(page)
+            state = await wait_for_debug_state(
+                page, lambda s: "window_size" in s and abs(s["window_size"][0] - width) <= 1
+            )
+            assert_debug_window(state, width, height)
+            await assert_canvas_fills_viewport(page, width, height)
+
+            key = f"{scene_baseline_key(project, scene)}_{label}"
+            current_path = screenshot_dir / f"responsive_{key}_current.png"
+            baseline_path = RESPONSIVE_BASELINE_DIR / f"{key}.png"
+            await page.screenshot(path=str(current_path))
+            if errors:
+                raise TestFailure("Browser errors:\n" + "\n".join(f"  • {e}" for e in errors))
+
+            if update or not baseline_path.exists():
+                RESPONSIVE_BASELINE_DIR.mkdir(parents=True, exist_ok=True)
+                created = not baseline_path.exists()
+                shutil.copy(current_path, baseline_path)
+                print(f"    Baseline {'created' if created else 'updated'}: {baseline_path.name}")
+                return
+            diff = compare_screenshots(str(baseline_path), str(current_path))
+            if diff > BASELINE_DIFF_THRESHOLD:
+                raise TestFailure(
+                    f"Screenshot diff {diff:.1%} exceeds {BASELINE_DIFF_THRESHOLD:.0%} threshold. Inspect: {current_path}"
+                )
+            print(f"    Diff: {diff:.2%} (threshold {BASELINE_DIFF_THRESHOLD:.0%}) — OK")
+        finally:
+            await page.close()
+    finally:
+        await context.close()
+
+
+async def test_resize_follows_viewport(browser: Browser) -> None:
+    """One page, several viewport sizes: the engine's window and the canvas both follow each resize."""
+    context = await browser.new_context(viewport={"width": 1280, "height": 720})
+    try:
+        page, errors = await open_project(context, "ui_demo")
+        try:
+            await wait_for_debug_state(page, lambda s: s.get("app_state") == "InGame")
+            for w, h in ((800, 600), (1920, 1080), (390, 844), (844, 390), (1280, 720)):
+                await page.set_viewport_size({"width": w, "height": h})
+                state = await wait_for_debug_state(
+                    page,
+                    lambda s, w=w, h=h: "window_size" in s
+                    and abs(s["window_size"][0] - w) <= 1 and abs(s["window_size"][1] - h) <= 1,
+                )
+                assert_debug_window(state, w, h)
+                await assert_canvas_fills_viewport(page, w, h)
+            if errors:
+                raise TestFailure("Browser errors:\n" + "\n".join(f"  • {e}" for e in errors))
+        finally:
+            await page.close()
+    finally:
+        await context.close()
+
+
+async def test_touch_tap_fires_action(browser: Browser) -> None:
+    """A touch tap (not a mouse click) on quick_scene's Dance button must fire its action.
+
+    Settles whether taps reach Bevy UI `Interaction`: nothing in core reads `Touches`, so this relies
+    on bevy_ui's own touch handling. A failure here is an input finding for the mobile backlog items,
+    not a layout regression.
+    """
+    context = await browser.new_context(viewport={"width": 1280, "height": 720}, has_touch=True)
+    try:
+        page, errors = await open_project(context, "quick_scene")
+        try:
+            await wait_for_debug_state(page, lambda s: s.get("app_state") == "InGame")
+            await page.touchscreen.tap(95, 80)   # Dance button centre, as test_button_fires_action
+            state = await wait_for_debug_state(page, lambda s: "PlayAnimation" in s.get("last_action", ""))
+            if errors:
+                raise TestFailure("Browser errors:\n" + "\n".join(f"  • {e}" for e in errors))
+            return state["last_action"]
+        finally:
+            await page.close()
+    finally:
+        await context.close()
+
+
+async def run_responsive(
+    screenshot_dir: Path,
+    update_baselines: bool,
+    update_targets: set[str],
+    filter_projects: set[str],
+    chromium_args: list[str] | None = None,
+    headless: bool = True,
+    executable_path: str | None = None,
+) -> list[tuple[str, bool, str]]:
+    results: list[tuple[str, bool, str]] = []
+
+    async def record(label: str, coro, xfail: str | None = None) -> None:
+        print(f"  [{label}]")
+        try:
+            extra = await coro
+        except Exception as e:
+            if xfail:
+                results.append((label, True, ""))
+                print(f"    XFAIL (known issue): {xfail}\n      actual: {e}")
+            else:
+                results.append((label, False, str(e)))
+                print(f"    FAIL: {e}")
+            return
+        if xfail:
+            results.append((label, False, f"unexpectedly passed (XPASS): remove its known-issue marker. Was: {xfail}"))
+            print(f"    XPASS: known issue appears fixed, remove the marker")
+        else:
+            results.append((label, True, ""))
+            print(f"    PASS" + (f"  ({extra})" if extra else ""))
+
+    async with async_playwright() as pw:
+        browser: Browser = await pw.chromium.launch(
+            headless=headless,
+            args=chromium_args or CHROMIUM_ARGS_GL,
+            executable_path=executable_path,
+        )
+        await record("responsive:resize_follows_viewport", test_resize_follows_viewport(browser))
+        await record("responsive:touch_tap_fires_action", test_touch_tap_fires_action(browser))
+        for project, scene in RESPONSIVE_TARGETS:
+            if filter_projects and project not in filter_projects:
+                continue
+            for label, w, h, dpr, mobile, xfail in RESPONSIVE_MATRIX:
+                key = f"{scene_baseline_key(project, scene)}_{label}"
+                update_this = update_baselines or "responsive" in update_targets or key in update_targets
+                await record(
+                    f"responsive:{key}",
+                    test_responsive_entry(browser, project, scene, label, w, h, dpr, mobile,
+                                          screenshot_dir, update_this),
+                    xfail,
+                )
+        await browser.close()
+    return results
+
+
 def build_wasm() -> bool:
     print("[build] Running wasm-pack …")
     result = subprocess.run(
@@ -657,6 +879,11 @@ def main() -> None:
                         dest="projects",
                         help="Limit tests to specific project(s) (repeatable). "
                              "Omit to run all projects.")
+    parser.add_argument("--responsive", action="store_true",
+                        help="Run the responsive viewport/device matrix (plus the resize and touch "
+                             "tests) INSTEAD of the main suite. Baselines: screenshot_baselines/"
+                             "responsive/. --update-baseline accepts 'responsive' (all) or an entry "
+                             "key such as ui_demo_main_390x844; --project limits the projects.")
     parser.add_argument("--screenshot-dir", default="screenshots")
     gpu_group = parser.add_mutually_exclusive_group()
     gpu_group.add_argument("--webgpu", action="store_true",
@@ -704,8 +931,9 @@ def main() -> None:
         chromium_args = CHROMIUM_ARGS_GL
         headless = True
 
+    runner = run_responsive if args.responsive else run_all
     try:
-        results = asyncio.run(run_all(
+        results = asyncio.run(runner(
             screenshot_dir, args.update_baselines, update_baseline_projects, filter_projects,
             chromium_args, headless, executable_path=args.browser_path,
         ))

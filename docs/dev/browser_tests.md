@@ -58,9 +58,16 @@ By default the test suite runs headless Chromium with GL/ANGLE (WebGL2). Two fla
 
 The test harness reads a hidden `<div id="debug-state">` updated every frame by the WASM runtime:
 ```json
-{"frame": 42, "app_state": "InGame", "last_action": "PlayAnimation(\"dance\")", "scene": "projects/quick_scene/scenes/main.scene.ron"}
+{"frame": 42, "app_state": "InGame", "last_action": "PlayAnimation(\"dance\")", "scene": "projects/quick_scene/scenes/main.scene.ron", "logic_state": "", "score": 0, "window_size": [1280, 720], "ui_scale": 1}
 ```
+`window_size` is the engine's logical window size and `ui_scale` its `UiScale`; the responsive tests wait on them to know a resize has landed.
 Written by `sync_debug_state_to_dom` (WASM-only, `PostUpdate`) in `ironhold_core/src/lib.rs`.
+
+## Responsive matrix (`--responsive`)
+
+`python test_web.py --responsive --real-gpu --skip-build` runs **instead of** the main suite: one new browser context per viewport/device (`RESPONSIVE_MATRIX`: 1920x1080, 1024x768, 768x1024, 844x390 and 390x844 with mobile emulation + touch, 1280x720 at DPR 2) for `ui_demo` and the `3rd_person_game_demo` main scene. Each entry asserts the engine's `window_size` equals the viewport, `ui_scale` is 1.0, there is exactly one canvas that fills the viewport with no page scroll, and diffs a screenshot against `screenshot_baselines/responsive/{project}_{scene}_{viewport}.png` (its own folder; the gallery reads `scenes/`). It also runs a resize-in-place test (one page, five viewport sizes) and a **touch** test (`touchscreen.tap` on quick_scene's Dance button). Baselines are GPU-captured, so use `--real-gpu`; `--update-baseline responsive` (all) or an entry key such as `ui_demo_main_390x844` re-captures, and `--project` limits the projects. Re-capture the `3rd_person_game_demo` entries when its HUD is retrofitted onto `Group`.
+
+A matrix entry can carry a **known-issue marker**: it still runs and prints `XFAIL` with the reason (not counted as a failure), and if it ever passes it fails the run as `XPASS` so the marker is removed. Today the DPR-2 entries are XFAIL for the HiDPI logical-window bug in `planning/backlog.md`.
 
 ## Canvas host (`#ironhold-canvas`)
 

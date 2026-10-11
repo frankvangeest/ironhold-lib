@@ -63,6 +63,13 @@ pub struct DebugState {
     pub logic_state: String,
     /// Running score total. Derived from `GameVariables["score"]` each frame.
     pub score: i32,
+    /// Logical size `(width, height)` of the primary window, as Bevy reports it this frame
+    /// (`(0.0, 0.0)` for a minimized window or before a window exists, e.g. in headless tests).
+    /// Lets the browser harness wait for a resize to land instead of guessing from pixels.
+    pub window_size: (f32, f32),
+    /// Current `UiScale` multiplier (`1.0` unless a project sets one; `0.0` when the resource
+    /// does not exist, e.g. a headless test app without `UiPlugin`).
+    pub ui_scale: f32,
 }
 
 /// Runtime-writable named values exposed to data-bound UI labels.
@@ -793,16 +800,30 @@ fn update_debug_state(
     mut scene_events: MessageReader<SceneEvent>,
     logic_state: Res<crate::runtime::scene_manager::LogicState>,
     game_vars: Res<GameVariables>,
+    windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    ui_scale: Option<Res<bevy::ui::UiScale>>,
 ) {
     debug.frame += 1;
     debug.app_state = format!("{:?}", state.get());
     debug.logic_state = logic_state.0.clone();
     debug.score = game_vars.0.get("score").and_then(|s| s.parse().ok()).unwrap_or(0);
+    debug.window_size = windows
+        .single()
+        .map(|w| (w.width(), w.height()))
+        .unwrap_or((0.0, 0.0));
+    debug.ui_scale = ui_scale.map(|s| s.0).unwrap_or(0.0);
     for event in scene_events.read() {
         if let SceneEvent::Ready(path) = event {
             debug.scene = path.clone();
         }
     }
+}
+
+/// A finite `f32` for the hand-built debug JSON (a NaN/inf would make the whole object invalid
+/// JSON and silently break every `wait_for_debug_state` poll).
+#[cfg(target_arch = "wasm32")]
+fn json_f32(v: f32) -> f32 {
+    if v.is_finite() { v } else { 0.0 }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -811,13 +832,16 @@ fn sync_debug_state_to_dom(debug: Res<DebugState>) {
     let Some(document) = window.document() else { return };
     let Some(el) = document.get_element_by_id("debug-state") else { return };
     let json = format!(
-        r#"{{"frame":{},"app_state":"{}","last_action":"{}","scene":"{}","logic_state":"{}","score":{}}}"#,
+        r#"{{"frame":{},"app_state":"{}","last_action":"{}","scene":"{}","logic_state":"{}","score":{},"window_size":[{},{}],"ui_scale":{}}}"#,
         debug.frame,
         debug.app_state,
         debug.last_action.replace('"', "\\\""),
         debug.scene.replace('"', "\\\""),
         debug.logic_state.replace('"', "\\\""),
         debug.score,
+        json_f32(debug.window_size.0),
+        json_f32(debug.window_size.1),
+        json_f32(debug.ui_scale),
     );
     el.set_inner_html(&json);
 }
