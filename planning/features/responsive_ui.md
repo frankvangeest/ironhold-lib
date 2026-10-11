@@ -350,6 +350,13 @@ with a hard size check (mismatch returns `1.0`, `:230`).
       0.37% -> 0.01% (dev vs release build noise). Screenshot sizes unchanged (the size check would have
       returned 1.0). Requires a `pkg/` built from the same commit as `play.html` (documented in
       `docs/dev/browser_tests.md`).
+      **Resize check (one-off Playwright script, dev build, ui_demo):** the canvas tracks the viewport
+      exactly at 1280x720, 800x600, 1920x1080, 390x844 and 844x390, back to 1280x720; with the top bar it is
+      viewport minus 44px high and starts at y=44; one canvas, no page scroll. **Finding for Phase 1c /
+      Phase 4:** at `device_scale_factor` 2 the canvas backing store was still 1280x720 (equal to CSS
+      size, not 2x), so on a HiDPI phone the UI would be rendered at 1x and upscaled (blurry). Verify with
+      the DPR-2 entry of the responsive matrix and decide the render-scale policy together with the mobile
+      render-cost cap.
 - [ ] Phase 1c: `--responsive` harness, debug-state fields, first matrix, touch test.
 - [ ] Phase 2: `ui_scale` schema + `ProjectConfig::validate()` + `ui_scale_system` (snap down, clamp,
       write-on-change, reset-to-1.0, clamp warning) + `ui_demo` block (1280x720 reference).
