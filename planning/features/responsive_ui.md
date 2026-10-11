@@ -331,7 +331,13 @@ with a hard size check (mismatch returns `1.0`, `:230`).
       gated (decision 8); what a minimized wasm host reports. (Native Windows is already verified: winit
       0.30.12 sends `Resized` 0x0 on minimize, bevy_winit writes `WindowResized{0,0}`, Bevy guards camera
       extraction/viewport/projection at 0, and our code never divides by window size: `lib.rs:656` only halves it.)
-- [ ] Phase 1a: `data-ready` signal; `play.html` + `test_web.py` switch to it; suite green alone.
+- [x] Phase 1a: `data-ready` signal; `play.html` + `test_web.py` switch to it; suite green alone. Done
+      2026-10-11 (`7449a77`): set from `#debug-state`'s first content in `play.html` (decision 8's second branch:
+      `update_debug_state`/`sync_debug_state_to_dom` run ungated), no Rust change. Full suite `--real-gpu
+      --skip-build` against the existing release `pkg/`: 56/59, the 3 failures are **pre-existing baseline
+      drift, identical with the old harness** (`foliage_demo_main` 5.5%, `local_coop_demo_room10` 8.4%,
+      `pause_nav/02_main_scene` 4.4% before vs 4.5% after). The run also auto-wrote an unreferenced
+      `local_coop_demo_room11` baseline (deleted, not part of this change).
 - [ ] Phase 1b: `WindowPlugin` override (unconditional), `play.html` flex host; suite green, no baseline change.
 - [ ] Phase 1c: `--responsive` harness, debug-state fields, first matrix, touch test.
 - [ ] Phase 2: `ui_scale` schema + `ProjectConfig::validate()` + `ui_scale_system` (snap down, clamp,
