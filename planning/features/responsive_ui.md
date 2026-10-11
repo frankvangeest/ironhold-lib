@@ -1,6 +1,6 @@
 # Feature: Responsive UI (canvas fit, reference-resolution scale, orientation event)
 
-_Status: Ready (plan-review rounds 1-3 + final check passed 2026-10-11; Phase 3 is gated on `ui_set_visible.md` shipping, which needs its own plan-review)_
+_Status: In Progress (Phases 1-2 Done 2026-10-11, Phases 3-4 Queued; Phase 3 is gated on `ui_set_visible.md` shipping, which needs its own plan-review)_
 _Planned at: `e3a2ff2` (2026-10-10)_
 
 Sources: UX + system-architect consult on the main-scene baselines (2026-10-10, see the `### UI`
@@ -39,8 +39,8 @@ from the remaining questions" below. Round-3 decisions (Frank, 2026-10-11):
 
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
-| 1 | Canvas fit + `data-ready` signal + responsive test harness | Done (reviewed, gate passed) | 2026-10-11 |
-| 2 | `ui_scale` project setting (reference-resolution `UiScale`) + pixel-site audit | Queued | — |
+| 1 | Canvas fit + `data-ready` signal + responsive test harness | Done (reviewed, gate passed) | 2026-10-11 (`b5c1800`) |
+| 2 | `ui_scale` project setting (reference-resolution `UiScale`) + pixel-site audit | Done (reviewed, gate passed) | 2026-10-11 (`f2194a3`) |
 | 3a | `SetUiVisible` action (own plan: `ui_set_visible.md`) | Queued | — |
 | 3 | Orientation event + `portrait_reference` (depends on 3a) | Queued | — |
 | 4 | Follow-ups (world-label scale, safe area, touch, mobile render cap, Group v2 re-scope) | Queued | — |
