@@ -38,6 +38,10 @@
                             children: [
                                 Button((id: "add_btn",   text: "Add",   action: "ui.add")),
                                 Button((id: "reset_btn", text: "Reset", action: "ui.reset")),
+                                // SetUiVisible demo: hiding station B collapses its space, so A and C
+                                // (a centre-justified row) close the gap.
+                                Button((id: "hide_b_btn", text: "Hide B", action: "ui.hide_b")),
+                                Button((id: "show_b_btn", text: "Show B", action: "ui.show_b")),
                             ],
                         )),
                     ],
