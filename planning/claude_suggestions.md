@@ -621,3 +621,15 @@
   V19 shows `python -c` with a built path reads the m365 proxy folder anyway, and the `external_directory` pattern `C:/ProgramData/m365-copilot-proxy/**` was only verified in that spelling (`c:\programdata\...` untested). Options: `python -c*` to `ask` for attended sessions, test the other spellings, or a Windows ACL on the credential files.
 - **`-alt` twin of `explore` has a hand-written prompt (the built-in `explore` has none to compare against)** _(observed at `2b8a011` 2026-10-09, opencode_glm_driver_pilot architect review)_
   `check_alt_twins` skips prompt parity when the base has no prompt, so `explore-alt` can drift unnoticed; pin its text in a prompt file or test it in the sync check.
+- **Move the `#ironhold-canvas` selector out of `ironhold_core`** _(observed at `d758771` 2026-10-11, responsive_ui phase 1 architect review)_
+  `start_app` hardcodes the host-page canvas id, and bevy_winit 0.18 panics ("Cannot find element: #ironhold-canvas") on any page without it, so a second host page inherits a hidden requirement; pass it in from `ironhold_web` or expose a documented `pub const` as the host contract.
+- **Split the responsive harness out of `test_web.py`** _(observed at `d758771` 2026-10-11, responsive_ui phase 1 architect review)_
+  The file is ~1000 lines and the `--responsive` section (~285 lines) is self-contained, so a `tools/`-style module would lighten the load for whoever edits the main suite next.
+- **`DebugState.ui_scale` uses `0.0` for "no `UiScale` resource"** _(observed at `d758771` 2026-10-11, responsive_ui phase 1 architect review)_
+  `DebugState::default()` gives 0.0 while a running app reports 1.0, so a reader can misread a 0; an `Option<f32>` serialised as `null` would be unambiguous.
+- **The screenshot diff relies on a 1280x720 canvas without asserting it** _(observed at `d758771` 2026-10-11, responsive_ui phase 1 architect review)_
+  `compare_screenshots` returns 1.0 for any size mismatch, so a wrongly sized canvas fails as "100% different" instead of saying so; asserting the canvas size before diffing would name the cause.
+- **Responsive baselines are not checked against `NON_DETERMINISTIC_SCENES` and the 3rd_person 768x1024 entry sits at ~2.85% of a 4% threshold** _(observed at `d758771` 2026-10-11, responsive_ui phase 1 debug-detective review)_
+  If that baseline starts flaking, settle longer or give the entry its own threshold rather than raising the global one.
+- **Phase 4 render budget should cap total physical pixels, not just mobile DPR** _(observed at `d758771` 2026-10-11, responsive_ui phase 1 wasm-perf review)_
+  The fitted canvas made big desktop monitors the worst case (4K at DPR 1.5: ~8.0 MP and ~350 MB of render targets vs ~2.07 MP / ~40 MB with the old fixed 1280x720 box; a DPR-3 phone got ~3x cheaper), so cap the total pixel budget (about 2-3.7 MP).

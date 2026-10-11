@@ -39,7 +39,7 @@ from the remaining questions" below. Round-3 decisions (Frank, 2026-10-11):
 
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
-| 1 | Canvas fit + `data-ready` signal + responsive test harness | Queued | — |
+| 1 | Canvas fit + `data-ready` signal + responsive test harness | Done (reviewed, gate passed) | 2026-10-11 |
 | 2 | `ui_scale` project setting (reference-resolution `UiScale`) + pixel-site audit | Queued | — |
 | 3a | `SetUiVisible` action (own plan: `ui_set_visible.md`) | Queued | — |
 | 3 | Orientation event + `portrait_reference` (depends on 3a) | Queued | — |
@@ -277,9 +277,14 @@ floor stays; scaling cannot reflow a 1280-wide HUD into 390px, the portrait layo
 - Safe-area insets in `play.html` only: `viewport-fit=cover` plus `env(safe-area-inset-*)` padding.
 - Touch: Bevy's UI focus folds touch into `Interaction` but nothing in core reads `Touches`, and
   orbit / click-to-target / flycam are mouse-only (`camera.rs:218`, `targeting.rs:202`,
-  `flycam.rs:77`). Settled by the Playwright touch test before any claim is made.
-- **Mobile render cost (wasm-perf):** a full-viewport canvas at DPR 3 renders at native phone
-  resolution; cap the render scale for mobile.
+  `flycam.rs:77`). The Playwright touch test (Phase 1c) shows taps reach Bevy UI buttons; the
+  world-side inputs above are still mouse-only.
+- **Render budget (wasm-perf, Phase 1 review):** cap the **total physical pixel budget** (about 2-3.7 MP),
+  not just the mobile DPR. The fitted canvas made phones ~3x cheaper (DPR-3: ~8.3 MP fixed 1280x720 box
+  before, ~2.8 MP now) but big desktop monitors the worst case (4K at DPR 1.5: ~8.0 MP and ~350 MB of
+  render targets vs ~2.07 MP / ~40 MB before; Bevy's default 4x MSAA applies; ~44 bytes per pixel of view
+  targets). Resize also reallocates the camera's main/depth targets (a temporary 2-3 target-set spike
+  while dragging); debounce in `play.html` only if drag hitching shows up.
 - Camera FOV policy for portrait.
 - Re-scope "Flex `Group` v2": leaf `Percent`/`max_width` becomes polish after Phases 1-2, and
   `SetUiVisible` (`ui_set_visible.md`) satisfies its runtime show/hide item. The "ActionBar/panels flow inside a
@@ -376,6 +381,16 @@ with a hard size check (mismatch returns `1.0`, `:230`).
       backlog bug was removed. **Do not use `device_scale_factor` for DPR checks.** Still open for Phase 4:
       the backing store is CSS x dpr, so a DPR-3 phone renders 9x the pixels (the x3 run: 1824x693 for a
       608x231 window); that is the mobile render-cost cap.
+- [x] Phase 1 review + gate, 2026-10-11: system-architect (APPROVE), debug-detective (no blockers), alignment
+      (ALIGNED), wasm-perf (OK; cap deferred to Phase 4, scope changed above). Gate: all 24 `ironhold_core` test
+      files pass, `cargo check -p ironhold_cli` ok, full `test_web.py --real-gpu` 56/59 with only the same 3
+      pre-existing failures, `--responsive` 14/14. Review fixes applied: `play.html` shows a message when the
+      engine can't start (init error, uncaught `unreachable` panic, or 60 s with no first frame; a healthy start
+      never flashes it, a no-WebGPU browser shows it immediately; both checked in a browser), stale-comment
+      fix, harness stale-`pkg/` message made reachable, `--update-baseline <project>` works in
+      `--responsive`, dead DSF column dropped, docs (`docs/30`, `docs/STATUS.md`, `docs/20` designer note,
+      host-page contract in `docs/dev/browser_tests.md`). Follow-ups logged in `claude_suggestions.md`; the
+      pre-existing debug-JSON escaping bug is in `## Bugs`.
 - [ ] Phase 2: `ui_scale` schema + `ProjectConfig::validate()` + `ui_scale_system` (snap down, clamp,
       write-on-change, reset-to-1.0, clamp warning) + `ui_demo` block (1280x720 reference).
 - [ ] Phase 2: pixel-site audit (grep `/ scale_factor` feeding `Val::Px`); fix `camera.rs` ~874 and ~987; test both.
