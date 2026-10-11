@@ -58,9 +58,24 @@ By default the test suite runs headless Chromium with GL/ANGLE (WebGL2). Two fla
 
 The test harness reads a hidden `<div id="debug-state">` updated every frame by the WASM runtime:
 ```json
-{"frame": 42, "app_state": "InGame", "last_action": "PlayAnimation(\"dance\")", "scene": "projects/quick_scene/scenes/main.scene.ron"}
+{"frame": 42, "app_state": "InGame", "last_action": "PlayAnimation(\"dance\")", "scene": "projects/quick_scene/scenes/main.scene.ron", "logic_state": "", "score": 0, "window_size": [1280, 720], "ui_scale": 1}
 ```
+`window_size` is the engine's logical window size and `ui_scale` its `UiScale`; the responsive tests wait on them to know a resize has landed.
 Written by `sync_debug_state_to_dom` (WASM-only, `PostUpdate`) in `ironhold_core/src/lib.rs`.
+
+## Responsive matrix (`--responsive`)
+
+`python test_web.py --responsive --real-gpu --skip-build` runs **instead of** the main suite: one new browser context per viewport/device (`RESPONSIVE_MATRIX`: 1920x1080, 1024x768, 768x1024, 844x390 and 390x844 with mobile emulation + touch) for `ui_demo` and the `3rd_person_game_demo` main scene. Each entry asserts the engine's `window_size` equals the viewport, `ui_scale` equals the expected value (1.0, except `ui_demo` which sets `ui_scale` with a 1280x720 reference and is checked against an independent Python copy of the formula: `expected_ui_scale` in `test_web.py`; keep that reference at 1280x720 so the project's main baseline stays a real regression check), there is exactly one canvas that fills the viewport with no page scroll, and diffs a screenshot against `screenshot_baselines/responsive/{project}_{scene}_{viewport}.png` (its own folder; the gallery reads `scenes/`). It also runs a resize-in-place test (one page, five viewport sizes) and a **touch** test (`touchscreen.tap` on quick_scene's Dance button). Baselines are GPU-captured, so use `--real-gpu`; `--update-baseline responsive` (all) or an entry key such as `ui_demo_main_390x844` re-captures, and `--project` limits the projects. Re-capture the `3rd_person_game_demo` entries when its HUD is retrofitted onto `Group`.
+
+**HiDPI is tested with a real device scale factor, never with Playwright's `device_scale_factor`.** That emulation makes `ResizeObserver`'s `devicePixelContentBoxSize` report the CSS size (an 800x600 element reports `[800,600]` at 1x, 2x and 3x), which is what winit's web backend reads for the canvas's physical size, so the engine would see a window of CSS/dpr (UI 2x too large and cut off). A real display reports CSS x dpr and the engine is correct. `test_real_hidpi` therefore launches a separate Chromium with `--force-device-scale-factor=2` (and `=3`) and `no_viewport=True`, and asserts the engine `window_size` equals the canvas CSS size and the canvas backing store is CSS x dpr. Do not add a `device_scale_factor` entry to the matrix.
+
+## Canvas host (`#ironhold-canvas`)
+
+`play.html` is exactly one viewport tall: the 44px top bar (hidden by `?bar=hidden` and `?testing=1`) above a `.game-host` flex box that takes the rest, with the engine's `<canvas id="ironhold-canvas">` inside it. `start_app` sets `Window.canvas = "#ironhold-canvas"` and `fit_canvas_to_parent: true`, so Bevy sizes the canvas to 100% of the host and it follows browser resizes. Under `?testing=1` the host is the whole viewport, so the suite's fixed 1280x720 context still yields a 1280x720 canvas (any other size makes `compare_screenshots` return `1.0`). **`play.html` needs a `pkg/` built from the same commit:** a stale `pkg/` does not know the selector and appends its own fixed-size canvas to `<body>`, leaving the authored one empty. The reverse also holds: a **new** `pkg/` on a page without `<canvas id="ironhold-canvas">` panics before its first frame (`bevy_winit` 0.18: "Cannot find element: #ironhold-canvas"), so any other page that hosts the engine (an embed, a second runner page) must contain that canvas. Only `play.html` hosts the engine today. Rebuild before running the suite after pulling a change to either file.
+
+## Readiness signal (`body[data-ready]`)
+
+"The engine is ready" means its first frame has run, **not** that a `<canvas>` exists (the canvas can be in the DOM before the wasm has loaded). `play.html` sets a `data-ready` attribute on `<body>` the first time `#debug-state` has content (the first `sync_debug_state_to_dom` write), and hides its loading overlay at the same moment. `test_web.py`'s `open_project` waits on `body[data-ready]` (state `attached`) instead of `canvas`. If a run times out waiting for it, the engine never completed a frame (wasm load failure, no WebGPU adapter, a panic before the first frame); check the console errors the harness collected.
 
 ## URL project selection
 

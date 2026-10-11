@@ -29,11 +29,33 @@
             --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
+        html {
+            height: 100%;
+        }
+
+        /* The page is exactly one viewport tall: the top bar (44px, or none with ?bar=hidden /
+           ?testing=1) plus the game host below it, which takes the rest. `100dvh` tracks the
+           mobile browser's collapsing URL bar; `height: 100%` (on html) is the fallback. */
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             background-color: var(--bg-primary);
             color: var(--text-primary);
             overflow: hidden;
+            height: 100%;
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* The engine draws into #ironhold-canvas (Window.canvas, `start_app`). Bevy's
+           fit_canvas_to_parent sets the canvas CSS to width/height 100% of its parent, so this host
+           must have a definite size: `flex: 1` + `min-height: 0` gives it the viewport minus the
+           top bar, and the canvas then follows every browser resize. */
+        .game-host {
+            position: relative;
+            flex: 1 1 0;
+            min-height: 0;
+            min-width: 0;
         }
 
         canvas {
@@ -43,11 +65,12 @@
         /* ── Top bar ──
            Static and in normal page flow: it sits ABOVE the game canvas instead of floating over
            it, so it never covers or intercepts clicks on the game's own top-of-screen UI. The
-           canvas is a fixed-size element the engine appends after this bar. Add ?bar=hidden to
+           game canvas sits in .game-host below this bar and fills the rest of the viewport. Add ?bar=hidden to
            the URL to remove the bar entirely (?testing=1, used by test_web.py, also hides it). */
         .top-bar {
             position: relative;
             z-index: 1000;
+            flex: none;
             display: flex;
             align-items: center;
             gap: 0.75rem;
@@ -193,7 +216,14 @@
         <a href="https://github.com/frankvangeest/ironhold-lib/blob/main/docs/README.md" class="back-link docs-link" id="docs-link" target="_blank" rel="noopener">Docs</a>
     </nav>
 
-    <!-- Loading indicator shown until canvas appears -->
+    <!-- Game host: sized to the viewport below the bar; the engine draws into the canvas inside it
+         (Window.canvas = "#ironhold-canvas"). Needs a pkg/ built from the same commit: a stale
+         pkg does not know this selector and appends its own fixed-size canvas to <body> instead. -->
+    <div class="game-host" id="game-host">
+        <canvas id="ironhold-canvas"></canvas>
+    </div>
+
+    <!-- Loading indicator shown until the engine's first frame has run -->
     <div class="loading-overlay" id="loading-overlay">
         <div class="loading-content">
             <div class="loading-spinner"></div>
@@ -264,14 +294,53 @@
                 label.textContent = 'Default Project';
             }
 
-            // Hide loading overlay once a <canvas> appears
-            const observer = new MutationObserver(() => {
-                if (document.querySelector('canvas')) {
-                    observer.disconnect();
-                    document.getElementById('loading-overlay').classList.add('hidden');
+            // Readiness signal: the engine is "ready" once its first frame has run, which is the
+            // first time the WASM runtime writes the debug-state JSON (sync_debug_state_to_dom,
+            // every PostUpdate). A <canvas> existing is NOT that signal: the canvas can be present
+            // before the wasm has loaded (and a canvas authored in the HTML would always be).
+            // Sets `data-ready` on <body>; test_web.py waits on `body[data-ready]` too.
+            const debugState = document.getElementById('debug-state');
+            const markReady = () => {
+                if (!debugState.textContent.trim()) return false;
+                document.body.setAttribute('data-ready', '');
+                document.getElementById('loading-overlay').classList.add('hidden');
+                return true;
+            };
+            if (!markReady()) {
+                const observer = new MutationObserver(() => {
+                    if (markReady()) observer.disconnect();
+                });
+                observer.observe(debugState, { childList: true, characterData: true, subtree: true });
+            }
+
+            // The overlay now waits for the engine's first frame, so if the engine can never start
+            // (no WebGPU adapter, a failed import/init) it must say so instead of spinning forever.
+            // The module script calls this on a thrown init/import error; a timeout covers the silent
+            // case (some browsers never resolve the adapter request).
+            const overlay = document.getElementById('loading-overlay');
+            const text = overlay.querySelector('.loading-text');
+            const spinner = overlay.querySelector('.loading-spinner');
+            window.ironholdStartupFailed = (reason) => {
+                if (document.body.hasAttribute('data-ready')) return;
+                if (spinner) spinner.style.display = 'none';
+                text.textContent = reason;
+            };
+            // A Rust panic before the first frame (e.g. bevy_render finding no WebGPU adapter) does not
+            // reject init(): it later surfaces as an uncaught `RuntimeError: unreachable`.
+            const crashed = (e) => {
+                const msg = String(e?.message ?? e?.reason?.message ?? e?.reason ?? e);
+                if (msg.includes('control flow')) return;
+                if (msg.includes('unreachable') || msg.includes('panicked')) {
+                    window.ironholdStartupFailed(
+                        'The engine crashed while starting. This build needs a browser with WebGPU (recent Chrome or Edge); see the console for details.'
+                    );
                 }
-            });
-            observer.observe(document.body, { childList: true, subtree: true });
+            };
+            window.addEventListener('error', crashed);
+            window.addEventListener('unhandledrejection', crashed);
+            setTimeout(() => window.ironholdStartupFailed(
+                'The engine has not started. This build needs a browser with WebGPU (recent Chrome or Edge); check the console for errors.'
+            ), 60000);
         })();
     </script>
 
@@ -280,20 +349,35 @@
         // import init from './pkg/ironhold_web.js';
         let ironhold;
         try {
-            // Primary source (local)
-            ironhold = await import('./pkg/ironhold_web.js');
+            try {
+                // Primary source (local)
+                ironhold = await import('./pkg/ironhold_web.js');
+            } catch (err) {
+                console.warn('Primary local import failed, trying GitHub Pages fallback...');
+                // Fallback source (GitHub Pages)
+                ironhold = await import('https://frankvangeest.github.io/ironhold-lib/pkg/ironhold_web.js');
+            }
         } catch (err) {
-            console.warn('Primary local import failed, trying GitHub Pages fallback...');
-            // Fallback source (GitHub Pages)
-            ironhold = await import('https://frankvangeest.github.io/ironhold-lib/pkg/ironhold_web.js');
+            console.error('Could not load the engine module:', err);
+            window.ironholdStartupFailed?.('Could not load the engine (pkg/ironhold_web.js). Build it with wasm-pack, or check your connection.');
         }
 
         async function run() {
+            if (!ironhold) return;
             // Dynamic import() returns the module namespace object.
             // wasm-pack --target web exports init as the default export only,
             // so use .default — not .init — when loading via import().
             const initFn = ironhold.default ?? ironhold.init;
-            await initFn();
+            try {
+                await initFn();
+            } catch (err) {
+                // winit's web event loop unwinds with a deliberate exception ("Using exceptions for
+                // control flow, don't mind me. This isn't actually an error!") that surfaces here on
+                // a perfectly healthy start; only a different error is a real failure.
+                if (String(err?.message ?? err).includes('control flow')) return;
+                console.error('Engine failed to start:', err);
+                window.ironholdStartupFailed?.('The engine failed to start (see the browser console). This build needs WebGPU.');
+            }
         }
 
         run();

@@ -1,0 +1,5 @@
+(
+    schema_version: 3,
+    initial_scene: "scenes/main.scene.ron",
+    ui_scale: (reference: (0.0, 720.0)),
+)

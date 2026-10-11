@@ -65,7 +65,7 @@ assets/projects/{name}/
 ```
 
 The native runner selects a project by name: `cargo run -p ironhold_native -- --project quick_scene`.
-The web runner uses a URL param: `play.html?project=quick_scene`.
+The web runner uses a URL param: `play.html?project=quick_scene`. On the web the game canvas fills the browser window below the page's top bar and follows window resizes (it is no longer a fixed 1280x720 box). UI placed with absolute pixel positions for 1280x720 can clip or crowd in smaller windows; use a [`Group`](#group) with `Percent` sizes for layouts that must adapt (a project-wide reference-resolution scale is planned).
 Both default to `quick_scene` if nothing is specified.
 
 ### File naming conventions
@@ -114,6 +114,7 @@ Entry point for a project. References all other files.
 | `damage_popup_style` | `Option<DamagePopupStyle>` | — | Visual style for `Action::ShowDamagePopup` popups. Omit for built-in defaults. See [DamagePopupStyle](#damagepopupstyle) below. |
 | `audio` | `AudioConfig` | — | Project-level audio settings. Omit for defaults (`max_volume: 1.0, mute_on_start: false`). See [AudioConfig](#audioconfig) below. |
 | `max_frame_delta_secs` | `Option<f32>` | — | Caps the largest per-frame time delta the whole game clock reports, in seconds. Omit for Bevy's default (0.25s). See [max_frame_delta_secs](#max_frame_delta_secs) below. |
+| `ui_scale` | `Option<UiScaleConfig>` | — | Scale the whole UI against a reference resolution so one layout works on any window size. Omit to leave UI scale at exactly 1.0. See [Responsive UI: `ui_scale`](#responsive-ui-ui_scale) below. |
 | `model_fixes` | `Map<String, TransformFix>` | v1 only | Inline fixes (v1 only; use `model_fixes_path` in v2+) |
 
 **Example:**
@@ -135,6 +136,7 @@ Entry point for a project. References all other files.
     },
     // global_unclaimed_gamepad_bindings: { "South": "join" },  // see Gamepad-triggered hot join
     // max_frame_delta_secs: 0.25,  // default; see max_frame_delta_secs below
+    // ui_scale: (reference: (1280.0, 720.0)),  // see Responsive UI: ui_scale below
 )
 ```
 
@@ -4732,6 +4734,50 @@ Optional block in `{name}.project.ron` that controls project-level audio volume.
 
 ---
 
+## Responsive UI: `ui_scale`
+
+Optional block in `{name}.project.ron`. Author your UI at one **reference resolution** (for example 1280x720) and the engine scales every fixed-pixel UI value and every text size by "how much bigger or smaller the window is than the reference", so the same layout stays readable on a big monitor, a tablet or a phone. Leave the block out and the UI stays at exactly 1.0 (every existing project behaves as before).
+
+```ron
+// {name}.project.ron
+(
+    schema_version: 3,
+    ...
+    ui_scale: (
+        reference: (1280.0, 720.0),   // required: the resolution you authored the UI at
+        fit: Fit,                     // Fit (default) | FitWidth | FitHeight
+        min_scale: 0.5,               // default 0.5
+        max_scale: 2.0,               // default 2.0
+        snap: 0.25,                   // default 0.25; 0.0 turns snapping off
+    ),
+)
+```
+
+Write the block exactly like the other optional blocks: no `Some(...)` around it, and no quotes around `Fit`.
+
+| Field | Type | Default | Meaning |
+|---|---|---|---|
+| `reference` | `(f32, f32)` | required | `(width, height)` the UI was authored at. Both must be greater than 0; whole numbers (`(1280, 720)`) work too. It must be the window size you actually tested your layout at: if it is not, the layout is off at every size, including the reference size. |
+| `fit` | `Fit` \| `FitWidth` \| `FitHeight` | `Fit` | `Fit`: the whole reference rectangle always fits (the smaller of width and height decides). `FitWidth` / `FitHeight`: match one axis. |
+| `min_scale` | `f32` | `0.5` | The lowest scale ever applied (at least `0.05`). Below this the UI overflows the window; the engine logs one warning (window size, the scale it needed, and the floor) when this starts to happen. Keep it a multiple of `snap` so the scale can land exactly on it. |
+| `max_scale` | `f32` | `2.0` | The highest scale ever applied. Must be at least `min_scale`. |
+| `snap` | `f32` | `0.25` | The scale is rounded **down** to a multiple of this (0.88 becomes 0.75, never 1.0, so it never grows past the window). Whole steps keep small text sharp. `0.0` disables snapping; it cannot be larger than `max_scale`. On phones `snap: 0.1` keeps text as large as the window allows. |
+
+**How the three pieces fit together:** `ui_scale` decides *how big* things are; a [`Group`](#group) decides *where* things go (a full-screen root `Group` with `SpaceBetween` rows keeps your rows glued to the screen edges at any size); a layout that must change for a different shape of screen is a later feature. A project with `ui_scale: (reference: (1280.0, 720.0))` and edge-anchored rows looks the same shape at 1920x1080 (scale 1.5) and at 844x390 (scale 0.5, rows still on the edges).
+
+**Behaviour to know:**
+- **An invalid block is ignored**: if a value breaks a rule above the engine logs an error and leaves the UI at 1.0 instead of crashing; `ironhold validate` names the field and the fix, so run it after editing.
+- **Only pixel values scale** (sizes, `padding`, `gap`, `font_size`, absolute `position:`); `Percent(...)` sizes already follow the window. UI placed with an absolute `position:` and no root `Group` scales from the top-left corner: on a window shaped differently from your reference it stays in a reference-shaped area and does not follow the right or bottom edge. Put HUD rows in a full-screen root `Group`.
+- Text shrinks with the scale: text authored at 22 px is 11 px at 0.5 (a phone in landscape lands there with the defaults).
+- At exactly the reference size the scale is 1.0, so a scene looks identical there. Keep `ui_demo`'s reference at 1280x720 for the same reason.
+- A window that reports 0x0 (a minimized desktop window, a hidden browser tab) is ignored: the scale stays what it was and nothing is re-laid out.
+- Split-screen: the scale comes from the **whole window**, not from each player's viewport.
+- **World labels do not scale yet.** Nameplates, world stat bars, floating text and damage popups are world-space text, not UI nodes, so on a 1080p window the HUD grows 1.5x while they stay put.
+- The scale is presentation only: it never affects gameplay, physics or replays.
+- To preview phone and tablet sizes without a device, open the web build and use the browser's device-mode toolbar (F12, then the device icon): the canvas follows the window.
+- On phones in portrait, one global scale cannot reflow a wide HUD into a narrow screen (a 390px-wide phone needs about 0.30, below the default floor); a portrait layout is a separate feature.
+
+---
 ## `max_frame_delta_secs`
 
 Optional field in `{name}.project.ron` that caps `Time<Virtual>::max_delta` — the largest delta the *whole* game clock reports for a single frame. Omit to use Bevy's default (`0.25`, ≈16 ticks at this engine's 64Hz tick rate).

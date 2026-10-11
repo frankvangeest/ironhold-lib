@@ -1,6 +1,6 @@
 # Feature: Responsive UI (canvas fit, reference-resolution scale, orientation event)
 
-_Status: Ready (plan-review rounds 1-3 + final check passed 2026-10-11; Phase 3 is gated on `ui_set_visible.md` shipping, which needs its own plan-review)_
+_Status: In Progress (Phases 1-2 Done 2026-10-11, Phases 3-4 Queued; Phase 3 is gated on `ui_set_visible.md` shipping, which needs its own plan-review)_
 _Planned at: `e3a2ff2` (2026-10-10)_
 
 Sources: UX + system-architect consult on the main-scene baselines (2026-10-10, see the `### UI`
@@ -39,8 +39,8 @@ from the remaining questions" below. Round-3 decisions (Frank, 2026-10-11):
 
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
-| 1 | Canvas fit + `data-ready` signal + responsive test harness | Queued | — |
-| 2 | `ui_scale` project setting (reference-resolution `UiScale`) + pixel-site audit | Queued | — |
+| 1 | Canvas fit + `data-ready` signal + responsive test harness | Done (reviewed, gate passed) | 2026-10-11 (`b5c1800`) |
+| 2 | `ui_scale` project setting (reference-resolution `UiScale`) + pixel-site audit | Done (reviewed, gate passed) | 2026-10-11 (`f2194a3`) |
 | 3a | `SetUiVisible` action (own plan: `ui_set_visible.md`) | Queued | — |
 | 3 | Orientation event + `portrait_reference` (depends on 3a) | Queued | — |
 | 4 | Follow-ups (world-label scale, safe area, touch, mobile render cap, Group v2 re-scope) | Queued | — |
@@ -277,9 +277,14 @@ floor stays; scaling cannot reflow a 1280-wide HUD into 390px, the portrait layo
 - Safe-area insets in `play.html` only: `viewport-fit=cover` plus `env(safe-area-inset-*)` padding.
 - Touch: Bevy's UI focus folds touch into `Interaction` but nothing in core reads `Touches`, and
   orbit / click-to-target / flycam are mouse-only (`camera.rs:218`, `targeting.rs:202`,
-  `flycam.rs:77`). Settled by the Playwright touch test before any claim is made.
-- **Mobile render cost (wasm-perf):** a full-viewport canvas at DPR 3 renders at native phone
-  resolution; cap the render scale for mobile.
+  `flycam.rs:77`). The Playwright touch test (Phase 1c) shows taps reach Bevy UI buttons; the
+  world-side inputs above are still mouse-only.
+- **Render budget (wasm-perf, Phase 1 review):** cap the **total physical pixel budget** (about 2-3.7 MP),
+  not just the mobile DPR. The fitted canvas made phones ~3x cheaper (DPR-3: ~8.3 MP fixed 1280x720 box
+  before, ~2.8 MP now) but big desktop monitors the worst case (4K at DPR 1.5: ~8.0 MP and ~350 MB of
+  render targets vs ~2.07 MP / ~40 MB before; Bevy's default 4x MSAA applies; ~44 bytes per pixel of view
+  targets). Resize also reallocates the camera's main/depth targets (a temporary 2-3 target-set spike
+  while dragging); debounce in `play.html` only if drag hitching shows up.
 - Camera FOV policy for portrait.
 - Re-scope "Flex `Group` v2": leaf `Percent`/`max_width` becomes polish after Phases 1-2, and
   `SetUiVisible` (`ui_set_visible.md`) satisfies its runtime show/hide item. The "ActionBar/panels flow inside a
@@ -304,11 +309,12 @@ with a hard size check (mismatch returns `1.0`, `:230`).
    change would pass silently. Decide deliberately (Phase 1 spike) and record it.
 4. **`--responsive` mode, kept separate** (do not multiply the main loop):
    - New context per entry via `new_context(viewport=..., device_scale_factor=..., is_mobile=..., has_touch=...)`.
-   - Matrix: 1920x1080, 1024x768, 768x1024, 844x390, 390x844 (`is_mobile`, `has_touch`), and
-     1280x720 at DPR 2.
+   - Matrix: 1920x1080, 1024x768, 768x1024, 844x390, 390x844 (`is_mobile`, `has_touch`). **No DSF
+     emulation entry** (it makes winit see a CSS/dpr window, see Phase 1d); real HiDPI is tested with
+     `--force-device-scale-factor` launches instead (x2, x3).
    - Projects: `ui_demo` (with a `ui_scale` block and a portrait variant) plus a retrofitted HUD
      scene (`3rd_person_game_demo` main).
-   - Baselines in `screenshot_baselines/responsive/{project}_{scene}_{W}x{H}[_dpr2].png`, not under
+   - Baselines in `screenshot_baselines/responsive/{project}_{scene}_{W}x{H}.png`, not under
      `scenes/` (that folder feeds the gallery). GPU-captured only (`--real-gpu`, port 8001).
 5. **Settle after resize:** `page.set_viewport_size`, then frame-count from the post-resize frame
    (`SCREENSHOT_SETTLE_FRAMES = 120`, `:81`), never wall-clock sleeps.
@@ -331,13 +337,86 @@ with a hard size check (mismatch returns `1.0`, `:230`).
       gated (decision 8); what a minimized wasm host reports. (Native Windows is already verified: winit
       0.30.12 sends `Resized` 0x0 on minimize, bevy_winit writes `WindowResized{0,0}`, Bevy guards camera
       extraction/viewport/projection at 0, and our code never divides by window size: `lib.rs:656` only halves it.)
-- [ ] Phase 1a: `data-ready` signal; `play.html` + `test_web.py` switch to it; suite green alone.
-- [ ] Phase 1b: `WindowPlugin` override (unconditional), `play.html` flex host; suite green, no baseline change.
-- [ ] Phase 1c: `--responsive` harness, debug-state fields, first matrix, touch test.
-- [ ] Phase 2: `ui_scale` schema + `ProjectConfig::validate()` + `ui_scale_system` (snap down, clamp,
-      write-on-change, reset-to-1.0, clamp warning) + `ui_demo` block (1280x720 reference).
-- [ ] Phase 2: pixel-site audit (grep `/ scale_factor` feeding `Val::Px`); fix `camera.rs` ~874 and ~987; test both.
-- [ ] Phase 2 gate: full suite green with no baseline changes; responsive baselines captured.
+- [x] Phase 1a: `data-ready` signal; `play.html` + `test_web.py` switch to it; suite green alone. Done
+      2026-10-11 (`7449a77`): set from `#debug-state`'s first content in `play.html` (decision 8's second branch:
+      `update_debug_state`/`sync_debug_state_to_dom` run ungated), no Rust change. Full suite `--real-gpu
+      --skip-build` against the existing release `pkg/`: 56/59, the 3 failures are **pre-existing baseline
+      drift, identical with the old harness** (`foliage_demo_main` 5.5%, `local_coop_demo_room10` 8.4%,
+      `pause_nav/02_main_scene` 4.4% before vs 4.5% after). The run also auto-wrote an unreferenced
+      `local_coop_demo_room11` baseline (deleted, not part of this change).
+- [x] Phase 1b: `WindowPlugin` override (unconditional), `play.html` flex host; suite green, no baseline change.
+      Done 2026-10-11: `start_app` sets `Window.canvas = "#ironhold-canvas"` + `fit_canvas_to_parent: true`;
+      `play.html` is a `100dvh` flex column (bar `flex: none`) with a `.game-host` (`flex: 1 1 0; min-height: 0`)
+      holding the authored `<canvas id="ironhold-canvas">`. Deviation from the plan's "keep `canvas: None`":
+      the authored canvas + selector keeps the 44px bar out of the canvas height (Bevy's inline
+      `height: 100%` would otherwise overflow `body`); Phase 1a's `data-ready` is what makes an
+      authored canvas safe. WASM dev build 2m21s. Full suite `--real-gpu --skip-build` on the dev build:
+      56/59 with the **same 3 pre-existing failures and identical numbers** (5.5% / 8.4% / 4.4%); across
+      the 40 scene baselines the only delta over 0.3 points is `3rd_person_game_demo_character_select`
+      0.37% -> 0.01% (dev vs release build noise). Screenshot sizes unchanged (the size check would have
+      returned 1.0). Requires a `pkg/` built from the same commit as `play.html` (documented in
+      `docs/dev/browser_tests.md`).
+      **Resize check (one-off Playwright script, dev build, ui_demo):** the canvas tracks the viewport
+      exactly at 1280x720, 800x600, 1920x1080, 390x844 and 844x390, back to 1280x720; with the top bar it is
+      viewport minus 44px high and starts at y=44; one canvas, no page scroll.
+- [x] Phase 1c: `--responsive` harness, debug-state fields, first matrix, touch test. Done 2026-10-11:
+      `DebugState.window_size` / `ui_scale` (+ `json_f32` guard, 2 core tests in `action_tests.rs`, 24/24 in
+      that file); `test_web.py --responsive` (resize-in-place test, touch test, 5-viewport matrix x
+      `ui_demo` + `3rd_person_game_demo` main, baselines in `screenshot_baselines/responsive/`, and two
+      real-HiDPI tests). Run against its own baselines: 14/14 (`ui_demo` 0.00%, the 3D scene 0.29-2.85%;
+      its 768x1024 entry is the closest to the 4% threshold, watch it). Not done (deferred, optional in the
+      plan): per-node UI rect dumps / "no root rect outside the window" assertion.
+      **Finding: touch taps reach Bevy UI buttons** (`touchscreen.tap` on quick_scene's Dance button fires
+      `PlayAnimation("dance")`); the mobile items can assume UI taps work. World-side orbit/click-to-target
+      are still mouse-only.
+- [x] Phase 1d (was proposed as a HiDPI fix): **resolved as not a bug, 2026-10-11.** Phase 1c's first matrix
+      had a DPR-2 entry that showed the engine at half the CSS size (`window_size` `[640,360]` for a 1280x720
+      viewport, UI 2x too large and cut off) and was briefly logged as a bug. Root cause: **Playwright's
+      `device_scale_factor` emulation makes ResizeObserver's `devicePixelContentBoxSize` report the CSS
+      size** (an 800x600 element reports `[800,600]` at DSF 1, 2 and 3 on a page with no engine at all), and
+      winit 0.30's web backend reads exactly that for the physical canvas size. With a **real** device
+      scale factor (`--force-device-scale-factor` + `no_viewport`) the engine is correct: x2 gives CSS
+      927x403, backing 1854x806, `window_size` 927x403; x3 gives CSS 608x231, backing 1824x693,
+      `window_size` 608x231. The DPR-2 entry was replaced by `test_real_hidpi` (x2 and x3, passing) and the
+      backlog bug was removed. **Do not use `device_scale_factor` for DPR checks.** Still open for Phase 4:
+      the backing store is CSS x dpr, so a DPR-3 phone renders 9x the pixels (the x3 run: 1824x693 for a
+      608x231 window); that is the mobile render-cost cap.
+- [x] Phase 1 review + gate, 2026-10-11: system-architect (APPROVE), debug-detective (no blockers), alignment
+      (ALIGNED), wasm-perf (OK; cap deferred to Phase 4, scope changed above). Gate: all 24 `ironhold_core` test
+      files pass, `cargo check -p ironhold_cli` ok, full `test_web.py --real-gpu` 56/59 with only the same 3
+      pre-existing failures, `--responsive` 14/14. Review fixes applied: `play.html` shows a message when the
+      engine can't start (init error, uncaught `unreachable` panic, or 60 s with no first frame; a healthy start
+      never flashes it, a no-WebGPU browser shows it immediately; both checked in a browser), stale-comment
+      fix, harness stale-`pkg/` message made reachable, `--update-baseline <project>` works in
+      `--responsive`, dead DSF column dropped, docs (`docs/30`, `docs/STATUS.md`, `docs/20` designer note,
+      host-page contract in `docs/dev/browser_tests.md`). Follow-ups logged in `claude_suggestions.md`; the
+      pre-existing debug-JSON escaping bug is in `## Bugs`.
+- [x] Phase 2: `ui_scale` schema + `ProjectConfig::validate()` + `ui_scale_system` (snap down, clamp,
+      write-on-change, reset-to-1.0, clamp warning) + `ui_demo` block (1280x720 reference). Done 2026-10-11.
+      `UiScaleConfig`/`UiScaleFit` + `ProjectConfig.ui_scale` (additive, `deny_unknown_fields`, no schema bump, no
+      `Some(`), `capabilities/ui_scale.rs` (`valid_window_size`, `compute_ui_scale`, `ui_scale_system`), 3 CLI
+      fixtures, `ui_demo` block. Deviations from the plan text, all deliberate: (1) the system **polls every frame**
+      instead of reading `WindowResized` (a few float ops; also covers project load, hot-reload and the first frame);
+      (2) it divides by `window.scale_factor() * UiScale` where the plan said `ComputedUiRenderTargetInfo` (equivalent
+      while all RON UI renders through the one primary-window `Camera2d`); (3) the floor warning fires once on each
+      transition **into** the floored state (not per window-size class), and compares the **unsnapped** need against
+      `min_scale` (the snapped value warned falsely when `min_scale` was not a multiple of `snap`); (4) an **invalid
+      block is treated as off** (UiScale stays 1.0) because the runtime only logs a failed `validate()` and never
+      re-validates a hot-reload, and `f32::clamp` panics on min > max (found by all three reviews; the clamp is now
+      `max().min()`); (5) extra validation: `min_scale >= 0.05`, `snap <= max_scale`, positive `max_scale`.
+- [x] Phase 2: pixel-site audit (grep `/ scale_factor` feeding `Val::Px`); fix `camera.rs` ~874 and ~987; test both.
+      Done: only those two sites convert viewport px to UI units (`lib.rs` world labels are `Text2d`, `targeting.rs`
+      is a cursor-vs-viewport ray, bevy_ui focus/picking apply `UiScale` themselves); both fixed and tested in
+      `local_coop_tests.rs` (the HUD one end to end through the real system; mutation-checked).
+- [x] Phase 2 gate: full suite green with no baseline changes; responsive baselines captured. Done 2026-10-11:
+      all 25 core test files (`ui_scale_tests` 15/15, `local_coop_tests` 164/164), 46 lib unit tests, CLI check +
+      tests (12/188/15), `ron_validation`/`ron_lint`; `test_web.py --real-gpu` 56/59 with only the same 3
+      pre-existing failures (so `ui_demo`'s main baseline, at exactly 1280x720 = scale 1.0, is unchanged);
+      `--responsive` 14/14 after re-capturing the five `ui_demo` baselines (scale 1.5 at 1920x1080, 0.75 at
+      1024x768, 0.5 at the rest; `test_web.py` checks the engine value against an independent Python copy of the
+      formula). Reviews: system-architect (approve once the panic was fixed), debug-detective (same blocker + the
+      false warning), ux-gamedesigner-reviewer (docs good, same blocker). A background gate was killed once by
+      memory pressure and re-run in pieces (build, then each browser suite alone).
 - [ ] **Prerequisite for Phase 3:** `ui_set_visible.md` planned, reviewed and shipped (`SetUiVisible`,
       `UiNodeId`, validate checks, `Action::is_presentation_only()`).
 - [ ] Phase 3: `UiEvent::Presentation(String)` + the four named destructure sites (`fsm_interpreter.rs:36`,

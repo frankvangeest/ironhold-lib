@@ -168,6 +168,18 @@ text_font.font_size = new_size;
 if (text_font.font_size - new_size).abs() >= 0.5 { text_font.font_size = new_size; }
 ```
 
+## `UiScale` is presentation-only, and `Val::Px` is in UI units
+
+`ProjectConfig.ui_scale` drives Bevy's global `UiScale` (`capabilities/ui_scale.rs`, `ui_scale_system`). It is never read by
+simulation, never runs in `FixedUpdate`, and is not a replay input. Two rules follow:
+- **Any code that turns window or viewport pixels into a `Val::Px` must divide by `window.scale_factor() * UiScale`**, not
+  `scale_factor` alone (`UiScale` is multiplied into every UI root's scale factor, so `Val::Px` is logical px / `UiScale`).
+  Today that is `split_viewport_player_label_update_system` and `target_hud_update_system` (`capabilities/camera.rs`); read
+  the resource as `Option<Res<UiScale>>` (headless test apps have no `UiPlugin`). `Text2d` world labels are not UI nodes
+  and are unaffected. Grep `/ .*scale_factor` next to a `Val::Px` when adding one.
+- **A window size of 0 (a minimized window, a hidden web host) carries no information:** go through
+  `capabilities::ui_scale::valid_window_size` and write nothing. Never divide by a raw `window.width()`.
+
 <!-- b:1084 -->
 ## Despawning: prefer `try_despawn()` when an entity may already be gone
 

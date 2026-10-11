@@ -24,6 +24,33 @@ fn test_log_action_updates_debug_last_action() {
     assert_eq!(debug.last_action, "Log(\"hello_world\")");
 }
 
+/// `DebugState.window_size` / `ui_scale` are what the browser harness (`test_web.py --responsive`)
+/// asserts on, so a resize or a `UiScale` change must reach them within a frame.
+#[test]
+fn test_debug_state_reports_window_size_and_ui_scale() {
+    let mut app = setup_test_app();
+    app.world_mut().spawn((
+        Window { resolution: (800u32, 600u32).into(), ..default() },
+        bevy::window::PrimaryWindow,
+    ));
+    app.world_mut().insert_resource(bevy::ui::UiScale(0.5));
+    app.update();
+
+    let debug = app.world().resource::<ironhold_core::DebugState>();
+    assert_eq!(debug.window_size, (800.0, 600.0));
+    assert_eq!(debug.ui_scale, 0.5);
+}
+
+/// No primary window (headless test apps, or before winit creates one) reads as 0x0, not a panic.
+#[test]
+fn test_debug_state_window_size_is_zero_without_a_window() {
+    let mut app = setup_test_app();
+    app.update();
+
+    let debug = app.world().resource::<ironhold_core::DebugState>();
+    assert_eq!(debug.window_size, (0.0, 0.0));
+}
+
 #[test]
 fn test_set_variable_writes_value() {
     let mut app = setup_test_app();
