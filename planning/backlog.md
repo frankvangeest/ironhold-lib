@@ -11,6 +11,8 @@
 
 ## Active
 
+- [ ] **Responsive UI, phases 1-2: canvas fit + `data-ready` + `ui_scale` project setting** _(2026-10-10; plan Ready 2026-10-11; Active 2026-10-11 on `feature/responsive_ui`)_ — today there is no `UiScale`, no resize handling, and `start_app` uses the default 1280x720 window (`lib.rs:848`), so Group layouts never see another window size. Phase 1: fit the canvas to the viewport below the `play.html` top bar (`fit_canvas_to_parent`; folds in the "Fit the game canvas" item above), switch the readiness signal from "a canvas exists" to a `data-ready` attribute in `play.html` and `test_web.py`, and add a `--responsive` Playwright matrix (separate baselines folder, fixed 1280x720 for the main suite). Phase 2: optional `ui_scale: (reference: (1280.0, 720.0), fit: Fit, min_scale, max_scale, snap)` on `ProjectConfig` (no `Some(`, no `None` variant; absent = off) driving Bevy `UiScale` from one change-guarded `WindowResized` system (snap down, clamp, one-time warning when the floor bites, ignores a minimized 0x0 window), plus an audit of hand-converted `Val::Px` sites (`camera.rs` ~874, ~987). Presentation only, never read by simulation. World labels/nameplates (`Text2d`) need the same factor separately (phase 4). See `planning/features/responsive_ui.md`. Size M.
+
 ---
 
 ## Bugs
