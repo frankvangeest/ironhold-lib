@@ -80,21 +80,20 @@ BASELINE_DIR = Path("screenshot_baselines")
 # like every other baseline. See planning/features/responsive_ui.md ("Playwright screenshot impact").
 RESPONSIVE_BASELINE_DIR = BASELINE_DIR / "responsive"
 #
-# The last field marks a KNOWN failing entry: it still runs and is reported as XFAIL (not counted as a
-# failure); if it ever passes it is reported as a failure (XPASS) so the marker gets removed.
-HIDPI_XFAIL = (
-    "at devicePixelRatio 2 the engine's logical window is half the CSS size (640x360 for a 1280x720 "
-    "viewport) and the canvas backing store stays at CSS size, so UI renders 2x too large and is cut off. "
-    "Pre-existing (identical before the canvas-fit change); see the HiDPI bug in planning/backlog.md"
-)
+# There is deliberately NO device_scale_factor > 1 entry here: Playwright's `device_scale_factor`
+# emulation makes ResizeObserver's devicePixelContentBoxSize report the CSS size (verified: an 800x600
+# element reports [800,600] at DSF 1, 2 and 3), which is what winit's web backend reads for the
+# physical canvas size, so the engine then sees a window of CSS/dpr. That is an emulation artifact (a
+# real display reports CSS*dpr). Real HiDPI is covered by `test_real_hidpi`, which launches Chromium
+# with `--force-device-scale-factor` instead.
 RESPONSIVE_MATRIX = [
-    ("1920x1080",      1920, 1080, 1, False, None),         # PC
-    ("1024x768",       1024,  768, 1, False, None),         # tablet, landscape
-    ("768x1024",        768, 1024, 1, False, None),         # tablet, portrait
-    ("844x390",         844,  390, 1, True,  None),         # phone, landscape
-    ("390x844",         390,  844, 1, True,  None),         # phone, portrait
-    ("1280x720_dpr2",  1280,  720, 2, False, HIDPI_XFAIL),  # HiDPI
+    ("1920x1080",      1920, 1080, 1, False),   # PC
+    ("1024x768",       1024,  768, 1, False),   # tablet, landscape
+    ("768x1024",        768, 1024, 1, False),   # tablet, portrait
+    ("844x390",         844,  390, 1, True),    # phone, landscape
+    ("390x844",         390,  844, 1, True),    # phone, portrait
 ]
+REAL_HIDPI_FACTORS = (2, 3)
 # (project, scene) pairs the matrix runs. `ui_demo` is the Group-layout showcase; the 3rd_person
 # main scene is the real HUD (its baselines change when that HUD is retrofitted onto `Group`).
 RESPONSIVE_TARGETS = [
@@ -793,6 +792,58 @@ async def test_touch_tap_fires_action(browser: Browser) -> None:
         await context.close()
 
 
+async def test_real_hidpi(
+    pw,
+    factor: int,
+    chromium_args: list[str] | None,
+    headless: bool,
+    executable_path: str | None,
+) -> str:
+    """On a real (not emulated) device scale factor the engine must see the CSS-sized window and the
+    canvas backing store must be CSS * dpr (sharp), not CSS-sized.
+
+    Chromium is launched with `--force-device-scale-factor=N` and `no_viewport=True` (no CDP
+    emulation: Playwright's `device_scale_factor` makes ResizeObserver report CSS-sized
+    devicePixelContentBoxSize, which makes winit see a CSS/dpr window; that is an emulation artifact).
+    The window size is whatever the browser opens with, so everything is measured in-page.
+    """
+    browser = await pw.chromium.launch(
+        headless=headless,
+        args=(chromium_args or CHROMIUM_ARGS_GL) + [f"--force-device-scale-factor={factor}"],
+        executable_path=executable_path,
+    )
+    try:
+        context = await browser.new_context(no_viewport=True)
+        page, errors = await open_project(context, "ui_demo")
+        try:
+            await wait_for_debug_state(page, lambda s: s.get("app_state") == "InGame")
+            await asyncio.sleep(2)   # let a post-load resize settle
+            m = await page.evaluate("""() => {
+              const c = document.getElementById('ironhold-canvas'); const r = c.getBoundingClientRect();
+              return {dpr: devicePixelRatio, innerW: innerWidth, innerH: innerHeight,
+                      cssW: r.width, cssH: r.height, backW: c.width, backH: c.height};
+            }""")
+            state = await wait_for_debug_state(page, lambda s: "window_size" in s)
+            ww, wh = state["window_size"]
+            if abs(m["dpr"] - factor) > 0.01:
+                raise TestFailure(f"browser reports devicePixelRatio {m['dpr']}, expected {factor}")
+            if abs(ww - m["cssW"]) > 1 or abs(wh - m["cssH"]) > 1:
+                raise TestFailure(f"engine window_size {ww}x{wh} != canvas CSS size {m['cssW']:.0f}x{m['cssH']:.0f}")
+            if abs(m["backW"] - m["cssW"] * factor) > factor or abs(m["backH"] - m["cssH"] * factor) > factor:
+                raise TestFailure(
+                    f"canvas backing store {m['backW']}x{m['backH']} is not CSS x {factor} "
+                    f"({m['cssW']:.0f}x{m['cssH']:.0f}): UI would be blurry or mis-scaled"
+                )
+            if errors:
+                raise TestFailure("Browser errors:\n" + "\n".join(f"  • {e}" for e in errors))
+            return f"css {m['cssW']:.0f}x{m['cssH']:.0f}, backing {m['backW']}x{m['backH']}, window_size {ww:.0f}x{wh:.0f}"
+        finally:
+            await page.close()
+            await context.close()
+    finally:
+        await browser.close()
+
+
 async def run_responsive(
     screenshot_dir: Path,
     update_baselines: bool,
@@ -804,24 +855,15 @@ async def run_responsive(
 ) -> list[tuple[str, bool, str]]:
     results: list[tuple[str, bool, str]] = []
 
-    async def record(label: str, coro, xfail: str | None = None) -> None:
+    async def record(label: str, coro) -> None:
         print(f"  [{label}]")
         try:
             extra = await coro
-        except Exception as e:
-            if xfail:
-                results.append((label, True, ""))
-                print(f"    XFAIL (known issue): {xfail}\n      actual: {e}")
-            else:
-                results.append((label, False, str(e)))
-                print(f"    FAIL: {e}")
-            return
-        if xfail:
-            results.append((label, False, f"unexpectedly passed (XPASS): remove its known-issue marker. Was: {xfail}"))
-            print(f"    XPASS: known issue appears fixed, remove the marker")
-        else:
             results.append((label, True, ""))
             print(f"    PASS" + (f"  ({extra})" if extra else ""))
+        except Exception as e:
+            results.append((label, False, str(e)))
+            print(f"    FAIL: {e}")
 
     async with async_playwright() as pw:
         browser: Browser = await pw.chromium.launch(
@@ -834,16 +876,22 @@ async def run_responsive(
         for project, scene in RESPONSIVE_TARGETS:
             if filter_projects and project not in filter_projects:
                 continue
-            for label, w, h, dpr, mobile, xfail in RESPONSIVE_MATRIX:
+            for label, w, h, dpr, mobile in RESPONSIVE_MATRIX:
                 key = f"{scene_baseline_key(project, scene)}_{label}"
                 update_this = update_baselines or "responsive" in update_targets or key in update_targets
                 await record(
                     f"responsive:{key}",
                     test_responsive_entry(browser, project, scene, label, w, h, dpr, mobile,
                                           screenshot_dir, update_this),
-                    xfail,
                 )
         await browser.close()
+
+        # Real HiDPI: separate browsers, one per forced device scale factor (see RESPONSIVE_MATRIX note).
+        for factor in REAL_HIDPI_FACTORS:
+            await record(
+                f"responsive:real_hidpi_x{factor}",
+                test_real_hidpi(pw, factor, chromium_args, headless, executable_path),
+            )
     return results
 
 
