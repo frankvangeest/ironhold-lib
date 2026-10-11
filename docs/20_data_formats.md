@@ -65,7 +65,7 @@ assets/projects/{name}/
 ```
 
 The native runner selects a project by name: `cargo run -p ironhold_native -- --project quick_scene`.
-The web runner uses a URL param: `play.html?project=quick_scene`.
+The web runner uses a URL param: `play.html?project=quick_scene`. On the web the game canvas fills the browser window below the page's top bar and follows window resizes (it is no longer a fixed 1280x720 box). UI placed with absolute pixel positions for 1280x720 can clip or crowd in smaller windows; use a [`Group`](#group) with `Percent` sizes for layouts that must adapt (a project-wide reference-resolution scale is planned).
 Both default to `quick_scene` if nothing is specified.
 
 ### File naming conventions

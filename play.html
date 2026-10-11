@@ -65,7 +65,7 @@
         /* ── Top bar ──
            Static and in normal page flow: it sits ABOVE the game canvas instead of floating over
            it, so it never covers or intercepts clicks on the game's own top-of-screen UI. The
-           canvas is a fixed-size element the engine appends after this bar. Add ?bar=hidden to
+           game canvas sits in .game-host below this bar and fills the rest of the viewport. Add ?bar=hidden to
            the URL to remove the bar entirely (?testing=1, used by test_web.py, also hides it). */
         .top-bar {
             position: relative;
@@ -312,6 +312,35 @@
                 });
                 observer.observe(debugState, { childList: true, characterData: true, subtree: true });
             }
+
+            // The overlay now waits for the engine's first frame, so if the engine can never start
+            // (no WebGPU adapter, a failed import/init) it must say so instead of spinning forever.
+            // The module script calls this on a thrown init/import error; a timeout covers the silent
+            // case (some browsers never resolve the adapter request).
+            const overlay = document.getElementById('loading-overlay');
+            const text = overlay.querySelector('.loading-text');
+            const spinner = overlay.querySelector('.loading-spinner');
+            window.ironholdStartupFailed = (reason) => {
+                if (document.body.hasAttribute('data-ready')) return;
+                if (spinner) spinner.style.display = 'none';
+                text.textContent = reason;
+            };
+            // A Rust panic before the first frame (e.g. bevy_render finding no WebGPU adapter) does not
+            // reject init(): it later surfaces as an uncaught `RuntimeError: unreachable`.
+            const crashed = (e) => {
+                const msg = String(e?.message ?? e?.reason?.message ?? e?.reason ?? e);
+                if (msg.includes('control flow')) return;
+                if (msg.includes('unreachable') || msg.includes('panicked')) {
+                    window.ironholdStartupFailed(
+                        'The engine crashed while starting. This build needs a browser with WebGPU (recent Chrome or Edge); see the console for details.'
+                    );
+                }
+            };
+            window.addEventListener('error', crashed);
+            window.addEventListener('unhandledrejection', crashed);
+            setTimeout(() => window.ironholdStartupFailed(
+                'The engine has not started. This build needs a browser with WebGPU (recent Chrome or Edge); check the console for errors.'
+            ), 60000);
         })();
     </script>
 
@@ -320,20 +349,35 @@
         // import init from './pkg/ironhold_web.js';
         let ironhold;
         try {
-            // Primary source (local)
-            ironhold = await import('./pkg/ironhold_web.js');
+            try {
+                // Primary source (local)
+                ironhold = await import('./pkg/ironhold_web.js');
+            } catch (err) {
+                console.warn('Primary local import failed, trying GitHub Pages fallback...');
+                // Fallback source (GitHub Pages)
+                ironhold = await import('https://frankvangeest.github.io/ironhold-lib/pkg/ironhold_web.js');
+            }
         } catch (err) {
-            console.warn('Primary local import failed, trying GitHub Pages fallback...');
-            // Fallback source (GitHub Pages)
-            ironhold = await import('https://frankvangeest.github.io/ironhold-lib/pkg/ironhold_web.js');
+            console.error('Could not load the engine module:', err);
+            window.ironholdStartupFailed?.('Could not load the engine (pkg/ironhold_web.js). Build it with wasm-pack, or check your connection.');
         }
 
         async function run() {
+            if (!ironhold) return;
             // Dynamic import() returns the module namespace object.
             // wasm-pack --target web exports init as the default export only,
             // so use .default — not .init — when loading via import().
             const initFn = ironhold.default ?? ironhold.init;
-            await initFn();
+            try {
+                await initFn();
+            } catch (err) {
+                // winit's web event loop unwinds with a deliberate exception ("Using exceptions for
+                // control flow, don't mind me. This isn't actually an error!") that surfaces here on
+                // a perfectly healthy start; only a different error is a real failure.
+                if (String(err?.message ?? err).includes('control flow')) return;
+                console.error('Engine failed to start:', err);
+                window.ironholdStartupFailed?.('The engine failed to start (see the browser console). This build needs WebGPU.');
+            }
         }
 
         run();

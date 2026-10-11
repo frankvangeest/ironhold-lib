@@ -56,7 +56,7 @@ This section is factual and reflects what exists right now.
   - `PreloadScene(path)` / `PreloadPrefab(key)` warm the asset cache for scenes and prefab GLBs respectively.
   - `Log(msg)` emits an `info!` log line.
 - ✅ `LogicState` resource tracks the current named state (default `""`). A state's own `on:` bindings only fire while `LogicState` matches that state's name; `global_on` bindings fire regardless. FSM transitions update `LogicState` directly in the interpreter — there is no separate action to force a state change; see `docs/20_data_formats.md`'s "Removed: rules.ron" callout for why and what to use instead (`EmitEvent` + a transition).
-- ✅ `DebugState` resource exposes `last_action`, `app_state`, `scene`, `frame`, `logic_state`, and `score` for observability and browser-based testing.
+- ✅ `DebugState` resource exposes `last_action`, `app_state`, `scene`, `frame`, `logic_state`, `score`, `window_size`, and `ui_scale` for observability and browser-based testing.
 
 ## Event model (planned)
 We standardize runtime messages so content can bind to them consistently.
@@ -320,7 +320,7 @@ Applies actions to the world. Key design points:
   - ✅ `InputAction` abstraction (`Move`, `Turn`, `Look`, `Jump`, `Run`)
   - ✅ Scene lifecycle events: `SceneEvent::{Requested, Loaded, Ready, Unloading}`
   - ✅ Data-defined project logic wired to interpreter + executor (originally two dialects, later consolidated onto `logic/state_machine.ron` alone — see `docs/20_data_formats.md`'s migration callout)
-  - ✅ `DebugState` resource for runtime observability (`frame`, `app_state`, `last_action`, `scene`, `logic_state`, `score`)
+  - ✅ `DebugState` resource for runtime observability (`frame`, `app_state`, `last_action`, `scene`, `logic_state`, `score`, `window_size`, `ui_scale`)
   - ✅ `GameEvent::Trigger(String)` for physics sensors and gameplay capabilities
 
 - **Milestone: Rule bindings v2** 🧭
@@ -391,7 +391,7 @@ Applies actions to the world. Key design points:
 ### Infrastructure ✅
 - `ActionQueue` — FIFO queue processed each frame by `action_executor_system` (push order equals execution order)
 - `LogicState` resource — tracks the current named state (default `""`); checked by `fsm_interpreter_system` (the per-entity `entity_fsm_interpreter_system` tracks its own state independently, via `EntityFsmState`)
-- `DebugState` resource — tracks `frame`, `app_state`, `last_action`, `scene`, `logic_state`; serialised to DOM on WASM for browser testing
+- `DebugState` resource — tracks `frame`, `app_state`, `last_action`, `scene`, `logic_state`, `score`, `window_size`, `ui_scale`; serialised to DOM on WASM for browser testing
 - `StateMachineAsset` loaded from `logic/state_machine.ron` via `fsm_interpreter_system`; every project uses this — `state_machine_path` in the project config points to it
 
 ### FSM asset schema (`logic/state_machine.ron`) ✅

@@ -75,7 +75,7 @@ BASELINE_DIR = Path("screenshot_baselines")
 
 # --responsive mode: a small viewport/device matrix, kept out of the main suite (it would multiply
 # a ~20-minute run). Baselines live in their own folder so the gallery (which reads scenes/) never
-# picks them up. Entries: (label, viewport width, viewport height, device_scale_factor, mobile).
+# picks them up. Entries: (label, viewport width, viewport height, mobile).
 # `mobile` turns on Chromium's mobile emulation and touch. Captured and compared with --real-gpu only,
 # like every other baseline. See planning/features/responsive_ui.md ("Playwright screenshot impact").
 RESPONSIVE_BASELINE_DIR = BASELINE_DIR / "responsive"
@@ -87,11 +87,11 @@ RESPONSIVE_BASELINE_DIR = BASELINE_DIR / "responsive"
 # real display reports CSS*dpr). Real HiDPI is covered by `test_real_hidpi`, which launches Chromium
 # with `--force-device-scale-factor` instead.
 RESPONSIVE_MATRIX = [
-    ("1920x1080",      1920, 1080, 1, False),   # PC
-    ("1024x768",       1024,  768, 1, False),   # tablet, landscape
-    ("768x1024",        768, 1024, 1, False),   # tablet, portrait
-    ("844x390",         844,  390, 1, True),    # phone, landscape
-    ("390x844",         390,  844, 1, True),    # phone, portrait
+    ("1920x1080",      1920, 1080, False),   # PC
+    ("1024x768",       1024,  768, False),   # tablet, landscape
+    ("768x1024",        768, 1024, False),   # tablet, portrait
+    ("844x390",         844,  390, True),    # phone, landscape
+    ("390x844",         390,  844, True),    # phone, portrait
 ]
 REAL_HIDPI_FACTORS = (2, 3)
 # (project, scene) pairs the matrix runs. `ui_demo` is the Group-layout showcase; the 3rd_person
@@ -699,14 +699,12 @@ async def test_responsive_entry(
     label: str,
     width: int,
     height: int,
-    dpr: int,
     mobile: bool,
     screenshot_dir: Path,
     update: bool,
 ) -> None:
     context = await browser.new_context(
         viewport={"width": width, "height": height},
-        device_scale_factor=dpr,
         is_mobile=mobile,
         has_touch=mobile,
     )
@@ -715,7 +713,7 @@ async def test_responsive_entry(
         try:
             await wait_for_scene_ready(page)
             state = await wait_for_debug_state(
-                page, lambda s: "window_size" in s and abs(s["window_size"][0] - width) <= 1
+                page, lambda s: "window_size" not in s or abs(s["window_size"][0] - width) <= 1   # a stale pkg (no field) falls through to assert_debug_window's clear message
             )
             assert_debug_window(state, width, height)
             await assert_canvas_fills_viewport(page, width, height)
@@ -756,8 +754,8 @@ async def test_resize_follows_viewport(browser: Browser) -> None:
                 await page.set_viewport_size({"width": w, "height": h})
                 state = await wait_for_debug_state(
                     page,
-                    lambda s, w=w, h=h: "window_size" in s
-                    and abs(s["window_size"][0] - w) <= 1 and abs(s["window_size"][1] - h) <= 1,
+                    lambda s, w=w, h=h: "window_size" not in s
+                    or (abs(s["window_size"][0] - w) <= 1 and abs(s["window_size"][1] - h) <= 1),
                 )
                 assert_debug_window(state, w, h)
                 await assert_canvas_fills_viewport(page, w, h)
@@ -823,7 +821,9 @@ async def test_real_hidpi(
               return {dpr: devicePixelRatio, innerW: innerWidth, innerH: innerHeight,
                       cssW: r.width, cssH: r.height, backW: c.width, backH: c.height};
             }""")
-            state = await wait_for_debug_state(page, lambda s: "window_size" in s)
+            state = await wait_for_debug_state(page, lambda s: s.get("app_state") == "InGame")
+            if "window_size" not in state:
+                raise TestFailure("debug state has no window_size: stale pkg/ (rebuild)")
             ww, wh = state["window_size"]
             if abs(m["dpr"] - factor) > 0.01:
                 raise TestFailure(f"browser reports devicePixelRatio {m['dpr']}, expected {factor}")
@@ -876,12 +876,12 @@ async def run_responsive(
         for project, scene in RESPONSIVE_TARGETS:
             if filter_projects and project not in filter_projects:
                 continue
-            for label, w, h, dpr, mobile in RESPONSIVE_MATRIX:
+            for label, w, h, mobile in RESPONSIVE_MATRIX:
                 key = f"{scene_baseline_key(project, scene)}_{label}"
-                update_this = update_baselines or "responsive" in update_targets or key in update_targets
+                update_this = update_baselines or "responsive" in update_targets or project in update_targets or key in update_targets
                 await record(
                     f"responsive:{key}",
-                    test_responsive_entry(browser, project, scene, label, w, h, dpr, mobile,
+                    test_responsive_entry(browser, project, scene, label, w, h, mobile,
                                           screenshot_dir, update_this),
                 )
         await browser.close()
