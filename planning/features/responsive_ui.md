@@ -304,11 +304,12 @@ with a hard size check (mismatch returns `1.0`, `:230`).
    change would pass silently. Decide deliberately (Phase 1 spike) and record it.
 4. **`--responsive` mode, kept separate** (do not multiply the main loop):
    - New context per entry via `new_context(viewport=..., device_scale_factor=..., is_mobile=..., has_touch=...)`.
-   - Matrix: 1920x1080, 1024x768, 768x1024, 844x390, 390x844 (`is_mobile`, `has_touch`), and
-     1280x720 at DPR 2.
+   - Matrix: 1920x1080, 1024x768, 768x1024, 844x390, 390x844 (`is_mobile`, `has_touch`). **No DSF
+     emulation entry** (it makes winit see a CSS/dpr window, see Phase 1d); real HiDPI is tested with
+     `--force-device-scale-factor` launches instead (x2, x3).
    - Projects: `ui_demo` (with a `ui_scale` block and a portrait variant) plus a retrofitted HUD
      scene (`3rd_person_game_demo` main).
-   - Baselines in `screenshot_baselines/responsive/{project}_{scene}_{W}x{H}[_dpr2].png`, not under
+   - Baselines in `screenshot_baselines/responsive/{project}_{scene}_{W}x{H}.png`, not under
      `scenes/` (that folder feeds the gallery). GPU-captured only (`--real-gpu`, port 8001).
 5. **Settle after resize:** `page.set_viewport_size`, then frame-count from the post-resize frame
    (`SCREENSHOT_SETTLE_FRAMES = 120`, `:81`), never wall-clock sleeps.
@@ -352,30 +353,29 @@ with a hard size check (mismatch returns `1.0`, `:230`).
       `docs/dev/browser_tests.md`).
       **Resize check (one-off Playwright script, dev build, ui_demo):** the canvas tracks the viewport
       exactly at 1280x720, 800x600, 1920x1080, 390x844 and 844x390, back to 1280x720; with the top bar it is
-      viewport minus 44px high and starts at y=44; one canvas, no page scroll. At `device_scale_factor` 2
-      the canvas backing store was 1280x720 (CSS size, not 2x); **my first reading ("UI rendered at 1x and
-      upscaled") was wrong, corrected in Phase 1c below:** the engine's logical window is half the CSS size.
+      viewport minus 44px high and starts at y=44; one canvas, no page scroll.
 - [x] Phase 1c: `--responsive` harness, debug-state fields, first matrix, touch test. Done 2026-10-11:
       `DebugState.window_size` / `ui_scale` (+ `json_f32` guard, 2 core tests in `action_tests.rs`, 24/24 in
-      that file); `test_web.py --responsive` (resize-in-place test, touch test, 6-entry matrix x
-      `ui_demo` + `3rd_person_game_demo` main, baselines in `screenshot_baselines/responsive/`, XFAIL/XPASS
-      known-issue marker). Second run against the just-created baselines: 14/14 (10 baselines at 0.00%
-      for `ui_demo`, 0.65-2.13% for the 3D scene). Not done (deferred, optional in the plan): per-node UI
-      rect dumps / "no root rect outside the window" assertion.
-      **Findings:** (1) **touch taps reach Bevy UI buttons**: `touchscreen.tap` on quick_scene's Dance
-      button fires `PlayAnimation("dance")` (the mobile items can assume UI taps work; world-side
-      orbit/click-to-target are still mouse-only). (2) **HiDPI is broken, pre-existing:** at DPR 2 and a CSS
-      1280x720 viewport the engine reports `window_size` `[640,360]` while the canvas backing store is
-      1280x720, so the UI renders 2x too large and is cut off (`ui_demo`'s bottom row is gone). Old and new
-      `pkg/` + `play.html` give byte-identical screenshots, so it predates 1b. It is logged as a bug
-      in `planning/backlog.md` and the DPR-2 matrix entries are XFAIL. It must be fixed before phones
-      (DPR 2-3) get a usable UI, so it is proposed as **Phase 1d** (below).
-- [ ] Phase 1d (proposed, needs Frank's go-ahead): fix the HiDPI logical-window bug. Investigate
-      bevy_winit/winit 0.30 web resize handling (physical = CSS x dpr, `devicePixelContentBoxSize`),
-      `WindowResolution` scale-factor handling and `scale_factor_override` (a correct layout at 1x
-      rendering is the fallback, a sharp 2x backing store the goal); flip the DPR-2 matrix entries from
-      XFAIL to passing and capture their baselines; fold in the mobile render-cost cap (a DPR-3 phone
-      renders 9x the pixels).
+      that file); `test_web.py --responsive` (resize-in-place test, touch test, 5-viewport matrix x
+      `ui_demo` + `3rd_person_game_demo` main, baselines in `screenshot_baselines/responsive/`, and two
+      real-HiDPI tests). Run against its own baselines: 14/14 (`ui_demo` 0.00%, the 3D scene 0.29-2.85%;
+      its 768x1024 entry is the closest to the 4% threshold, watch it). Not done (deferred, optional in the
+      plan): per-node UI rect dumps / "no root rect outside the window" assertion.
+      **Finding: touch taps reach Bevy UI buttons** (`touchscreen.tap` on quick_scene's Dance button fires
+      `PlayAnimation("dance")`); the mobile items can assume UI taps work. World-side orbit/click-to-target
+      are still mouse-only.
+- [x] Phase 1d (was proposed as a HiDPI fix): **resolved as not a bug, 2026-10-11.** Phase 1c's first matrix
+      had a DPR-2 entry that showed the engine at half the CSS size (`window_size` `[640,360]` for a 1280x720
+      viewport, UI 2x too large and cut off) and was briefly logged as a bug. Root cause: **Playwright's
+      `device_scale_factor` emulation makes ResizeObserver's `devicePixelContentBoxSize` report the CSS
+      size** (an 800x600 element reports `[800,600]` at DSF 1, 2 and 3 on a page with no engine at all), and
+      winit 0.30's web backend reads exactly that for the physical canvas size. With a **real** device
+      scale factor (`--force-device-scale-factor` + `no_viewport`) the engine is correct: x2 gives CSS
+      927x403, backing 1854x806, `window_size` 927x403; x3 gives CSS 608x231, backing 1824x693,
+      `window_size` 608x231. The DPR-2 entry was replaced by `test_real_hidpi` (x2 and x3, passing) and the
+      backlog bug was removed. **Do not use `device_scale_factor` for DPR checks.** Still open for Phase 4:
+      the backing store is CSS x dpr, so a DPR-3 phone renders 9x the pixels (the x3 run: 1824x693 for a
+      608x231 window); that is the mobile render-cost cap.
 - [ ] Phase 2: `ui_scale` schema + `ProjectConfig::validate()` + `ui_scale_system` (snap down, clamp,
       write-on-change, reset-to-1.0, clamp warning) + `ui_demo` block (1280x720 reference).
 - [ ] Phase 2: pixel-site audit (grep `/ scale_factor` feeding `Val::Px`); fix `camera.rs` ~874 and ~987; test both.
