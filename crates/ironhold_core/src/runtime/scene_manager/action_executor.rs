@@ -803,6 +803,17 @@ pub fn action_executor_system(
                     warn!("Action::SetEntityVisible: entity '{}' not found in spawn registry", entity_id);
                 }
             }
+            Action::SetUiVisible { id, visible } => {
+                // `Display::None` drops the node from flex layout and hit-testing; a `Group`
+                // takes its subtree with it. Applies to every match (base scene + overlay);
+                // an unknown id is a silent no-op (the node may not be spawned yet).
+                let display = if visible { Display::Flex } else { Display::None };
+                for (node_id, mut node) in scene_state.ui_nodes_q.iter_mut() {
+                    if node_id.0 == id && node.display != display {
+                        node.display = display;
+                    }
+                }
+            }
             Action::EmitEventAfterDelay { event, delay_secs } => {
                 info!("Action::EmitEventAfterDelay: '{}' in {:.1}s", event, delay_secs);
                 scene_state.delayed_events.0.push((delay_secs, event));

@@ -582,6 +582,12 @@ pub struct PendingAnimationPolicy(pub Handle<AnimationPolicy>);
 #[derive(Component)]
 pub struct OverlayEntity;
 
+/// Scene-authored `id` of a spawned UI node, inserted by `spawn_ui_element_node` in every
+/// `UiNodeDef` arm so `Action::SetUiVisible` can find it. Ids are unique per scene, not across a
+/// base scene plus an open overlay, so lookups apply to every match. Empty ids are never matched.
+#[derive(Component, Debug, Clone, PartialEq, Eq)]
+pub struct UiNodeId(pub String);
+
 /// Marker component for the currently playing background music entity.
 /// Used by `Action::PlayMusicLoop` to stop the previous track before starting a new one.
 #[derive(Component)]
@@ -750,6 +756,8 @@ pub struct SceneStateParams<'w, 's> {
     pub shop_entries_q: Query<'w, 's, (Entity, &'static ChildOf), With<crate::capabilities::inventory::ShopEntriesContainerMarker>>,
     /// Visibility query for the ContainerPanel node.
     pub container_panel_q: Query<'w, 's, (Entity, &'static mut Visibility), (With<crate::capabilities::inventory::ContainerPanelMarker>, Without<crate::capabilities::inventory::InventoryPanelMarker>, Without<crate::capabilities::inventory::ShopPanelMarker>)>,
+    /// UI nodes addressable by `Action::SetUiVisible` (the only core writer of `Node.display`).
+    pub ui_nodes_q: Query<'w, 's, (&'static UiNodeId, &'static mut Node)>,
 }
 
 /// Bundles material-related assets to keep `spawn_scene_v2` under Bevy's 16-param limit.
