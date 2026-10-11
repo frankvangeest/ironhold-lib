@@ -180,6 +180,13 @@ simulation, never runs in `FixedUpdate`, and is not a replay input. Two rules fo
 - **A window size of 0 (a minimized window, a hidden web host) carries no information:** go through
   `capabilities::ui_scale::valid_window_size` and write nothing. Never divide by a raw `window.width()`.
 
+## `Node.display` has one writer: `Action::SetUiVisible`
+
+`SetUiVisible` hides a UI node with `Display::None` (not `Visibility::Hidden`, which still takes flex space) through the `UiNodeId`
+component every `UiNodeDef` spawner arm inserts. It is the only core writer of `Node.display`; a second one needs a shared owner, or the
+two will fight. Keep the guarded write (`if node.display != target`) and a silent no-op on unknown ids. Panels and the `ActionBar` are
+excluded on purpose (they open/close via `Visibility` and their own actions); `ironhold validate` enforces it.
+
 <!-- b:1084 -->
 ## Despawning: prefer `try_despawn()` when an entity may already be gone
 

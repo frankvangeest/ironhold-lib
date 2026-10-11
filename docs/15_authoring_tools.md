@@ -117,6 +117,8 @@ Sample `watch` output (each save prints the changed file and a result):
 |---|---|---|---|
 | two slots in one `ActionBar` whose keys resolve to the same key | `duplicate_key` | they share one cooldown and one set of event names | give each slot a unique key |
 | slots in two different `ActionBar`s that resolve to the same key | `cross_bar_duplicate_key` | cooldown and intent events are keyed by the slot key scene-wide, so a rule for one bar's slot also fires for the other | use distinct keys across bars |
+| a `SetUiVisible` with an empty id, or an id that matches no UI node in any scene or overlay (nested groups and `ActionBar` slot actions are scanned) | `set_ui_visible_empty_id` / `set_ui_visible_unknown_id` | the action does nothing at runtime (a typo is the usual cause) | use the `id` of a `ui:` node; ids only need to exist in one scene |
+| a `SetUiVisible` whose target is, or contains, a dialogue/inventory/shop/container panel or an `ActionBar` | `set_ui_visible_unhideable_target` | panels open and close with their own actions and an `ActionBar`'s keys keep firing while hidden | target a `Group` that does not contain them, and move the bar/panel outside it |
 | an unrecognised slot `gamepad_key` | `invalid_gamepad_key` | the slot never fires from the gamepad | fix the button name |
 | one player with two or more slots on the same gamepad button | `same_player_gamepad_duplicate_key` | the slots collide | give each slot its own button |
 | a slot with a `gamepad_key` whose owning player's prefab has no `inputs.gamepad_index` | `gamepad_key_without_gamepad_index` | the gamepad binding never fires (the keyboard key still works) | set `gamepad_index` on the player |
