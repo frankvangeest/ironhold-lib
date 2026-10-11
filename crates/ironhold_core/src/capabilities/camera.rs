@@ -852,12 +852,16 @@ pub fn split_viewport_player_label_update_system(
     window_q: Query<&Window, With<bevy::window::PrimaryWindow>>,
     cameras: Query<(&Camera, &LinkedPlayerLabel), With<SplitScreenPlayerLabel>>,
     mut labels: Query<(&mut Node, &mut Visibility)>,
+    ui_scale: Option<Res<bevy::ui::UiScale>>,
 ) {
     const MARGIN_PX: f32 = 8.0;
     const LABEL_WIDTH_PX: f32 = 48.0;
 
     let Ok(window) = window_q.single() else { return };
-    let scale_factor = window.scale_factor();
+    // `Val::Px` is in UI units: logical pixels divided by `UiScale` (bevy_ui multiplies it into each
+    // root's scale factor), so a viewport (physical px) converts by `scale_factor * UiScale`, not by
+    // `scale_factor` alone. MARGIN_PX/LABEL_WIDTH_PX are UI units and scale with the label itself.
+    let scale_factor = window.scale_factor() * ui_scale.map_or(1.0, |s| s.0);
 
     for (camera, linked) in &cameras {
         let Ok((mut node, mut visibility)) = labels.get_mut(linked.0) else { continue };
@@ -944,12 +948,15 @@ pub fn target_hud_update_system(
     registry: Res<crate::runtime::scene_manager::SpawnRegistry>,
     target_hud_cfg: Res<crate::runtime::scene_manager::LoadedTargetHud>,
     mut huds: Query<(&mut Text, &mut Node, &mut Visibility)>,
+    ui_scale: Option<Res<bevy::ui::UiScale>>,
 ) {
     use crate::schema::scene_v2::TargetHudDisplay;
 
     let Some(cfg) = &target_hud_cfg.0 else { return };
     let Ok(window) = window_q.single() else { return };
-    let scale_factor = window.scale_factor();
+    // Physical viewport px -> UI units: divide by `scale_factor * UiScale` (see
+    // `split_viewport_player_label_update_system`).
+    let scale_factor = window.scale_factor() * ui_scale.map_or(1.0, |s| s.0);
 
     const MARGIN_PX: f32 = 8.0;
     const READOUT_HEIGHT_PX: f32 = 24.0;

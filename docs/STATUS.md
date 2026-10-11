@@ -116,6 +116,7 @@ _Last updated: 2026‑10‑11_
 > New Messages/Actions **must** update this table and include examples + tests.
 
 ### Debug / Test Surface
+- Responsive UI scale: optional `ui_scale` block in `.project.ron` (reference resolution, `Fit`/`FitWidth`/`FitHeight`, `min_scale`/`max_scale`/`snap`) drives Bevy's `UiScale`; see docs/20 "Responsive UI: `ui_scale`".
 - `DebugState` resource — updated every `PostUpdate` frame; exposes `frame`, `app_state`, `last_action`, `scene`, `logic_state`, `score`, `window_size`, `ui_scale`.
 - On WASM, `DebugState` is serialised as JSON into `<div id="debug-state">` by `sync_debug_state_to_dom`, making it readable by browser automation tools.
   ```json

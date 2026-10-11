@@ -387,6 +387,12 @@ impl Plugin for GamePlugin {
                 crate::capabilities::camera::camera_blend_system,
                 animation_playback_system,
             ).chain())
+            // Keeps UiScale at the configured reference scale. Before the two systems that convert
+            // viewport pixels into `Val::Px` (they divide by `UiScale` too), so a resize and the
+            // scale it causes land in the same frame.
+            .add_systems(Update, crate::capabilities::ui_scale::ui_scale_system
+                .before(split_viewport_player_label_update_system)
+                .before(target_hud_update_system))
             .add_systems(Update, split_viewport_player_label_spawn_system)
             .add_systems(Update, target_hud_spawn_system)
             .add_systems(Update, pipeline_warmup_system)

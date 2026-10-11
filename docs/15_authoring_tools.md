@@ -141,7 +141,7 @@ Sample `watch` output (each save prints the changed file and a result):
 | a `join_prefab_keys` slot past the supported player count | `unreachable_join_slot` | that slot can never join | remove it |
 | a joinable slot with no `player_{slot+1}_start` entry in the scene's `spawn_points` | `missing_reference` | the joining player spawns next to player 1 | add the spawn point |
 | a catalog file (`assets.ron`, `prefabs.ron`, `stats.ron`, `items.ron`) that fails its own rules, e.g. an empty model path, a `Foliage` prefab missing its `foliage` block, a stat with `min > max`, an item with `max_stack: 0` | `invalid_asset_catalog` / `invalid_prefab_catalog` / `invalid_stat_catalog` / `invalid_item_catalog` | the catalog misbehaves at runtime | fix the entry named in the message |
-| the `.project.ron` itself invalid (`schema_version`, or `max_frame_delta_secs` outside about 0.03 to 60 seconds) | `invalid_project_config` | a crash, or permanent slow motion | fix the field |
+| the `.project.ron` itself invalid (`schema_version`, `max_frame_delta_secs` outside about 0.03 to 60 seconds, or a `ui_scale` block with a non-positive `reference`, a `min_scale` below 0.05 or above `max_scale`, a non-positive `max_scale`, or a negative or oversized `snap`) | `invalid_project_config` | a crash, permanent slow motion, or (for `ui_scale`) the engine ignoring the block and leaving the UI at 1.0 | fix the field; the message names it, e.g. "`ui_scale.min_scale` (1.5) > `ui_scale.max_scale` (1): swap them" |
 
 ### Strict-only checks (`--strict`)
 | What you see | Code | Meaning |

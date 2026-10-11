@@ -9,6 +9,14 @@
     prefab_catalog: "prefabs/prefabs.ron",
     state_machine_path: "logic/state_machine.ron",
 
+    // Author the UI at 1280x720 and scale it with the window (Fit: the whole 1280x720 rectangle
+    // always fits). At exactly 1280x720 the scale is 1.0, so this scene looks unchanged there.
+    // Keep this reference at 1280x720: `ui_demo`'s main baseline relies on it staying a real
+    // regression check (see docs/dev/browser_tests.md).
+    ui_scale: (
+        reference: (1280.0, 720.0),
+    ),
+
     global_environment: (
         intensity: 400.0,
         fallback: (

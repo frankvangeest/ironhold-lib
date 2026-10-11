@@ -7198,3 +7198,89 @@ fn test_party_camera_manual_zoom_offset_does_not_bank_past_the_radius_clamp() {
          {radius_after_one_reversed_notch} (expected {expected})"
     );
 }
+
+// ── UiScale (responsive_ui Phase 2): viewport-pixel -> Val::Px sites must divide by UiScale ─────
+
+#[test]
+fn test_split_label_position_divides_by_ui_scale() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+    // `Val::Px` is in UI units (logical px / UiScale), so at UiScale 2.0 the same physical viewport
+    // edge lands at half the Px value. The label's own margin/width are UI units and do not halve.
+    app.world_mut().insert_resource(bevy::ui::UiScale(2.0));
+
+    let target = app.world_mut().spawn(PlayerIndex(0)).id();
+    let camera = app.world_mut().spawn((
+        Camera {
+            is_active: true,
+            viewport: Some(Viewport {
+                physical_position: UVec2::new(0, 0),
+                physical_size: UVec2::new(640, 720),
+                ..default()
+            }),
+            ..default()
+        },
+        test_orbit_camera(target),
+        SplitViewportSlot(0),
+    )).id();
+
+    app.world_mut().run_system_once(split_viewport_player_label_spawn_system).unwrap();
+    app.world_mut().run_system_once(split_viewport_player_label_update_system).unwrap();
+
+    let label = app.world().get::<LinkedPlayerLabel>(camera).unwrap().0;
+    let node = app.world().get::<Node>(label).unwrap();
+    assert_eq!(node.top, Val::Px(8.0));
+    match node.left {
+        Val::Px(px) => assert!(
+            (px - (640.0 / 2.0 - 48.0 - 8.0)).abs() < 0.01,
+            "right edge 640 physical / UiScale 2.0 = 320 UI px, minus label width and margin; got {px}"
+        ),
+        other => panic!("expected Val::Px, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_target_hud_position_divides_by_ui_scale() {
+    use ironhold_core::capabilities::player::PlayerTarget;
+    use ironhold_core::capabilities::camera::LinkedTargetHud;
+
+    let mut app = setup_test_app();
+    app.update();
+    spawn_primary_window(&mut app, 1280, 720, 1.0);
+    load_two_player_scene_with_target_hud(&mut app, true);
+    // The headless test app has no UiPlugin, which is what normally provides the resource.
+    app.world_mut().init_resource::<bevy::ui::UiScale>();
+    // End to end through the real ui_scale_system: a 640x360 reference in a 1280x720 window is exactly 2.0.
+    // (Setting the UiScale resource by hand would be pulled back to 1.0 by that system, since this
+    // project has no ui_scale block.)
+    let config_handle = app.world().resource::<ProjectConfigHandle>().0.clone();
+    app.world_mut().resource_mut::<Assets<ProjectConfig>>().get_mut(&config_handle).unwrap().ui_scale =
+        Some(ironhold_core::schema::project::UiScaleConfig {
+            reference: (640.0, 360.0),
+            fit: Default::default(),
+            min_scale: 0.5,
+            max_scale: 2.0,
+            snap: 0.25,
+        });
+    app.update();
+    assert_eq!(app.world().resource::<bevy::ui::UiScale>().0, 2.0, "ui_scale_system must have applied the reference scale");
+
+    let cams: Vec<(Entity, Entity)> = {
+        let mut q = app.world_mut().query::<(&CameraTargets, &LinkedTargetHud)>();
+        q.iter(app.world()).filter_map(|(t, l)| t.0.first().copied().map(|target| (target, l.0))).collect()
+    };
+    assert_eq!(cams.len(), 2);
+    let (player1, hud1) = cams[0];
+    app.world_mut().get_mut::<PlayerTarget>(player1).unwrap().0 = Some("enemy_01".to_string());
+    app.update();
+
+    // Player 1's cell is the left half (0..640 x 0..720 physical): bottom edge 720 / UiScale 2.0 = 360
+    // UI px, so top = 360 - 24 (readout height) - 8 (margin) = 328 (688 at UiScale 1.0); left = 0 + 8.
+    let node = app.world().get::<Node>(hud1).unwrap();
+    assert_eq!(node.left, Val::Px(8.0));
+    match node.top {
+        Val::Px(px) => assert!((px - 328.0).abs() < 0.01, "expected 328 UI px at UiScale 2.0, got {px}"),
+        other => panic!("expected Val::Px, got {other:?}"),
+    }
+}

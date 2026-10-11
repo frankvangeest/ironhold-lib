@@ -2336,3 +2336,28 @@ fn nested_action_bar_duplicate_key_across_bars_exits_1() {
     assert_eq!(code, 1, "expected exit 1, got {code}:\n{stdout}");
     assert!(stdout.contains("bar_a") && stdout.contains("bar_b") && stdout.contains("both resolve to"), "{stdout}");
 }
+
+/// `ProjectConfig.ui_scale` invariants flow through `ProjectConfig::validate()` into the CLI, so a
+/// project that would log an error at load fails `ironhold validate` instead (responsive_ui Phase 2).
+#[test]
+fn ui_scale_min_greater_than_max_exits_1_with_the_fix() {
+    let (code, stdout) = validate("bad_ui_scale_min_gt_max");
+    assert_eq!(code, 1, "expected exit 1, got {code}:\n{stdout}");
+    assert!(
+        stdout.contains("ui_scale.min_scale (1.5) > ui_scale.max_scale (1): swap them"),
+        "expected the swap-them message in output:\n{stdout}"
+    );
+}
+
+#[test]
+fn ui_scale_non_positive_reference_exits_1() {
+    let (code, stdout) = validate("bad_ui_scale_reference");
+    assert_eq!(code, 1, "expected exit 1, got {code}:\n{stdout}");
+    assert!(stdout.contains("ui_scale.reference"), "expected the reference message in output:\n{stdout}");
+}
+
+#[test]
+fn good_ui_scale_exits_0() {
+    let (code, stdout) = validate("good_ui_scale");
+    assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
+}

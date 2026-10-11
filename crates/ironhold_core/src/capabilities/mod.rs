@@ -30,6 +30,7 @@ pub mod target_indicator;
 pub mod dialogue;
 pub mod inventory;
 pub mod nameplate;
+pub mod ui_scale;
 pub use player::*;
 pub use camera::*;
 pub use flycam::*;

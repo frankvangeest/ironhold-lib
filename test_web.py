@@ -35,6 +35,7 @@ Requirements:
 import argparse
 import asyncio
 import json
+import math
 import shutil
 import subprocess
 import sys
@@ -680,16 +681,31 @@ async def assert_canvas_fills_viewport(page: Page, w: int, h: int) -> None:
         raise TestFailure(f"page scrolls: {r['scrollW']}x{r['scrollH']} for a {w}x{h} viewport")
 
 
-def assert_debug_window(state: dict, w: int, h: int) -> None:
+# Projects in the responsive matrix that set a `ui_scale` block, and its reference. Mirrors the engine's
+# formula (planning/features/responsive_ui.md Phase 2) independently, so a drift on either side fails.
+# It hardcodes the DEFAULT fit/snap/min/max: if a matrix project ever sets those fields the test fails
+# loudly (rather than drifting silently), and this mirror must grow the same fields.
+UI_SCALE_REFERENCES = {"ui_demo": (1280.0, 720.0)}
+
+
+def expected_ui_scale(project: str, w: float, h: float) -> float:
+    ref = UI_SCALE_REFERENCES.get(project)
+    if ref is None:
+        return 1.0
+    raw = min(w / ref[0], h / ref[1])                       # fit: Fit
+    snapped = math.floor(raw / 0.25 + 1e-4) * 0.25          # snap DOWN to 0.25
+    return min(max(snapped, 0.5), 2.0)                      # min_scale / max_scale
+
+
+def assert_debug_window(state: dict, w: int, h: int, ui_scale: float = 1.0) -> None:
     """`window_size` (logical) and `ui_scale` from #debug-state match the viewport / 1.0."""
     if "window_size" not in state or "ui_scale" not in state:
         raise TestFailure("debug state has no window_size/ui_scale: stale pkg/ (rebuild)")
     ww, wh = state["window_size"]
     if abs(ww - w) > 1 or abs(wh - h) > 1:
         raise TestFailure(f"engine window_size is {ww}x{wh}, expected {w}x{h}")
-    # Projects in the matrix set no `ui_scale` block yet, so the scale stays at Bevy's default.
-    if state["ui_scale"] != 1.0:
-        raise TestFailure(f"ui_scale is {state['ui_scale']}, expected 1.0 (no ui_scale block)")
+    if abs(state["ui_scale"] - ui_scale) > 1e-4:
+        raise TestFailure(f"ui_scale is {state['ui_scale']}, expected {ui_scale} for a {w}x{h} window")
 
 
 async def test_responsive_entry(
@@ -715,7 +731,7 @@ async def test_responsive_entry(
             state = await wait_for_debug_state(
                 page, lambda s: "window_size" not in s or abs(s["window_size"][0] - width) <= 1   # a stale pkg (no field) falls through to assert_debug_window's clear message
             )
-            assert_debug_window(state, width, height)
+            assert_debug_window(state, width, height, expected_ui_scale(project, width, height))
             await assert_canvas_fills_viewport(page, width, height)
 
             key = f"{scene_baseline_key(project, scene)}_{label}"
@@ -757,7 +773,7 @@ async def test_resize_follows_viewport(browser: Browser) -> None:
                     lambda s, w=w, h=h: "window_size" not in s
                     or (abs(s["window_size"][0] - w) <= 1 and abs(s["window_size"][1] - h) <= 1),
                 )
-                assert_debug_window(state, w, h)
+                assert_debug_window(state, w, h, expected_ui_scale("ui_demo", w, h))
                 await assert_canvas_fills_viewport(page, w, h)
             if errors:
                 raise TestFailure("Browser errors:\n" + "\n".join(f"  • {e}" for e in errors))
@@ -829,6 +845,9 @@ async def test_real_hidpi(
                 raise TestFailure(f"browser reports devicePixelRatio {m['dpr']}, expected {factor}")
             if abs(ww - m["cssW"]) > 1 or abs(wh - m["cssH"]) > 1:
                 raise TestFailure(f"engine window_size {ww}x{wh} != canvas CSS size {m['cssW']:.0f}x{m['cssH']:.0f}")
+            want = expected_ui_scale("ui_demo", ww, wh)
+            if abs(state["ui_scale"] - want) > 1e-4:
+                raise TestFailure(f"ui_scale {state['ui_scale']} != {want} for a {ww:.0f}x{wh:.0f} window at DPR {factor}")
             if abs(m["backW"] - m["cssW"] * factor) > factor or abs(m["backH"] - m["cssH"] * factor) > factor:
                 raise TestFailure(
                     f"canvas backing store {m['backW']}x{m['backH']} is not CSS x {factor} "

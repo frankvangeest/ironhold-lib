@@ -257,6 +257,107 @@ pub struct ProjectConfig {
     /// visible reason in the RON file.
     #[serde(default)]
     pub max_frame_delta_secs: Option<f32>,
+
+    /// Optional reference-resolution UI scale. Author the UI at `reference` and the engine scales
+    /// every fixed-pixel UI value and text size by `window / reference` (snapped down, clamped), so
+    /// the same layout stays usable on a bigger monitor, a tablet or a phone. Omit the block to
+    /// leave UI scale at exactly 1.0 (every existing project). Presentation only. Documented in
+    /// `docs/20_data_formats.md` ("Responsive UI").
+    #[serde(default)]
+    pub ui_scale: Option<UiScaleConfig>,
+}
+
+/// Which window axis(es) decide the UI scale. Written unquoted in RON: `fit: Fit`.
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum UiScaleFit {
+    /// The whole reference rectangle fits in the window: `min(window_w / ref_w, window_h / ref_h)`.
+    #[default]
+    Fit,
+    /// Match the reference width: `window_w / ref_w`.
+    FitWidth,
+    /// Match the reference height: `window_h / ref_h`.
+    FitHeight,
+}
+
+/// `ProjectConfig.ui_scale`: scale the UI against a reference resolution.
+///
+/// ```ron
+/// ui_scale: (
+///     reference: (1280.0, 720.0),   // required: the resolution the UI is authored at
+///     fit: Fit,                     // Fit (default) | FitWidth | FitHeight
+///     min_scale: 0.5,               // default 0.5
+///     max_scale: 2.0,               // default 2.0
+///     snap: 0.25,                   // default 0.25; 0.0 disables snapping
+/// ),
+/// ```
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct UiScaleConfig {
+    /// `(width, height)` the UI was authored at; both must be > 0 and finite.
+    pub reference: (f32, f32),
+    #[serde(default)]
+    pub fit: UiScaleFit,
+    /// Lowest scale ever applied. Below this the UI overflows the window (the engine logs one
+    /// warning when the floor starts raising the scale). Default 0.5.
+    #[serde(default = "default_ui_min_scale")]
+    pub min_scale: f32,
+    /// Highest scale ever applied. Default 2.0.
+    #[serde(default = "default_ui_max_scale")]
+    pub max_scale: f32,
+    /// The scale is snapped **down** to a multiple of this (bounds blurry text and glyph-atlas
+    /// variants). `0.0` disables snapping. Default 0.25.
+    #[serde(default = "default_ui_snap")]
+    pub snap: f32,
+}
+
+/// Smallest `ui_scale.min_scale` that validates (see `UiScaleConfig::validate`).
+pub const MIN_UI_SCALE_FLOOR: f32 = 0.05;
+
+fn default_ui_min_scale() -> f32 { 0.5 }
+fn default_ui_max_scale() -> f32 { 2.0 }
+fn default_ui_snap() -> f32 { 0.25 }
+
+impl UiScaleConfig {
+    /// Every invariant, each message naming the field and the fix. Shared by the runtime
+    /// (`ProjectConfig::validate()` at load) and `ironhold validate`.
+    pub fn validate(&self) -> Result<(), String> {
+        let (w, h) = self.reference;
+        if !(w.is_finite() && h.is_finite() && w > 0.0 && h > 0.0) {
+            return Err(format!(
+                "ui_scale.reference must be two positive, finite numbers (the resolution the UI is authored at, e.g. (1280.0, 720.0)), got ({w}, {h})"
+            ));
+        }
+        // 0.05 floor: a smaller scale would divide viewport pixels by ~0 in the UI-unit conversions
+        // (`Val::Px(inf)`) and shrink the UI to nothing; nothing legible exists below it anyway.
+        if !(self.min_scale.is_finite() && self.min_scale >= MIN_UI_SCALE_FLOOR) {
+            return Err(format!(
+                "ui_scale.min_scale must be a finite number of at least {MIN_UI_SCALE_FLOOR} (a smaller UI is unreadable), got {}",
+                self.min_scale
+            ));
+        }
+        if !(self.max_scale.is_finite() && self.max_scale > 0.0) {
+            return Err(format!("ui_scale.max_scale must be a positive, finite number, got {}", self.max_scale));
+        }
+        if self.min_scale > self.max_scale {
+            return Err(format!(
+                "ui_scale.min_scale ({}) > ui_scale.max_scale ({}): swap them",
+                self.min_scale, self.max_scale
+            ));
+        }
+        if !(self.snap.is_finite() && self.snap >= 0.0) {
+            return Err(format!(
+                "ui_scale.snap must be 0.0 (no snapping) or a positive step such as 0.25, got {}",
+                self.snap
+            ));
+        }
+        if self.snap > self.max_scale {
+            return Err(format!(
+                "ui_scale.snap ({}) is larger than ui_scale.max_scale ({}): the scale could only ever be min_scale or max_scale; use a smaller step such as 0.25",
+                self.snap, self.max_scale
+            ));
+        }
+        Ok(())
+    }
 }
 
 /// Floor for `ProjectConfig::max_frame_delta_secs`: two fixed-tick periods. Below this, the cap
@@ -358,6 +459,9 @@ impl ProjectConfig {
                      {MAX_MAX_FRAME_DELTA_SECS} seconds, got {secs}"
                 ));
             }
+        }
+        if let Some(ui_scale) = &self.ui_scale {
+            ui_scale.validate()?;
         }
         Ok(())
     }
