@@ -264,14 +264,24 @@
                 label.textContent = 'Default Project';
             }
 
-            // Hide loading overlay once a <canvas> appears
-            const observer = new MutationObserver(() => {
-                if (document.querySelector('canvas')) {
-                    observer.disconnect();
-                    document.getElementById('loading-overlay').classList.add('hidden');
-                }
-            });
-            observer.observe(document.body, { childList: true, subtree: true });
+            // Readiness signal: the engine is "ready" once its first frame has run, which is the
+            // first time the WASM runtime writes the debug-state JSON (sync_debug_state_to_dom,
+            // every PostUpdate). A <canvas> existing is NOT that signal: the canvas can be present
+            // before the wasm has loaded (and a canvas authored in the HTML would always be).
+            // Sets `data-ready` on <body>; test_web.py waits on `body[data-ready]` too.
+            const debugState = document.getElementById('debug-state');
+            const markReady = () => {
+                if (!debugState.textContent.trim()) return false;
+                document.body.setAttribute('data-ready', '');
+                document.getElementById('loading-overlay').classList.add('hidden');
+                return true;
+            };
+            if (!markReady()) {
+                const observer = new MutationObserver(() => {
+                    if (markReady()) observer.disconnect();
+                });
+                observer.observe(debugState, { childList: true, characterData: true, subtree: true });
+            }
         })();
     </script>
 

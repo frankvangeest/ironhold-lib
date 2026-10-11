@@ -62,6 +62,10 @@ The test harness reads a hidden `<div id="debug-state">` updated every frame by 
 ```
 Written by `sync_debug_state_to_dom` (WASM-only, `PostUpdate`) in `ironhold_core/src/lib.rs`.
 
+## Readiness signal (`body[data-ready]`)
+
+"The engine is ready" means its first frame has run, **not** that a `<canvas>` exists (the canvas can be in the DOM before the wasm has loaded). `play.html` sets a `data-ready` attribute on `<body>` the first time `#debug-state` has content (the first `sync_debug_state_to_dom` write), and hides its loading overlay at the same moment. `test_web.py`'s `open_project` waits on `body[data-ready]` (state `attached`) instead of `canvas`. If a run times out waiting for it, the engine never completed a frame (wasm load failure, no WebGPU adapter, a panic before the first frame); check the console errors the harness collected.
+
 ## URL project selection
 
 The WASM build reads `?project=<name>` from the URL (e.g. `?project=terrain_demo`) and passes it to `start_app`. Implemented in `ironhold_web/src/lib.rs`.

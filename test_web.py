@@ -211,11 +211,14 @@ async def open_project(
         url += f"&scene={scene}"
     await page.goto(url, wait_until="networkidle")
 
+    # Ready = the engine's first frame has run (play.html sets `data-ready` on <body> when the
+    # WASM runtime first writes #debug-state). A <canvas> existing is not that signal: it can be
+    # present before the wasm has loaded.
     try:
-        await page.wait_for_selector("canvas", timeout=CANVAS_TIMEOUT * 1000)
+        await page.wait_for_selector("body[data-ready]", state="attached", timeout=CANVAS_TIMEOUT * 1000)
     except Exception:
         raise TestFailure(
-            f"Timed out waiting for <canvas> on project '{project or 'default'}'"
+            f"Timed out waiting for the engine to become ready (body[data-ready]) on project '{project or 'default'}'"
             + (f", scene '{scene}'" if scene else "")
             + " — WebGPU adapter likely failed."
         )
