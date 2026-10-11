@@ -1,0 +1,12 @@
+(
+    schema_version: 2,
+    name: "main",
+    ui: [
+        Group((
+            id: "hud_a",
+            children: [
+                InventoryPanel((id: "inv", position: (0.0, 0.0))),
+            ],
+        )),
+    ],
+)

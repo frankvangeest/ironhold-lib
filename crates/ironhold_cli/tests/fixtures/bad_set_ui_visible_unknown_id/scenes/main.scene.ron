@@ -1,0 +1,18 @@
+(
+    schema_version: 2,
+    name: "main",
+    ui: [
+        Group((
+            id: "hud_a",
+            children: [
+                Label((id: "lbl", text: "hi")),
+            ],
+        )),
+        ActionBar((
+            id: "skill_bar",
+            slots: [
+                (key: "KeyQ", do_actions: [SetUiVisible(id: "slot_typo", visible: false)]),
+            ],
+        )),
+    ],
+)
