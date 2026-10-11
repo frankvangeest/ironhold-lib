@@ -29,11 +29,33 @@
             --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
+        html {
+            height: 100%;
+        }
+
+        /* The page is exactly one viewport tall: the top bar (44px, or none with ?bar=hidden /
+           ?testing=1) plus the game host below it, which takes the rest. `100dvh` tracks the
+           mobile browser's collapsing URL bar; `height: 100%` (on html) is the fallback. */
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             background-color: var(--bg-primary);
             color: var(--text-primary);
             overflow: hidden;
+            height: 100%;
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* The engine draws into #ironhold-canvas (Window.canvas, `start_app`). Bevy's
+           fit_canvas_to_parent sets the canvas CSS to width/height 100% of its parent, so this host
+           must have a definite size: `flex: 1` + `min-height: 0` gives it the viewport minus the
+           top bar, and the canvas then follows every browser resize. */
+        .game-host {
+            position: relative;
+            flex: 1 1 0;
+            min-height: 0;
+            min-width: 0;
         }
 
         canvas {
@@ -48,6 +70,7 @@
         .top-bar {
             position: relative;
             z-index: 1000;
+            flex: none;
             display: flex;
             align-items: center;
             gap: 0.75rem;
@@ -193,7 +216,14 @@
         <a href="https://github.com/frankvangeest/ironhold-lib/blob/main/docs/README.md" class="back-link docs-link" id="docs-link" target="_blank" rel="noopener">Docs</a>
     </nav>
 
-    <!-- Loading indicator shown until canvas appears -->
+    <!-- Game host: sized to the viewport below the bar; the engine draws into the canvas inside it
+         (Window.canvas = "#ironhold-canvas"). Needs a pkg/ built from the same commit: a stale
+         pkg does not know this selector and appends its own fixed-size canvas to <body> instead. -->
+    <div class="game-host" id="game-host">
+        <canvas id="ironhold-canvas"></canvas>
+    </div>
+
+    <!-- Loading indicator shown until the engine's first frame has run -->
     <div class="loading-overlay" id="loading-overlay">
         <div class="loading-content">
             <div class="loading-spinner"></div>

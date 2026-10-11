@@ -338,7 +338,18 @@ with a hard size check (mismatch returns `1.0`, `:230`).
       drift, identical with the old harness** (`foliage_demo_main` 5.5%, `local_coop_demo_room10` 8.4%,
       `pause_nav/02_main_scene` 4.4% before vs 4.5% after). The run also auto-wrote an unreferenced
       `local_coop_demo_room11` baseline (deleted, not part of this change).
-- [ ] Phase 1b: `WindowPlugin` override (unconditional), `play.html` flex host; suite green, no baseline change.
+- [x] Phase 1b: `WindowPlugin` override (unconditional), `play.html` flex host; suite green, no baseline change.
+      Done 2026-10-11: `start_app` sets `Window.canvas = "#ironhold-canvas"` + `fit_canvas_to_parent: true`;
+      `play.html` is a `100dvh` flex column (bar `flex: none`) with a `.game-host` (`flex: 1 1 0; min-height: 0`)
+      holding the authored `<canvas id="ironhold-canvas">`. Deviation from the plan's "keep `canvas: None`":
+      the authored canvas + selector keeps the 44px bar out of the canvas height (Bevy's inline
+      `height: 100%` would otherwise overflow `body`); Phase 1a's `data-ready` is what makes an
+      authored canvas safe. WASM dev build 2m21s. Full suite `--real-gpu --skip-build` on the dev build:
+      56/59 with the **same 3 pre-existing failures and identical numbers** (5.5% / 8.4% / 4.4%); across
+      the 40 scene baselines the only delta over 0.3 points is `3rd_person_game_demo_character_select`
+      0.37% -> 0.01% (dev vs release build noise). Screenshot sizes unchanged (the size check would have
+      returned 1.0). Requires a `pkg/` built from the same commit as `play.html` (documented in
+      `docs/dev/browser_tests.md`).
 - [ ] Phase 1c: `--responsive` harness, debug-state fields, first matrix, touch test.
 - [ ] Phase 2: `ui_scale` schema + `ProjectConfig::validate()` + `ui_scale_system` (snap down, clamp,
       write-on-change, reset-to-1.0, clamp warning) + `ui_demo` block (1280x720 reference).

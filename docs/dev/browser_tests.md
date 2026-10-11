@@ -62,6 +62,10 @@ The test harness reads a hidden `<div id="debug-state">` updated every frame by 
 ```
 Written by `sync_debug_state_to_dom` (WASM-only, `PostUpdate`) in `ironhold_core/src/lib.rs`.
 
+## Canvas host (`#ironhold-canvas`)
+
+`play.html` is exactly one viewport tall: the 44px top bar (hidden by `?bar=hidden` and `?testing=1`) above a `.game-host` flex box that takes the rest, with the engine's `<canvas id="ironhold-canvas">` inside it. `start_app` sets `Window.canvas = "#ironhold-canvas"` and `fit_canvas_to_parent: true`, so Bevy sizes the canvas to 100% of the host and it follows browser resizes. Under `?testing=1` the host is the whole viewport, so the suite's fixed 1280x720 context still yields a 1280x720 canvas (any other size makes `compare_screenshots` return `1.0`). **`play.html` needs a `pkg/` built from the same commit:** a stale `pkg/` does not know the selector and appends its own fixed-size canvas to `<body>`, leaving the authored one empty. Rebuild before running the suite after pulling a change to either file.
+
 ## Readiness signal (`body[data-ready]`)
 
 "The engine is ready" means its first frame has run, **not** that a `<canvas>` exists (the canvas can be in the DOM before the wasm has loaded). `play.html` sets a `data-ready` attribute on `<body>` the first time `#debug-state` has content (the first `sync_debug_state_to_dom` write), and hides its loading overlay at the same moment. `test_web.py`'s `open_project` waits on `body[data-ready]` (state `attached`) instead of `canvas`. If a run times out waiting for it, the engine never completed a frame (wasm load failure, no WebGPU adapter, a panic before the first frame); check the console errors the harness collected.

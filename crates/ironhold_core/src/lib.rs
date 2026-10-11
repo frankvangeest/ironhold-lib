@@ -845,11 +845,28 @@ pub fn start_app(project_path: Option<String>, scene_override: Option<String>) {
     }
 
     let mut app = App::new();
-    app.add_plugins(DefaultPlugins.set(AssetPlugin {
-        file_path: asset_path,
-        meta_check: bevy::asset::AssetMetaCheck::Never,
-        ..default()
-    }))
+    app.add_plugins(
+        DefaultPlugins
+            .set(AssetPlugin {
+                file_path: asset_path,
+                meta_check: bevy::asset::AssetMetaCheck::Never,
+                ..default()
+            })
+            // `canvas` and `fit_canvas_to_parent` are documented no-ops on native, so this is set
+            // unconditionally (no cfg branch). On the web the engine draws into the `<canvas
+            // id="ironhold-canvas">` that play.html places inside a flex host sized to the viewport
+            // below its top bar, and keeps it that size on browser resize (bevy_winit sets the
+            // canvas CSS to 100% of that host). Everything else is Bevy's default `Window` (native
+            // stays 1280x720).
+            .set(bevy::window::WindowPlugin {
+                primary_window: Some(Window {
+                    canvas: Some("#ironhold-canvas".to_string()),
+                    fit_canvas_to_parent: true,
+                    ..default()
+                }),
+                ..default()
+            }),
+    )
     .insert_resource(ProjectConfigPath(config_path))
     .insert_resource(ProjectRoot(project_root))
     .insert_resource(WinitSettings {
