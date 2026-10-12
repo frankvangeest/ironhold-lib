@@ -26,6 +26,9 @@
                 Group((
                     id: "top_bar",
                     flex_direction: Row,
+                    // Wrap so the buttons drop under the title on a phone-width window.
+                    flex_wrap: Wrap,
+                    gap: 8.0,
                     justify_content: SpaceBetween,
                     align_items: Center,
                     width: Percent(100.0),
@@ -35,6 +38,7 @@
                         Label((id: "title", text: "ui_demo - Group layout", size: (360.0, 32.0), align: Left)),
                         Group((
                             gap: 8.0,
+                            flex_wrap: Wrap,
                             children: [
                                 Button((id: "add_btn",   text: "Add",   action: "ui.add")),
                                 Button((id: "reset_btn", text: "Reset", action: "ui.reset")),
