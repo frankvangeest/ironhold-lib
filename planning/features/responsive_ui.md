@@ -41,7 +41,7 @@ from the remaining questions" below. Round-3 decisions (Frank, 2026-10-11):
 |---|---|---|---|
 | 1 | Canvas fit + `data-ready` signal + responsive test harness | Done (reviewed, gate passed) | 2026-10-11 (`b5c1800`) |
 | 2 | `ui_scale` project setting (reference-resolution `UiScale`) + pixel-site audit | Done (reviewed, gate passed) | 2026-10-11 (`f2194a3`) |
-| 3a | `SetUiVisible` action (own plan: `ui_set_visible.md`) | Queued | — |
+| 3a | `SetUiVisible` action (own plan: `ui_set_visible.md`) | Done 2026-10-12 | — |
 | 3 | Orientation event + `portrait_reference` (depends on 3a) | Queued | — |
 | 4 | Follow-ups (world-label scale, safe area, touch, mobile render cap, Group v2 re-scope) | Queued | — |
 
