@@ -24,4 +24,14 @@ Verified 2026-10-11 at 33186ba while plan-reviewing `planning/features/ui_set_vi
 - `GameSceneV2::validate` allows empty id only on `Group`; every other UiNodeDef must have a non-empty unique id.
 - Headless layout test precedent: `tests/ui_panel_blocker.rs` adds `UiPlugin`.
 
+Implementation review 2026-10-12 (feature/ui_set_visible, 85e2cc8):
+- Group arm inserts `UiNodeId("")` for id-less Groups (plan said non-empty only) and the executor has no
+  empty-id guard, so runtime `SetUiVisible(id: "")` hides every anonymous Group; only CLI validate catches it.
+  The "unknown id noop" test checks the child Rect, not the Group, so it passes anyway.
+- `Action::is_presentation_only()` has no consumer yet (responsive_ui Phase 3); only SetUiVisible is `true`,
+  despite a doc comment naming audio/camera feel - classification is the Phase 3 contract, review it there.
+- Restore writes `Display::Flex` unconditionally: any future authored `display:` (Grid/Block) breaks it.
+- B0001: executor's only Node access is `ui_nodes_q`; other `&mut Node` writers (camera.rs, stat_display.rs)
+  touch disjoint entities (no UiNodeId), so no conflict and no clobber.
+
 Related: [[ui-scale-and-overlay-slot-facts]], [[ui-flat-scan-and-taffy-facts]], [[cli-validate-coverage-model]].

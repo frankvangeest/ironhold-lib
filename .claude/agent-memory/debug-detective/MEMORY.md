@@ -77,4 +77,5 @@
 - [Interaction press-edge semantics](project_bevy_interaction_press_edge_semantics.md) — Bevy 0.18 focus.rs never rewrites Pressed->Pressed, never spawns Pressed; stuck-Pressed after missed release swallows one click
 - [OPENCODE_CONFIG_CONTENT keeps repo "ask" keys](project_opencode_config_content_merge_keeps_ask.md) — flipping bash "*" to deny leaves git push/cargo clean/external_directory asks, auto-approved headless (V20)
 - [f32::clamp on authored bounds panics](project_f32_clamp_panics_on_authored_bounds.md) — unconditional assert min<=max; non-fatal validate means an invalid RON crashes release builds (ui_scale min>max)
+- [Overlays emit no scene.ready](project_overlay_no_scene_ready.md) — only scene.loaded fires for LoadSceneOverlay/ToggleOverlay; "init on scene.ready" advice is dead for overlay UI
 - [play.html ready signal never fires on adapter failure](project_play_html_ready_signal_never_fires_on_adapter_failure.md) — overlay waits on first #debug-state write; no WebGPU adapter = no update ever = eternal spinner, no error
