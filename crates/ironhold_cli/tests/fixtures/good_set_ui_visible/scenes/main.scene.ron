@@ -1,0 +1,16 @@
+(
+    schema_version: 2,
+    name: "main",
+    ui: [
+        Group((
+            id: "hud_a",
+            children: [
+                Label((id: "lbl", text: "hi")),
+            ],
+        )),
+        Group((
+            id: "hud_bar_holder",
+            children: [],
+        )),
+    ],
+)

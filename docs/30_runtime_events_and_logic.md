@@ -195,9 +195,8 @@ See `docs/20_data_formats.md` — `stats.ron` and `Instance stats (stat_template
 - `SetEntityVisible { entity, visible }` ✅ — shows or hides a spawned entity by spawn ID; entity stays in ECS (stats and behavior FSM keep running); world-space labels tracking the entity auto-hide; `{self}` substituted in behavior contexts
 - `EmitEventAfterDelay { event, delay_secs }` ✅ — fires `GameEvent::Trigger(event)` after `delay_secs` seconds; cleared on `LoadScene`; `{self}` substituted in behavior contexts
 
-#### UI actions 🧭
-- `ShowUi(panel_id)`
-- `HideUi(panel_id)`
+#### UI actions
+- `SetUiVisible { id, visible }` ✅ — shows or hides a scene `ui:` node by its `id` (a `Group` hides its subtree and takes no space while hidden); every node with that id, base scene and overlay alike; no match is a silent no-op; resets on `LoadScene`; not for panels or the `ActionBar` (validate rejects them). See `docs/20_data_formats.md#setuivisible`
 
 ### Action semantics (planned)
 - Actions are executed in a defined order per tick/frame.
@@ -375,6 +374,7 @@ Applies actions to the world. Key design points:
 - `ShowDamagePopup { entity, amount }` — spawns a floating `+N` / `-N` world-space label above the entity with the given spawn ID; style configured via `damage_popup_style` in `.project.ron`; `{self}` substituted in behavior contexts
 - `ShowFloatingText { entity, text, offset? }` — spawns a floating text label (warm yellow) above the entity; rises and fades like `ShowDamagePopup`; use for status messages, selection feedback, etc.; `{self}` and `{target}` substituted in both `entity` and `text`. Optional `offset: (x, y, z)` overrides the default spawn height from `damage_popup_style.spawn_offset` — set a different Y to prevent two simultaneous texts from stacking at the same position (e.g. ability name fires at default height, kill confirmation fires at `offset: (0.0, -0.02, 0.0)`)
 - `SetEntityVisible { entity, visible }` — shows or hides a spawned entity by spawn ID; entity stays in ECS (stats and behavior FSM keep running); world-space labels tracking the entity auto-hide; `{self}` substituted in behavior contexts
+- `SetUiVisible { id, visible }` — shows or hides a scene `ui:` node (or `Group` subtree) by its `id`; every node with that id, base scene and overlay alike; unknown id is a silent no-op; not for panels or the `ActionBar` (validate rejects them); no `{self}`/`{target}` substitution
 - `EmitEventAfterDelay { event, delay_secs }` — fires `GameEvent::Trigger(event)` after `delay_secs` seconds; cleared on `LoadScene` so no delayed events survive scene transitions; `{self}` substituted in behavior contexts
 - `SpawnEffect { key, position, entity }` — bursts a particle effect from `AssetCatalog.effects`; `entity` (spawn ID) takes precedence over `position` (world coords); the effect def `offset` is added to the resolved position; `{self}` substituted in behavior contexts; silently skips on unknown key or unresolvable entity; see `docs/20_data_formats.md` for `EffectDef` fields. **WASM:** sphere particles and flame sprite particles (`uv_distort > 0` or `uv_scroll_speed > 0`) compile separate WebGPU pipelines — fire one warmup burst per variant on `scene.ready` at `position: Some((0.0, -100.0, 0.0))` to pre-compile both pipelines before the player can interact.
 - `SetTarget(String)` — sets `CurrentTarget` to the given spawn ID; emits `target.changed:{id}` and `target.changed`; `{target}` in subsequent rule actions resolves to this ID

@@ -2361,3 +2361,41 @@ fn good_ui_scale_exits_0() {
     let (code, stdout) = validate("good_ui_scale");
     assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
 }
+// -- SetUiVisible (ui_set_visible.md) --
+
+#[test]
+fn good_set_ui_visible_exits_0() {
+    // `hud_b` only exists in a second scene: valid, `global_on` is project-wide.
+    let (code, stdout) = validate("good_set_ui_visible");
+    assert_eq!(code, 0, "expected exit 0, got {code}:
+{stdout}");
+}
+
+#[test]
+fn set_ui_visible_unknown_id_exits_1_including_actionbar_slot_actions() {
+    let (code, stdout) = validate("bad_set_ui_visible_unknown_id");
+    assert_eq!(code, 1, "expected exit 1, got {code}:
+{stdout}");
+    assert!(stdout.contains("\"hud_typo\" matches no UI node"), "{stdout}");
+    assert!(stdout.contains("\"slot_typo\" matches no UI node"), "slot do_actions must be scanned:
+{stdout}");
+    assert!(stdout.contains("SetUiVisible has an empty id"), "{stdout}");
+    assert!(stdout.contains("(Groups and leaves need a non-empty id"), "message text must be a single clean sentence:
+{stdout}");
+}
+
+#[test]
+fn set_ui_visible_group_containing_panel_exits_1() {
+    let (code, stdout) = validate("bad_set_ui_visible_panel");
+    assert_eq!(code, 1, "expected exit 1, got {code}:
+{stdout}");
+    assert!(stdout.contains("contains InventoryPanel \"inv\"; panels open and close with OpenInventory/CloseInventory"), "{stdout}");
+}
+
+#[test]
+fn set_ui_visible_group_containing_action_bar_exits_1() {
+    let (code, stdout) = validate("bad_set_ui_visible_action_bar");
+    assert_eq!(code, 1, "expected exit 1, got {code}:
+{stdout}");
+    assert!(stdout.contains("contains ActionBar \"skill_bar\"") && stdout.contains("keys would keep firing"), "{stdout}");
+}

@@ -568,6 +568,7 @@ fn action_kind(a: &Action) -> &'static str {
         Action::RemoveModifier { .. } => "RemoveModifier",
         Action::ShowDamagePopup { .. } => "ShowDamagePopup",
         Action::SetEntityVisible { .. } => "SetEntityVisible",
+        Action::SetUiVisible { .. } => "SetUiVisible",
         Action::EmitEventAfterDelay { .. } => "EmitEventAfterDelay",
         Action::SpawnEffect { .. } => "SpawnEffect",
         Action::ProjectDecal { .. } => "ProjectDecal",

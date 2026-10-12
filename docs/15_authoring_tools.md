@@ -98,6 +98,8 @@ Sample `watch` output (each save prints the changed file and a result):
 | a scene with a wrong `schema_version`, an empty or duplicate entity / world-label / UI id (a `Group` may have no id; UI ids must be unique across nested groups) | `invalid_scene` | unpredictable results; only the first problem per scene is reported, so fix and re-run | make ids unique and non-empty |
 | a `Group` with a negative or non-finite `gap`/`padding`/`width`/`height` | `invalid_group_value` | the layout is wrong | use numbers >= 0 |
 | a `Group` nested deeper than 16 levels | `ui_depth_exceeded` | the deeper children are **never spawned** | flatten the nesting |
+| a `SetUiVisible` with an empty id, or an id that matches no UI node in any scene or overlay (nested groups and `ActionBar` slot actions are scanned) | `set_ui_visible_empty_id` / `set_ui_visible_unknown_id` | the action does nothing at runtime (a typo is the usual cause) | use the `id` of a `ui:` node. Validate only checks the id exists somewhere in the project; at runtime it must be in the currently loaded scene or overlay |
+| a `SetUiVisible` whose target is, or contains, a dialogue/inventory/shop/container panel or an `ActionBar` | `set_ui_visible_unhideable_target` | panels open and close with their own actions, and an `ActionBar`'s keys would keep firing while hidden (an `ActionBar` itself cannot be hidden yet) | target a `Group` that does not contain them; move the bar/panel outside it |
 | a `Label`/`Button` with `font_size` <= 0 | `invalid_font_size` | renders nothing | use a positive size |
 | a `label_depth_scale.min_scale` outside `[0.0, 1.0]` | `label_depth_scale_min_scale_out_of_range` | labels scale incorrectly | use a value in range |
 

@@ -848,14 +848,128 @@ fn fsm_actions(fsm: &StateMachineAsset) -> Vec<Action> {
     out
 }
 
+// ── SetUiVisible checks ───────────────────────────────────────────────────────
+
+/// Name of a panel/ActionBar node kind `SetUiVisible` must not hide (see `ui_set_visible.md`).
+fn unhideable_kind(node: &UiNodeDef) -> Option<(&'static str, &str)> {
+    match node {
+        UiNodeDef::ActionBar(d) => Some(("ActionBar", &d.id)),
+        UiNodeDef::DialoguePanel(d) => Some(("DialoguePanel", &d.id)),
+        UiNodeDef::InventoryPanel(d) => Some(("InventoryPanel", &d.id)),
+        UiNodeDef::ShopPanel(d) => Some(("ShopPanel", &d.id)),
+        UiNodeDef::ContainerPanel(d) => Some(("ContainerPanel", &d.id)),
+        _ => None,
+    }
+}
+
+/// `SetUiVisible` checks: non-empty id, id exists in some scene/overlay `ui:` tree (nested
+/// Groups included), and no occurrence is or contains a panel/ActionBar. Uses its own action
+/// scan because `collect_actions` skips ActionBar slot `do_actions` (backlog item); `actions`
+/// is already the shared collection, so only the slot actions are added here.
+fn set_ui_visible_checks(
+    scenes: &[(String, GameSceneV2)],
+    actions: &[(String, Action)],
+    scenes_parsed_cleanly: bool,
+    errors: &mut Vec<CrossFileError>,
+) {
+    let mut found: Vec<(&str, &str)> = actions
+        .iter()
+        .filter_map(|(src, a)| match a {
+            Action::SetUiVisible { id, .. } => Some((src.as_str(), id.as_str())),
+            _ => None,
+        })
+        .collect();
+    for (scene_path, scene) in scenes {
+        for node in walk_ui_nodes(&scene.ui) {
+            if let UiNodeDef::ActionBar(bar) = node {
+                for slot in &bar.slots {
+                    for a in &slot.do_actions {
+                        if let Action::SetUiVisible { id, .. } = a {
+                            found.push((scene_path.as_str(), id.as_str()));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let mut reported: HashSet<(String, String, String)> = HashSet::new(); // det: lookup-only
+    for (source, id) in found {
+        if id.is_empty() {
+            errors.push(CrossFileError {
+                source_file: source.to_string(),
+                message: "SetUiVisible has an empty id; use the id of a UI node (Groups and leaves need a non-empty id to be addressable)".to_string(),
+                error_type: "set_ui_visible_empty_id",
+            });
+            continue;
+        }
+        let mut occurrences = 0usize;
+        for (scene_path, scene) in scenes {
+            for node in walk_ui_nodes(&scene.ui) {
+                if node.id() != id {
+                    continue;
+                }
+                occurrences += 1;
+                for inner in walk_ui_nodes(std::slice::from_ref(node)) {
+                    let Some((kind, inner_id)) = unhideable_kind(inner) else { continue };
+                    if !reported.insert((id.to_string(), scene_path.clone(), inner_id.to_string())) {
+                        continue;
+                    }
+                    let is_target = inner_id == id;
+                    let message = if kind == "ActionBar" && is_target {
+                        format!(
+                            "SetUiVisible target {:?} (scene {}) is an ActionBar; an ActionBar cannot be hidden at runtime yet (its keys would keep firing while hidden).",
+                            id, scene_path
+                        )
+                    } else if kind == "ActionBar" {
+                        format!(
+                            "SetUiVisible target {:?} (scene {}) contains ActionBar {:?}; move the bar out of this Group (its keys would keep firing while it is hidden).",
+                            id, scene_path, inner_id
+                        )
+                    } else {
+                        let (open, close) = match kind {
+                            "DialoguePanel" => ("StartDialogue", "EndDialogue"),
+                            "ShopPanel" => ("OpenShop", "CloseShop"),
+                            "ContainerPanel" => ("OpenContainer", "CloseContainer"),
+                            _ => ("OpenInventory", "CloseInventory"),
+                        };
+                        format!(
+                            "SetUiVisible target {:?} (scene {}) {} {} {:?}; panels open and close with {}/{}, not SetUiVisible.",
+                            id, scene_path, if is_target { "is" } else { "contains" }, kind, inner_id,
+                            open, close
+                        )
+                    };
+                    errors.push(CrossFileError {
+                        source_file: source.to_string(),
+                        message,
+                        error_type: "set_ui_visible_unhideable_target",
+                    });
+                }
+            }
+        }
+        if occurrences == 0 && scenes_parsed_cleanly && !scenes.is_empty() {
+            errors.push(CrossFileError {
+                source_file: source.to_string(),
+                message: format!(
+                    "SetUiVisible id {:?} matches no UI node in any scene or overlay (check for a typo)",
+                    id
+                ),
+                error_type: "set_ui_visible_unknown_id",
+            });
+        }
+    }
+}
+
 // ── Cross-file checks ─────────────────────────────────────────────────────────
 
 fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
     let LoadedProject {
         project_dir, project_config, asset_catalog, prefab_catalog, stat_catalog, item_catalog,
-        scenes, dialogues, actions, ..
+        scenes, dialogues, actions, scenes_parsed_cleanly, ..
     } = project;
     let mut errors = Vec::new();
+
+    set_ui_visible_checks(scenes, actions, scenes_parsed_cleanly, &mut errors);
 
     // All four catalog types have real schema-level invariants their own `.validate()` enforces
     // (e.g. `AssetCatalog::validate()` rejects an empty `models[]`/`decals[]` path,

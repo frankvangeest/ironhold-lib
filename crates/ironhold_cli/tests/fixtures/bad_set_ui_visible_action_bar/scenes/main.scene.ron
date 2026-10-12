@@ -1,0 +1,12 @@
+(
+    schema_version: 2,
+    name: "main",
+    ui: [
+        Group((
+            id: "hud_a",
+            children: [
+                ActionBar((id: "skill_bar", slots: [(key: "KeyQ", do_actions: [Log("x")])])),
+            ],
+        )),
+    ],
+)

@@ -237,6 +237,20 @@ pub enum Action {
         entity: String,
         visible: bool,
     },
+    /// Show or hide a UI node by its scene `id`; a `Group` hides its whole subtree.
+    /// `visible: false` sets `Display::None` (the node stops taking flex space and cannot be
+    /// clicked); `visible: true` restores it. Applies to every live node with that `id` (base
+    /// scene and open overlay alike) and is a silent no-op if none exists yet, so author initial
+    /// hides on `scene.ready:<scene>`. Not in the same list as `LoadScene`/`LoadSceneOverlay` (the
+    /// new UI does not exist yet), and overlay nodes cannot start hidden (overlays fire no
+    /// `scene.ready`). Not for panels or the `ActionBar` (validate rejects them);
+    /// the `id` is a literal UI id, `{self}`/`{target}` are not substituted. Hidden state resets
+    /// on `LoadScene`.
+    /// Example: `SetUiVisible(id: "station_b", visible: false)`.
+    SetUiVisible {
+        id: String,
+        visible: bool,
+    },
     /// Emit a `GameEvent::Trigger` with the given name after a delay (in seconds).
     /// The event is buffered in `DelayedEventQueue` and fired by `tick_delayed_events_system`.
     /// Cleared on `Action::LoadScene` so no stale events fire after a scene transition.
@@ -426,6 +440,51 @@ pub enum Action {
     JoinPlayer,
 }
 
+impl Action {
+    /// True for actions that only change presentation and never touch game state, entities or
+    /// scene flow. Today only `SetUiVisible` qualifies; every other variant is conservatively
+    /// `false` until it is classified individually (`responsive_ui.md` Phase 3 decides which
+    /// audio/camera/feedback actions to add). Exhaustive by design, no `_` arm: a new `Action`
+    /// variant must be classified here (compile error until it is).
+    pub fn is_presentation_only(&self) -> bool {
+        match self {
+            Action::SetUiVisible { .. } => true,
+            Action::LoadScene(_) | Action::Quit | Action::Log(_) | Action::Spawn { .. }
+            | Action::Despawn(_) | Action::SetDespawnTimer { .. } | Action::PlayAnimation(_)
+            | Action::PlaySound { .. } | Action::PlayMusicLoop { .. } | Action::StopMusic
+            | Action::LoadSceneOverlay(_) | Action::UnloadOverlay | Action::ToggleOverlay(_)
+            | Action::SetVolume(_) | Action::PreloadScene(_) | Action::PreloadPrefab(_)
+            | Action::PreloadGlb(_) | Action::SetVariable(_, _) | Action::IncrementVariable(_, _)
+            | Action::PlayAnimationOn { .. } | Action::EmitEvent(_) | Action::ModifyStat { .. }
+            | Action::SetStat { .. } | Action::ApplyModifier { .. } | Action::RemoveModifier { .. }
+            | Action::ShowDamagePopup { .. } | Action::SetEntityVisible { .. }
+            | Action::EmitEventAfterDelay { .. } | Action::SpawnEffect { .. }
+            | Action::ProjectDecal { .. } | Action::SetParticleQuality(_)
+            | Action::ShowFloatingText { .. } | Action::SetTarget(_) | Action::ClearTarget
+            | Action::ToggleMute | Action::SyncAudioState | Action::ResetToSpawn(_)
+            | Action::CameraShake { .. } | Action::SetCameraMode { .. }
+            | Action::StartDialogue { .. } | Action::AdvanceDialogue | Action::EndDialogue
+            | Action::AddItem { .. } | Action::RemoveItem { .. } | Action::TransferItem { .. }
+            | Action::OpenInventory | Action::CloseInventory | Action::ToggleInventory
+            | Action::OpenShop(_) | Action::CloseShop | Action::BuyItem(_)
+            | Action::OpenContainer(_) | Action::CloseContainer | Action::TakeAllFromContainer
+            | Action::ToggleOwnNameplate | Action::JoinPlayer => false,
+        }
+    }
+}
+
 fn default_action_volume() -> f32 { 1.0 }
 fn default_decal_color() -> (f32, f32, f32, f32) { (1.0, 1.0, 1.0, 1.0) }
 fn one_u32() -> u32 { 1 }
+
+#[cfg(test)]
+mod tests {
+    use super::Action;
+
+    #[test]
+    fn is_presentation_only_pins_the_current_classification() {
+        assert!(Action::SetUiVisible { id: "x".into(), visible: false }.is_presentation_only());
+        assert!(!Action::SetVariable("k".into(), "v".into()).is_presentation_only());
+        assert!(!Action::SetEntityVisible { entity: "e".into(), visible: false }.is_presentation_only());
+    }
+}

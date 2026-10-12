@@ -1,0 +1,9 @@
+(
+    schema_version: 1,
+    global_on: [
+        (
+            event: "scene.ready:main",
+            do_actions: [SetUiVisible(id: "hud_a", visible: false), SetUiVisible(id: "hud_b", visible: true)],
+        ),
+    ],
+)

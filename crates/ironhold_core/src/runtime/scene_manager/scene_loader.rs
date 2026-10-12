@@ -19,7 +19,7 @@ use super::{
     resolve_label_depth_scale, WorldLabel,
     WorldLabelRank, LoadedGamepadBindings,
     LoadedAudioHandles, LoadedDecalHandles, LoadedAssetCatalog,
-    DynamicStatUiQueue,
+    DynamicStatUiQueue, UiNodeId,
 };
 use crate::capabilities::collectible::Collectable;
 use crate::capabilities::motion::Motion;
@@ -1843,6 +1843,9 @@ fn spawn_ui_element_node(
             // its empty area reach the world (a Node's default FocusPolicy is already Pass).
             let name = if g.id.is_empty() { "Group".to_string() } else { format!("Group: {}", g.id) };
             let mut ec = parent.spawn((Name::new(name), group_node));
+            if !g.id.is_empty() {
+                ec.insert(UiNodeId(g.id.clone()));
+            }
             if let Some((r, gr, b, a)) = g.background_color {
                 ec.insert(BackgroundColor(Color::srgba(r, gr, b, a)));
             }
@@ -1867,6 +1870,7 @@ fn spawn_ui_element_node(
             let (r, g, b, a) = rect.color;
             parent.spawn((
                 Name::new(format!("Rect: {}", rect.id)),
+                UiNodeId(rect.id.clone()),
                 node,
                 BackgroundColor(Color::srgba(r, g, b, a)),
             ));
@@ -1881,6 +1885,7 @@ fn spawn_ui_element_node(
             parent
                 .spawn((
                     Name::new(format!("Label: {}", label.text)),
+                    UiNodeId(label.id.clone()),
                     label_node,
                     BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.55)),
                 ))
@@ -1915,6 +1920,7 @@ fn spawn_ui_element_node(
             parent
                 .spawn((
                     Name::new(format!("Button: {}", btn.text)),
+                    UiNodeId(btn.id.clone()),
                     Button,
                     btn_node,
                     BorderColor::from(Color::BLACK),
@@ -1955,6 +1961,7 @@ fn spawn_ui_element_node(
             parent
                 .spawn((
                     Name::new(format!("IconButton: {}", icon_btn.id)),
+                    UiNodeId(icon_btn.id.clone()),
                     Button,
                     node,
                     BackgroundColor(Color::NONE),
@@ -2034,6 +2041,7 @@ fn spawn_ui_element_node(
             parent
                 .spawn((
                     Name::new(format!("StatBar: {}", bar.id)),
+                    UiNodeId(bar.id.clone()),
                     bar_node,
                     BackgroundColor(Color::srgba(br, bg_c, bb, ba)),
                 ))
@@ -2090,6 +2098,7 @@ fn spawn_ui_element_node(
             parent
                 .spawn((
                     Name::new(format!("StatSpread: {}", spread.id)),
+                    UiNodeId(spread.id.clone()),
                     spread_node,
                 ))
                 .with_children(|parent| {
@@ -2172,6 +2181,7 @@ fn spawn_ui_element_node(
             if let Some(handle) = radar_handles.get(&radar.id) {
                 parent.spawn((
                     Name::new(format!("StatRadar: {}", radar.id)),
+                    UiNodeId(radar.id.clone()),
                     node,
                     MaterialNode(handle.clone()),
                     StatRadarNode { stat_keys: radar.stats.clone() },
@@ -2200,6 +2210,7 @@ fn spawn_ui_element_node(
             parent
                 .spawn((
                     Name::new(format!("DialoguePanel: {}", panel.id)),
+                    UiNodeId(panel.id.clone()),
                     panel_node,
                     BackgroundColor(Color::srgba(r, g, b, a)),
                     visibility,
@@ -2288,6 +2299,7 @@ fn spawn_ui_element_node(
             parent
                 .spawn((
                     Name::new(format!("ActionBar: {}", bar.id)),
+                    UiNodeId(bar.id.clone()),
                     bar_node,
                     BackgroundColor(Color::srgba(br, bg_c, bb, ba)),
                 ))
@@ -2477,6 +2489,7 @@ fn spawn_ui_element_node(
             let entity = parent
                 .spawn((
                     Name::new(format!("InventoryPanel: {}", panel.id)),
+                    UiNodeId(panel.id.clone()),
                     panel_node,
                     BackgroundColor(Color::srgba(r, g, b, a)),
                     visibility,
@@ -2661,6 +2674,7 @@ fn spawn_ui_element_node(
             let entity = parent
                 .spawn((
                     Name::new(format!("ShopPanel: {}", panel.id)),
+                    UiNodeId(panel.id.clone()),
                     panel_node,
                     BackgroundColor(Color::srgba(r, g, b, a)),
                     visibility,
@@ -2790,6 +2804,7 @@ fn spawn_ui_element_node(
             let entity = parent
                 .spawn((
                     Name::new(format!("ContainerPanel: {}", panel.id)),
+                    UiNodeId(panel.id.clone()),
                     panel_node,
                     BackgroundColor(Color::srgba(r, g, b, a)),
                     Visibility::Hidden,

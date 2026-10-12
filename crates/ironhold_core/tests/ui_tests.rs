@@ -607,3 +607,103 @@ fn test_group_inside_ui_panel_flows_and_children_do_not_shrink() {
     let child = node_by_name(&mut app, "Label: X");
     assert_eq!(child.flex_shrink, 0.0);
 }
+
+// -- SetUiVisible / UiNodeId (ui_set_visible.md) --
+
+fn display_by_id(app: &mut App, id: &str) -> Vec<Display> {
+    let mut q = app.world_mut().query::<(&ironhold_core::runtime::scene_manager::UiNodeId, &Node)>();
+    q.iter(app.world()).filter(|(n, _)| n.0 == id).map(|(_, node)| node.display).collect()
+}
+
+fn run_set_ui_visible(app: &mut App, id: &str, visible: bool) {
+    app.world_mut()
+        .resource_mut::<ActionQueue>()
+        .push(Action::SetUiVisible { id: id.to_string(), visible });
+    app.update();
+}
+
+const SET_VISIBLE_UI: &str = r#"
+    Group((id: "hud_a", children: [
+        Label((id: "lbl_a", text: "A")),
+        Button((id: "btn_a", text: "B", action: "ui.go")),
+    ])),
+    Group((children: [Rect((id: "plain", size: (10.0, 10.0)))])),
+    Rect((id: "r", size: (10.0, 10.0))),
+    StatBar((id: "bar", stat_key: "hp")),
+    StatSpread((id: "spread", stats: ["hp"])),
+"#;
+
+#[test]
+fn test_set_ui_visible_toggles_group_and_restores() {
+    let mut app = setup_test_app();
+    app.update();
+    load_scene_with_ui(&mut app, SET_VISIBLE_UI);
+    assert_eq!(display_by_id(&mut app, "hud_a"), vec![Display::Flex]);
+
+    run_set_ui_visible(&mut app, "hud_a", false);
+    assert_eq!(display_by_id(&mut app, "hud_a"), vec![Display::None]);
+    // The Group's own node is hidden; descendants are not individually touched.
+    assert_eq!(display_by_id(&mut app, "lbl_a"), vec![Display::Flex]);
+    assert_eq!(display_by_id(&mut app, "btn_a"), vec![Display::Flex]);
+    // Siblings are untouched.
+    assert_eq!(display_by_id(&mut app, "r"), vec![Display::Flex]);
+
+    run_set_ui_visible(&mut app, "hud_a", true);
+    assert_eq!(display_by_id(&mut app, "hud_a"), vec![Display::Flex]);
+}
+
+#[test]
+fn test_set_ui_visible_unknown_id_is_a_silent_noop() {
+    let mut app = setup_test_app();
+    app.update();
+    load_scene_with_ui(&mut app, SET_VISIBLE_UI);
+    run_set_ui_visible(&mut app, "does_not_exist", false);
+    run_set_ui_visible(&mut app, "", false);
+    for id in ["hud_a", "r", "plain"] {
+        assert_eq!(display_by_id(&mut app, id), vec![Display::Flex], "{id}");
+    }
+    // An empty id must not match the id-less Group (it wraps `plain`).
+    assert_eq!(node_by_name(&mut app, "Group").display, Display::Flex);
+}
+
+#[test]
+fn test_ui_node_id_present_on_leaf_kinds_and_idless_group_untouched() {
+    let mut app = setup_test_app();
+    app.update();
+    load_scene_with_ui(&mut app, SET_VISIBLE_UI);
+    for id in ["hud_a", "lbl_a", "btn_a", "plain", "r", "bar", "spread"] {
+        assert_eq!(display_by_id(&mut app, id).len(), 1, "UiNodeId missing for {id}");
+    }
+    // The id-less Group carries no UiNodeId at all, so no SetUiVisible can match it.
+    assert!(display_by_id(&mut app, "").is_empty());
+    run_set_ui_visible(&mut app, "plain", false);
+    assert_eq!(display_by_id(&mut app, "plain"), vec![Display::None]);
+    let group = node_by_name(&mut app, "Group");
+    assert_eq!(group.display, Display::Flex);
+}
+
+#[test]
+fn test_set_ui_visible_applies_to_every_matching_entity() {
+    let mut app = setup_test_app();
+    app.update();
+    load_scene_with_ui(&mut app, SET_VISIBLE_UI);
+    // Simulates an overlay re-using a base-scene id.
+    app.world_mut().spawn((
+        Node::default(),
+        ironhold_core::runtime::scene_manager::UiNodeId("r".to_string()),
+    ));
+    run_set_ui_visible(&mut app, "r", false);
+    assert_eq!(display_by_id(&mut app, "r"), vec![Display::None, Display::None]);
+}
+
+#[test]
+fn test_set_ui_visible_state_resets_when_a_scene_is_reloaded() {
+    // Hidden state lives on the spawned nodes, so a fresh scene load comes back visible.
+    let mut app = setup_test_app();
+    app.update();
+    load_scene_with_ui(&mut app, SET_VISIBLE_UI);
+    run_set_ui_visible(&mut app, "hud_a", false);
+    assert_eq!(display_by_id(&mut app, "hud_a"), vec![Display::None]);
+    load_scene_with_ui(&mut app, SET_VISIBLE_UI);
+    assert_eq!(display_by_id(&mut app, "hud_a"), vec![Display::Flex]);
+}
