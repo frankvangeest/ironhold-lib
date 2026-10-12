@@ -662,6 +662,8 @@ fn test_set_ui_visible_unknown_id_is_a_silent_noop() {
     for id in ["hud_a", "r", "plain"] {
         assert_eq!(display_by_id(&mut app, id), vec![Display::Flex], "{id}");
     }
+    // An empty id must not match the id-less Group (it wraps `plain`).
+    assert_eq!(node_by_name(&mut app, "Group").display, Display::Flex);
 }
 
 #[test]
@@ -672,7 +674,8 @@ fn test_ui_node_id_present_on_leaf_kinds_and_idless_group_untouched() {
     for id in ["hud_a", "lbl_a", "btn_a", "plain", "r", "bar", "spread"] {
         assert_eq!(display_by_id(&mut app, id).len(), 1, "UiNodeId missing for {id}");
     }
-    // The id-less Group carries an empty UiNodeId that no SetUiVisible can match.
+    // The id-less Group carries no UiNodeId at all, so no SetUiVisible can match it.
+    assert!(display_by_id(&mut app, "").is_empty());
     run_set_ui_visible(&mut app, "plain", false);
     assert_eq!(display_by_id(&mut app, "plain"), vec![Display::None]);
     let group = node_by_name(&mut app, "Group");
@@ -694,12 +697,13 @@ fn test_set_ui_visible_applies_to_every_matching_entity() {
 }
 
 #[test]
-fn test_set_ui_visible_does_not_replace_loaded_scene_state_on_loadscene() {
+fn test_set_ui_visible_state_resets_when_a_scene_is_reloaded() {
     // Hidden state lives on the spawned nodes, so a fresh scene load comes back visible.
     let mut app = setup_test_app();
     app.update();
     load_scene_with_ui(&mut app, SET_VISIBLE_UI);
     run_set_ui_visible(&mut app, "hud_a", false);
+    assert_eq!(display_by_id(&mut app, "hud_a"), vec![Display::None]);
     load_scene_with_ui(&mut app, SET_VISIBLE_UI);
     assert_eq!(display_by_id(&mut app, "hud_a"), vec![Display::Flex]);
 }

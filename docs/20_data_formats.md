@@ -1504,7 +1504,7 @@ ui: [
 7. **`Percent` needs a definite parent.** Under an `Auto`-sized parent, `Percent(50.0)` resolves against the parent's final content size, which is rarely what you meant. A `Percent` group directly inside `ui_panel:` has the same problem unless the panel sets `width`/`height` (a bare number there, e.g. `width: 380.0`). `ironhold validate --strict` warns (`percent_under_auto`), but only about the *direct* parent: a `Percent` group inside a `Percent` parent that itself sits in an `Auto` grandparent is not flagged separately, so fix the outermost `Auto` first.
 8. **Spacers.** To add extra space between two children, put an empty group between them: `Group((height: Px(20.0), children: []))` in a column, `Group((width: Px(20.0), children: []))` in a row.
 9. **Migrating from `ui_panel:`.** The defaults do not carry over: a `Group` has no padding, no gap, no background and no clipping unless you set them.
-10. **Hiding.** Use [`SetUiVisible`](#setuivisible) to show or hide a `Group` (and everything in it) at runtime. A hidden group stops taking up space, so its siblings close the gap (in a centre-justified row, the remaining items re-centre). Plain `Visibility::Hidden` is not used for this, because an invisible child would still take up its space. Give the group a non-empty `id` to make it addressable.
+10. **Hiding.** Use [`SetUiVisible`](#setuivisible) to show or hide a `Group` (and everything in it) at runtime; give the group a non-empty `id`. A hidden group takes up no space, so its siblings close the gap (in a centre-justified row the rest re-centre). Try it in `ui_demo` with the Hide B / Show B buttons. A group that contains an `ActionBar` or a panel cannot be hidden (see trip-up 6).
 11. **Reversed directions.** `RowReverse`/`ColumnReverse` flip the children's order *and* what `Start`/`End` mean, exactly like CSS.
 
 Other things to know: a top-level `Group` in a scene with `ui_panel:` flows like any other child of the panel; without `ui_panel:` it sits at its `position:`. Layout mistakes are reported both by `ironhold validate` and by a `UI layout [...]` warning in the console when the scene loads.
@@ -3214,13 +3214,11 @@ scene_key_bindings: {
 > fire early otherwise. `assets/projects/local_coop_demo/scenes/room8.scene.ron` uses `"KeyG"` for
 > exactly this reason.
 
-> **`SetEntityVisible` cannot target a scene-authored UI `Label`** (verified during
-> implementation) — `Action::SetEntityVisible` resolves its `entity` argument through the same
-> `SpawnRegistry` that 3D `entities:` use, and UI nodes are never registered there. A "press to
-> join" prompt therefore can't be hidden via `coop.lobby_full` + `SetEntityVisible` in v1 — author
-> it as an always-visible `Label` instead (see `room8.scene.ron`'s `join_prompt`), give the label an `id`
-> and hide it with [`SetUiVisible`](#setuivisible) on `coop.lobby_full`, or react to
-> `coop.lobby_full` some other way (e.g. a bound `GameVariable` swapping the label's own text).
+> **`SetEntityVisible` only works on spawned 3D entities, not on `ui:` nodes** — UI nodes are never registered in
+> the spawn registry. To hide a "press to join" prompt when the lobby fills, give the `Label` an `id` and bind
+> `( event: "coop.lobby_full", do_actions: [SetUiVisible(id: "join_prompt", visible: false)] )` (see
+> [`SetUiVisible`](#setuivisible)). `room8.scene.ron` still shows the prompt permanently; wiring it up is a
+> planned demo follow-up.
 
 A full working example (2-player start, grows to 4 via hot-join) lives in
 `assets/projects/local_coop_demo/scenes/room8.scene.ron`.
@@ -3951,8 +3949,8 @@ column.
 | `SetStat(key: "key", value: f32)` | Set a stat to an absolute value and clamp. Same dot-routing and `{self}` substitution as `ModifyStat`. |
 | `ShowDamagePopup(entity: "id", amount: f32)` | Spawns a floating `+N` / `-N` label above the entity with the given spawn ID. Positive amounts show in heal colour, negative in damage colour. Uses `{self}` substitution in behavior files. Style (font size, duration, colours) is set via `damage_popup_style` in `.project.ron`. In split-screen scenes it appears in every viewport that can see the entity. |
 | `ShowFloatingText(entity: "id", text: "msg")` | Spawns a floating text label above the entity with the given spawn ID. Rises and fades using the same animation as `ShowDamagePopup`. Colour is warm yellow; use `ShowDamagePopup` for numeric health feedback. Uses `{self}` and `{target}` substitution. Optional `offset: (x, y, z)` overrides the default spawn height set by `damage_popup_style.spawn_offset` — useful when multiple floating texts fire at the same time and would otherwise overlap. Example: `ShowFloatingText(entity: "player_01", text: "You killed {self}!", offset: (0.0, -0.02, 0.0))` In split-screen scenes it appears in every viewport that can see the entity. |
-| `SetEntityVisible(entity: "id", visible: bool)` | Shows (`true`) or hides (`false`) a spawned entity by its spawn ID. The entity stays in the ECS — colliders and behavior FSM keep running. World-space labels tracking that entity (stat bar, stat label, and per-entity `label:`) auto-hide automatically — all three spawn as the same underlying `WorldLabel` component, which `world_label_screen_pos_system` hides whenever its tracked entity's own `Visibility` is `Hidden`. Uses `{self}` in behavior files. |
-| `SetUiVisible(id: "ui_id", visible: bool)` | <a id="setuivisible"></a>Shows (`true`) or hides (`false`) a scene `ui:` node by its `id`; a `Group` hides its whole subtree. Hidden nodes stop taking layout space and cannot be clicked. Applies to **every** live node with that id (base scene and an open overlay both), and silently does nothing if no node has the id yet. `UiNodeDef`s are spawned just after the scene loads, so to start something hidden bind `SetUiVisible(..., visible: false)` to `scene.ready:<scene>` (a one-frame flash is possible). Hidden state is not kept across `LoadScene`; a reloaded scene or reopened overlay comes back visible. The id is a literal UI id: `{self}`/`{target}` are not substituted. `ironhold validate` errors on an unknown id (one that exists in no scene or overlay) and on a target that is, or contains, a dialogue/inventory/shop/container panel or an `ActionBar` (panels open and close with their own actions; a bar's keys would keep firing while hidden). **Limit:** an `ActionBar` cannot be hidden at runtime yet. Example: `( event: "scene.ready:main", do_actions: [SetUiVisible(id: "hud_landscape", visible: false)] )`. |
+| `SetEntityVisible(entity: "id", visible: bool)` | Shows (`true`) or hides (`false`) a spawned entity by its spawn ID. The entity stays in the ECS — colliders and behavior FSM keep running. World-space labels tracking that entity (stat bar, stat label, and per-entity `label:`) auto-hide automatically — all three spawn as the same underlying `WorldLabel` component, which `world_label_screen_pos_system` hides whenever its tracked entity's own `Visibility` is `Hidden`. Uses `{self}` in behavior files. For `ui:` nodes use [`SetUiVisible`](#setuivisible). |
+| `SetUiVisible(id: "ui_id", visible: bool)` | Shows (`true`) or hides (`false`) a scene `ui:` node by its `id`; a `Group` hides its whole subtree and its siblings close the gap. See [SetUiVisible](#setuivisible) below for start-hidden, overlays and what it cannot hide. Example: `SetUiVisible(id: "station_b", visible: false)` (`assets/projects/ui_demo`, the Hide B / Show B buttons). |
 | `EmitEventAfterDelay(event: "name", delay_secs: f32)` | Fires a `GameEvent::Trigger("name")` after `delay_secs` seconds. One-shot — fires once then is removed. Cleared on `Action::LoadScene` so delayed events do not leak across scene transitions. Uses `{self}` substitution in behavior files. The delay keeps counting while the game is paused or in any other state, so a rule that must catch it belongs in the top-level `global_on:`, not a state's `on:` list (a state-scoped rule silently misses an event that lands while that state is not active). A delayed event cannot be cancelled; for a per-entity despawn timer prefer `SetDespawnTimer`. |
 | `SpawnEffect(key: "key", position/entity)` | Spawn a particle burst from `assets.ron effects`. Quality multiplier and budget gating are applied at spawn time. See the Particle System section. |
 | `ProjectDecal(key: "key", …)` | Spawn a flat ground-projected texture quad. See the Ground Decals section. |
@@ -3972,6 +3970,20 @@ column.
 | `AdvanceDialogue` | Advance the current dialogue to the next node. No-op when the current node has visible choices (player must click a choice button). |
 | `EndDialogue` | Close the dialogue panel immediately. Emits `dialogue.ended:{path}`. Cleared automatically on `LoadScene`. |
 | `JoinPlayer` | Hot-join a new player into an already `Grid`-split local co-op scene, growing the split-screen layout live (up to `MAX_SPLIT_PLAYERS`) with no scene reload. No-ops with a `warn!` outside a `Grid`-split scene, at the cap, or with no `join_prefab_keys` entry for the next slot. Emits `coop.lobby_full` on the join that reaches the cap. See [Local co-op hot join](#local-co-op-hot-join) above. |
+
+#### `SetUiVisible` <a id="setuivisible"></a>
+
+`SetUiVisible(id: "x", visible: false)` hides the `ui:` node whose `id:` is `"x"`; `visible: true` shows it again. A hidden node takes up no space and cannot be clicked. `id` is the UI `id:` written in the scene, not a spawn id, and `{self}`/`{target}` are not substituted.
+
+- **Start hidden:** bind it to `scene.ready:<scene file name>`, e.g. `( event: "scene.ready:main", do_actions: [SetUiVisible(id: "hud_landscape", visible: false)] )` for `scenes/main.scene.ron`. The nodes are spawned just before that event, so a visible flash on the first frame is not expected; it has not been measured.
+- **Not in the same list as `LoadScene` / `LoadSceneOverlay`:** the new scene's UI does not exist yet, so the action finds nothing and does nothing. Use the `scene.ready` binding above.
+- **Overlays:** overlays do not fire `scene.ready`, so an overlay node cannot be started hidden yet; keep optional parts in the base scene or show them from a button.
+- **Every matching node:** if a base scene and an open overlay both have a node with the same `id` (say `title`), both are hidden. Prefix overlay ids (`pause_title`) to keep them apart.
+- **No match is fine:** an `id` that is not in the currently loaded scene or overlay does nothing (`global_on` rules are project-wide). `ironhold validate` still errors if the id exists in no scene or overlay at all, which catches typos. It also errors on an empty id.
+- **Resets on `LoadScene`:** a reloaded scene, or an overlay you reopen, comes back fully visible.
+- **A hidden button's action can still fire** from a `scene_key_bindings` / `global_key_bindings` entry that emits the same `ui.button_pressed:<trigger>`; hiding only stops clicks.
+- **Cannot hide panels or the `ActionBar`:** dialogue, inventory, shop and container panels open and close with their own actions (`StartDialogue`, `OpenInventory`, ...), and an `ActionBar`'s keys would keep firing while hidden. `validate` rejects a target that is, or contains, one of them. An `ActionBar` cannot be hidden at runtime yet.
+- **Not a toggle:** use two bound events (or buttons), one `visible: true` and one `visible: false`.
 
 ---
 

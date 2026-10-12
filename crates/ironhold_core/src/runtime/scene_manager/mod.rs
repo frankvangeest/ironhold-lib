@@ -584,7 +584,8 @@ pub struct OverlayEntity;
 
 /// Scene-authored `id` of a spawned UI node, inserted by `spawn_ui_element_node` in every
 /// `UiNodeDef` arm so `Action::SetUiVisible` can find it. Ids are unique per scene, not across a
-/// base scene plus an open overlay, so lookups apply to every match. Empty ids are never matched.
+/// base scene plus an open overlay, so lookups apply to every match. Only an id-less `Group` can have
+/// an empty id; it gets no `UiNodeId` at all, and the executor ignores an empty id.
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
 pub struct UiNodeId(pub String);
 

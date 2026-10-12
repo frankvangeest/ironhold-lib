@@ -193,11 +193,10 @@ See `docs/20_data_formats.md` — `stats.ron` and `Instance stats (stat_template
 #### Entity visibility / timing actions ✅
 - `ShowDamagePopup { entity, amount }` ✅ — spawns a floating `+N` / `-N` world-space label above the entity with the given spawn ID; style (font size, duration, rise speed, colours) configured via `damage_popup_style` in `.project.ron`; `{self}` is substituted in behavior contexts
 - `SetEntityVisible { entity, visible }` ✅ — shows or hides a spawned entity by spawn ID; entity stays in ECS (stats and behavior FSM keep running); world-space labels tracking the entity auto-hide; `{self}` substituted in behavior contexts
-- `SetUiVisible { id, visible }` ✅ — shows or hides a scene `ui:` node by its `id` (a `Group` hides its subtree) via `Display::None`; applies to every live node with that id, silent no-op if none; hidden state resets on `LoadScene`; cosmetic, UI-only
 - `EmitEventAfterDelay { event, delay_secs }` ✅ — fires `GameEvent::Trigger(event)` after `delay_secs` seconds; cleared on `LoadScene`; `{self}` substituted in behavior contexts
 
-#### UI actions 🧭
-- `ShowUi(panel_id)` / `HideUi(panel_id)` — planned for panels; `SetUiVisible` (above) covers HUD nodes and Groups
+#### UI actions
+- `SetUiVisible { id, visible }` ✅ — shows or hides a scene `ui:` node by its `id` (a `Group` hides its subtree and takes no space while hidden); every node with that id, base scene and overlay alike; no match is a silent no-op; resets on `LoadScene`; not for panels or the `ActionBar` (validate rejects them). See `docs/20_data_formats.md#setuivisible`
 
 ### Action semantics (planned)
 - Actions are executed in a defined order per tick/frame.

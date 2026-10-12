@@ -3,7 +3,7 @@
     global_on: [
         (
             event: "scene.ready:main",
-            do_actions: [SetUiVisible(id: "hud_typo", visible: false)],
+            do_actions: [SetUiVisible(id: "hud_typo", visible: false), SetUiVisible(id: "", visible: true)],
         ),
     ],
 )

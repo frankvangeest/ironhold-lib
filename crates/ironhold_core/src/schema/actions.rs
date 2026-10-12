@@ -241,7 +241,9 @@ pub enum Action {
     /// `visible: false` sets `Display::None` (the node stops taking flex space and cannot be
     /// clicked); `visible: true` restores it. Applies to every live node with that `id` (base
     /// scene and open overlay alike) and is a silent no-op if none exists yet, so author initial
-    /// hides on `scene.ready:<scene>`. Not for panels or the `ActionBar` (validate rejects them);
+    /// hides on `scene.ready:<scene>`. Not in the same list as `LoadScene`/`LoadSceneOverlay` (the
+    /// new UI does not exist yet), and overlay nodes cannot start hidden (overlays fire no
+    /// `scene.ready`). Not for panels or the `ActionBar` (validate rejects them);
     /// the `id` is a literal UI id, `{self}`/`{target}` are not substituted. Hidden state resets
     /// on `LoadScene`.
     /// Example: `SetUiVisible(id: "station_b", visible: false)`.
@@ -439,8 +441,10 @@ pub enum Action {
 }
 
 impl Action {
-    /// True for actions that only change presentation (cosmetic UI/audio/camera feel) and never
-    /// touch game state, entities or scene flow. Exhaustive by design, no `_` arm: a new `Action`
+    /// True for actions that only change presentation and never touch game state, entities or
+    /// scene flow. Today only `SetUiVisible` qualifies; every other variant is conservatively
+    /// `false` until it is classified individually (`responsive_ui.md` Phase 3 decides which
+    /// audio/camera/feedback actions to add). Exhaustive by design, no `_` arm: a new `Action`
     /// variant must be classified here (compile error until it is).
     pub fn is_presentation_only(&self) -> bool {
         match self {
@@ -472,3 +476,15 @@ impl Action {
 fn default_action_volume() -> f32 { 1.0 }
 fn default_decal_color() -> (f32, f32, f32, f32) { (1.0, 1.0, 1.0, 1.0) }
 fn one_u32() -> u32 { 1 }
+
+#[cfg(test)]
+mod tests {
+    use super::Action;
+
+    #[test]
+    fn is_presentation_only_pins_the_current_classification() {
+        assert!(Action::SetUiVisible { id: "x".into(), visible: false }.is_presentation_only());
+        assert!(!Action::SetVariable("k".into(), "v".into()).is_presentation_only());
+        assert!(!Action::SetEntityVisible { entity: "e".into(), visible: false }.is_presentation_only());
+    }
+}

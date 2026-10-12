@@ -185,7 +185,9 @@ simulation, never runs in `FixedUpdate`, and is not a replay input. Two rules fo
 `SetUiVisible` hides a UI node with `Display::None` (not `Visibility::Hidden`, which still takes flex space) through the `UiNodeId`
 component every `UiNodeDef` spawner arm inserts. It is the only core writer of `Node.display`; a second one needs a shared owner, or the
 two will fight. Keep the guarded write (`if node.display != target`) and a silent no-op on unknown ids. Panels and the `ActionBar` are
-excluded on purpose (they open/close via `Visibility` and their own actions); `ironhold validate` enforces it.
+excluded on purpose (they open/close via `Visibility` and their own actions); `ironhold validate` enforces it. Restore is
+hard-coded to `Display::Flex` (nothing else sets a `Display`); if a `UiNodeDef` ever gains an authored `display:`, store the
+original value on or beside `UiNodeId` first, or `visible: true` will clobber it.
 
 <!-- b:1084 -->
 ## Despawning: prefer `try_despawn()` when an entity may already be gone

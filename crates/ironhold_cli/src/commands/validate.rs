@@ -898,7 +898,7 @@ fn set_ui_visible_checks(
         if id.is_empty() {
             errors.push(CrossFileError {
                 source_file: source.to_string(),
-                message: "SetUiVisible has an empty id; use the id of a UI node (Groups and                           leaves need a non-empty id to be addressable)".to_string(),
+                message: "SetUiVisible has an empty id; use the id of a UI node (Groups and leaves need a non-empty id to be addressable)".to_string(),
                 error_type: "set_ui_visible_empty_id",
             });
             continue;
@@ -915,15 +915,28 @@ fn set_ui_visible_checks(
                     if !reported.insert((id.to_string(), scene_path.clone(), inner_id.to_string())) {
                         continue;
                     }
-                    let message = if kind == "ActionBar" {
+                    let is_target = inner_id == id;
+                    let message = if kind == "ActionBar" && is_target {
                         format!(
-                            "SetUiVisible target {:?} (scene {}) {} ActionBar {:?}; move the bar                              outside the Group. Its keys keep firing while hidden.",
-                            id, scene_path, if inner_id == id { "is" } else { "contains" }, inner_id
+                            "SetUiVisible target {:?} (scene {}) is an ActionBar; an ActionBar cannot be hidden at runtime yet (its keys would keep firing while hidden).",
+                            id, scene_path
+                        )
+                    } else if kind == "ActionBar" {
+                        format!(
+                            "SetUiVisible target {:?} (scene {}) contains ActionBar {:?}; move the bar out of this Group (its keys would keep firing while it is hidden).",
+                            id, scene_path, inner_id
                         )
                     } else {
+                        let (open, close) = match kind {
+                            "DialoguePanel" => ("StartDialogue", "EndDialogue"),
+                            "ShopPanel" => ("OpenShop", "CloseShop"),
+                            "ContainerPanel" => ("OpenContainer", "CloseContainer"),
+                            _ => ("OpenInventory", "CloseInventory"),
+                        };
                         format!(
-                            "SetUiVisible target {:?} (scene {}) {} {} {:?}; panels open and                              close with OpenInventory/CloseInventory etc., not SetUiVisible.",
-                            id, scene_path, if inner_id == id { "is" } else { "contains" }, kind, inner_id
+                            "SetUiVisible target {:?} (scene {}) {} {} {:?}; panels open and close with {}/{}, not SetUiVisible.",
+                            id, scene_path, if is_target { "is" } else { "contains" }, kind, inner_id,
+                            open, close
                         )
                     };
                     errors.push(CrossFileError {

@@ -1842,7 +1842,10 @@ fn spawn_ui_element_node(
             // A Group is a pure layout wrapper: no Interaction / FocusPolicy::Block, so clicks on
             // its empty area reach the world (a Node's default FocusPolicy is already Pass).
             let name = if g.id.is_empty() { "Group".to_string() } else { format!("Group: {}", g.id) };
-            let mut ec = parent.spawn((Name::new(name), group_node, UiNodeId(g.id.clone())));
+            let mut ec = parent.spawn((Name::new(name), group_node));
+            if !g.id.is_empty() {
+                ec.insert(UiNodeId(g.id.clone()));
+            }
             if let Some((r, gr, b, a)) = g.background_color {
                 ec.insert(BackgroundColor(Color::srgba(r, gr, b, a)));
             }
