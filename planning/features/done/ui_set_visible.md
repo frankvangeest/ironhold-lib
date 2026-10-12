@@ -1,6 +1,6 @@
 # Feature: `SetUiVisible` action (show/hide a UI node by id)
 
-_Status: Ready (own plan-review + final check passed 2026-10-11)_
+_Status: Done (2026-10-12)_
 _Planned at: `e3a2ff2` (2026-10-11)_
 
 Origin: plan-review of `planning/features/responsive_ui.md` (rounds 1-3). The architect recommended
