@@ -217,6 +217,7 @@ async def open_project(
     context: BrowserContext,
     project: str | None = None,
     scene: str | None = None,
+    extra_query: str = "",
 ) -> tuple[Page, list[str]]:
     """Open a new page for the given project (and optional scene), return (page, error_list).
 
@@ -241,6 +242,7 @@ async def open_project(
     url = f"{BASE_URL}/play.html?project={project}&testing=1" if project else f"{BASE_URL}/play.html?testing=1"
     if scene:
         url += f"&scene={scene}"
+    url += extra_query
     await page.goto(url, wait_until="networkidle")
 
     # Ready = the engine's first frame has run (play.html sets `data-ready` on <body> when the
@@ -828,7 +830,9 @@ async def test_real_hidpi(
     )
     try:
         context = await browser.new_context(no_viewport=True)
-        page, errors = await open_project(context, "ui_demo")
+        # `px_budget=off`: this test checks the *uncapped* path (backing store == CSS x dpr). The render-budget cap
+        # (play.html, k > 1 above 3.69 MP) is covered by `test_render_budget`; at DPR 3 the default window would hit it.
+        page, errors = await open_project(context, "ui_demo", extra_query="&px_budget=off")
         try:
             await wait_for_debug_state(page, lambda s: s.get("app_state") == "InGame")
             await asyncio.sleep(2)   # let a post-load resize settle
@@ -863,6 +867,79 @@ async def test_real_hidpi(
         await browser.close()
 
 
+RENDER_BUDGET_PX = 3686400   # play.html BUDGET_PX (2560x1440)
+
+
+async def test_render_budget(browser: Browser) -> str:
+    """Above the pixel budget play.html CSS-scales the canvas's parent so the backing store (CSS x dpr, measured
+    before the transform) stays within budget while the picture still fills the viewport; at or under the budget
+    nothing is scaled (k == 1). Uses viewport-size emulation only (DPR 1): `device_scale_factor` emulation makes
+    ResizeObserver report CSS-sized content boxes, so it cannot be used to check DPR behaviour (see
+    docs/dev/browser_tests.md). Real DPR coverage is part of the manual playtest."""
+    context = await browser.new_context(viewport={"width": 3840, "height": 2160})
+    try:
+        page, errors = await open_project(context, "ui_demo")
+        try:
+            await wait_for_debug_state(page, lambda s: s.get("app_state") == "InGame")
+            await asyncio.sleep(2)   # let the post-load resize settle
+            m = await page.evaluate("""() => {
+              const c = document.getElementById('ironhold-canvas');
+              return {k: window.ironholdRenderScale, backW: c.width, backH: c.height, dpr: devicePixelRatio};
+            }""")
+            if m["k"] is None or m["k"] <= 1.0:
+                raise TestFailure(f"3840x2160 is over the budget but ironholdRenderScale is {m['k']}")
+            back = m["backW"] * m["backH"]
+            # Device-pixel snapping: allow a small tolerance over the budget.
+            if back > RENDER_BUDGET_PX * 1.02:
+                raise TestFailure(f"canvas backing store {m['backW']}x{m['backH']} = {back} px exceeds the budget {RENDER_BUDGET_PX}")
+            await assert_canvas_fills_viewport(page, 3840, 2160)   # transformed rect still fills the viewport
+            state = await wait_for_debug_state(page, lambda s: "window_size" in s)
+            ww, wh = state["window_size"]
+            if abs(ww * m["k"] - 3840) > 2 or abs(wh * m["k"] - 2160) > 2:
+                raise TestFailure(f"engine window_size {ww}x{wh} x k={m['k']} != 3840x2160")
+            # Back under the budget: no scaling.
+            await page.set_viewport_size({"width": 1920, "height": 1080})
+            await page.wait_for_function("window.ironholdRenderScale === 1")
+            await assert_canvas_fills_viewport(page, 1920, 1080)
+            # The engine and the backing store follow back to the uncapped size, not just the CSS rect.
+            state = await wait_for_debug_state(
+                page, lambda s: "window_size" in s and abs(s["window_size"][0] - 1920) <= 1 and abs(s["window_size"][1] - 1080) <= 1)
+            back = await page.evaluate("() => { const c = document.getElementById('ironhold-canvas'); return [c.width, c.height]; }")
+            if abs(back[0] - 1920) > 1 or abs(back[1] - 1080) > 1:
+                raise TestFailure(f"backing store {back[0]}x{back[1]} did not return to 1920x1080 once back under the budget")
+            if errors:
+                raise TestFailure("Browser errors:\n" + "\n".join(f"  \u2022 {e}" for e in errors))
+            return f"k={m['k']:.2f}, backing {m['backW']}x{m['backH']}, window_size {ww:.0f}x{wh:.0f}"
+        finally:
+            await page.close()
+    finally:
+        await context.close()
+
+
+async def test_render_budget_pointer(browser: Browser) -> str:
+    """Pointer mapping under the render-budget CSS scale: at k > 1 a click at the *visual* position of a UI button must
+    still hit it (winit reads element-local offsetX/offsetY, which is untransformed, so the engine's logical coordinates
+    are the visual ones divided by k). quick_scene's Dance button is top-left anchored at logical (95, 80)."""
+    context = await browser.new_context(viewport={"width": 3840, "height": 2160})
+    try:
+        page, errors = await open_project(context, "quick_scene")
+        try:
+            await wait_for_debug_state(page, lambda s: s.get("app_state") == "InGame")
+            await asyncio.sleep(2)   # let the post-load resize settle
+            k = await page.evaluate("window.ironholdRenderScale")
+            if k is None or k <= 1.0:
+                raise TestFailure(f"3840x2160 is over the budget but ironholdRenderScale is {k}")
+            await page.mouse.click(95 * k, 80 * k)
+            state = await wait_for_debug_state(page, lambda s: "PlayAnimation" in s.get("last_action", ""))
+            if errors:
+                raise TestFailure("Browser errors:\n" + "\n".join(f"  \u2022 {e}" for e in errors))
+            return f"k={k:.2f}, click at ({95 * k:.0f},{80 * k:.0f}) -> {state['last_action']}"
+        finally:
+            await page.close()
+    finally:
+        await context.close()
+
+
 async def run_responsive(
     screenshot_dir: Path,
     update_baselines: bool,
@@ -892,6 +969,8 @@ async def run_responsive(
         )
         await record("responsive:resize_follows_viewport", test_resize_follows_viewport(browser))
         await record("responsive:touch_tap_fires_action", test_touch_tap_fires_action(browser))
+        await record("responsive:render_budget", test_render_budget(browser))
+        await record("responsive:render_budget_pointer", test_render_budget_pointer(browser))
         for project, scene in RESPONSIVE_TARGETS:
             if filter_projects and project not in filter_projects:
                 continue

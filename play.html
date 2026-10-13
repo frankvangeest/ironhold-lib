@@ -58,6 +58,24 @@
             min-width: 0;
         }
 
+        /* Render-budget scaler (see "Render budget" in the script below). It is the canvas's parent, so
+           Bevy's fit_canvas_to_parent fills IT. With --k > 1 it is made 1/k of the host's size and scaled up
+           by k, so the backing store (CSS size x devicePixelRatio, measured before the transform) is capped
+           while the picture still fills the host. --k is 1 for any viewport at or under the pixel budget, and
+           then the script sets `transform: none` (the box is full size). Pointer positions are element-local (winit uses
+           offsetX/offsetY), so they stay correct under the transform. NOTE: the transform makes this a
+           containing block for any future position:fixed child and may affect canvas.requestFullscreen(). */
+        .canvas-scaler {
+            --k: 1;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: calc(100% / var(--k));
+            height: calc(100% / var(--k));
+            transform: scale(var(--k));
+            transform-origin: 0 0;
+        }
+
         canvas {
             display: block;
         }
@@ -220,7 +238,9 @@
          (Window.canvas = "#ironhold-canvas"). Needs a pkg/ built from the same commit: a stale
          pkg does not know this selector and appends its own fixed-size canvas to <body> instead. -->
     <div class="game-host" id="game-host">
-        <canvas id="ironhold-canvas"></canvas>
+        <div class="canvas-scaler" id="ironhold-scaler">
+            <canvas id="ironhold-canvas"></canvas>
+        </div>
     </div>
 
     <!-- Loading indicator shown until the engine's first frame has run -->
@@ -282,6 +302,58 @@
             if (params.get('bar') === 'hidden') {
                 document.getElementById('top-bar').classList.add('bar-hidden');
             }
+
+            // ─── Render budget ────────────────────────────────────────────────
+            // The engine's canvas backing store is CSS size x devicePixelRatio (wgpu writes
+            // canvas.width/height from the size winit's ResizeObserver reports), so a 4K monitor at DPR 1.5 would
+            // render ~8 MP. Cap it at BUDGET_PX (2560x1440 = 3,686,400) by CSS-scaling the canvas's parent
+            // (.canvas-scaler): k = sqrt(cssW*cssH*dpr^2 / budget), rounded UP to 0.05 so the budget holds, then
+            // limited so the engine's logical window stays at least 1280x720 (the HUDs are authored for that; a
+            // small HiDPI laptop may therefore go slightly over budget). k is 1 (no scaling) at or under budget.
+            // Must run before the module script starts the engine, or the first surface configure allocates full
+            // size render targets (~350 MB at 8 MP) and immediately reallocates them.
+            // ?px_budget=<megapixels> overrides the budget (e.g. 2.1 to experiment); ?px_budget=off disables the cap.
+            // Only this page applies it: another page embedding the engine renders uncapped unless it copies this.
+            const BUDGET_PX = 3686400;
+            const MIN_LOGICAL_W = 1280, MIN_LOGICAL_H = 720;
+            const K_STEP = 0.05;
+            let budget = BUDGET_PX;
+            const pxBudget = params.get('px_budget');
+            if (pxBudget === 'off') {
+                budget = Infinity;
+            } else if (pxBudget && Number(pxBudget) > 0) {
+                budget = Math.round(Number(pxBudget) * 1e6);
+            } else if (pxBudget !== null) {
+                console.warn(`Ignoring ?px_budget=${pxBudget} (expected a positive number of megapixels, or "off"); using the default.`);
+            }
+            const gameHost = document.getElementById('game-host');
+            const scaler = document.getElementById('ironhold-scaler');
+            function applyRenderBudget() {
+                // Measure the host, never the scaler: the scaler's size depends on k (no feedback loop).
+                const w = gameHost.clientWidth, h = gameHost.clientHeight;
+                let k = 1;
+                if (w > 0 && h > 0 && Number.isFinite(budget)) {
+                    const dpr = window.devicePixelRatio || 1;
+                    const kBudget = Math.ceil(Math.sqrt((w * h * dpr * dpr) / budget) / K_STEP - 1e-9) * K_STEP;
+                    const kFloor = Math.min(w / MIN_LOGICAL_W, h / MIN_LOGICAL_H);
+                    k = Math.max(1, Math.min(kBudget, kFloor));
+                    if (k < 1 + 1e-6) k = 1;
+                }
+                k = Math.round(k * 10000) / 10000;   // keep the DOM / ironholdRenderScale free of float noise
+                scaler.style.setProperty('--k', String(k));
+                // No transform at all when uncapped: a transform (even scale(1)) makes the scaler a stacking
+                // context and a containing block for position:fixed descendants.
+                scaler.style.transform = k === 1 ? 'none' : '';
+                window.ironholdRenderScale = k;
+            }
+            applyRenderBudget();
+            new ResizeObserver(applyRenderBudget).observe(gameHost);
+            // devicePixelRatio changes (browser zoom, moving between monitors) do not resize the host; the media
+            // query is bound to one DPR value, so re-arm it after each change.
+            (function watchDpr() {
+                const mq = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+                mq.addEventListener('change', () => { applyRenderBudget(); watchDpr(); }, { once: true });
+            })();
 
             // Show project name from URL
             const project = params.get('project');
