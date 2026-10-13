@@ -55,3 +55,4 @@
 - [Dev-doc split designer-leak audit](dev_doc_split_designer_leak_audit.md) — use moved-sections-index as checklist; {self}-in-dialogue 3-way doc contradiction; particle `additive` doc staleness; corpse-only caveats
 - [SetUiVisible / UiNodeId pattern](ui_set_visible_pattern.md) — UI-id Display::None action; empty-id guard now in; overlay no-scene.ready + ActionBar-unhideable gaps; wildcard arms left
 - [Web host-page contract](web_host_page_contract.md) — canvas selector/fit/data-ready/DebugState test fields need no RON; flag missing-id embeds + designer note on non-fixed play area
+- [Scene ambient light](scene_ambient_light_pattern.md) — dead AmbientLight entity -> GlobalAmbientLight; sRGB-linearised colour x brightness = most scenes darker; shadow-map resources leak across scenes; cd/m^2 not lux

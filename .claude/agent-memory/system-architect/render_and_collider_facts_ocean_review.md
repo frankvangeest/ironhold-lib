@@ -30,6 +30,18 @@ Facts verified against vendored source / code at `34803b1` (2026-10-02) while pl
 - bevy_rapier 0.33 `ExternalForce` sync (`plugin/systems/rigid_body.rs` ~312) runs on `Changed<ExternalForce>`:
   reset_forces + add_force - persistent until the component changes again.
 
+Added 2026-10-13 (prerelease_render_fixes plan-review, `5217c95`):
+- `GlobalAmbientLight` Default = white / 80.0 / affects_lightmapped true; `GlobalAmbientLight::NONE` const exists;
+  in `bevy::prelude`. bevy_pbr extracts it only on `is_changed()` (re-insert marks changed, fine).
+- `apply_lighting_v2` body is wrapped in `if let Some(lighting) = &scene.lighting` - any "reset when absent" logic
+  must also cover `lighting: None` (7 scenes have no lighting block). Shadow-map-size resources already leak across
+  scenes the same way.
+- winit 0.30.12 web pointer position = `MouseEvent.offsetX/Y` (transform-aware local coords), so a CSS
+  `transform: scale` wrapper around the canvas keeps hit-testing right in principle; `canvas.position()` uses
+  getBoundingClientRect (IME/inner_position only).
+- `test_web.py::test_real_hidpi` (factors 2,3, no_viewport) compares engine `window_size` to the canvas
+  getBoundingClientRect - any CSS-scaled canvas wrapper with k>1 breaks it.
+
 **Why:** these were each load-bearing for a plan claim that was wrong. **How to apply:** check them in any
 lighting, custom-vertex-material, buoyancy/physics-body, or boat/vehicle review. Related: [[player-marker-gap]]
 (boat-as-player blocked by CharacterController-as-player-marker), [[shader-resolution-pattern]].

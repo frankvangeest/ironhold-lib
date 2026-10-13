@@ -42,4 +42,4 @@
 - [D1 deterministic maps](project_d1_deterministic_maps.md) — BTreeMap/IndexMap swaps perf-neutral, ~0 size; idle frames alloc-free; parse_key lowercase-letter String alloc is pre-existing nit
 - [max_fixed_delta_secs config](project_max_fixed_delta_config.md) — opt-in RON cap, applied ONCE at project load (LoadingProject-gated system); zero per-frame cost; clamps Update delta too; sub-tick value = permanent slow-motion
 - [D2 catalog BTreeMaps](project_d2_catalog_btreemaps.md) — catalogs/LoadedModifiers/particle buckets→BTreeMap perf-neutral; real nit = per-particle group_key String clone (pre-existing)
-- [Responsive canvas render cost](project_responsive_canvas.md) — fit_canvas_to_parent: phones got cheaper (old 1280x720@DPR3=8.3MP), 4K desktops ~3.9x pixels; shadow maps fixed; debug DOM write pre-existing
+- [Responsive canvas render cost](project_responsive_canvas.md) — fit_canvas_to_parent 4K ~3.9x pixels; CSS-scale cap: winit offsetX mapping OK, logical shrinks by k, no Sample2 on WebGPU

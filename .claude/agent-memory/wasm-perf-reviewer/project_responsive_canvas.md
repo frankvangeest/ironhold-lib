@@ -1,6 +1,6 @@
 ---
 name: responsive-canvas-render-cost
-description: Responsive UI Phase 1 (fit_canvas_to_parent) — backing store = CSS x DPR; big desktop monitors (not phones) are the real fill-rate regression; resize cost; debug-state DOM write
+description: fit_canvas_to_parent cost (big HiDPI desktops are the fill-rate regression) + CSS-scale pixel-cap findings (winit offsetX mapping OK, logical-size shrink, Sample2 invalid on WebGPU, test_real_hidpi coupling)
 metadata:
   type: project
 ---
@@ -10,10 +10,21 @@ Before, the canvas was Bevy-default 1280x720 logical (no CSS scaling), so backin
 
 - Phones got CHEAPER: old 1280x720 @DPR3 = 3840x2160 = 8.3 MP; full-viewport 390x800 @DPR3 ~ 2.8 MP.
 - Large desktops got MORE expensive: 4K @DPR1.5 viewport ~3840x2094 = 8.0 MP vs old 1920x1080 = 2.07 MP (~3.9x).
-- No Msaa override in crates → Bevy default Sample4; rough ~44 B/px of view targets (MSAA color+depth, 2 resolve ping-pong, swapchain) → ~350 MB at 8 MP.
+- No Msaa override in crates → Bevy default Sample4; rough ~44 B/px of view targets (MSAA color+depth, 2 resolve ping-pong, swapchain) → ~350 MB at 8 MP, ~160 MB at 3.7 MP, ~92 MB at 2.1 MP.
 - Shadow maps are fixed-size resources (scene_loader DirectionalLightShadowMap), NOT resize-dependent.
-- No WindowResized readers in crates; split_screen_viewport_system polls physical_size every frame (cheap).
-- sync_debug_state_to_dom (wasm, PostUpdate) was ALREADY a per-frame format!+set_inner_html before Phase 1; Phase 1 only adds 3 floats.
+- sync_debug_state_to_dom (wasm, PostUpdate) is a per-frame format!+set_inner_html (pre-existing).
 
-**Why:** Phase 4 "mobile render cap" framing assumed phones are the worst case; it's actually large/HiDPI desktop.
-**How to apply:** when render-scale cap lands, cap total physical pixels (e.g. ~2.1-3.7 MP budget), not just DPR on mobile. See [[project-dynamic-split-screen]].
+Pixel-cap via CSS `transform: scale(k)` wrapper (plan prerelease_render_fixes phase C, reviewed 2026-10-13):
+- winit 0.30.12 pointer/touch positions = `offsetX/offsetY` (web_sys/event.rs:83-98), × window DPR. offsetX is in the
+  target's untransformed local space in Blink/Gecko/WebKit → mapping is correct under an ancestor scale.
+- Resize uses ResizeObserver DevicePixelContentBox (resize_scaling.rs:141-143), Safari fallback contentRect×DPR
+  (:231-235); both are pre-transform → backing store = (W/k)·DPR as intended.
+- Mouse-look: Chromium movementX is screen-space (unaffected); Gecko coalesced path diffs offsetX (event.rs:131-137)
+  → delta shrinks by 1/k at k>1 (minor Firefox sensitivity drift).
+- Cap shrinks the LOGICAL window by k: non-ui_scale projects' Val::Px UI appears k× larger; HiDPI laptops
+  (1512x982@2) drop to ~1192x774 logical at 3.7 MP, ~899x584 at 2.1 MP (below 1280x720) → prefer 3.7 MP + a logical floor.
+- WebGPU only allows sample counts 1 and 4 → Msaa::Sample2 is NOT a web option.
+- test_real_hidpi (test_web.py ~L810) measures getBoundingClientRect (transformed) vs window_size/backing → breaks at k>1.
+
+**How to apply:** cap total physical pixels, not DPR; check any canvas-size test for getBoundingClientRect vs clientWidth.
+See [[project-dynamic-split-screen]].
