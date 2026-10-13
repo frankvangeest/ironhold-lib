@@ -11,6 +11,7 @@
 
 ## Active
 
+- [ ] **Pre-release render fixes (ambient light, warmup `NoFrustumCulling`, canvas pixel cap)** _(Active 2026-10-12, branch `feature/prerelease_render_fixes`)_ — three phases on one branch, see `planning/features/prerelease_render_fixes.md` (Ready): (A) authored scene ambient light via `GlobalAmbientLight` + re-tune the 37 scenes; (B) `WarmupNoCull` marker so warmup only strips what it added; (C) `play.html` CSS-scaled wrapper capping physical canvas pixels at 2560x1440. Closes the three matching entries in Bugs/Performance when each phase ships.
 
 ---
 
