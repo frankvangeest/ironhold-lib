@@ -1,28 +1,31 @@
 ---
 name: ux-wishlist-status
-description: My top-5 designer-experience wishlist in planning/stakeholder_priority_list.md — old list's status and the refreshed 2026-10-01 top-5
+description: My top-5 designer-experience wishlist in planning/stakeholder_priority_list.md — history across editions and the 3rd-edition (2026-10-13) top-5
 metadata:
   type: project
 ---
 
-I own the "UX-Gamedesigner-Reviewer" section of `planning/stakeholder_priority_list.md`
-(old snapshot `db1ede0`, 2026-09-03). Refreshed 2026-10-01:
+I own the "UX-Gamedesigner-Reviewer" section of `planning/stakeholder_priority_list.md`.
+Editions: 1st `db1ede0` (2026-09-03), 2nd `ce77bdd` (2026-10-01), 3rd at `929b7d1` (2026-10-13).
 
-Old list status:
-- #1 RON typos silently no-op — SHIPPED (`3677859`, Action + 8 FSM/dialogue containers).
-- #2 validate inconsistency — mostly closed (~10 Done CLI-validate entries in Sept). Residuals:
-  stale `logic/rules.ron` unflagged, ContainerPanel slots vs max_slots, `{target}` gating.
-- #3 demo projects (prefab/ui/audio/scene_transitions/parkour) — STILL all unbuilt.
-- #4 RON parse footguns — still only the camera_mode gotcha (docs/20 ~2416); no general primer.
-- #5 tofu — lint shipped; the 20 shipped strings (particles_demo 16, effect_mayhem_demo 4) and
-  the ASCII-only font are unchanged.
+2nd-edition items, status at 3rd edition (none shipped — October went to UI layout/responsive work):
+- #1 real pause — still open; docs/30 ~223-257 pause example still has no caveat; new Bug
+  "dying while paused never reaches game over" (primitive_world state_machine:130).
+- #2 load hang — still open; project_loader Failed arms are catalogs only; no
+  UntypedAssetLoadFailedEvent; play.html message (b5c1800) covers only engine-can't-start.
+- #3 demos — Changed: minimal `ui_demo` shipped (1167eb9, +SetUiVisible d50045d);
+  prefab/audio/scene_transitions/parkour still unbuilt (3 cycles).
+- #4 `{target}` -> "" — still open, action_needs_target still 11 arms (action_bar.rs ~429).
+- #5 `motion:` undocumented — still open (14 uses / 5 projects, 0 docs hits).
+- Tofu: still exactly 20 strings (particles_demo 16, effect_mayhem 4); re-flagged backlog ~260.
 
-Refreshed top-5 (2026-10-01): 1 real pause (docs teach the cosmetic pattern), 2 load failures
-hang with no on-screen error (.project.ron + scene fetch), 3 demo projects (carried),
-4 `{target}` silently -> "" for 8 action types, 5 `motion:` undocumented (used in 5 projects).
+3rd-edition top-5: 1 real pause (carried), 2 action-bar slots are validate's blind spot
+(collect_actions skips slot do_actions + {target}), 3 load hang (carried), 4 docs/20 too big
+(354k chars) + motion: hole, 5 demo projects (prefab/audio/scene_transitions) + README table
+missing particles_demo/local_coop_demo rows.
 
 **Why:** Frank periodically asks each reviewer persona to self-assess against this list.
-**How to apply:** next refresh, re-verify these five first; demo projects have now gone two
-cycles with zero movement — call that out explicitly.
+**How to apply:** next refresh, re-verify these five first; pause and load-hang have now gone two
+editions with zero movement — call that out.
 Related: [[pause-is-cosmetic]], [[ron-parse-failure-diagnostics]], [[em-dash-font-glyph-gap]],
-[[validate-coverage-gaps]].
+[[validate-coverage-gaps]], [[ui-trigger-wiring]].

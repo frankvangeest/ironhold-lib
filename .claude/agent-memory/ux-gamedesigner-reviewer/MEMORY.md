@@ -24,7 +24,7 @@
 - [ShowFloatingText tracks its entity](project_floating_text_tracks_entity.md) — pairing it with Despawn of the same entity in one do_actions list = zero visible frames, no warning
 - [Pause is cosmetic](project_pause_is_cosmetic.md) — pause menu is an overlay only; nothing in the sim stops; 4 doc surfaces claim otherwise; no UI focus/keyboard-nav concept exists anywhere
 
-- [My top-5 UX wishlist status](project_ux_wishlist_status.md) — stakeholder list ownership; 2026-10-01 refresh: pause, load-hang, demos, {target}->"", motion: docs
+- [My top-5 UX wishlist status](project_ux_wishlist_status.md) — stakeholder list ownership; 3rd ed 2026-10-13: pause, slot validate gap, load-hang, docs/20 size+motion, demos
 - [Hot-join input/prefab coupling](project_hot_join_input_prefab_coupling.md) — per-slot join prefabs for keyboard seats; gamepad binds ONLY at join time; canonical room8; several older gaps now closed
 - [Player-count-change assumptions](project_player_count_change_assumptions.md) — seat index vs viewport slot conflated at join; "2+ players" gating assumes count is fixed per scene; both break on leave
 - [CameraConfig party/split nesting](project_camera_config_party_split_nesting.md) — party:/split: now SIBLING fields of components.camera (nested location is legacy fallback only); flycam is TAG-driven not field-driven; doc surface + local_coop_demo migration constraints

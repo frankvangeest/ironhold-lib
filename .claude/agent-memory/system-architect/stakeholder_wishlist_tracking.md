@@ -1,23 +1,25 @@
 ---
 name: stakeholder-wishlist-tracking
-description: My top-5 architect items in planning/stakeholder_priority_list.md — db1ede0 (2026-09-03) list, its 2026-10-01 status, and the refreshed 2026-10-01 top-5
+description: My top-5 architect items in planning/stakeholder_priority_list.md — 1st (db1ede0), 2nd (ce77bdd, 2026-10-01) and 3rd-edition (929b7d1, 2026-10-13) lists and their statuses
 metadata:
   type: project
 ---
 
-`planning/stakeholder_priority_list.md` holds a 5-stakeholder snapshot (commit `db1ede0`, 2026-09-03). My section is "System-Architect — stability, maintainability, future-proofing".
+`planning/stakeholder_priority_list.md` holds a 5-stakeholder snapshot, re-run on request. My section is "System-Architect — stability, maintainability, future-proofing".
 
-**Old list (db1ede0) → status at 2026-10-01 refresh (HEAD ce77bdd):**
-1. Rapier float divergence — CHANGED: cause was wrong (enhanced-determinism always on); v1 fixed-timestep shipped `6f720de`; v2 cross-platform harness still Queued (Beta 0.5).
-2. `Action` deny_unknown_fields — SHIPPED (merge `33842ff`).
-3. Camera/input config on PrefabDef — STILL OPEN (Icebox); scene-level `camera_modes` map exists but per-player `camera_mode`/`split`/`party` still on PrefabDef.
-4. Test-suite trust — CHANGED: flake fixed/closed (`80f5ab1`), but warning-assert infra, ambiguity detection, schedule-graph assertions all still Queued; zero `SystemSet`s in src.
-5. `spawn_scene_v2` 16-param ceiling — STILL OPEN, still exactly 16 (moved to `runtime/scene_manager/scene_loader.rs:41`, file now ~3570 lines).
+**1st edition (db1ede0, 2026-09-03):** float divergence (Changed), Action deny_unknown_fields (Shipped 33842ff), camera/input on PrefabDef (open, Icebox), test trust (Changed), spawn_scene_v2 16 params (open).
 
-**Refreshed top-5 (2026-10-01):** (1) determinism harness before the ocean/buoyancy/boat physics batch (requested 2026-09-30) lands; (2) schedule-ordering contract (first SystemSet + ambiguity detection + graph assertion); (3) input-ownership arbitration — `UiPointerCaptured` primitive (backlog Bugs, left-mouse-on-UI); (4) loader failure visibility — `.project.ron` parse failure hangs forever, no scene-fetch retry; (5) scene_manager monolith / 16-param ceiling.
+**2nd edition (ce77bdd) → status at 3rd edition (929b7d1, 2026-10-13):** all five STILL OPEN.
+1. Determinism harness before ocean — open; but ocean batch also not started (0 ocean code in src), and D1 (9e167ca) + D2 (7637605) shipped as groundwork; D5 two-App smoke test queued as cheap first slice.
+2. Schedule-ordering contract — Changed: became D3, plan Ready 2026-10-02, still unbuilt; zero SystemSets in src.
+3. UiPointerCaptured — open (moved Bugs→Queued; no code).
+4. Loader failure visibility — open in-engine; play.html now reports pre-first-frame failures (b5c1800) but a parse failure after frame 1 still hangs; check_project_loaded has no Failed arm for the ProjectConfig handle.
+5. scene_manager monolith — open; spawn_scene_v2 still 16 params, scene_loader.rs 3570→3686 lines, folder 9287.
 
-Also observed 2026-10-01: backlog `## Active` still holds the rules.ron consolidation bullet although its Done entry exists — the exact drift CLAUDE.md step 10 warns about.
+**3rd-edition top-5:** (1) build D3 now; (2) "invalid data fails loudly and safely" — loader Failed arms + runtime-total validated fields (see [[runtime-validate-is-advisory]]); (3) input ownership incl. touch for mobile_ui_demo; (4) cheapest determinism measurement (D5) + make is_presentation_only a real contract; (5) scene_manager monolith.
 
-**Why:** Frank periodically asks each persona to grade progress against its own wishlist; the snapshot is a recurring reference point.
+Observed 2026-10-13: only 26 of 204 non-merge commits since ce77bdd touched crates/ironhold_core/src — the period went mostly to OpenCode tooling, docs/CLAUDE.md split, planning. Backlog `## Active` is empty (drift from 2nd edition fixed).
+
+**Why:** Frank periodically asks each persona to grade progress against its own wishlist.
 
 **How to apply:** Re-verify against `git log <snapshot>..HEAD` and current backlog before quoting. See [[determinism-networking]], [[schedule-ordering-mechanism]], [[panel-input-blocking]], [[schema-tightening-blast-radius]], [[fragile-modules]].

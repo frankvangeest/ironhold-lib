@@ -11,10 +11,11 @@ inserted in all 13 `UiNodeDef` arms of `spawn_ui_element_node`; the executor ite
 `SceneStateParams.ui_nodes_q` (only `&mut Node` query in scene_manager) and writes `Display`.
 
 **Footguns to check on any follow-up (Group v2, responsive_ui Phase 3, initially_hidden):**
-- UiNodeId is inserted even for empty ids (id-less Groups). The executor compares `node_id.0 == id`
-  with no `is_empty()` guard, so a runtime `SetUiVisible(id: "")` hides EVERY id-less Group. Only
-  the CLI `set_ui_visible_empty_id` error prevents it; the doc comment on UiNodeId ("Empty ids are
-  never matched") and the test comment claim otherwise. Ask whether a guard was added.
+- ~~Empty-id runtime match~~ FIXED before merge: `action_executor.rs:~812` now `warn!`s and skips
+  on `id.is_empty()` (verified 2026-10-13). Keep the guard if the arm is refactored.
+- Still open (verified 2026-10-13): overlays never fire `scene.ready` (`scene_loader.rs:~1332`
+  `if !is_overlay`), so the start-hidden recipe doesn't work for overlay UI; ActionBar cannot be
+  hidden at all (validate-rejected).
 - validate.rs message literals were written with `\`-newline continuations that got flattened into
   runs of ~27 spaces inside the string (designer-visible). Grep new CLI messages for `"  {5,}`.
 - `action_needs_target` (action_bar.rs) and `substitute_self_in_action` (dialogue.rs) still use `_`

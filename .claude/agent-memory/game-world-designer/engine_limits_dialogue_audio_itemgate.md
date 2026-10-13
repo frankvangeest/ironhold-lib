@@ -44,6 +44,15 @@ loot (separate corpse entities, `Spawn.at_entity`) shipped Aug 2026, but Loot ta
 Day/night all still Queued; Save/load still Icebox. New Ocean Simulation Demo section (2026-09-30)
 plans `Set*` light/fog actions + Wind resource that overlap day/night.
 
+**Re-verified 2026-10-13 (3rd-edition wishlist, HEAD 929b7d1):** Quest v1/v2, Loot v1, Sound zones,
+Day/night, Save/load (Icebox) all still open; quest/loot/day-night/save plans still Draft from 2026-06-02.
+October shipped only UI/infra (SetUiVisible `d50045d`, responsive UI, Group UI, volume readout).
+NEW concern: scene `lighting.ambient` spawns an `AmbientLight` *entity* (`scene_loader.rs` ~2998);
+in Bevy 0.18 that is a per-camera component and scene ambient is the `GlobalAmbientLight` resource, so
+authored ambient (37 scenes) is likely a no-op — found by ocean plan-review
+(`features/ocean_simulation_demo.md` ~348), recommended as a Bug but NOT logged. No fog in schema.
+Real pause (`features/real_pause.md`) still Queued; dying-while-paused bug open.
+
 **How to apply:** items 1 and 2 can be designed around as shipped. For items 2 and 3, check
 `planning/backlog.md` L106/L108 for current status before designing around them as if they exist —
 they may have shipped since 2026-09-03. Related: [[project-greywatch-world]].

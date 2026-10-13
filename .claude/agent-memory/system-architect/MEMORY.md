@@ -61,7 +61,7 @@
 - [Schema-tightening blast radius](schema_tightening_blast_radius.md) — deny_unknown_fields turns a silent field drop into a whole-FILE failure; 3 of 4 Action-bearing loaders (down from 5, post rules.ron removal) have no Failed arm
 - [CLI/runtime mirror check pairs](cli_runtime_mirror_check_pairs.md) — incl. the (now-fixed 2026-09-22) false "rules.ron is NOT loaded" warn + stale docs back-reference lesson
 - [Demo project baseline determinism](demo_project_baseline_determinism.md) — test_web.py globs EVERY scene for a 4%-threshold baseline; NON_DETERMINISTIC_SCENES exclusion mechanism now exists (use as last resort — prefer settling content
-- [Stakeholder wishlist tracking](stakeholder_wishlist_tracking.md) — db1ede0 top-5 status as of 2026-10-01 (#2 shipped, #1/#4 partly) + refreshed 2026-10-01 top-5
+- [Stakeholder wishlist tracking](stakeholder_wishlist_tracking.md) — 1st/2nd/3rd-edition top-5s; at 929b7d1 (2026-10-13) all 5 of the 2nd-edition items still open
 - [OpenCode toolchain facts](opencode_toolchain_facts.md) — AGENTS.md shadows root CLAUDE.md; `{file:}` single-sourcing; `-deep` paid opt-in; model-free `debug agent`/`debug paths` introspection; probe's silent-degradation spots
 - [Claude hooks contract](claude_hooks_contract_bug.md) — hooks were no-ops (exit 1 / plain stdout); fixed via `_hook_common.py` block()/emit_context(); new hooks must use it
 - [Asset fetch failure handling](asset_fetch_failure_handling.md) — no retry anywhere; failed .scene.ron = permanent LoadingScene hang; cheap Bevy retry primitives; serve.py HTTP/1.0+backlog-5 vs GH Pages HTTP/2

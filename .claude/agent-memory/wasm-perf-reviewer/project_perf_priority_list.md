@@ -1,6 +1,6 @@
 ---
 name: perf-priority-list
-description: My top-5 perf wishlist in planning/stakeholder_priority_list.md; refreshed 2026-10-01 — still zero of the original 5 shipped; message_interpreter part of item 2 obsoleted by its removal
+description: My top-5 perf wishlist in planning/stakeholder_priority_list.md; 3rd edition 2026-10-13 — still zero of the original perf items shipped; canvas pixel budget is new #1
 metadata:
   type: project
 ---
@@ -8,22 +8,20 @@ metadata:
 Original top-5 (snapshot db1ede0, 2026-09-03): terrain first-frame stall, per-frame collection
 allocs, scene-transition material cache, frozen-clip evaluation, `format!`-before-guard.
 
-**Status at 2026-10-01 refresh (209 commits later): none shipped.** All five have backlog entries in
-`planning/backlog.md` ▸ Performance (frozen clips was promoted there 2026-09-14). Item 2 *changed*:
-`message_interpreter_system` no longer exists (removed by rules_to_state_machine_consolidation), so
-its Vec is gone; remaining offenders are `stat_modifier_system`'s per-entity key `Vec<String>`
-clone (stats.rs ~line 19, always allocates when a StatMap is non-empty) and `player_movement_system`'s
-input HashMap (FixedUpdate; `HashMap::new()` is alloc-free on idle ticks, allocates only on ticks
-with input). The backlog entry text still names the removed system — stale wording.
+**Status at 3rd edition (HEAD 929b7d1, 2026-10-13, 213 commits after ce77bdd): still none shipped.**
+Oct window went to docs/CLAUDE.md split, OpenCode/GLM tooling, flex Group, responsive UI, SetUiVisible.
+All original items still in `planning/backlog.md` ▸ Performance (the per-frame-collections entry
+still names the deleted `message_interpreter_system`). stats.rs has the key-Vec clone TWICE
+(:19 modifier, :118 threshold system).
 
-Refreshed 2026-10-01 ranking: 1 terrain stall, 2 pipeline warmup for 2D/UI/Sprite (backlog
-"Extend pipeline warmup to Text2d and UI" + claude_suggestions Sprite-warmup note — Textured
-`Sprite` bars now ship on 3rd_person_game_demo players), 3 frozen clips, 4 material cache,
-5 per-frame alloc trio (stat_modifier Vec + format!-before-guard).
+3rd-edition ranking: 1 cap total physical pixels of the fitted canvas (responsive_ui Phase 4,
+see [[responsive-canvas-render-cost]]), 2 terrain stall, 3 2D/UI/Sprite warmup, 4 frozen clips,
+5 warmup must only strip the NoFrustumCulling it added (lib.rs ~495) + ocean-demo perf gates.
+Material cache and alloc trio demoted (still open).
 
-**Why:** the Sept window went to CLI hardening, rules→state_machine consolidation, fixed timestep,
-action-bar features — authoring/correctness work, not perf. Not neglect of a known regression.
+**Why:** authoring/tooling work dominates; perf items get no lull. Responsive UI shifted the worst
+case to large desktops.
 
-**How to apply:** when a lull appears, propose frozen clips first (smallest diff). Re-read
-backlog.md before claiming status; do not trust this snapshot. Binary size is a non-issue
-(see [[wasm-size]]; pkg release 32,090,055 bytes on 2026-09-29).
+**How to apply:** re-read backlog.md before claiming status; do not trust this snapshot. pkg/ release
+was built at ebc338c (2026-10-10), BEFORE responsive UI landed — the canvas regression is not live
+until the next release. Binary size non-issue (32,161,056 bytes); see [[wasm-size]].
