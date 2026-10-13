@@ -18,6 +18,8 @@ still names the deleted `message_interpreter_system`). stats.rs has the key-Vec 
 see [[responsive-canvas-render-cost]]), 2 terrain stall, 3 2D/UI/Sprite warmup, 4 frozen clips,
 5 warmup must only strip the NoFrustumCulling it added (lib.rs ~495) + ocean-demo perf gates.
 Material cache and alloc trio demoted (still open).
+2026-10-13: #1 (canvas pixel cap) and #5 (warmup WarmupNoCull marker) implemented on feature/prerelease_render_fixes
+(reviewed, not yet merged at time of writing) — verify on integration before calling them shipped.
 
 **Why:** authoring/tooling work dominates; perf items get no lull. Responsive UI shifted the worst
 case to large desktops.

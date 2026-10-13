@@ -26,5 +26,13 @@ Pixel-cap via CSS `transform: scale(k)` wrapper (plan prerelease_render_fixes ph
 - WebGPU only allows sample counts 1 and 4 → Msaa::Sample2 is NOT a web option.
 - test_real_hidpi (test_web.py ~L810) measures getBoundingClientRect (transformed) vs window_size/backing → breaks at k>1.
 
+Implemented 2026-10-13 (feature/prerelease_render_fixes, post-impl review): play.html `.canvas-scaler` wrapper,
+BUDGET_PX 3,686,400, k ceil to 0.05, logical floor 1280x720, `window.ironholdRenderScale`, `?px_budget=off|<MP>`.
+bevy_winit 0.18 fit_canvas_to_parent only sets canvas style width/height 100% (system.rs:104) → parent = scaler, fine.
+Only play.html applies the cap (index/other embeds uncapped). transform: scale(1) is non-none even at k=1 (stacking
+context + containing block always). test_real_hidpi now runs with px_budget=off; test_render_budget covers DPR1 4K.
+Stray-camera fix landed same batch: old `AmbientLight` entity spawn `#[require(Camera)]` → per-scene extra active
+Camera (Frustum+VisibleEntities) — removing it is a per-frame visibility-pass win, and it leaked into Query<&Camera>.
+
 **How to apply:** cap total physical pixels, not DPR; check any canvas-size test for getBoundingClientRect vs clientWidth.
 See [[project-dynamic-split-screen]].

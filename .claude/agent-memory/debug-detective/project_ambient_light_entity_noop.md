@@ -12,5 +12,9 @@ never writes `GlobalAmbientLight`, so authored ambient does nothing in all 37 sc
 that trips bevy_render's "no render graph" warn. No ironhold camera query sees it (all filter `With<Camera3d>`/markers).
 
 **Why:** docs/20 documents ambient as working; a "my ambient tweak does nothing" report is this, not a colour/HDR issue.
-**How to apply:** fix = write `GlobalAmbientLight` (or insert `AmbientLight` on the Camera3d). Not browser-confirmed yet.
+**How to apply:** fixed on `feature/prerelease_render_fixes` (2026-10-13): `GlobalAmbientLight` written on every Replace
+load (reset to default when unauthored). Consequence: every scene tuned while ambient was a no-op now renders its authored
+value; linearised dark tints mean ~5-36x LESS ambient than the old white/80 (e.g. quick_scene ~4.5, primitive_world
+start_menu ~2.2 effective). "Scene got much darker after this batch" = this, re-tune the RON. No validate check guards
+NaN/negative `ambient_brightness`, which is now live.
 Related: [[warmup-strips-all-nfc]].

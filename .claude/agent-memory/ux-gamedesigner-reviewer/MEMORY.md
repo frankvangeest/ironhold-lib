@@ -1,5 +1,7 @@
 # Memory Index
 
+- [Ambient light contract](project_ambient_light_contract.md) — ambient now real; linearised colour; 80 vs 150 defaults; most shipped scenes still ~5% of default
+
 - [Docs audience split](project_docs_audience_split.md) — Phase A shipped; code-span cross-refs dead on GitHub; Getting-started assumes repo clone; no prebuilt CLI
 
 - [opencode probe plan-review](project_opencode_probe_plan_review.md) — dev-only doc must enter docs/README via dev rows only; paid model in default fallback list; nvs recipe

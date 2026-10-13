@@ -42,6 +42,12 @@ Added 2026-10-13 (prerelease_render_fixes plan-review, `5217c95`):
 - `test_web.py::test_real_hidpi` (factors 2,3, no_viewport) compares engine `window_size` to the canvas
   getBoundingClientRect - any CSS-scaled canvas wrapper with k>1 breaks it.
 
+Status 2026-10-13 (post-impl review of `feature/prerelease_render_fixes`, uncommitted on 4ecf1fb): the ambient and
+warmup bugs above are FIXED there once merged - `scene_ambient_light()` writes `GlobalAmbientLight` on every Replace
+load (resets to default; shadow-map sizes reset too), and warmup marks what it adds with pub `WarmupNoCull` and strips
+only that. Remaining trap: permanent NFC must be in the SAME spawn bundle as `Mesh3d`; inserting it later on an
+already-marked mesh is still stripped. Verified defaults: DirectionalLightShadowMap 2048, PointLightShadowMap 1024.
+
 **Why:** these were each load-bearing for a plan claim that was wrong. **How to apply:** check them in any
 lighting, custom-vertex-material, buoyancy/physics-body, or boat/vehicle review. Related: [[player-marker-gap]]
 (boat-as-player blocked by CharacterController-as-player-marker), [[shader-resolution-pattern]].

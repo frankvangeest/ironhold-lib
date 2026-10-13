@@ -1,18 +1,23 @@
 ---
 name: warmup-strips-all-nfc
-description: pipeline_warmup_system removes NoFrustumCulling from EVERY entity at countdown end, including particle pool meshes that need it permanently; also overlay scene.loaded timing note
+description: pipeline_warmup_system NFC history (strip-all bug fixed via WarmupNoCull on feature/prerelease_render_fixes) + Bevy calculate_bounds skips NFC entities, so a mesh mutated during warmup keeps a stale Aabb
 metadata:
   type: project
 ---
 
-`lib.rs` `pipeline_warmup_system` (~L479-502) removes `NoFrustumCulling` from all `With<NoFrustumCulling>` entities when
-`PipelineWarmup` hits 0 — no marker of which it inserted. `particle_renderer.rs` (~L364/392) spawns pool-group meshes with
-permanent NFC (Transform::default + world-space verts). A pool group created inside the 4-frame window (docs' scene-load
-`SpawnEffect` warmup recipe) loses NFC → can be culled against a stale AABB. Code-inferred 2026-10-13, not browser-reproduced.
+Original bug: `lib.rs` `pipeline_warmup_system` removed `NoFrustumCulling` from all `With<NoFrustumCulling>` entities at
+countdown end, stripping the permanent NFC on `particle_renderer.rs` pool-group meshes. Fixed on
+`feature/prerelease_render_fixes` (2026-10-13): insert `(NoFrustumCulling, WarmupNoCull)` only on `Without<NoFrustumCulling>`
+meshes, strip only `With<WarmupNoCull>`. Residual rule: a permanent NFC must be in the SAME spawn bundle as `Mesh3d`
+(inserting it later onto an already-marked mesh still gets stripped).
 
-Same review: `spawn_scene_v2` writes `SceneEvent::Loaded` (~L87) in the same run as `Ready` (~L1333), for overlays too, and runs
-`.before(fsm_interpreter_system)`, so `scene.loaded:<overlay>` likely works as a start-hidden hook for `SetUiVisible` even though
-docs say "entities not yet spawned" at scene.loaded. Untested — write one test before relying on it. See [[overlay-no-scene-ready]].
+**Still-open, pre-existing (verified in bevy_camera-0.18.0 visibility/mod.rs:451-476):** `calculate_bounds`'s
+`update_aabb` query is `Or<(AssetChanged<Mesh3d>, Changed<Mesh3d>)>, Without<NoFrustumCulling>`. A mesh whose *asset is
+mutated* during the 4-frame warmup window gets no Aabb update (it has temporary NFC), and the change tick is gone by the
+time NFC is removed -> culled against a stale Aabb afterwards. `new_aabb` (Without<Aabb>) is fine: it retries after removal.
 
-**Why:** "particles vanish when the camera turns, only sometimes after a scene load" → check this first.
-**How to apply:** fix with a `WarmupNoCull` marker; regression test must assert a pre-existing NFC survives warmup end.
+Same earlier review: `spawn_scene_v2` writes `SceneEvent::Loaded` in the same run as `Ready`, for overlays too. See [[overlay-no-scene-ready]].
+
+**Why:** "something vanishes when the camera turns, only after a scene load" -> check warmup x Aabb first.
+**How to apply:** procedurally-rebuilt meshes created at scene load (terrain/foliage/ocean regen) should use an explicit
+`Aabb` + `NoAutoAabb`, or force an Aabb recompute after warmup.
