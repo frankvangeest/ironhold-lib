@@ -46,8 +46,10 @@
         )),
     ],
     lighting: (
-        ambient: (0.18, 0.20, 0.25),
-        ambient_brightness: 1.2,
+        // Scene-wide ambient fill. For the engine default look use ambient: (1.0, 1.0, 1.0), ambient_brightness: 80.0;
+        // darker colours count for much less than they look, so they need a much higher brightness.
+        ambient: (0.7, 0.75, 0.85),
+        ambient_brightness: 80.0,
         directional: (
             color: (1.0, 0.95, 0.85),
             intensity: 25000.0,

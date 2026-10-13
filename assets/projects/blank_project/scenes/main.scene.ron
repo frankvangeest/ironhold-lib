@@ -3,8 +3,11 @@
     name: "main",
 
     lighting: (
-        ambient: (0.20, 0.22, 0.30),
-        ambient_brightness: 260.0,
+        // Scene-wide ambient fill. Omit both fields for the engine default (white at brightness 80); this is a slightly
+        // cooler, a bit softer fill. Darker colours count for much less than they look: a colour of 0.5 needs about 4x
+        // the brightness (about 380) to match the default; to reproduce it exactly use (1.0, 1.0, 1.0) at 80.
+        ambient: (0.8, 0.85, 1.0),
+        ambient_brightness: 80.0,
         directional: (
             color: (1.0, 0.95, 0.82),
             intensity: 28000.0,

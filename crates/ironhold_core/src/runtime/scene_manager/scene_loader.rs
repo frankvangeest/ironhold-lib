@@ -2980,6 +2980,25 @@ fn spawn_ui_element_node(
     }
 }
 
+/// The scene-wide ambient light for a scene's `lighting:` block.
+///
+/// Scene-wide ambient is Bevy's `GlobalAmbientLight` *resource*; the `AmbientLight` component is a per-camera
+/// override that requires a `Camera` (spawning it as a bare entity does nothing and adds a stray camera). A resource
+/// outlives the scene, so the caller inserts this on every Replace load: a scene with no authored ambient resets to
+/// Bevy's default (white, 80 cd/m^2) instead of inheriting the previous scene's light. Setting either field authors
+/// the light (colour defaults to white, brightness to 150).
+fn scene_ambient_light(lighting: Option<&crate::schema::scene_v2::SceneLightingV2>) -> bevy::light::GlobalAmbientLight {
+    let Some(l) = lighting.filter(|l| l.ambient.is_some() || l.ambient_brightness.is_some()) else {
+        return bevy::light::GlobalAmbientLight::default();
+    };
+    let (r, g, b) = l.ambient.unwrap_or((1.0, 1.0, 1.0));
+    bevy::light::GlobalAmbientLight {
+        color: Color::srgba(r, g, b, 1.0),
+        brightness: l.ambient_brightness.unwrap_or(150.0),
+        ..default()
+    }
+}
+
 fn apply_lighting_v2(
     commands: &mut Commands,
     scene: &crate::schema::scene_v2::GameSceneV2,
@@ -2987,26 +3006,23 @@ fn apply_lighting_v2(
     asset_server: &AssetServer,
     images: &mut Assets<Image>,
 ) {
+    // These three are resources, not LevelEntity-tagged entities, so nothing tears them down on a scene change:
+    // always write them (default when unauthored) or a 4096 shadow map / a dark ambient leaks into the next scene.
+    commands.insert_resource(scene_ambient_light(scene.lighting.as_ref()));
+    commands.insert_resource(bevy::light::DirectionalLightShadowMap {
+        size: scene.lighting.as_ref().and_then(|l| l.shadow_map_size).map_or_else(
+            || bevy::light::DirectionalLightShadowMap::default().size,
+            |s| s as usize,
+        ),
+    });
+    commands.insert_resource(bevy::light::PointLightShadowMap {
+        size: scene.lighting.as_ref().and_then(|l| l.point_shadow_map_size).map_or_else(
+            || bevy::light::PointLightShadowMap::default().size,
+            |s| s as usize,
+        ),
+    });
+
     if let Some(lighting) = &scene.lighting {
-        if let Some(size) = lighting.shadow_map_size {
-            commands.insert_resource(bevy::light::DirectionalLightShadowMap { size: size as usize });
-        }
-        if let Some(size) = lighting.point_shadow_map_size {
-            commands.insert_resource(bevy::light::PointLightShadowMap { size: size as usize });
-        }
-
-        if let Some((r, g, b)) = lighting.ambient {
-            commands.spawn((
-                Name::new("Ambient Light"),
-                AmbientLight {
-                    color: Color::srgba(r, g, b, 1.0),
-                    brightness: lighting.ambient_brightness.unwrap_or(150.0),
-                    ..default()
-                },
-                LevelEntity,
-            ));
-        }
-
         for (i, pl) in lighting.point_lights.iter().enumerate() {
             commands.spawn((
                 Name::new(format!("Point Light {}", i)),

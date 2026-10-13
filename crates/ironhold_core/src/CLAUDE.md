@@ -153,9 +153,11 @@ with the main game UI camera. A data struct that should show in the inspector is
 
 Native only (`#[cfg(not(target_arch = "wasm32"))]`): `bevy_framepace` caps the render loop at `FIXED_TICK_RATE` to stop vsync
 busy-wait inflating GPU numbers, and `WinitSettings` drops an unfocused window to `Reactive { wait: 100ms }`. Web is paced
-by `requestAnimationFrame`. **`pipeline_warmup_system` adds `NoFrustumCulling` to every `Mesh3d` for 4 frames after each scene
+by `requestAnimationFrame`. **`pipeline_warmup_system` adds `NoFrustumCulling` to every `Mesh3d` that lacks one for 4 frames after each scene
 load** (`PipelineWarmup(4)`, inserted by `spawn_scene_v2`): on WASM, WebGPU pipeline compilation is synchronous and lazy, and
-without it revealing a previously-culled entity stalls the frame 300-2000 ms.
+without it revealing a previously-culled entity stalls the frame 300-2000 ms. **It removes only what it added** (marked
+`WarmupNoCull`): a mesh that needs a *permanent* `NoFrustumCulling` (particle pools, the ocean grid) must carry it in the same
+spawn bundle as its `Mesh3d`; adding it later to an already-marked mesh would be stripped at the end of the window.
 
 <!-- b:1041 -->
 **Change-detection discipline:** a system that updates a render-affecting component every frame (font size, colour,

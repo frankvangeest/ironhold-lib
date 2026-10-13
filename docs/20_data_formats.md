@@ -180,7 +180,8 @@ File extension must be `.scene.ron`.
   name: "main",
 
   lighting: (
-    ambient: (0.35, 0.35, 0.4),
+    ambient: (0.35, 0.35, 0.4),     // a cool, fairly dark fill ...
+    ambient_brightness: 300.0,      // ... so it needs a high brightness (see the table above)
     directional: (
       color: (1.0, 0.98, 0.92),
       intensity: 12000.0,
@@ -283,12 +284,14 @@ Applied to **all cameras** spawned for the scene (flycam, orbit camera, and fall
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `ambient` | `Option<(f32,f32,f32)>` | engine default | Ambient light colour as sRGB |
-| `ambient_brightness` | `Option<f32>` | `150.0` | Ambient brightness in lux. Without HDR colours clip at 1.0, so keep this low (50–300 is typical). |
+| `ambient` | `Option<(f32,f32,f32)>` | engine default | Scene-wide ambient light colour as sRGB. Omit both `ambient` and `ambient_brightness` to get the engine default (white at brightness `80`). |
+| `ambient_brightness` | `Option<f32>` | `150.0` (when `ambient` is set) | How strong the ambient fill is (a multiplier on the colour; the unit is cd/m²). Setting only this keeps a white colour. **Darker colours count for much less than they look**: the engine treats colour values non-linearly (1.0 counts as 1.0, 0.7 as about 0.45, 0.5 as about 0.21, 0.35 as about 0.10, 0.25 as about 0.05), so the brightness you need is roughly `80 ÷` that number to match the default: a mid-grey `(0.5, 0.5, 0.5)` needs about `380`, a dark `(0.25, 0.25, 0.25)` about `1600`. `ambient: (1.0, 1.0, 1.0), ambient_brightness: 80.0` reproduces the default exactly. **Careful:** adding only `ambient:` uses brightness `150`, not `80`, so set `ambient_brightness` explicitly whenever you set a colour. |
 | `directional` | `Option<DirectionalLightDefV2>` | none | A single directional (sun) light |
 | `point_lights` | `Vec<PointLightDefV2>` | `[]` | Point (omnidirectional) lights |
 | `shadow_map_size` | `Option<u32>` | `2048` | Texel resolution of the directional-light shadow atlas. Must be a power of two. Lower values (`512`, `1024`) improve GPU performance; higher values (`4096`) give sharper shadows on large scenes. |
 | `point_shadow_map_size` | `Option<u32>` | `1024` | Texel resolution of each point-light shadow cube face. Same power-of-two rule applies. Only relevant when a point light has `shadows_enabled: true`. |
+
+Ambient light and both shadow-map sizes are written on **every** base-scene load: a scene that does not set them goes back to the engine default instead of inheriting the previous scene's value. An overlay's `lighting:` block is ignored (only the base scene lights the world).
 
 **`DirectionalLightDefV2` fields:**
 
@@ -316,8 +319,8 @@ Applied to **all cameras** spawned for the scene (flycam, orbit camera, and fall
 **Example (full lighting block):**
 ```ron
 lighting: (
-  ambient: (0.25, 0.30, 0.45),
-  ambient_brightness: 15.0,
+  ambient: (0.5, 0.6, 0.85),   // cool fill at about the default strength; darker tints need even more brightness
+  ambient_brightness: 200.0,
 
   directional: (
     color: (1.0, 0.95, 0.85),
@@ -4780,6 +4783,7 @@ Write the block exactly like the other optional blocks: no `Some(...)` around it
 **How the three pieces fit together:** `ui_scale` decides *how big* things are; a [`Group`](#group) decides *where* things go (a full-screen root `Group` with `SpaceBetween` rows keeps your rows glued to the screen edges at any size); a layout that must change for a different shape of screen is a later feature. A project with `ui_scale: (reference: (1280.0, 720.0))` and edge-anchored rows looks the same shape at 1920x1080 (scale 1.5) and at 844x390 (scale 0.5, rows still on the edges).
 
 **Behaviour to know:**
+- **Very large browser windows (web only):** `play.html` renders at most about 3.7 million pixels (a 2560x1440 screen's worth); above that it draws at a lower resolution and the browser scales the picture up, so the picture is slightly softer and the engine's window becomes smaller than the browser window (a 4K display at 150% scaling reports about 1707x960). A project **without** `ui_scale` therefore shows fixed-pixel UI (including world labels, nameplates and floating text) proportionally larger on such monitors; with `ui_scale` it is compensated automatically. The cap never shrinks the engine's window below 1280x720, and the native build is unaffected. Add `?px_budget=off` to the play URL to compare against the uncapped picture. Details: [browser tests](dev/browser_tests.md#canvas-host-ironhold-canvas).
 - **An invalid block is ignored**: if a value breaks a rule above the engine logs an error and leaves the UI at 1.0 instead of crashing; `ironhold validate` names the field and the fix, so run it after editing.
 - **Only pixel values scale** (sizes, `padding`, `gap`, `font_size`, absolute `position:`); `Percent(...)` sizes already follow the window. UI placed with an absolute `position:` and no root `Group` scales from the top-left corner: on a window shaped differently from your reference it stays in a reference-shaped area and does not follow the right or bottom edge. Put HUD rows in a full-screen root `Group`.
 - Text shrinks with the scale: text authored at 22 px is 11 px at 0.5 (a phone in landscape lands there with the defaults).

@@ -51,6 +51,7 @@ That item stays Icebox-parked and is only partly superseded.
    and are fine; the Foliage struct-uniform pattern (`FoliageMaterialParams`, 5 Vec4) is the template.
 3. **Pipeline warmup**: `pipeline_warmup_system` adds `NoFrustumCulling` to every `Mesh3d` for 4 frames after scene load (`CLAUDE.md:1034`); the ocean grid is a normal `Mesh3d`
    so its pipeline compiles in warmup. It also needs permanent `NoFrustumCulling` (displaced vertices leave the flat-grid AABB). Warmup does not touch `RenderLayers` (`:432`).
+   **Status 2026-10-12 (`prerelease_render_fixes` phase B):** warmup now removes only the `NoFrustumCulling` it added (`WarmupNoCull`), so a permanent one in the same spawn bundle as `Mesh3d` survives; an inflated `Aabb` + `NoAutoAabb` is still preferred for a displaced grid because it keeps culling.
 4. **No runtime setter exists** for sun/ambient/fog. `schema/actions.rs` has no light/fog/ocean/wind action (variant list read in full). Lights are spawned once from
    `SceneLightingV2` (`scene_loader.rs:2885-2921`: an `AmbientLight` entity only when `lighting.ambient` is set, one `DirectionalLight`; fields `scene_v2.rs:193-228`).
    **Fog does not exist at all**: `grep DistanceFog|FogSettings` over `src/` finds nothing, and `SceneLightingV2` has no fog field. `foliage_lighting_sync_system` already queries

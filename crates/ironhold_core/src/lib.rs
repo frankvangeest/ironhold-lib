@@ -44,8 +44,17 @@ pub struct ProjectRoot(pub String);
 /// Counts down after each scene spawn, keeping NoFrustumCulling on all mesh entities
 /// for a few frames so every pipeline compiles before the user starts interacting.
 /// Set to a non-zero value by spawn_scene_v2; decremented each frame by pipeline_warmup_system.
+/// The cleanup runs only when the countdown *reaches* zero: setting this to 0 directly leaves every
+/// `WarmupNoCull` entity without frustum culling for good.
 #[derive(Resource, Default)]
 pub struct PipelineWarmup(pub u8);
+
+/// Marks a mesh whose `NoFrustumCulling` was added by `pipeline_warmup_system` (and so is removed by it).
+/// An entity that needs a *permanent* `NoFrustumCulling` (the particle pool meshes, the future ocean grid) must carry
+/// it in the same spawn bundle as its `Mesh3d`: warmup never marks or touches those. Adding a permanent one later to
+/// a mesh warmup already marked would be removed at the end of the window unless the owner also removes this marker.
+#[derive(Component)]
+pub struct WarmupNoCull;
 
 /// Live game state exposed to the DOM (WASM) and available to tests.
 /// Updated every frame by `update_debug_state`.
@@ -480,8 +489,8 @@ fn icon_button_sync_system(
 fn pipeline_warmup_system(
     mut warmup: ResMut<PipelineWarmup>,
     mut commands: Commands,
-    mesh_entities: Query<Entity, With<Mesh3d>>,
-    nfc_entities: Query<Entity, With<NoFrustumCulling>>,
+    mesh_entities: Query<Entity, (With<Mesh3d>, Without<NoFrustumCulling>)>,
+    warmed_entities: Query<Entity, With<WarmupNoCull>>,
 ) {
     if warmup.0 == 0 {
         return;
@@ -489,12 +498,13 @@ fn pipeline_warmup_system(
     warmup.0 -= 1;
     if warmup.0 > 0 {
         for entity in mesh_entities.iter() {
-            commands.entity(entity).insert(NoFrustumCulling);
+            commands.entity(entity).try_insert((NoFrustumCulling, WarmupNoCull));
         }
     } else {
-        let mesh_count = nfc_entities.iter().count();
-        for entity in nfc_entities.iter() {
-            commands.entity(entity).remove::<NoFrustumCulling>();
+        // Only strip what warmup itself added: a permanent `NoFrustumCulling` (particle pools) is left alone.
+        let mesh_count = warmed_entities.iter().count();
+        for entity in warmed_entities.iter() {
+            commands.entity(entity).try_remove::<(NoFrustumCulling, WarmupNoCull)>();
         }
         info!(
             "Pipeline warmup complete — {mesh_count} mesh(es) warmed up, frustum culling restored."
