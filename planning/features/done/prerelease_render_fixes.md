@@ -1,6 +1,6 @@
 # Feature: Pre-release render fixes (ambient light, warmup NoFrustumCulling, canvas pixel cap)
 
-_Status: Ready (plan-review done: architect, alignment, wasm-perf; all blockers folded in)_
+_Status: Done_
 _Planned at: `d4ab4e0` (2026-10-12)_
 
 Source: `planning/stakeholder_priority_list.md` (3rd edition) — Game-World-Designer #2, WASM-Perf #1 and #5,
@@ -11,9 +11,9 @@ because they are all tiny, all touch the render/lighting boot path, and all shou
 
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
-| A | Bug: authored scene ambient light does nothing | Queued | — |
-| B | Bug: `pipeline_warmup_system` strips `NoFrustumCulling` from entities it did not add | Queued | — |
-| C | Perf: cap the fitted canvas's total physical pixels | Queued | — |
+| A | Bug: authored scene ambient light does nothing | Done | `0c1d533` (2026-10-13) |
+| B | Bug: `pipeline_warmup_system` strips `NoFrustumCulling` from entities it did not add | Done | `0c1d533` (2026-10-13) |
+| C | Perf: cap the fitted canvas's total physical pixels | Done | `f72a943` (2026-10-13) |
 
 Each phase is its own commit on the feature branch and is independently revertable. **Single feature file, three
 backlog items:** the file moves to `done/` only when all three ship.
@@ -86,6 +86,9 @@ culled against a stale AABB.
 - **Rule to document** (crate CLAUDE.md + ocean B1 note): a permanent `NoFrustumCulling` goes in the *same spawn bundle* as
   `Mesh3d`; adding it later to a mesh warmup already marked would still be removed at zero unless the owner also removes
   `WarmupNoCull`. Add a one-line comment on `PipelineWarmup`: setting it to 0 directly skips the cleanup.
+- `WarmupNoCull` is `pub` and re-exported at the crate root (plan said private): the integration tests assert on it and the
+  documented escape hatch ("the owner also removes `WarmupNoCull`") needs it reachable. If a third permanent-NFC owner appears,
+  prefer an opt-in `KeepNoFrustumCulling` marker over relying on authors removing `WarmupNoCull`.
 - Entities that already carry a permanent `NoFrustumCulling` are never touched. `PipelineWarmup(4)` re-arm per scene
   load is unchanged.
 - Update the `capabilities/CLAUDE.md` and `src/CLAUDE.md` warmup sentences, and the `ocean_simulation_demo.md` B1/N17
@@ -211,3 +214,10 @@ unaffected by construction).
   mapping verified from winit 0.30.12 sources (`offsetX/Y`); still gated on a manual real-browser click check.
 - **Separate backlog items to log:** MSAA policy on web (Off + FXAA/SMAA, WebGPU supports only 1 or 4 samples); document the
   scaler in the host-page contract.
+
+## Outcome (2026-10-13)
+
+- Shipped as three commits on `feature/prerelease_render_fixes`: `0c1d533` (C, host page only) and `f72a943` (A + B share one commit because their tests live in one file).
+- Dev playtest passed (Frank, 2026-10-13). Gate: all 25 `ironhold_core` test files + `cargo check -p ironhold_cli` green; five post-implementation reviews, no blockers.
+- **Still to do outside this feature:** re-capture screenshot baselines for the affected projects under `--real-gpu` (own commit); review the darkest ambient scenes if the look is not wanted (`quick_scene`, `3rd_person_game_demo`, `terrain_demo`, `primitive_world/start_menu`).
+- Follow-ups logged in the backlog: `global_environment` IBL no-op (do right after this, re-review the ambient values together), ambient validation, stale `Aabb` during warmup, MSAA policy on web.
