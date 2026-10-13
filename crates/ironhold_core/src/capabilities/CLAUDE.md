@@ -287,7 +287,7 @@ velocity and the player jitters against the edge.
 <!-- b:1731 -->
 ## Particle pipeline warmup
 
-Pool group entities are created lazily on first use, so `pipeline_warmup_system` cannot pre-warm them, and each new
+Pool group entities are created lazily on first use (spawned with a permanent `NoFrustumCulling`, which `pipeline_warmup_system` never strips), so it cannot pre-warm them, and each new
 material/blend combination (additive, blend, `PoolFlameMaterial`) compiles a pipeline synchronously on WASM (about
 300-1000 ms). Fire one `SpawnEffect` per variant you use during scene load (at `y=-100`, next to `PreloadScene`/
 `PreloadPrefab`; recipe in `docs/20_data_formats.md`, "Warming up particle pipelines"). **Those warmup effects are real particle allocations and consume `ParticleBudget`:** use low-count

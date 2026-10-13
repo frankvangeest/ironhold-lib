@@ -5,8 +5,10 @@
   lighting: (
     // Ambient kept low so directional shadows read clearly on the white marble floor.
     // Too-high ambient washes out the vein contrast in the albedo.
-    ambient: (0.25, 0.30, 0.45),
-    ambient_brightness: 15.0,
+    // For the engine default look use ambient: (1.0, 1.0, 1.0), ambient_brightness: 80.0; this pale cool tint at 40 is a
+    // gentle fill, well under that.
+    ambient: (0.6, 0.7, 1.0),
+    ambient_brightness: 40.0,
 
     directional: (
       color: (1.0, 0.95, 0.85),

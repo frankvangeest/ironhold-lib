@@ -1,7 +1,8 @@
 ﻿use bevy::prelude::*;
 use bevy::ecs::system::RunSystemOnce;
 use std::collections::HashMap;
-use ironhold_core::PipelineWarmup;
+use ironhold_core::{PipelineWarmup, WarmupNoCull};
+use bevy::camera::visibility::NoFrustumCulling;
 use ironhold_core::runtime::{ActionQueue, SceneEvent, InputAction, InputActionMessage, ModelSpawner, OverlayEntity, PendingSceneLoadMode, PreloadedScenes, SceneHandleV2, LevelEntity, LoadedKeyBindings, ProjectKeyBindings, PendingProjectLoads};
 use ironhold_core::schema::{AppState, Action, ProjectConfig, ProjectConfigHandle, TransformFix, GameSceneV2};
 use ironhold_core::capabilities::player::{CharacterController, SpeedMultiplier, player_movement_system};
@@ -17,6 +18,11 @@ use support::setup_test_app;
 /// transitions state to LoadingScene and runs enough updates for the system to
 /// fire and its despawn commands to flush.
 fn drive_replace_load(app: &mut App) {
+    drive_replace_load_with(app, "(schema_version: 2, entities: [], ui: [])");
+}
+
+/// Same as `drive_replace_load` but loads the given scene RON (used by the lighting tests).
+fn drive_replace_load_with(app: &mut App, scene_ron: &str) {
     let config_handle = app
         .world_mut()
         .resource_mut::<Assets<ProjectConfig>>()
@@ -27,8 +33,7 @@ fn drive_replace_load(app: &mut App) {
         });
     app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
 
-    let scene: GameSceneV2 =
-        ron::de::from_str("(schema_version: 2, entities: [], ui: [])").unwrap();
+    let scene: GameSceneV2 = ron::de::from_str(scene_ron).unwrap();
     let scene_handle = app
         .world_mut()
         .resource_mut::<Assets<GameSceneV2>>()
@@ -796,4 +801,158 @@ fn test_pipeline_warmup_stops_at_zero() {
 
     let warmup = app.world().resource::<PipelineWarmup>();
     assert_eq!(warmup.0, 0, "PipelineWarmup must not go below 0");
+}
+
+// ---- Scene lighting resources (prerelease_render_fixes phase A) ----
+
+fn ambient(app: &App) -> (Color, f32) {
+    let a = app.world().resource::<bevy::light::GlobalAmbientLight>();
+    (a.color, a.brightness)
+}
+
+#[test]
+fn test_scene_ambient_sets_global_ambient_light_resource() {
+    // Regression: `lighting.ambient` used to spawn a bare `AmbientLight` entity, which Bevy 0.18 ignores (it is a
+    // per-camera override that requires a `Camera`); scene-wide ambient is the `GlobalAmbientLight` resource.
+    let mut app = setup_test_app();
+    app.update();
+    drive_replace_load_with(
+        &mut app,
+        "(schema_version: 2, entities: [], ui: [], lighting: Some((ambient: Some((0.0, 0.0, 0.0)), ambient_brightness: Some(0.0))))",
+    );
+    let (color, brightness) = ambient(&app);
+    assert_eq!(brightness, 0.0, "authored ambient_brightness must reach GlobalAmbientLight");
+    assert_eq!(color, Color::srgba(0.0, 0.0, 0.0, 1.0), "authored ambient colour must reach GlobalAmbientLight");
+}
+
+#[test]
+fn test_scene_ambient_defaults_and_either_field_rule() {
+    let mut app = setup_test_app();
+    app.update();
+    // Colour only: brightness defaults to 150.
+    drive_replace_load_with(
+        &mut app,
+        "(schema_version: 2, entities: [], ui: [], lighting: Some((ambient: Some((0.5, 0.25, 0.125)))))",
+    );
+    let (color, brightness) = ambient(&app);
+    assert_eq!(brightness, 150.0);
+    assert_eq!(color, Color::srgba(0.5, 0.25, 0.125, 1.0));
+
+    // Brightness only: not silently dropped, white colour.
+    drive_replace_load_with(
+        &mut app,
+        "(schema_version: 2, entities: [], ui: [], lighting: Some((ambient_brightness: Some(500.0))))",
+    );
+    let (color, brightness) = ambient(&app);
+    assert_eq!(brightness, 500.0);
+    assert_eq!(color, Color::srgba(1.0, 1.0, 1.0, 1.0));
+}
+
+#[test]
+fn test_scene_ambient_resets_to_default_on_next_scene() {
+    // The resource outlives the scene (the old entity was LevelEntity and was torn down), so the next Replace load must
+    // reset it: both a scene with no `lighting:` block and one with a `lighting:` block but no ambient fields.
+    let default = bevy::light::GlobalAmbientLight::default();
+    for next in [
+        "(schema_version: 2, entities: [], ui: [])",
+        "(schema_version: 2, entities: [], ui: [], lighting: Some((point_lights: [])))",
+    ] {
+        let mut app = setup_test_app();
+        app.update();
+        drive_replace_load_with(
+            &mut app,
+            "(schema_version: 2, entities: [], ui: [], lighting: Some((ambient: Some((0.1, 0.1, 0.1)), ambient_brightness: Some(5.0))))",
+        );
+        assert_eq!(ambient(&app).1, 5.0, "precondition: first scene's ambient applied");
+
+        drive_replace_load_with(&mut app, next);
+        let (color, brightness) = ambient(&app);
+        assert_eq!(brightness, default.brightness, "unauthored ambient must reset ({next})");
+        assert_eq!(color, default.color, "unauthored ambient colour must reset ({next})");
+    }
+}
+
+#[test]
+fn test_scene_shadow_map_sizes_reset_on_next_scene() {
+    // Same leak class as ambient: shadow-map sizes are resources too.
+    let mut app = setup_test_app();
+    app.update();
+    drive_replace_load_with(
+        &mut app,
+        "(schema_version: 2, entities: [], ui: [], lighting: Some((shadow_map_size: Some(4096), point_shadow_map_size: Some(256))))",
+    );
+    assert_eq!(app.world().resource::<bevy::light::DirectionalLightShadowMap>().size, 4096);
+    assert_eq!(app.world().resource::<bevy::light::PointLightShadowMap>().size, 256);
+
+    drive_replace_load_with(&mut app, "(schema_version: 2, entities: [], ui: [])");
+    assert_eq!(
+        app.world().resource::<bevy::light::DirectionalLightShadowMap>().size,
+        bevy::light::DirectionalLightShadowMap::default().size
+    );
+    assert_eq!(
+        app.world().resource::<bevy::light::PointLightShadowMap>().size,
+        bevy::light::PointLightShadowMap::default().size
+    );
+}
+
+#[test]
+fn test_scene_lighting_spawns_no_stray_camera() {
+    // The old `AmbientLight` entity carried `#[require(Camera)]`, so every ambient scene spawned a render-graph-less Camera.
+    // A scene load spawns its own cameras, so compare the same scene with and without `ambient:` rather than before/after.
+    let camera_count_after_load = |scene_ron: &str| {
+        let mut app = setup_test_app();
+        app.update();
+        drive_replace_load_with(&mut app, scene_ron);
+        app.world_mut().query::<&Camera>().iter(app.world()).count()
+    };
+    let without = camera_count_after_load("(schema_version: 2, entities: [], ui: [])");
+    let with = camera_count_after_load(
+        "(schema_version: 2, entities: [], ui: [], lighting: Some((ambient: Some((0.2, 0.2, 0.2)))))",
+    );
+    assert_eq!(with, without, "scene `ambient:` must not spawn a Camera entity");
+}
+
+// ---- Pipeline warmup only strips the NoFrustumCulling it added (prerelease_render_fixes phase B) ----
+
+#[test]
+fn test_pipeline_warmup_strips_only_what_it_added() {
+    // Regression: warmup removed `NoFrustumCulling` from EVERY entity at the end of its window, including the particle
+    // pool meshes that carry a permanent one (world-space vertices, identity transform), so they were then culled
+    // against a stale AABB. Warmup must now remove only the component it inserted (marked `WarmupNoCull`).
+    let mut app = setup_test_app();
+    app.update(); // Startup
+
+    // Spawned before warmup starts, with its own permanent NFC (an existing particle pool).
+    let permanent_early = app.world_mut().spawn((Mesh3d(Handle::default()), NoFrustumCulling)).id();
+    let ordinary = app.world_mut().spawn(Mesh3d(Handle::default())).id();
+    app.world_mut().insert_resource(PipelineWarmup(4));
+
+    app.update(); // warmup frame 1: ordinary mesh gets NFC + marker
+    // A pool group created *inside* the warmup window (the `scene.ready` SpawnEffect warmup recipe).
+    let permanent_late = app.world_mut().spawn((Mesh3d(Handle::default()), NoFrustumCulling)).id();
+    for _ in 0..3 {
+        app.update();
+    }
+    app.update(); // flush the deferred removes
+
+    assert_eq!(app.world().resource::<PipelineWarmup>().0, 0);
+    let w = app.world();
+    assert!(w.get::<NoFrustumCulling>(permanent_early).is_some(), "permanent NFC (spawned before warmup) must survive");
+    assert!(w.get::<NoFrustumCulling>(permanent_late).is_some(), "permanent NFC (spawned inside the window) must survive");
+    assert!(w.get::<WarmupNoCull>(permanent_early).is_none() && w.get::<WarmupNoCull>(permanent_late).is_none(),
+        "warmup must never mark an entity that already had NoFrustumCulling");
+    assert!(w.get::<NoFrustumCulling>(ordinary).is_none(), "the NFC warmup added must be removed at the end");
+    assert!(w.get::<WarmupNoCull>(ordinary).is_none(), "the marker must be removed with it");
+}
+
+#[test]
+fn test_pipeline_warmup_adds_nfc_to_meshes_during_the_window() {
+    let mut app = setup_test_app();
+    app.update(); // Startup
+    let mesh = app.world_mut().spawn(Mesh3d(Handle::default())).id();
+    app.world_mut().insert_resource(PipelineWarmup(4));
+    app.update();
+    app.update(); // flush the deferred insert
+    assert!(app.world().get::<NoFrustumCulling>(mesh).is_some(), "warmup must keep meshes always-visible during the window");
+    assert!(app.world().get::<WarmupNoCull>(mesh).is_some());
 }

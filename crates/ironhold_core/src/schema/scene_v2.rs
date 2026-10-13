@@ -196,11 +196,14 @@ impl GameSceneV2 {
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct SceneLightingV2 {
+    /// Scene-wide ambient light colour (sRGB). Written to Bevy's `GlobalAmbientLight` on every base-scene load; omit
+    /// both `ambient` and `ambient_brightness` to get Bevy's default (white, 80 cd/m^2). An overlay's `lighting:` is
+    /// ignored.
     #[serde(default)]
     pub ambient: Option<(f32, f32, f32)>,
-    /// Overrides the default ambient brightness (150.0).
-    /// Maps to Bevy's `AmbientLight::brightness` (lux). Works with or without HDR;
-    /// without HDR colours clip at 1.0, so keep values low (50–300 is typical).
+    /// Ambient brightness in cd/m^2 (a multiplier on the linearised `ambient` colour), default 150.0 when `ambient`
+    /// is set. Setting only this keeps a white colour. Dark tints need a large value to match Bevy's white-at-80
+    /// default (`ambient: (1.0, 1.0, 1.0), ambient_brightness: 80.0` reproduces it exactly).
     #[serde(default)]
     pub ambient_brightness: Option<f32>,
     #[serde(default)]
@@ -215,7 +218,7 @@ pub struct SceneLightingV2 {
     pub shadow_map_size: Option<u32>,
     /// Resolution of each cube-face of point-light shadow maps.
     /// Applies globally to all shadow-casting point lights in the scene.
-    /// Must be a power of two. Bevy default: 512. Use 256 for cheaper point shadows.
+    /// Must be a power of two. Bevy default: 1024. Use 512 or 256 for cheaper point shadows.
     #[serde(default)]
     pub point_shadow_map_size: Option<u32>,
 }
