@@ -152,6 +152,7 @@ impl Plugin for GamePlugin {
         app.init_state::<AppState>()
             .init_resource::<DebugState>()
             .init_resource::<PipelineWarmup>()
+            .init_resource::<crate::runtime::sim_clock::SimClock>()
             .init_resource::<ActionQueue>()
             .init_resource::<ModelSpawner>()
             .init_resource::<crate::runtime::scene_manager::MergedModelFixes>()
@@ -160,6 +161,7 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::runtime::scene_manager::LoadedKeyBindings>()
             .init_resource::<crate::runtime::scene_manager::ProjectGamepadBindings>()
             .init_resource::<crate::runtime::scene_manager::LoadedGamepadBindings>()
+            .init_resource::<crate::runtime::scene_manager::ProjectClaimedGamepadBindings>()
             .init_resource::<crate::runtime::scene_manager::PendingJoinGamepad>()
             .init_resource::<crate::runtime::scene_manager::LoadedAssetCatalog>()
             .init_resource::<crate::runtime::scene_manager::LoadedPrefabCatalog>()
@@ -286,6 +288,9 @@ impl Plugin for GamePlugin {
                 entity_fsm_interpreter_system,
                 flush_pending_intent_system,
                 action_executor_system,
+                // The only caller of Time<Virtual>::pause()/unpause(); runs after every writer of SimClock this frame.
+                crate::runtime::sim_clock::apply_sim_clock_system
+                    .run_if(bevy::ecs::schedule::common_conditions::resource_changed::<crate::runtime::sim_clock::SimClock>),
                 stat_effective_value_system, // recompute after ModifyStat/SetStat/ApplyModifier/RemoveModifier
                 stat_threshold_system,
                 drain_spawn_queue_system,
@@ -352,7 +357,10 @@ impl Plugin for GamePlugin {
             // load-bearing: interactable_system must stay before the interpreters (see the next comment).
             // Interactable input runs before all interpreters so both readers
             // see the emitted GameEvent in the same frame.
-            .add_systems(Update, interactable_system.before(fsm_interpreter_system))
+            // Real pause: edge-triggered input gate (`sim_running`); the `panels_open` early-return inside stays separate on purpose.
+            .add_systems(Update, interactable_system.before(fsm_interpreter_system).run_if(crate::runtime::sim_clock::sim_running))
+            // Keeps Bevy's message buffers flowing while the sim is held (a paused clock runs zero fixed ticks, which is what normally flips them).
+            .add_systems(Last, crate::runtime::sim_clock::keep_messages_flowing_while_held)
             // Dialogue tick: auto-wires entity.interacted→StartDialogue and manages panel UI.
             // Runs after button_system and interactable_system so all events are in the buffer.
             // load-bearing: dialogue_tick_system after button + interactable and before the interpreters.
@@ -362,7 +370,8 @@ impl Plugin for GamePlugin {
                 .before(fsm_interpreter_system))
             // Delayed events tick down each frame; emitted GameEvents are visible to both
             // interpreter systems in the same frame they fire.
-            // load-bearing: tick_delayed_events_system before the interpreters; it ticks on raw Time with no pause gate.
+            // load-bearing: tick_delayed_events_system before the interpreters. It reads the (virtual) `Res<Time>`, so a real
+            // pause freezes it with no gate; it still fires in any non-`playing` FSM state, so rules that must catch it live in `global_on`.
             .add_systems(Update, tick_delayed_events_system.before(fsm_interpreter_system))
             // Visual/animation pipeline stays in Update (rendering cadence, not physics)
             // load-bearing: the order inside this .chain() is the camera pipeline: animation_resolver_system first and

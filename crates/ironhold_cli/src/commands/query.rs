@@ -598,6 +598,9 @@ fn action_kind(a: &Action) -> &'static str {
         Action::TakeAllFromContainer => "TakeAllFromContainer",
         Action::ToggleOwnNameplate => "ToggleOwnNameplate",
         Action::JoinPlayer => "JoinPlayer",
+        Action::PauseGame => "PauseGame",
+        Action::ResumeGame => "ResumeGame",
+        Action::TogglePause => "TogglePause",
     }
 }
 

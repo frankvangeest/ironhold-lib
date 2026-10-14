@@ -26,6 +26,7 @@
 
     global_key_bindings: {
         "Escape": "toggle_pause",
+        "KeyP": "toggle_pause",  // a second pause key: a browser can swallow Escape in fullscreen
         // "KeyI" removed — inventory is now wired via the action bar slot (key: "i").
     },
 )

@@ -199,6 +199,20 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub global_unclaimed_gamepad_bindings: HashMap<String, String>, // det: order-independent
 
+    /// Global gamepad button -> event trigger mappings that fire **only for a gamepad a live player
+    /// already owns** (the mirror image of `global_unclaimed_gamepad_bindings`). Button names use the
+    /// same format (`InputMap::parse_gamepad_button`, e.g. "Start"); the value fires as
+    /// `ui.button_pressed:<trigger>`. This is how a joined gamepad player reaches a pause menu:
+    /// `global_claimed_gamepad_bindings: { "Start": "toggle_pause" }`. A pad is claimed or unclaimed
+    /// each frame, never both, so "Start = join" on a free pad (`global_unclaimed_gamepad_bindings`) and
+    /// "Start = toggle_pause" on a joined pad never conflict. Each trigger is emitted **at most once
+    /// per frame across all pads** (two players pressing Start in the same frame must not toggle
+    /// twice). It never takes part in hot join and keeps working while the game is paused. Avoid
+    /// buttons a player's own `InputMap` or action-bar slots already use. See
+    /// `planning/features/real_pause.md`.
+    #[serde(default)]
+    pub global_claimed_gamepad_bindings: std::collections::BTreeMap<String, String>,
+
     /// Default base color applied to every `kind: "primitive"` prefab that does not
     /// specify its own `primitive.color`. Expressed as linear sRGB (r, g, b) in the
     /// 0.0–1.0 range. When absent, the engine falls back to a neutral grey (0.7, 0.7, 0.7).

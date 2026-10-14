@@ -67,6 +67,9 @@ PlayAnimation("run")
 OpenInventory
 CloseInventory
 ToggleInventory
+PauseGame
+ResumeGame
+TogglePause
 OpenShop("merchant_01")
 CloseShop
 OpenContainer("chest_01")

@@ -374,7 +374,7 @@
           // One shared mouse — mouse-driven strafe/rotate is a single-player convenience
           // that would conflict between two keyboard players, so it's disabled here.
           strafe_mouse_button: None,
-          // gamepad_index: 0,  // uncomment to put Player 1 on a controller — the keyboard
+          gamepad_index: 0,  // one-time seed: locks to this controller once it resolves; the keyboard keeps working alongside it (input is additive)
           // bindings above keep working alongside the pad (input is additive), nothing to remove.
           // jump/run/interact/target_next default to South/East/West/North (Xbox A/B/X/Y) —
           // no other fields needed unless rebinding (see docs/20_data_formats.md's InputMap
@@ -414,7 +414,7 @@
           jump:         "Enter",
           run:          "ShiftRight",
           strafe_mouse_button: None,
-          // gamepad_index: 1,  // uncomment for controller co-op (see player_p1's inputs comment)
+          gamepad_index: 1,  // one-time seed: locks to this controller once it resolves; the keyboard keeps working alongside it (input is additive)
           // No look_left/look_right here either — see player_p1's "IMPORTANT" comment above.
         ),
         movement: (
@@ -639,6 +639,7 @@
           orientation: Horizontal,
         ),
         inputs: (
+          gamepad_index: 0,  // one-time seed: locks to this controller once it resolves; the keyboard keeps working alongside it (input is additive)
           forward:      "KeyW",
           backward:     "KeyS",
           left:         "KeyA",
@@ -685,6 +686,7 @@
           character_rotate_button: None,
         )),
         inputs: (
+          gamepad_index: 1,  // one-time seed: locks to this controller once it resolves; the keyboard keeps working alongside it (input is additive)
           forward:      "ArrowUp",
           backward:     "ArrowDown",
           left:         "ArrowLeft",
@@ -747,6 +749,7 @@
           ),
         ),
         inputs: (
+          gamepad_index: 0,  // one-time seed: locks to this controller once it resolves; the keyboard keeps working alongside it (input is additive)
           forward:      "KeyW",
           backward:     "KeyS",
           left:         "KeyA",
@@ -792,6 +795,7 @@
           character_rotate_button: None,
         ),
         inputs: (
+          gamepad_index: 1,  // one-time seed: locks to this controller once it resolves; the keyboard keeps working alongside it (input is additive)
           forward:      "ArrowUp",
           backward:     "ArrowDown",
           left:         "ArrowLeft",
@@ -858,7 +862,7 @@
           strafe_mouse_button: None,
           look_left:  "KeyZ",
           look_right: "KeyX",
-          // gamepad_index: 0,  // uncomment for a controller-driven P1 — the keyboard bindings
+          gamepad_index: 0,  // one-time seed: locks to this controller once it resolves; the keyboard keeps working alongside it (input is additive)
           // above keep working alongside it (input is additive, not a replacement)
         ),
         movement: (
@@ -895,6 +899,7 @@
           character_rotate_button: None,
         ),
         inputs: (
+          gamepad_index: 1,  // one-time seed: locks to this controller once it resolves; the keyboard keeps working alongside it (input is additive)
           forward:      "ArrowUp",
           backward:     "ArrowDown",
           left:         "ArrowLeft",
@@ -940,6 +945,7 @@
           character_rotate_button: None,
         ),
         inputs: (
+          gamepad_index: 2,  // one-time seed: locks to this controller once it resolves; the keyboard keeps working alongside it (input is additive)
           forward:      "KeyI",
           backward:     "KeyK",
           left:         "KeyJ",
@@ -986,6 +992,7 @@
           character_rotate_button: None,
         ),
         inputs: (
+          gamepad_index: 3,  // one-time seed: locks to this controller once it resolves; the keyboard keeps working alongside it (input is additive)
           forward:      "Numpad5",
           backward:     "Numpad2",
           left:         "Numpad1",
@@ -1104,6 +1111,7 @@
           ),
         ),
         inputs: (
+          gamepad_index: 0,  // one-time seed: locks to this controller once it resolves; the keyboard keeps working alongside it (input is additive)
           forward:      "KeyW",
           backward:     "KeyS",
           left:         "KeyA",
@@ -1168,6 +1176,7 @@
           character_rotate_button: None,
         ),
         inputs: (
+          gamepad_index: 1,  // one-time seed: locks to this controller once it resolves; the keyboard keeps working alongside it (input is additive)
           forward:      "ArrowUp",
           backward:     "ArrowDown",
           left:         "ArrowLeft",
@@ -1618,6 +1627,7 @@
           orientation: Vertical,
         ),
         inputs: (
+          gamepad_index: 0,  // one-time seed: locks to this controller once it resolves; the keyboard keeps working alongside it (input is additive)
           forward:      "KeyW",
           backward:     "KeyS",
           left:         "KeyA",
@@ -1656,6 +1666,7 @@
           character_rotate_button: None,
         )),
         inputs: (
+          gamepad_index: 1,  // one-time seed: locks to this controller once it resolves; the keyboard keeps working alongside it (input is additive)
           forward:      "ArrowUp",
           backward:     "ArrowDown",
           left:         "ArrowLeft",

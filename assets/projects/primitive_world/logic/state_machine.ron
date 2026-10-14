@@ -2,7 +2,43 @@
     schema_version: 1,
     initial_state: "menu",
 
-    global_on: [],
+    global_on: [
+        // ── Run start ─────────────────────────────────────────────────────────────────────
+        // `scene.ready:main` fires once per run (first start AND Retry; never for an overlay), so everything that
+        // STARTS a run lives here. It used to be in "playing"'s entry_actions, which re-run on every unpause: each
+        // pause/resume then reset the score and health and restarted the music (docs/30_runtime_events_and_logic.md, "Pausing the game").
+        ( event: "scene.ready:main", do_actions: [
+            // Reset display variables
+            SetVariable("health", "100"),
+            SetVariable("score", "0"),
+            SetVariable("status", ""),
+            SetVariable("buff", ""),
+            // Reset global stats for a fresh run (goblin stats are per-entity — reset on respawn)
+            SetStat(key: "player_health", value: 100.0),
+            PlayMusicLoop(key: "bg_music"),
+            PreloadScene("scenes/pause.scene.ron"),
+            PreloadScene("scenes/map.scene.ron"),
+            PreloadScene("scenes/character_stats.scene.ron"),
+            PreloadScene("scenes/game_over.scene.ron"),
+            // Warm WebGPU particle pipelines during the scene-load window so the first visible
+            // burst does not stall the GPU thread. Three pipeline variants exist:
+            //   1. Sphere + AlphaMode::Add (no texture)     — hit_spark, heal_burst, pickup_sparkle
+            //   2. Quad  + AlphaMode::Add + texture          — campfire_fire  (additive sprite)
+            //   3. Quad  + AlphaMode::Blend + texture        — campfire_smoke (blend sprite)
+            // One SpawnEffect per variant is enough — all effects sharing a variant reuse the
+            // compiled pipeline. Position far below terrain keeps the warmup invisible.
+            SpawnEffect(key: "hit_spark",        position: (0.0, -100.0, 0.0)),
+            SpawnEffect(key: "campfire_fire",    position: (0.0, -100.0, 0.0)),
+            SpawnEffect(key: "campfire_smoke",   position: (0.0, -100.0, 0.0)),
+            SpawnEffect(key: "skill_heal",       position: (0.0, -100.0, 0.0)),
+            SpawnEffect(key: "skill_speedboost", position: (0.0, -100.0, 0.0)),
+            SpawnEffect(key: "skill_fireburst",  position: (0.0, -100.0, 0.0)),
+        ] ),
+
+        // Clamp the display to zero on death (avoids a negative display from IncrementVariable). In global_on so it
+        // also runs if the pause overlay is up when the edge-triggered threshold event arrives.
+        ( event: "stat.player_health.depleted", do_actions: [ SetVariable("health", "0") ] ),
+    ],
 
     states: [
         (
@@ -17,33 +53,11 @@
         (
             name: "playing",
             entry_actions: [
-                // Reset display variables
-                SetVariable("health", "100"),
-                SetVariable("score", "0"),
-                SetVariable("status", ""),
-                SetVariable("buff", ""),
-                // Reset global stats for a fresh run (goblin stats are per-entity — reset on respawn)
-                SetStat(key: "player_health", value: 100.0),
-                PlayMusicLoop(key: "bg_music"),
-                PreloadScene("scenes/pause.scene.ron"),
-                PreloadScene("scenes/map.scene.ron"),
-                PreloadScene("scenes/character_stats.scene.ron"),
-                PreloadScene("scenes/game_over.scene.ron"),
-                // Warm WebGPU particle pipelines during the scene-load window so the first visible
-                // burst does not stall the GPU thread. Three pipeline variants exist:
-                //   1. Sphere + AlphaMode::Add (no texture)     — hit_spark, heal_burst, pickup_sparkle
-                //   2. Quad  + AlphaMode::Add + texture          — campfire_fire  (additive sprite)
-                //   3. Quad  + AlphaMode::Blend + texture        — campfire_smoke (blend sprite)
-                // One SpawnEffect per variant is enough — all effects sharing a variant reuse the
-                // compiled pipeline. Position far below terrain keeps the warmup invisible.
-                SpawnEffect(key: "hit_spark",        position: (0.0, -100.0, 0.0)),
-                SpawnEffect(key: "campfire_fire",    position: (0.0, -100.0, 0.0)),
-                SpawnEffect(key: "campfire_smoke",   position: (0.0, -100.0, 0.0)),
-                SpawnEffect(key: "skill_heal",       position: (0.0, -100.0, 0.0)),
-                SpawnEffect(key: "skill_speedboost", position: (0.0, -100.0, 0.0)),
-                SpawnEffect(key: "skill_fireburst",  position: (0.0, -100.0, 0.0)),
+                // Nothing here on purpose: everything that starts a run is the global_on `scene.ready:main` rule, because an
+                // unpause re-enters this state and must not reset the run.
             ],
-            exit_actions: [ StopMusic ],
+            // Music keeps playing across a pause (audio is deliberately not paused); it stops at game over instead.
+            exit_actions: [],
             on: [
                 ( event: "ui.button_pressed:toggle_map",   do_actions: [ ToggleOverlay("scenes/map.scene.ron") ] ),
                 ( event: "ui.button_pressed:toggle_stats", do_actions: [ ToggleOverlay("scenes/character_stats.scene.ron") ] ),
@@ -83,8 +97,7 @@
                 ( event: "stat.player_health.low",      do_actions: [ SetVariable("status", "! LOW HEALTH !") ] ),
                 // Correct display on full heal (coin at full HP).
                 ( event: "stat.player_health.full",     do_actions: [ SetVariable("health", "100"), SetVariable("status", "") ] ),
-                // Clamp display to zero on death (avoids negative display from IncrementVariable).
-                ( event: "stat.player_health.depleted", do_actions: [ SetVariable("health", "0") ] ),
+                // (Death display clamp: see the global_on: rule for stat.player_health.depleted.)
 
                 // ── Action bar feedback ──────────────────────────────────────────────
                 // Clear status after a short delay so these messages don't linger.
@@ -100,17 +113,20 @@
             ],
         ),
         (
+            // Real pause: PauseGame in entry_actions + ResumeGame in THIS state's exit_actions, next to the overlay actions.
             name: "paused",
-            entry_actions: [ LoadSceneOverlay("scenes/pause.scene.ron") ],
-            exit_actions:  [ UnloadOverlay ],
+            entry_actions: [ LoadSceneOverlay("scenes/pause.scene.ron"), PauseGame ],
+            exit_actions:  [ UnloadOverlay, ResumeGame ],
             on: [
                 ( event: "ui.button_pressed:pause_quit", do_actions: [ Quit ] ),
             ],
         ),
         (
+            // The world is frozen behind the game-over screen. Retry's LoadScene also auto-resumes (a Replace-mode scene
+            // load releases the pause), so ResumeGame here is a harmless no-op on that path.
             name: "game_over",
-            entry_actions: [ LoadSceneOverlay("scenes/game_over.scene.ron") ],
-            exit_actions:  [ UnloadOverlay ],
+            entry_actions: [ StopMusic, LoadSceneOverlay("scenes/game_over.scene.ron"), PauseGame ],
+            exit_actions:  [ UnloadOverlay, ResumeGame ],
             on: [
                 ( event: "ui.button_pressed:retry",          do_actions: [ LoadScene("scenes/main.scene.ron") ] ),
                 ( event: "ui.button_pressed:game_over_quit", do_actions: [ Quit ] ),
@@ -126,9 +142,13 @@
         ( from: "paused",  on: "ui.button_pressed:toggle_pause", to: "playing" ),
         ( from: "paused",  on: "ui.button_pressed:resume",       to: "playing" ),
 
-        // Player health reaches zero → game over overlay.
+        // Player health reaches zero → game over overlay. Also from "paused": threshold events are edge-triggered
+        // and never re-fire, and a ModifyStat executed in the same frame as the pause makes the event arrive next
+        // frame, when the state is already "paused" (a `from: "playing"` row alone would drop it).
         ( from: "playing", on: "stat.player_health.depleted", to: "game_over" ),
-        // Retry reloads main; scene.ready:main transitions back to playing.
+        ( from: "paused",  on: "stat.player_health.depleted", to: "game_over" ),
+        // Retry reloads main (which also releases the pause); the any-state `scene.ready:main` transition above takes the
+        // FSM back to playing (this row is kept for readability; it never matches first).
         ( from: "game_over", on: "scene.ready:main", to: "playing" ),
     ],
 )

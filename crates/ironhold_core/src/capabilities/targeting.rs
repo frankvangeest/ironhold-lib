@@ -57,8 +57,9 @@ impl Plugin for TargetingPlugin {
         // luck — see `planning/backlog.md`'s "Same-frame targeting/action-bar race" bug entry.
         app.add_systems(Update, (
             (
-                click_select_system,
-                tab_targeting_system,
+                // Real pause: both are edge-triggered input systems; `target_auto_clear_system` must keep running.
+                click_select_system.run_if(crate::runtime::sim_clock::sim_running),
+                tab_targeting_system.run_if(crate::runtime::sim_clock::sim_running),
                 target_auto_clear_system,
             )
                 .chain()

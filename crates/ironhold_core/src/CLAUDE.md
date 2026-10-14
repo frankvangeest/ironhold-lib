@@ -71,9 +71,18 @@ the projected point, and stashes that camera's distance in `NameplateCameraDista
 that stash and never re-select a camera**. Rank-duplication rules for new widgets: `capabilities/CLAUDE.md`.
 
 <!-- b:575.rule -->
-`tick_delayed_events_system` (`lib.rs`) ticks on raw `Time` with **no pause gate**, so a delayed event (a monster respawn
-timer) can fire while the game is not in `"playing"`; RON rules that must catch such an event belong in the top-level
-`global_on:`, never in a state-scoped `on:` list.
+`tick_delayed_events_system` (`lib.rs`) reads the virtual `Res<Time>`, so a real pause freezes it, but a delayed event (a
+monster respawn timer) can still fire while the FSM is in any non-`"playing"` state; RON rules that must catch such an event
+belong in the top-level `global_on:`, never in a state-scoped `on:` list.
+
+**Pause goes through `SimClock` (`runtime/sim_clock.rs`) and nowhere else.** Its holds (`Menu`/`Static`/`FocusLoss`/`Session`) are
+an idempotent `BTreeSet`, never a counter; `apply_sim_clock_system` is the **only** caller of `Time<Virtual>::pause()`/`unpause()`
+and the only emitter of `game.paused`/`game.resumed`. Gameplay reads `sim_running`/`SimClock::is_running`, never
+`Time<Virtual>::is_paused()`. A paused clock runs zero `FixedUpdate` ticks and freezes every `Res<Time>` system, but an
+*edge-triggered input* system (interact, targeting, the action bar, first-person/flycam mouse look, dialogue choices) does not
+follow the clock and needs its own gate. Keep the `panels_open` check a **separate** condition (merging it would stop the action
+bar from closing the inventory). `PauseGame`/`ResumeGame`/`TogglePause` touch only the `Menu` hold; a Replace-mode load releases
+only `Menu` (in `spawn_scene_v2`, never in the executor's `LoadScene` arm and never for an overlay).
 
 <!-- b:706 -->
 ## WebGPU 16-byte alignment

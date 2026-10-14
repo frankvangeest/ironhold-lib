@@ -92,6 +92,7 @@ pub fn dialogue_tick_system(
     game_vars: Res<GameVariables>,
     loaded_stats: Option<Res<LoadedStats>>,
     time: Res<Time>,
+    sim: Res<crate::runtime::sim_clock::SimClock>,
     entity_dialogue_q: Query<(&SpawnId, &DialoguePath)>,
     mut panel_q: Query<(&mut Visibility, &DialoguePanelMarker)>,
     mut text_q: Query<(&mut Text, &DialogueTextMarker)>,
@@ -111,6 +112,9 @@ pub fn dialogue_tick_system(
             t.strip_prefix("dialogue_choice:").and_then(|s| s.parse::<usize>().ok())
         })
         .collect();
+    // Real pause: a still-visible dialogue panel stays clickable, but a choice must not act while the sim is held.
+    // (Gated here, not with a system-level `run_if`, which would also stop the panel upkeep below.)
+    let choice_clicks = if sim.is_running() { choice_clicks } else { Vec::new() };
 
     // ── Hide panel and handle auto-wire when no dialogue is active ────────────
     if !active.is_active() {
@@ -360,6 +364,8 @@ fn substitute_self_in_action(action: Action, npc_id: &str) -> Action {
                 yaw_deg,
                 at_entity: at_entity.map(|e| s(&e)),
             },
+        // Fieldless pause actions: nothing to substitute.
+        other @ (Action::PauseGame | Action::ResumeGame | Action::TogglePause) => other,
         other => other,
     }
 }

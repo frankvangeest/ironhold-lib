@@ -109,7 +109,9 @@ This aligns with the rendering philosophy: web builds are the performance baseli
 ## Layering
 ### App-level flow (global)
 Use Bevy app States for lifecycle:
-Boot → LoadingProject → LoadingScene → InGame → Paused / Error
+Boot → LoadingProject → LoadingScene → InGame → Error
+
+(Pausing is **not** an app lifecycle state: it is a hold on the simulation clock, `SimClock`, set by the `PauseGame`/`ResumeGame`/`TogglePause` actions; see `runtime/sim_clock.rs` and [Pausing the game](../30_runtime_events_and_logic.md#pausing-the-game).)
 
 ### Gameplay logic (data-driven)
 - **Project logic** (`logic/state_machine.ron`): menus, options, scene transitions, UI-driven events, playing/paused/character-selection and other FSM-driven states — one format for all of it. Supports flat `global_on:` events, entry/exit actions, and explicit `from:`/`to:` transitions; start flat and add states only when you need modes. See `docs/20_data_formats.md`'s "Removed: rules.ron" callout for the migration mapping from the old two-format system.

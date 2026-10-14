@@ -33,6 +33,11 @@ and insert a `StaticMode(bool)` resource before the app runs.
 virtual clock, so one pause call freezes all animations, NPC tick deltas, motion integration, and
 particle emission simultaneously. No per-system surgery needed for the majority of systems.
 
+> **Update 2026-10-14 (`real_pause.md` shipped `SimClock`):** do **not** call `Time<Virtual>::pause()` directly. Take the
+> `PauseHold::Static` hold on `SimClock` (`runtime/sim_clock.rs`); `apply_sim_clock_system` is the only caller of
+> `pause()`/`unpause()`. Because holds are a set, opening and resuming the pause menu releases only the `Menu` hold, so it can
+> never un-freeze static mode.
+
 **Freeze point: `SceneEvent::Ready` (after warmup)**
 
 Insert a system in `ironhold_core` that runs when `StaticMode(true)` and observes

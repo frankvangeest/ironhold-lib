@@ -30,6 +30,20 @@ pub struct PendingCatalogAssets<'w> {
     pub item_catalog: Res<'w, Assets<ItemCatalog>>,
 }
 
+/// Builds the claimed-pad bindings resource from the project config, warning (like the unclaimed map)
+/// about a button name that does not parse, since such a binding would silently never fire.
+fn claimed_gamepad_bindings(config: &ProjectConfig) -> super::ProjectClaimedGamepadBindings {
+    for button_name in config.global_claimed_gamepad_bindings.keys() {
+        if InputMap::parse_gamepad_button(button_name).is_none() {
+            warn!(
+                "global_claimed_gamepad_bindings: unrecognised button name {:?} — binding will have no effect",
+                button_name
+            );
+        }
+    }
+    super::ProjectClaimedGamepadBindings(config.global_claimed_gamepad_bindings.clone())
+}
+
 pub fn check_project_loaded(
     mut commands: Commands,
     config_handle: Res<ProjectConfigHandle>,
@@ -135,6 +149,7 @@ pub fn check_project_loaded(
             }
             commands.insert_resource(ProjectGamepadBindings(gamepad_bindings.clone()));
             commands.insert_resource(LoadedGamepadBindings(gamepad_bindings));
+            commands.insert_resource(claimed_gamepad_bindings(&config));
         }
         commands.insert_resource(LoadedAssetCatalog(AssetCatalog::default()));
         commands.insert_resource(LoadedPrefabCatalog(PrefabCatalog::default()));
@@ -273,6 +288,7 @@ pub fn check_project_loaded(
         }
         commands.insert_resource(ProjectGamepadBindings(gamepad_bindings.clone()));
         commands.insert_resource(LoadedGamepadBindings(gamepad_bindings));
+        commands.insert_resource(claimed_gamepad_bindings(&config));
 
         let asset_catalog = if let Some(h) = &pending.asset_catalog {
             pending_assets.asset_catalog.get(h).cloned().unwrap_or_default()

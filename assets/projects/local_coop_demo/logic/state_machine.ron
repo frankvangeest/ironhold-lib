@@ -1,6 +1,13 @@
 (
     schema_version: 1,
     global_on: [
+        // Pause (KeyP, or Start on a joined controller): a FLAT project, so TogglePause + ToggleOverlay in global_on.
+        // (A project with states uses a `paused` state with PauseGame/ResumeGame instead: see "Pausing the game" in
+        // docs/30_runtime_events_and_logic.md. ToggleOverlay closes ANY open overlay, which is why this flat form is
+        // second-class: it is fine here because this demo has no other overlays.)
+        ( event: "ui.button_pressed:toggle_pause", do_actions: [ ToggleOverlay("scenes/pause.scene.ron"), TogglePause ] ),
+        ( event: "ui.button_pressed:resume",       do_actions: [ UnloadOverlay, ResumeGame ] ),
+
         ( event: "scene.ready:main",  do_actions: [ Log("Local co-op demo scene ready") ] ),
         // Temporary camera_modes.md v1 playtest aid (main.scene.ron's scene_key_bindings) —
         // fires on the shared party camera, verifying CameraShake now covers Party mode too.
