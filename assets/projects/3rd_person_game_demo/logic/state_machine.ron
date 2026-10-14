@@ -6,6 +6,48 @@
     // SyncAudioState in each state's entry_actions re-emits the current state on entry,
     // ensuring labels are correct on first project load and after navigating between scenes.
     global_on: [
+        // ── Run start ─────────────────────────────────────────────────────────────────────
+        // `scene.ready:main` fires once per run (it is never fired for an overlay), so this is the place for
+        // everything that STARTS a run. It used to live in "playing"'s entry_actions, which re-run on every
+        // unpause: each pause/resume then fully healed the player, reset the combat status and restarted the music.
+        ( event: "scene.ready:main", do_actions: [
+            PlayMusicLoop(key: "bg_music"),
+            PreloadScene("scenes/pause.scene.ron"),
+            // Reset player stats on each play session.
+            SetStat(key: "player_health", value: 100.0),
+            SetStat(key: "player_mana",   value: 60.0),
+            SetVariable("combat_status", ""),
+            // Preload animation source GLBs so the player's animation graph is fully
+            // decoded before the first attack/death clip fires. Without this, each GLB
+            // triggers an async GLTF decode stall the first time its clips are needed.
+            PreloadGlb("anim_locomotion"),
+            PreloadGlb("anim_melee"),
+            PreloadGlb("anim_emotes"),
+            PreloadGlb("anim_magic"),
+            PreloadGlb("anim_hit_death"),
+            PreloadGlb("anim_zombie"),
+            // Preload GLB models so first-encounter spawns don't stall on WASM.
+            PreloadPrefab("enemy_snake"),
+            PreloadPrefab("enemy_spider"),
+            PreloadPrefab("enemy_zombie"),
+            // Lootable-corpse prefabs (planning/features/monster_corpse_loot.md) — preloaded
+            // here too so the first death of the session doesn't stall on a fresh WebGPU
+            // pipeline compile for the corpse's own render/UI materials.
+            PreloadPrefab("zombie_corpse"),
+            PreloadPrefab("snake_corpse"),
+            PreloadPrefab("spider_corpse"),
+            // Warm WebGPU particle pipelines during the loading window.
+            SpawnEffect(key: "hit_spark",    position: (0.0, -100.0, 0.0)),
+            SpawnEffect(key: "death_poof",   position: (0.0, -100.0, 0.0)),
+            SpawnEffect(key: "respawn_glow", position: (0.0, -100.0, 0.0)),
+            SpawnEffect(key: "venom_splash", position: (0.0, -100.0, 0.0)),
+            SpawnEffect(key: "web_burst",    position: (0.0, -100.0, 0.0)),
+        ] ),
+
+        // Death animation. In global_on (not "playing"'s on:) so it still plays if the pause overlay is up at the exact
+        // moment the threshold event arrives: threshold events are edge-triggered and never re-fire.
+        ( event: "stat.player_health.depleted", do_actions: [ PlayAnimationOn(target: "player_01", clip: "death") ] ),
+
         ( event: "audio.muted",   do_actions: [ SetVariable("audio_state", "Muted"),    SetVariable("audio_muted", "true")  ] ),
         ( event: "audio.unmuted", do_actions: [ SetVariable("audio_state", "Sound On"), SetVariable("audio_muted", "false") ] ),
 
@@ -16,9 +58,10 @@
         // behavior file that armed it belongs to an entity that no longer exists by the time it
         // fires, so no per-entity interpreter can react to it. Scoping this to "playing"'s on:
         // list instead (an earlier revision did) is a real bug, not just poor organization: if
-        // the game is in "paused" (or any other global state) at the exact moment the 30s timer
-        // fires, a state-scoped `on:` handler simply never matches and the event is silently
-        // dropped — that monster slot then never respawns for the rest of the session.
+        // the game is in any other FSM state (the menu, a scene swap) at the exact moment the 30s
+        // timer fires, a state-scoped `on:` handler simply never matches and the event is silently
+        // dropped — that monster slot then never respawns for the rest of the session. (A real
+        // pause freezes this timer, so "paused" itself is no longer the risk; other states still are.)
         // `monster.respawn:{self}` (not a per-type `zombie.respawn:{self}`/etc.) is a uniform
         // convention across all three monster behavior files — a per-type prefix that must also
         // be kept in sync with each new monster's own event name is an easy thing to typo/forget
@@ -39,7 +82,8 @@
     states: [
         (
             name: "menu",
-            entry_actions: [ SyncAudioState ],
+            // StopMusic: "playing" no longer stops the music when it is left (a pause must not), so the menu does.
+            entry_actions: [ SyncAudioState, StopMusic ],
             exit_actions: [],
             on: [
                 ( event: "ui.button_pressed:start_game", do_actions: [ LoadScene("scenes/character_select.scene.ron") ] ),
@@ -107,40 +151,15 @@
         (
             name: "playing",
             entry_actions: [
-                PlayMusicLoop(key: "bg_music"),
-                PreloadScene("scenes/pause.scene.ron"),
+                // Only what must run on EVERY (re)entry lives here. Everything that starts a run (stat/variable
+                // reset, music, preloads, particle warm-up) is in the global `scene.ready:main` rule above: an
+                // unpause re-enters "playing" and must not heal the player, reset the combat status or restart the
+                // music (see docs/30_runtime_events_and_logic.md, "Pausing the game").
                 SyncAudioState,
-                // Reset player stats on each play session.
-                SetStat(key: "player_health", value: 100.0),
-                SetStat(key: "player_mana",   value: 60.0),
-                SetVariable("combat_status", ""),
-                // Preload animation source GLBs so the player's animation graph is fully
-                // decoded before the first attack/death clip fires. Without this, each GLB
-                // triggers an async GLTF decode stall the first time its clips are needed.
-                PreloadGlb("anim_locomotion"),
-                PreloadGlb("anim_melee"),
-                PreloadGlb("anim_emotes"),
-                PreloadGlb("anim_magic"),
-                PreloadGlb("anim_hit_death"),
-                PreloadGlb("anim_zombie"),
-                // Preload GLB models so first-encounter spawns don't stall on WASM.
-                PreloadPrefab("enemy_snake"),
-                PreloadPrefab("enemy_spider"),
-                PreloadPrefab("enemy_zombie"),
-                // Lootable-corpse prefabs (planning/features/monster_corpse_loot.md) — preloaded
-                // here too so the first death of the session doesn't stall on a fresh WebGPU
-                // pipeline compile for the corpse's own render/UI materials.
-                PreloadPrefab("zombie_corpse"),
-                PreloadPrefab("snake_corpse"),
-                PreloadPrefab("spider_corpse"),
-                // Warm WebGPU particle pipelines during the loading window.
-                SpawnEffect(key: "hit_spark",    position: (0.0, -100.0, 0.0)),
-                SpawnEffect(key: "death_poof",   position: (0.0, -100.0, 0.0)),
-                SpawnEffect(key: "respawn_glow", position: (0.0, -100.0, 0.0)),
-                SpawnEffect(key: "venom_splash", position: (0.0, -100.0, 0.0)),
-                SpawnEffect(key: "web_burst",    position: (0.0, -100.0, 0.0)),
             ],
-            exit_actions:  [ StopMusic ],
+            // Music keeps playing across a pause (audio is deliberately not paused); it is stopped on arrival at the
+            // menu (see "menu"'s entry_actions), not whenever "playing" is left.
+            exit_actions:  [],
             on: [
                 ( event: "ui.button_pressed:dance",       do_actions: [ PlayAnimationOn(target: "player_01", clip: "dance") ] ),
                 ( event: "ui.button_pressed:test_actions",do_actions: [ Spawn(prefab: "chest_02", id: "chest_02_spawned", spawn_point: "chest_spawn") ] ),
@@ -175,8 +194,8 @@
                 // entity.interact_blocked:{id} in docs/30_runtime_events_and_logic.md) ──────────
                 // seal_door requires the "old_key" item (buyable from merchant_01) to open.
                 // State-scoped here (not global_on:) to match every other interact rule above —
-                // pressing F near the door while paused correctly does nothing, same as the
-                // merchant/chests. Blocked feedback reuses the existing "click" audio key rather
+                // pressing F near the door while in any other state does nothing, same as the
+                // merchant/chests (and a real pause gates the interact key itself). Blocked feedback reuses the existing "click" audio key rather
                 // than adding a new asset just for this example — use a real locked-door sfx in a
                 // real project. SetDespawnTimer (not Despawn) so "The seal breaks..." is actually
                 // visible for a moment before the door disappears — ShowFloatingText's popup
@@ -194,7 +213,7 @@
 
                 // Monster respawn rules moved to the top-level global_on: block — see its comment
                 // for why (a state-scoped on: list here would silently drop the respawn event if
-                // the game happens to be paused when the 30s timer fires).
+                // the FSM is in another state when the 30s timer fires).
 
                 ( event: "ui.button_pressed:start_menu",  do_actions: [ LoadScene("scenes/start_menu.scene.ron") ] ),
                 ( event: "ui.button_pressed:toggle_mute",        do_actions: [ ToggleMute                                              ] ),
@@ -216,14 +235,19 @@
                 ( event: "action_bar.activated:2",             do_actions: [ SetVariable("combat_status", ""), ShowFloatingText(entity: "player_01", text: "Heavy Strike!")  ] ),
                 ( event: "action_bar.activated:3",             do_actions: [ SetVariable("combat_status", ""), ShowFloatingText(entity: "player_01", text: "Poke!")          ] ),
                 ( event: "action_bar.activated:4",             do_actions: [ SetVariable("combat_status", ""), ShowFloatingText(entity: "player_01", text: "Mana Blast!")    ] ),
-                // ── Player death ─────────────────────────────────────────────────
-                ( event: "stat.player_health.depleted",        do_actions: [ PlayAnimationOn(target: "player_01", clip: "death") ] ),
+                // (Player death animation: see the global_on: rule for stat.player_health.depleted.)
             ],
         ),
         (
+            // Real pause: PauseGame in entry_actions + ResumeGame in THIS state's exit_actions, next to the overlay
+            // actions. Every way out of "paused" (Resume, the pause key, a later menu button) resumes the game.
+            // Gameplay panels (inventory, shop, chest) are drawn above the pause overlay and stay clickable, so they are
+            // closed on entry. Audio keeps playing; react to the game.paused / game.resumed events if you want to duck it
+            // (do not use ToggleMute/StopMusic here: they would un-mute a muted player / restart the track).
+            // See docs/30_runtime_events_and_logic.md, "Pausing the game".
             name: "paused",
-            entry_actions: [ LoadSceneOverlay("scenes/pause.scene.ron") ],
-            exit_actions:  [ UnloadOverlay ],
+            entry_actions: [ CloseInventory, CloseShop, CloseContainer, LoadSceneOverlay("scenes/pause.scene.ron"), PauseGame ],
+            exit_actions:  [ UnloadOverlay, ResumeGame ],
             on: [
                 ( event: "ui.button_pressed:pause_quit",  do_actions: [ Quit       ] ),
                 ( event: "ui.button_pressed:toggle_mute", do_actions: [ ToggleMute ] ),
@@ -245,8 +269,8 @@
         ( from: "selecting", on: "ui.button_pressed:select_female", to: "spawning_female" ),
 
         // Main scene ready in spawning_* state → advance to playing.
-        // (scene.ready:main fires AFTER the on: Spawn rule in each spawning_* state,
-        //  so the player entity is queued before playing's entry_actions fire.)
+        // (scene.ready:main fires AFTER the on: Spawn rule in each spawning_* state, so the player entity is queued
+        //  before this transition moves the FSM to playing.)
         ( from: "spawning_male",   on: "scene.ready:main", to: "playing" ),
         ( from: "spawning_female", on: "scene.ready:main", to: "playing" ),
 

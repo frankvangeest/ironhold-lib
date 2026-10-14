@@ -86,6 +86,7 @@ _Last updated: 2026‑10‑11_
 - `Action::LoadSceneOverlay(String)` — loads a `.scene.ron` as an overlay (e.g. pause menu)
 - `Action::UnloadOverlay` — despawns all overlay entities
 - `Action::ToggleOverlay(String)` — opens overlay if none active, closes if one is active
+- `Action::PauseGame` / `ResumeGame` / `TogglePause` — hold / release / flip the simulation (a real pause; emits `game.paused` / `game.resumed`)
 - `Action::Quit` — requests app exit
 - `Action::Log(String)` — logs a message (debug/telemetry)
 - `Action::Spawn { prefab, id, position, spawn_point, yaw_deg }` — enqueues a prefab spawn to `PendingEntitySpawns`; processed at max 2/frame by `drain_spawn_queue_system` to cap WebGPU pipeline-compile stalls on WASM; `id` auto-generated if omitted; `position` (x,y,z) takes precedence over `spawn_point` (scene-defined named point); defaults to world origin if neither is given; `yaw_deg` rotates around the Y axis
@@ -146,17 +147,19 @@ One authoring format, `state_machine.ron` (schema v1) ✅ — see `docs/20_data_
   (
     schema_version: 1,
     initial_state: "menu",
-    global_on: [],
+    // Run-start actions go in a scene.ready rule, NOT in playing.entry_actions (those re-run on every unpause).
+    global_on: [ ( event: "scene.ready:main", do_actions: [ PlayMusicLoop(key: "bg_music") ] ) ],
     states: [
       ( name: "menu", entry_actions: [], exit_actions: [],
         on: [ ( event: "ui.button_pressed:start_game", do_actions: [ LoadScene("scenes/main.scene.ron") ] ) ] ),
       ( name: "playing",
-        entry_actions: [ PlayMusicLoop(key: "bg_music") ],
-        exit_actions:  [ StopMusic ],
+        entry_actions: [],
+        exit_actions:  [],
         on: [ ( event: "ui.button_pressed:dance", do_actions: [ PlayAnimation("dance") ] ) ] ),
       ( name: "paused",
-        entry_actions: [ LoadSceneOverlay("scenes/pause.scene.ron") ],
-        exit_actions:  [ UnloadOverlay ],
+        // PauseGame on entry, ResumeGame on THIS state's exit (a real pause; see docs/30 "Pausing the game").
+        entry_actions: [ LoadSceneOverlay("scenes/pause.scene.ron"), PauseGame ],
+        exit_actions:  [ UnloadOverlay, ResumeGame ],
         on: [] ),
     ],
     transitions: [

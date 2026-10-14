@@ -108,3 +108,5 @@ window any pad churn could exploit to bind the wrong device). `spawn_player_enti
 keyboard-triggered join sees the resource already `None` and is unaffected. This override does
 **not** disable the joiner's keyboard scheme — gamepad and keyboard inputs are read additively
 (`||`), never exclusively, everywhere in this file's gamepad routing on this page.
+
+`ProjectConfig.global_claimed_gamepad_bindings` (project-level only, no per-scene override) is the mirror image: `unclaimed_gamepad_trigger_system` evaluates it against the same `claimed` set, so a pad is claimed or unclaimed each frame, never both. It emits `UiEvent` only (never `PendingJoinGamepad`), at most once per trigger per frame across all pads (sorted pads, `BTreeMap` buttons), and is not gated by the pause, so the button that pauses also resumes. It is how a joined player reaches `toggle_pause`.

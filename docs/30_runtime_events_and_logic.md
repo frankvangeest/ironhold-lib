@@ -120,6 +120,8 @@ The name is used as-is in the rules pipeline — the caller is responsible for n
 - The targeting capability also writes the `target_display` / `target_name` / `target_id` `GameVariables` on every change — bind a `Label` to one of these for a HUD target frame (no rule wiring needed; they go blank whenever 2+ players are present, so use the per-viewport `target_hud:` block described in [20_data_formats.md](20_data_formats.md) instead). ✅
 - `"audio.muted"` — emitted by `ToggleMute` when transitioning to muted ✅
 - `"audio.unmuted"` — emitted by `ToggleMute` when transitioning to unmuted ✅
+- `"game.paused"` — emitted when the simulation actually stops (`PauseGame`/`TogglePause` took effect); only on a real change, so a second `PauseGame` emits nothing ✅
+- `"game.resumed"` — emitted when the simulation actually restarts (`ResumeGame`/`TogglePause`, or the automatic resume on a Replace-mode `LoadScene`) ✅
 - `"audio.volume_changed"` — emitted by `SetVolume` after the active fraction changes ✅ (the audio system also keeps the `audio_volume_percent` `GameVariables` entry in sync — bind a `Label` to it, no rule needed; mute is not auto-written)
 - `"dialogue.started:{npc_id}"` — dialogue panel opened for the NPC with the given spawn ID; emitted by `Action::StartDialogue` ✅
 - `"dialogue.ended:{dialogue_path}"` — dialogue panel closed; payload is the project-relative `.dialogue.ron` path; emitted by `Action::EndDialogue` and cleared on `LoadScene` ✅
@@ -245,8 +247,10 @@ Once you need modes, a menu → playing → paused flow could look like this:
             name: "paused",
             // "paused" is only ever entered/exited via the two toggle_pause transitions below,
             // so these fire exactly once per pause/unpause — no re-fire trap here.
-            entry_actions: [ LoadSceneOverlay("scenes/pause.scene.ron") ],
-            exit_actions: [ UnloadOverlay ],
+            // PauseGame/ResumeGame are a pair: PauseGame on entry, ResumeGame on THIS state's exit,
+            // so every way out of "paused" resumes the game (see "Pausing the game" below).
+            entry_actions: [ LoadSceneOverlay("scenes/pause.scene.ron"), PauseGame ],
+            exit_actions: [ UnloadOverlay, ResumeGame ],
         ),
     ],
     transitions: [
@@ -263,6 +267,73 @@ on the **destination state's `entry_actions`** and/or the **source state's `exit
 instead, as `paused` does above — or on the state's own `on:` binding for the same event the
 transition matches, as `menu` does above, when the action should fire once regardless of which
 state the event happens to also advance you to.
+
+### Pausing the game
+
+A pause menu is a state that opens an overlay **and** holds the simulation. Put `PauseGame` in the state's `entry_actions`
+and `ResumeGame` in the **same state's** `exit_actions`, right next to `LoadSceneOverlay`/`UnloadOverlay` (the `paused` state
+in the example above). Whatever transition leaves the state — Resume, the pause key, the player dying, a later "main menu"
+button — resumes the game, so the pair can never get out of step.
+
+| Action | Effect |
+|---|---|
+| `PauseGame` | Hold the simulation. A **request**: the engine emits `game.paused` only when the clock really stops. A no-op if already paused (there is no counting: one `ResumeGame` always undoes it). |
+| `ResumeGame` | Release the pause. A no-op if not paused. |
+| `TogglePause` | Flip it. For flat projects that only use `global_on`; inside `entry_actions`/`exit_actions` use the pair above instead, because entering a state while already paused would *un*pause. |
+
+A flat project (no states) pauses like this:
+
+```ron
+global_on: [
+    ( event: "ui.button_pressed:toggle_pause", do_actions: [ ToggleOverlay("scenes/pause.scene.ron"), TogglePause ] ),
+    ( event: "ui.button_pressed:resume",       do_actions: [ UnloadOverlay, ResumeGame ] ),
+],
+```
+
+This is second-class on purpose: `ToggleOverlay` closes *any* open overlay, so with a map overlay open the pause key closes the
+map but still pauses, and the overlay and the pause drift apart. Prefer a `paused` state, which cannot get out of step.
+**An action-bar slot with `do_actions: [TogglePause]` can pause but never resume** (the action bar is frozen while paused):
+bind the pause key in `global_key_bindings` (or a pad button in `global_claimed_gamepad_bindings`) instead.
+
+**What freezes while paused:** physics, the player, NPCs and monster AI, motion (`rotate`/`bob`), particles, animations,
+cooldowns, `EmitEventAfterDelay` and `SetDespawnTimer` timers, stat regeneration and over-time effects, camera movement
+(including first-person and flycam mouse look), and the interact / loot / targeting / action-bar inputs. **What keeps
+running:** the UI (buttons, the overlay), your rules (`global_on`, state `on:` bindings), scene loading, and audio. The
+pause lands on the frame *after* the action runs.
+
+Things to know when you author one:
+
+- **A Replace-mode `LoadScene` always un-pauses.** If the paused state's Retry/"main menu" button loads a scene, the new scene
+  starts running even if you forgot `ResumeGame`. (`LoadSceneOverlay`/`ToggleOverlay`/`UnloadOverlay` never resume.) The
+  load always wins: `[LoadScene("x"), PauseGame]` in one list ends with the new scene **running**, because the scene spawns
+  a few frames after both actions ran and releases the pause then. To start a scene paused, run `PauseGame` from that
+  scene's `scene.ready:<scene>` rule.
+- **"Main menu" from the pause menu.** A Replace-mode `LoadScene` un-pauses, but the FSM stays in `paused` until the new
+  scene's `scene.ready` transition moves it, so give that scene an any-state transition
+  (`( on: "scene.ready:start_menu", to: "menu" )`). Otherwise `playing`'s rules never fire again and the pause key acts
+  strangely.
+- **Your rules and some UI keep running.** The UI is not paused: the overlay's full-screen backdrop blocks clicks on the HUD
+  underneath, but a key in `global_key_bindings` bound to a gameplay trigger, a rule in `global_on`, and any panel drawn above
+  the backdrop (inventory, shop, chest) still work. Bind gameplay triggers in the `playing` state's `on:` (not `global_on`),
+  and close open panels on entry (`CloseInventory`, `CloseShop`, `CloseContainer`) as the demos do.
+- **Do not put run-start actions in `playing`'s `entry_actions`.** Unpausing re-enters `playing`, so a health/score reset or a
+  `PlayMusicLoop` there would fire on every unpause. Put them in a `scene.ready:<scene>` rule (it fires once per run and never
+  for an overlay), as `primitive_world` and `3rd_person_game_demo` do.
+- **Death while paused.** Threshold events (`stat.player_health.depleted`) arrive once and never re-fire. Handle them in
+  `global_on`, or give the transition a `from: "paused"` row too, so a death that lands on the pause frame is not dropped.
+- **Do not arm a timer from the pause menu.** An `EmitEventAfterDelay` armed in a paused state never fires until the game is
+  resumed, so a "fade, then `LoadScene`" quit button would hang. Run `ironhold validate --strict`: it warns about this and about the
+  other pause mistakes (a paused state with no `ResumeGame` in its `exit_actions`, `TogglePause` in an entry/exit list, ...).
+- **Audio keeps playing.** Do not use `ToggleMute` (it un-mutes a player who had muted) or `StopMusic` followed by
+  `PlayMusicLoop` (the track restarts) in the pause entry/exit. React to `game.paused`/`game.resumed` if you want to duck.
+- **Keys and pads.** Bind a pause key in `global_key_bindings` (`"Escape": "toggle_pause"`; add `"KeyP"` too, since a browser
+  can swallow Escape in fullscreen). A joined gamepad player's own buttons never reach `global_unclaimed_gamepad_bindings`,
+  so use `global_claimed_gamepad_bindings: { "Start": "toggle_pause" }` (project file). Per-scene bindings in an *overlay*
+  scene are ignored (the engine logs a warning): bind keys in the project file or the base scene.
+- **Local co-op:** one clock, so any player pauses everyone, and the overlay is one screen-space UI across the whole window
+  (it sits across the seams of a split-screen grid). A player can still hot-join while paused and spawns frozen.
+- **Online play (later):** `PauseGame` may only open your menu there (the host decides whether the simulation stops). Build your
+  pause UI around the `game.paused`/`game.resumed` events, not around the action itself, and your content needs no changes.
 
 ### Per-event evaluation order
 For each event, in this order:
@@ -387,6 +458,7 @@ Applies actions to the world. Key design points:
 - `ToggleInventory` — checks current `InventoryPanel` visibility and flips it: shows if hidden, hides if visible. Use this for a single key/button that both opens and closes the panel.
 - `OpenShop(merchant_id)` — resolves the merchant's `MerchantDef` via the `SpawnRegistry` + `PrefabKey`, makes the `ShopPanel` visible, and repopulates its stock list. Targets by node **type** — at most one `ShopPanel` per scene. `{self}` and `{target}` substituted in the merchant ID. Warns if no merchant entity or no `ShopPanel` UI node is present.
 - `CloseShop` — hides the `ShopPanel` (equality-guarded; no-op if already hidden)
+- `PauseGame` / `ResumeGame` / `TogglePause` — hold / release / flip the simulation (see [Pausing the game](#pausing-the-game)). `PauseGame` is a request: `game.paused` is emitted only when the clock really stops, and `game.resumed` when it restarts (including the automatic resume on a Replace-mode `LoadScene`). No-ops if already in that state.
 
 ### Infrastructure ✅
 - `ActionQueue` — FIFO queue processed each frame by `action_executor_system` (push order equals execution order)
@@ -423,8 +495,10 @@ Use `logic/state_machine.ron` for **gameplay state machines** — managing named
         ( name: "menu" ),
         (
             name: "playing",
-            entry_actions: [ PlayMusicLoop(key: "bg_music") ],   // queued when entering this state
-            exit_actions:  [ StopMusic ],                    // queued when leaving this state
+            // Queued on EVERY entry to this state, including each unpause: keep run-start actions (music, stat resets,
+            // preloads) out of here and in a `scene.ready:<scene>` rule instead (see "Pausing the game").
+            entry_actions: [ SetVariable("status", "playing") ],   // queued when entering this state
+            exit_actions:  [ SetVariable("status", "left playing") ],  // queued when leaving this state
             on: [
                 // In-state bindings: fire while in "playing", do not change state.
                 ( event: "ui.button_pressed:dance", do_actions: [ PlayAnimation("dance") ] ),
@@ -432,8 +506,8 @@ Use `logic/state_machine.ron` for **gameplay state machines** — managing named
         ),
         (
             name: "paused",
-            entry_actions: [ LoadSceneOverlay("scenes/pause.scene.ron") ],
-            exit_actions:  [ UnloadOverlay ],
+            entry_actions: [ LoadSceneOverlay("scenes/pause.scene.ron"), PauseGame ],
+            exit_actions:  [ UnloadOverlay, ResumeGame ],
             on: [],
         ),
     ],
@@ -672,10 +746,10 @@ global_on: [
 ],
 ```
 
-This **must** be `global_on`, not a state-scoped rule. `tick_delayed_events_system` ticks on raw
-`Time` with no pause-gate, so a monster's respawn timer can fire while the game is in a
-non-`"playing"` state (e.g. paused) — a state-scoped `on:` handler simply never matches in that
-case, silently and permanently losing that monster's respawn for the rest of the session.
+This **must** be `global_on`, not a state-scoped rule. A real pause freezes the timer, but it still
+fires while the game is in any other non-`"playing"` state (the menu, a scene swap) — a state-scoped
+`on:` handler simply never matches in that case, silently and permanently losing that monster's
+respawn for the rest of the session.
 `global_on` fires "regardless of state, no state change," so it always catches the event. The event
 name is a single, monster-type-agnostic `monster.respawn:{id}` convention (not
 `zombie.respawn:{id}`/`snake.respawn:{id}`/etc.) specifically so a future 4th monster type is a
@@ -774,7 +848,7 @@ point at the same file with no changes needed:
 ```
 
 `SetDespawnTimer(entity, delay_secs)` arms a self-contained despawn on the named entity — after
-`delay_secs` of real time it despawns automatically, no event round-trip and no `on:` handler
+`delay_secs` of game time (frozen while the game is paused) it despawns automatically, no event round-trip and no `on:` handler
 needed to react to it (unlike `EmitEventAfterDelay`, which needs a paired `on:` handler and, for a
 timer whose target's id might later be reused by an unrelated entity, needs careful ownership to
 avoid firing against the wrong one — see `crates/ironhold_core/src/capabilities/despawn_timer.rs`).

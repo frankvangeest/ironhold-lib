@@ -111,7 +111,7 @@ Sample `watch` output (each save prints the changed file and a result):
 | a `Fixed.look_at_entity` that does not exist, or a `SetCameraMode` whose `mode` is in no scene's registry | `missing_reference` | the camera mode never applies | fix the entity id or the registry |
 | `split`/`party` written **inside** a `camera_mode: Orbit(...)` instead of next to it under the prefab's `components:` | `camera_mode_nested_split_party` | silently ignored | move them next to `camera_mode` (in a `camera_modes:` registry entry, delete them) |
 | `Party(...)` as a player prefab's own `camera_mode`, or a `flycam`-tagged prefab whose `camera_mode` is not `Flycam(...)` | `unsupported_prefab_camera_mode` | the runtime silently falls back | use `Orbit(...)` / `Flycam(...)` |
-| an unrecognised `orbit_button` / `character_rotate_button` / `look_button` value | `invalid_binding` | falls back to `"Either"` | use a supported value (see [20_data_formats.md](20_data_formats.md)) |
+| an unrecognised `orbit_button` / `character_rotate_button` / `look_button` value, or an unrecognised gamepad button name in `global_unclaimed_gamepad_bindings`, `global_claimed_gamepad_bindings` or `scene_unclaimed_gamepad_bindings` | `invalid_binding` | the orbit/look settings fall back to `"Either"`; a bad gamepad button name makes that binding never fire | use a supported value (see [20_data_formats.md](20_data_formats.md)) |
 | an unrecognised flycam movement key (`forward`, `backward`, `left`, `right`, `up`, `down`), or an unrecognised action-bar slot `key` | `invalid_key` | silently uses the default key, with **no warning at all** | fix the key name |
 
 ### Action bars
@@ -146,6 +146,8 @@ Sample `watch` output (each save prints the changed file and a result):
 | the `.project.ron` itself invalid (`schema_version`, `max_frame_delta_secs` outside about 0.03 to 60 seconds, or a `ui_scale` block with a non-positive `reference`, a `min_scale` below 0.05 or above `max_scale`, a non-positive `max_scale`, or a negative or oversized `snap`) | `invalid_project_config` | a crash, permanent slow motion, or (for `ui_scale`) the engine ignoring the block and leaving the UI at 1.0 | fix the field; the message names it, e.g. "`ui_scale.min_scale` (1.5) > `ui_scale.max_scale` (1): swap them" |
 
 ### Strict-only checks (`--strict`)
+Every row here, including the pause checks (`unrecoverable_pause`, `toggle_pause_in_entry_exit`, `pause_in_behavior`, `pause_without_resume`, `delayed_event_while_paused`, `claimed_gamepad_collision`, `overlay_scene_bindings_ignored`), only runs with `ironhold validate --strict`.
+
 | What you see | Code | Meaning |
 |---|---|---|
 | a prefab, effect, audio or decal key defined but never used | `unused_prefab` / `unused_effect` / `unused_audio` / `unused_decal` | dead data; delete or use it |
@@ -163,6 +165,13 @@ Sample `watch` output (each save prints the changed file and a result):
 | an `Auto`-sized `Group` whose children are all `absolute: true` | `collapsed_group` | the group has zero size |
 | a `Percent` size under an `Auto` parent (or a `Percent` group directly in a `ui_panel:` with no width/height) | `percent_under_auto` | resolves against the parent's content size |
 | an `ActionBar`/`DialoguePanel`/`InventoryPanel`/`ShopPanel`/`ContainerPanel` inside a `Group` | `panel_nested_in_group` | its `position:` is measured from the group, not the screen; move it to the top level |
+| a state in `state_machine.ron` with `PauseGame` in `entry_actions` and no `ResumeGame` in its own `exit_actions`, when a `transitions` row can leave it (its `from`, or any state) on a non-`scene.*` event such as a Resume button, even if another button does a `LoadScene`; or, with no such transition, when it has no Replace-mode `LoadScene` either | `unrecoverable_pause` | leaving the state keeps the game frozen (only a Replace-mode scene load auto-resumes, so a `LoadScene` excuses the state only when every way out is a `scene.*` event); add `ResumeGame` to that state's `exit_actions` |
+| `TogglePause` in a state's `entry_actions` or `exit_actions` | `toggle_pause_in_entry_exit` | entering the state while already paused would unpause; use `PauseGame`/`ResumeGame` there |
+| `PauseGame` or `TogglePause` in a `.behavior.ron` | `pause_in_behavior` | the entity may despawn and nothing resumes; pause from `state_machine.ron` instead |
+| an `on:`/`global_on` binding with `PauseGame` while no `ResumeGame`/`TogglePause` exists anywhere in the state machine, behaviors or dialogue | `pause_without_resume` | the game can never be resumed; add a `ResumeGame` (or use `TogglePause`). ActionBar slot actions are not scanned, so a resume wired only through a slot is reported too |
+| `EmitEventAfterDelay` in the same state (`entry_actions` or `on:`) or `global_on` binding as a `PauseGame` | `delayed_event_while_paused` | the delay timer is held while paused, so the event never fires until the game is resumed (a permanent freeze if that event is the way out of the pause); use a plain `EmitEvent` or resume first |
+| a `global_claimed_gamepad_bindings` button that is also a player's `gamepad_jump`/`gamepad_run`/`gamepad_interact`/`gamepad_target_next` (defaults included) or an `ActionBar` slot `gamepad_key` | `claimed_gamepad_collision` | pressing it does both things for a joined player; pick another button (use `global_claimed_gamepad_bindings` for a pause/resume button on a joined pad, `global_key_bindings` for keys). A gamepad-only player still cannot click Quit/Mute buttons (focus navigation is not built yet) |
+| a scene that is only ever loaded as an overlay (`LoadSceneOverlay`/`ToggleOverlay`, never `LoadScene` or `initial_scene`; `./` and `\` in paths are normalised) but has `scene_key_bindings` or `scene_unclaimed_gamepad_bindings` | `overlay_scene_bindings_ignored` | the runtime ignores those bindings for overlays (and logs a warning); move them to `global_key_bindings` (keys) or `global_claimed_gamepad_bindings` / `global_unclaimed_gamepad_bindings` (gamepad: claimed = already-joined pads, e.g. pause/resume; unclaimed = free pads) in the `.project.ron`. ActionBar slot actions are not scanned for overlay loads |
 
 ## 5. Inspect assets before you author
 

@@ -24,5 +24,11 @@
     // reaches every room without a per-scene binding. Remove once confirmed.
     global_key_bindings: {
         "KeyC": "shake_camera",
+        "KeyP": "toggle_pause",
     },
+
+    // A joined player's controller can pause and resume too: global_unclaimed_gamepad_bindings never fire for a pad a
+    // player owns, so a pause button on a joined pad needs this (claimed-pad) map. Start is not one of the players' own
+    // gamepad buttons. Any player pauses everyone (one clock). See docs/30_runtime_events_and_logic.md, "Pausing the game".
+    global_claimed_gamepad_bindings: { "Start": "toggle_pause" },
 )

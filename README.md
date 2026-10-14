@@ -98,8 +98,9 @@ destination state's `entry_actions` and the source state's `exit_actions` along 
 | Action | Effect |
 |--------|--------|
 | `LoadScene("scenes/main.scene.ron")` | Replace the current scene |
-| `LoadSceneOverlay("scenes/pause.scene.ron")` | Open an overlay (pause menus) |
+| `LoadSceneOverlay("scenes/pause.scene.ron")` | Open an overlay (a menu; add `PauseGame` to also freeze the game) |
 | `UnloadOverlay` | Close the active overlay |
+| `PauseGame` / `ResumeGame` / `TogglePause` | Freeze / unfreeze / flip the simulation (`PauseGame`+`ResumeGame` as a pair in a paused state's entry/exit actions; `TogglePause` for flat projects) |
 | `PlayAnimation("dance")` | Play a named animation on the player |
 | `PlaySound(key: "click")` | Fire-and-forget audio by catalog key |
 | `PlayMusicLoop(key: "bg_music")` | Start a looping background track |
