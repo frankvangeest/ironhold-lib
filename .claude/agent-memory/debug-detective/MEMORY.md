@@ -1,5 +1,7 @@
 # Memory Index
 
+- [run_if skip leaves change baseline stale](project_runif_skip_stale_change_baseline.md) — skipped system keeps last_run, so Ref/Changed/readers replay the skip window; gate in-body + drain
+
 - [Scene ambient light is a no-op](project_ambient_light_entity_noop.md) — Bevy 0.18 AmbientLight is a per-camera override #[require(Camera)]; standalone spawn = stray...
 - [Warmup NFC + stale Aabb](project_warmup_strips_all_nfc.md) — strip-all fixed (WarmupNoCull); still: calculate_bounds skips NFC, so a mesh mutated in the window keeps a stale Aabb
 

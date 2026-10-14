@@ -1,30 +1,35 @@
 ---
 name: real-pause-pattern
-description: Plan-review facts for real_pause.md (PauseGame/ResumeGame/TogglePause, Time<Virtual> freeze) — what auto-freezes vs needs a gate, sibling-state pause re-runs entry_actions, overlay key bindings never merge
+description: Real pause (SimClock/PauseGame/ResumeGame/TogglePause, game.paused/resumed, global_claimed_gamepad_bindings) - plan facts plus the 2026-10-14 implementation-review findings and recurring doc traps
 metadata:
   type: project
 ---
 
-Reviewed `planning/features/real_pause.md` (plan dated 2026-09-15) at `d2191ab` on 2026-10-13. Verdict: Needs work.
+Plan-reviewed 2026-10-13 (Needs work), implementation-reviewed 2026-10-14 on `feature/real_pause` (uncommitted diff).
 
-**Verified facts (re-check before relying on them):**
-- `Time<Virtual>` pause stops the whole `FixedUpdate` chain (`lib.rs` ~341: gamepad_bind, input_translator,
-  player_movement, collectible, trigger_zone, npc_behavior, motion) plus every `Res<Time>` Update system
-  (tick_delayed_events, stat regen/modifiers, despawn timers, particles, camera orbit/party, shake/blend).
-  So `collectible_system` needs no gate (plan listed it wrongly).
-- NOT dt-scaled, so they keep acting while paused: `first_person_camera_system` (mouse yaw rotates the
-  **player Transform** — a gameplay mutation), flycam mouse look (cosmetic). Edge-triggered Update systems
-  needing a gate: interactable, click_select, tab_targeting, action_bar_input (keyboard+gamepad+click).
-- `panels_open` gates only collectible/interactable/targeting; action_bar is NOT gated by it, and
-  `3rd_person_game_demo` slot "i" fires ToggleInventory — folding panels_open into a shared condition
-  that also covers action_bar would make the inventory unclosable by key.
-- Overlay loads never touch `LoadedKeyBindings` (`scene_loader.rs` rebuild is in the Replace branch only),
-  so an overlay's `scene_key_bindings` are dead data; no validate warning exists.
-- FSM sibling-state pause (`playing`<->`paused`) re-runs `playing.entry_actions` on every unpause: both
-  shipped projects reset HP (3rd_person: `SetStat player_health 100`) / score (primitive_world) and restart
-  music on resume. Real pause does not fix this; "pause as `on:` bindings, not a state" avoids it.
-- No engine code special-cases a "paused"/"game_over" state name. Executor-emitted state events have
-  precedent (`audio.muted`/`unmuted`, `nameplate.own_shown`).
+**Design facts (verified in code):**
+- `SimClock` (`runtime/sim_clock.rs`) BTreeSet holds; `apply_sim_clock_system` compares want vs `Time<Virtual>::is_paused()`
+  so `game.paused`/`game.resumed` fire only on a real change (ResumeGame+PauseGame same frame = no event).
+- Auto-resume lives in `spawn_scene_v2` Replace branch, NOT the executor `LoadScene` arm. Consequence: `[LoadScene(x),
+  PauseGame]` in one list does NOT start x paused (PauseGame holds this frame, the load releases it frames later). The
+  plan and docs/30 claimed the opposite; the pause_tests test of that name only pauses after the load. To start a scene
+  paused: `scene.ready:x -> PauseGame`.
+- validate has NO engine-event allowlist: `check_orphan_event` only inspects `ui.button_pressed:*`, so bindings on
+  `game.paused`/`audio.muted`/etc. are never flagged. Don't ask for an allowlist entry for new GameEvent names.
+- `collect_reachable_ui_triggers` must include every binding map (global_claimed_gamepad_bindings was added) or
+  orphan_binding false-positives.
+- All 7 pause checks are `--strict`-only (validate has no non-strict warning tier; errors only).
+- Run-start actions moved from `playing.entry_actions` to a `global_on` `scene.ready:main` rule in both demos; StopMusic
+  moved to menu entry (3rd_person) / game_over entry (primitive_world). global_on runs BEFORE in-state `on:` Spawn.
+
+**Recurring doc traps for pause:** docs/20 EmitEventAfterDelay row and docs/dev/lootable-corpse.md said "keeps counting
+while paused" (stale after real pause); docs/30 second FSM example + STATUS.md example still put PlayMusicLoop in
+playing.entry/StopMusic in exit (the free-heal anti-pattern); docs/30 event catalog (~L121) lacked game.paused/resumed;
+new test file (pause_tests) not added to root CLAUDE.md test loop. No shipped project demos TogglePause or
+global_claimed_gamepad_bindings.
+
+Older plan facts: first-person mouse yaw rotates the player Transform (needs gate); overlay `scene_key_bindings` are dead
+data (rebuilt only in Replace branch); `panels_open` must stay a separate condition from pause.
 
 Related: [[intent-event-layer-pattern]], [[gamepad-hot-join-pattern]], [[rules-vs-state-machine-coexistence]],
-[[fixed-timestep-det-math-pattern]].
+[[fixed-timestep-det-math-pattern]], [[validate-cross-file-blind-spots]].

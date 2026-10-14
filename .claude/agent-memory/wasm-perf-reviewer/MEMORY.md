@@ -43,3 +43,4 @@
 - [max_fixed_delta_secs config](project_max_fixed_delta_config.md) — opt-in RON cap, applied ONCE at project load (LoadingProject-gated system); zero per-frame cost; clamps Update delta too; sub-tick value = permanent slow-motion
 - [D2 catalog BTreeMaps](project_d2_catalog_btreemaps.md) — catalogs/LoadedModifiers/particle buckets→BTreeMap perf-neutral; real nit = per-particle group_key String clone (pre-existing)
 - [Responsive canvas render cost](project_responsive_canvas.md) — pixel cap in play.html .canvas-scaler (3.69 MP, floor 1280x720); winit offsetX OK; stray AmbientLight camera removed
+- [Real pause / SimClock](project_real_pause.md) — paused Time<Virtual> stops FixedMain so Bevy Messages<T> never swap -> unbounded growth while paused; gates O(1)

@@ -1,27 +1,30 @@
 ---
 name: real-pause-plan-review
-description: 2026-10-13 plan-review of planning/features/real_pause.md - verified overlay scene_key_bindings are NOT merged, recommended pause authoring pattern, validate rule shape, audio-ducking footgun, missing doc surfaces
+description: real_pause plan-review (2026-10-13) + implementation review (2026-10-14) - what shipped, remaining stale "timers use real time" doc lines, validate LoadScene-as-way-out false negative, strict-only soft-lock checks
 metadata:
   type: project
 ---
 
-Verdict at `d2191ab`: Needs work (RON surface right, details underspecified).
+Plan-review verdict at `d2191ab`: Needs work. Implementation review (feature/real_pause, uncommitted, 2026-10-14): Needs work (small).
 
-- **Verified:** overlay loads (`LoadSceneOverlay`/`ToggleOverlay`) only spawn UI; `scene_key_bindings` and
-  `scene_unclaimed_gamepad_bindings` are rebuilt ONLY on Replace loads. A key in `pause.scene.ron` is dead,
-  yet `unreachable_trigger` validates it as live. docs/20 ~164 does not say so.
-- Recommended pattern: `PauseGame` in the paused state's `entry_actions`, `ResumeGame` in the SAME state's
-  `exit_actions` (mirrors LoadSceneOverlay/UnloadOverlay). `TogglePause` only for flat `global_on` Escape.
-  Pause/Resume idempotent, not a counter.
-- Plan's validate rule "a ResumeGame reachable anywhere" is too loose; propose same-state exit check (error),
-  TogglePause-in-entry/exit and PauseGame-in-.behavior.ron warnings. Action-bar slot do_actions are a blind spot.
-- Footguns: `ToggleMute` in pause entry/exit un-mutes an already-muted player; `StopMusic`/`PlayMusicLoop`
-  restarts the track; `EmitEventAfterDelay` armed from the pause menu (fade-then-LoadScene) never fires = soft-lock.
-- Joined gamepad players have NO pause route; docs/20 ~3254-3261 already names `"Start": "toggle_pause"` as dead.
-  Suggested shape: `global_claimed_gamepad_bindings` (mirror of the unclaimed map). local_coop_demo has no pause.
-- Missing doc surfaces in plan: README ~94/101/127, docs/15 Logic-wiring row, docs/20 ~3254 gamepad note,
-  docs/20 ~164 overlay caveat, 3rd_person state_machine.ron comments ~177-179 and ~195-197, backlog ~240 caveat item.
-  Plan's docs/30 line refs stale (now ~223-257, ~409-450, ~675-678).
+Shipped surface: `PauseGame`/`ResumeGame`/`TogglePause` (unit), `game.paused`/`game.resumed` events,
+`global_claimed_gamepad_bindings` (project only), Replace-`LoadScene` auto-resume, docs/30 "Pausing the game"
+section (~269-312), 7 `--strict`-only validate codes in docs/15 (~166-172), both demos moved run-start actions to
+`global_on` `scene.ready:main`.
 
-**How to apply:** at implementation review, check these items first. Related: [[pause-is-cosmetic]],
-[[fixed-tick-pipeline-review]], [[ui-trigger-wiring]], [[gamepad-input-system]], [[docs-lag-actions]].
+Open at implementation review (check these first next time):
+- Stale "timers use real time" lines: docs/20 `EmitEventAfterDelay` row ("keeps counting while paused"),
+  docs/20 + docs/30 ~825 `SetDespawnTimer` "real time".
+- Copy-paste examples still teach `playing.entry_actions: [PlayMusicLoop]` + `exit_actions: [StopMusic]`
+  (docs/30 schema-pattern ~474, STATUS ~155 with only a caveat comment) - contradicts the new rule.
+- `game.paused`/`game.resumed` missing from the docs/30 GameEvent list (~96-130) and docs/20 event table.
+- `unrecoverable_pause` treats a `LoadScene` in ANY own `on:` binding as a way out -> pause menu with Resume
+  transition + "Main menu" LoadScene button and no ResumeGame validates clean but Resume leaves the game frozen.
+- All 7 checks strict-only; soft-lock-grade ones (`unrecoverable_pause`, `pause_without_resume`) silent in plain validate.
+- docs/30 "HUD button keeps firing under the overlay" contradicts docs/20/30 "backdrop blocks clicks" - needs verification.
+- 3rd_person paused comment points at "audio.* actions" for ducking - none exist.
+
+Verified (plan stage): overlay `scene_key_bindings`/`scene_unclaimed_gamepad_bindings` are NOT merged (Replace loads only).
+
+**How to apply:** on any follow-up touching pause/timers, grep "real time" and "keeps counting". Related:
+[[pause-is-cosmetic]], [[docs-lag-actions]], [[validate-coverage-gaps]], [[gamepad-input-system]].

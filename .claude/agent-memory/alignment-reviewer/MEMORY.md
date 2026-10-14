@@ -55,5 +55,5 @@
 - [Dev-doc split designer-leak audit](dev_doc_split_designer_leak_audit.md) — use moved-sections-index as checklist; {self}-in-dialogue 3-way doc contradiction; particle `additive` doc staleness; corpse-only caveats
 - [SetUiVisible / UiNodeId pattern](ui_set_visible_pattern.md) — UI-id Display::None action; empty-id guard now in; overlay no-scene.ready + ActionBar-unhideable gaps; wildcard arms left
 - [Web host-page contract](web_host_page_contract.md) — canvas selector/fit/data-ready/DebugState test fields need no RON; flag missing-id embeds + designer note on non-fixed play area
-- [Real pause plan facts](real_pause_pattern.md) — what Time<Virtual> freezes vs needs a gate; FirstPerson mouse-look leak; sibling-state pause re-runs entry_actions; overlay key bindings dead
+- [Real pause pattern](real_pause_pattern.md) — SimClock/auto-resume-in-spawn_scene_v2 ([LoadScene,PauseGame] is NOT paused); validate has no engine-event allowlist; stale "timers tick while paused" doc sites
 - [Scene ambient light](scene_ambient_light_pattern.md) — AmbientLight entity -> GlobalAmbientLight; per-scene luminance-ratio table; global_environment EnvironmentMapLight is ALSO a dead bare entity; cd/m^2
