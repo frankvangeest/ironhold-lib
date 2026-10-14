@@ -252,6 +252,10 @@ tick; Phase 4 adds the hash hook.
 - [ ] Docs: `docs/40` "input seam"
 **Phase 3 (L)**
 - [ ] Spike: paused control tick (`accumulate_overstep`); decide with Frank (Q1); amend `real_pause.md`
+      **Note from `real_pause.md` (shipped 2026-10-14):** the `Time<Virtual>` freeze only works because the interpreters and
+      executor run in `Update`. When they move into `FixedUpdate`, the "paused control tick" must key off `SimClock::is_running`
+      (`runtime/sim_clock.rs`), never `Time<Virtual>::is_paused()`: control systems must keep running while the sim is held
+      (a Resume/Quit button still has to work), and the `Static`/`FocusLoss`/`Session` holds must keep behaving the same way.
 - [ ] Move D3 sets to `FixedUpdate`; add `GameStreamSet::World`; split movement chain; keep registration spot
 - [ ] Move UI capture systems to `BeforeFixedMainLoop`; `npc_hit_relay` into `PostExecute`; verify deferred
       `SceneHandleV2` ordering vs `spawn_scene_v2`

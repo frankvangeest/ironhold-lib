@@ -1,6 +1,6 @@
 # Feature: Real Pause (v1 — simulation freeze)
 
-_Status: Ready (plan-review 2026-10-14: system-architect, ux-gamedesigner-reviewer, alignment-reviewer; Frank's decisions recorded below)_
+_Status: Done (shipped 2026-10-14)_
 _Planned at: `d2191ab` (2026-10-14). First written at `2a034d6` (2026-09-15); rewritten after plan-review against current code._
 
 ## What
@@ -37,9 +37,9 @@ game over**) and the docs teach the broken pattern as canonical. Not project-spe
 
 | Phase | Content | Status | Completed |
 |---|---|---|---|
-| 1 | `SimClock` + actions + gates + auto-resume + events + core tests | Queued | — |
-| 2 | `global_claimed_gamepad_bindings` (+ loader, CLI, docs) | Queued | — |
-| 3 | `validate` checks + overlay-binding `warn!`/validate + demo RON changes + docs | Queued | — |
+| 1 | `SimClock` + actions + gates + auto-resume + events + core tests | Done | 2026-10-14 |
+| 2 | `global_claimed_gamepad_bindings` (+ loader, CLI, docs) | Done | 2026-10-14 |
+| 3 | `validate` checks + overlay-binding `warn!`/validate + demo RON changes + docs | Done | 2026-10-14 |
 
 Backlog: **Real pause** (Queued ▸ Engine/Runtime, `backlog.md:71`) closes with phase 3; also close the Bug **Dying while paused
 never reaches game over** (`:21`) and the interim docs item "Add a 'the game keeps running' warning…" (Designer Experience).
@@ -126,7 +126,8 @@ Policy: a Replace-mode scene load releases the `Menu` hold (and **only** `Menu`:
 - **Overlay loads never resume** (`LoadSceneOverlay`/`ToggleOverlay`/`UnloadOverlay` do not touch `SimClock`; the overlay branch at
   `scene_loader.rs:121-124` stays clock-free). Not driven from `SceneEvent::Loaded` (written for overlay and Replace alike, `:87`).
 - Designer-visible: `info!` log, `game.resumed` event, documented in the `LoadScene` doc comment, docs/20 and docs/30. FIFO
-  consequence: `[LoadScene(x), PauseGame]` deliberately starts the new scene paused. The FSM stays in `paused` until a
+  consequence (corrected in review): `[LoadScene(x), PauseGame]` in one list ends with the new scene **running** (the load releases
+  the pause when the scene spawns, a few frames after both ran); to start a scene paused, `PauseGame` from its `scene.ready` rule. The FSM stays in `paused` until a
   `scene.ready` transition fires while the clock is already running — documented.
 
 ### 5. `global_claimed_gamepad_bindings` (phase 2)
@@ -230,7 +231,7 @@ music-volume action) is a follow-up. Designers can react to `game.paused`/`game.
 
 ## Docs (phase 3; line numbers as of `d2191ab`, re-check)
 
-- `docs/20_data_formats.md`: action table (three actions; no-op-if-already semantics; auto-resume on Replace load; FIFO consequence),
+- `docs/20_data_formats.md`: action table (three actions; no-op-if-already semantics; auto-resume on Replace load; a Replace load always wins over a same-list PauseGame),
   `LoadScene` doc comment, ~L164 `scene_key_bindings` overlay note, ~L3254-3261 (rewrite: it uses `"Start": "toggle_pause"` as its example
   of what does not work) + `global_claimed_gamepad_bindings`.
 - `docs/30_runtime_events_and_logic.md`: action list (~47, ~352), both pause FSM examples (~223-257, ~409-450; teach pattern (a) and the
@@ -256,7 +257,7 @@ music-volume action) is a follow-up. Designers can react to `game.paused`/`game.
   suppressed while paused; **first-person mouse-look leaves the player's rotation unchanged while paused**; action-bar slot still `Pressed`
   on the first frame after resume does not fire; UI buttons still work while paused; pausing mid-scene-load; **`LoadScene` from `paused`
   while the FSM is still `paused`** (auto-resume, new scene unpaused); `LoadSceneOverlay` / `ToggleOverlay` close while paused stay paused;
-  `[LoadScene, PauseGame]` starts paused; delayed events armed before pause fire after resume, not during; `EmitEventAfterDelay` armed from
+  `[LoadScene, PauseGame]` queued together ends running (a Replace load always wins); delayed events armed before pause fire after resume, not during; `EmitEventAfterDelay` armed from
   the pause menu fires only after resume; **pause in the same frame as lethal damage still reaches `game_over`**; Escape spam /
   Resume + Escape in the same frame; `Static` hold is not released by `ResumeGame`/auto-resume; an overlay `scene_key_bindings` entry is
   inert (pins today's behaviour); claimed-pad binding fires only for a claimed pad and **at most once per trigger per frame with two pads**,
@@ -290,3 +291,11 @@ music-volume action) is a follow-up. Designers can react to `game.paused`/`game.
   when two players press it in one frame.
 - Given a `paused` state with `PauseGame` and no `ResumeGame` in its `exit_actions`, `ironhold validate` warns (`unrecoverable_pause`).
 - Given no pause action is authored, every existing project behaves exactly as before.
+
+## Outcome (2026-10-14)
+
+- Shipped as one branch (`feature/real_pause`). Phases landed in two code commits and a docs/demos commit rather than one per phase: the tests and several files (`lib.rs`, `scene_manager/mod.rs`, `pause_tests.rs`) mix phases 1 and 2.
+- Post-implementation reviews (debug-detective, architect, alignment, UX, wasm-perf) found and fixed, beyond doc wording: the Bevy message buffers never flipping while paused (a real memory leak on a long pause; mutation-tested), `first_person_camera_system` skipping camera placement while paused, the `[LoadScene, PauseGame]` claim (a Replace load always wins), the `unrecoverable_pause` loophole for a Resume transition next to a `LoadScene` button, and stale/contradictory docs.
+- Playtest (Frank, 2026-10-14): `3rd_person_game_demo` and `primitive_world` checks 1-10 pass (freeze, keys, free-heal fix, death while paused, Retry); `local_coop_demo` keyboard pause and joined-pad `Start` pause pass in rooms 3-7 (only rooms 3, 9 and 10 seeded pads, so the demo's other rooms' players were then seeded too: P1 pad 0 ... P4 pad 3).
+- Deviation from the plan: the claimed-pad demo lives in `local_coop_demo` (flat project with `TogglePause`), not `3rd_person_game_demo` (its players never claim a pad). The `no_panels_open` named condition was not introduced: the three existing `panels_open` early returns stay inside their systems, so the two checks remain separate.
+- Still open: `pause_nav` / affected screenshot baselines need a `--real-gpu` re-capture (own commit). Follow-ups are in the backlog.

@@ -189,6 +189,12 @@ no per-frame cost, sets add build-time nodes only; N9 → Bevy 0.19 note in §5;
 small).
 
 ## Tasks
+- [ ] **Add from `real_pause.md` (2026-10-14):** a separate `PlayerInputSet` with **no ordering edges** and
+      `configure_sets(Update, PlayerInputSet.run_if(sim_running))`, with the edge-triggered gameplay input systems (interact, tab/click
+      targeting, action bar, first-person/flycam look) as members (they also stay in their ordering sets). Do **not** attach
+      the condition to `GameStreamSet::Targeting`/`::Interact`: a set-level condition would also gate `target_auto_clear_system`.
+      Real pause ships these gates as per-system `run_if(sim_running)`/in-body `SimClock` checks today; D3's source-scan test should
+      then require every edge-triggered gameplay emitter to be a `PlayerInputSet` member.
 - [ ] Re-verify the writer/reader/pusher inventory with `grep` for `MessageWriter<…>`, `MessageReader<…>`,
       `ResMut<ActionQueue>` and reconcile against Findings (add anything found missing)
 - [ ] `runtime/schedule.rs`: `GameplaySet`, `EmitSet`, `GameStreamSet` + module docs (unstable; never order
