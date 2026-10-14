@@ -1,5 +1,7 @@
 # Memory Index
 
+- [Bevy auto-sync distance semantics](project_bevy_auto_sync_distance_semantics.md) — sync nodes shared per distance (hidden cross-chain order), ignore_deferred postpones, new chains add syncs
+
 - [run_if skip leaves change baseline stale](project_runif_skip_stale_change_baseline.md) — skipped system keeps last_run, so Ref/Changed/readers replay the skip window; gate in-body + drain
 
 - [Scene ambient light is a no-op](project_ambient_light_entity_noop.md) — Bevy 0.18 AmbientLight is a per-camera override #[require(Camera)]; standalone spawn = stray...
