@@ -11,6 +11,7 @@
 
 ## Active
 
+- [ ] **Real pause (v1): `SimClock`, `PauseGame`/`ResumeGame`/`TogglePause`, input gates, auto-resume, claimed-gamepad pause bindings, validate checks, demo free-heal fix** _(Active 2026-10-14, branch `feature/real_pause`)_ — see `planning/features/real_pause.md` (Ready). Three phases on one branch: (1) clock owner + actions + gates + auto-resume + `game.paused`/`game.resumed`; (2) `global_claimed_gamepad_bindings`; (3) `validate` checks + demo RON + docs. Closes **Real pause**, **Dying while paused never reaches game over** and the interim pause-docs warning when phase 3 ships.
 
 ---
 
