@@ -1285,6 +1285,20 @@ pub fn action_executor_system(
                         format!("inventory.transferred:{}:{}:{}", from, to, item_key)));
                 }
             }
+            Action::PauseGame => {
+                // Idempotent: check through `Deref` first so a redundant PauseGame does not even mark the clock changed.
+                if !scene_state.sim_clock.is_held(crate::runtime::sim_clock::PauseHold::Menu) {
+                    scene_state.sim_clock.hold(crate::runtime::sim_clock::PauseHold::Menu);
+                }
+            }
+            Action::ResumeGame => {
+                if scene_state.sim_clock.is_held(crate::runtime::sim_clock::PauseHold::Menu) {
+                    scene_state.sim_clock.release(crate::runtime::sim_clock::PauseHold::Menu);
+                }
+            }
+            Action::TogglePause => {
+                scene_state.sim_clock.toggle(crate::runtime::sim_clock::PauseHold::Menu);
+            }
             Action::OpenInventory => {
                 for (_, mut vis) in scene_state.inventory_panel_q.iter_mut() {
                     if *vis != Visibility::Visible { *vis = Visibility::Visible; }

@@ -64,6 +64,12 @@ pub struct LoadedKeyBindings(pub std::collections::BTreeMap<String, String>);
 #[derive(Resource, Default, Clone)]
 pub struct ProjectGamepadBindings(pub std::collections::BTreeMap<String, String>);
 
+/// `ProjectConfig.global_claimed_gamepad_bindings`, set at project load and never modified: gamepad
+/// button name -> trigger, fired for **claimed** pads by `unclaimed_gamepad_trigger_system`. Project
+/// level only (no per-scene override in v1). A `BTreeMap` for deterministic emission order.
+#[derive(Resource, Default, Clone)]
+pub struct ProjectClaimedGamepadBindings(pub std::collections::BTreeMap<String, String>);
+
 /// Active gamepad bindings used by the unclaimed-gamepad join-detection system
 /// (`runtime::input::unclaimed_gamepad_trigger_system`). Mirrors `LoadedKeyBindings` exactly:
 /// rebuilt on each Replace-mode scene load as project bindings + scene overrides.
@@ -663,12 +669,17 @@ pub struct SceneV2Params<'w> {
     /// See `planning/features/gamepad_hot_join.md`.
     pub project_gamepad_bindings: Res<'w, ProjectGamepadBindings>,
     pub loaded_gamepad_bindings: ResMut<'w, LoadedGamepadBindings>,
+    /// A Replace-mode scene load releases the `Menu` hold (auto-resume). Same 16-param ceiling reason as above.
+    pub sim_clock: ResMut<'w, crate::runtime::sim_clock::SimClock>,
 }
 
 /// Bundles scene-load state resources to keep `action_executor_system` under Bevy's 16-param limit.
 #[derive(bevy::ecs::system::SystemParam)]
 pub struct SceneStateParams<'w, 's> {
     pub load_mode: ResMut<'w, PendingSceneLoadMode>,
+    /// `PauseGame`/`ResumeGame`/`TogglePause` take/release the `Menu` hold here (`action_executor_system` is at the
+    /// 16-param ceiling, so it reaches the clock through this bundle).
+    pub sim_clock: ResMut<'w, crate::runtime::sim_clock::SimClock>,
     pub preloaded: ResMut<'w, PreloadedScenes>,
     pub preloaded_glbs: ResMut<'w, PreloadedGlbHandles>,
     pub game_vars: ResMut<'w, crate::GameVariables>,

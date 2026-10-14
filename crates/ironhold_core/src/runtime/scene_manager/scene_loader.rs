@@ -122,8 +122,28 @@ pub fn spawn_scene_v2(
         // Overlay mode: keep the game world, only spawn the UI section.
         // Reset load_mode immediately so subsequent loads default to Replace.
         *load_mode = PendingSceneLoadMode::Replace;
+        // An overlay contributes UI only: its key/gamepad bindings are never merged into the running scene (the
+        // effective bindings are rebuilt in the Replace branch below), so they would silently do nothing. Say so.
+        if !scene.scene_key_bindings.is_empty() || !scene.scene_unclaimed_gamepad_bindings.is_empty() {
+            let overlay_path = asset_server
+                .get_path(scene_handle.0.id())
+                .map(|p| p.to_string())
+                .unwrap_or_else(|| "<unknown>".to_string());
+            warn!(
+                "Overlay scene '{overlay_path}' defines scene_key_bindings/scene_unclaimed_gamepad_bindings, which are \
+                 ignored when a scene is loaded as an overlay; bind the key in global_key_bindings (project file) or \
+                 the base scene instead"
+            );
+        }
     } else {
         // Replace mode: tear down the existing world.
+        // Auto-resume (real_pause.md): a Replace load releases the designer's pause (the `Menu` hold only; never a
+        // static/focus-loss/session hold) in the same frame the old world is despawned, so a Retry from a paused
+        // `game_over` cannot boot the new scene frozen. Overlay loads never reach this branch and never resume.
+        if params.sim_clock.is_held(crate::runtime::sim_clock::PauseHold::Menu) {
+            info!("Replace-mode scene load: releasing the menu pause (auto-resume)");
+            params.sim_clock.release(crate::runtime::sim_clock::PauseHold::Menu);
+        }
         commands.insert_resource(LoadedSpawnPoints(scene.spawn_points.clone()));
         commands.insert_resource(LoadedCameraModes(scene.camera_modes.clone()));
         spawn_registry.entities.clear();

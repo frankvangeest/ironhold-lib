@@ -4867,3 +4867,19 @@ fn test_group_diagnostics_exemptions_and_walker_guard() {
     let ui = nested_ui();
     assert_eq!(walk_ui_nodes(&ui).current_path().to_string(), "");
 }
+
+#[test]
+fn pause_actions_parse_as_unit_variants() {
+    use ironhold_core::schema::Action;
+    for (src, want) in [
+        ("PauseGame", Action::PauseGame),
+        ("ResumeGame", Action::ResumeGame),
+        ("TogglePause", Action::TogglePause),
+    ] {
+        let got: Action = ron::de::from_str(src).unwrap_or_else(|e| panic!("{src} must parse: {e}"));
+        assert_eq!(got, want);
+    }
+    // Unit variants: a payload is rejected rather than silently ignored.
+    assert!(ron::de::from_str::<Action>("PauseGame(1)").is_err());
+    assert!(ron::de::from_str::<Action>("TogglePause(true)").is_err());
+}

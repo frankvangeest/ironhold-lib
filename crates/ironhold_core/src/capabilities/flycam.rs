@@ -60,6 +60,7 @@ pub fn fly_camera_system(
     state: Res<State<AppState>>,
     mut query: Query<(&mut Transform, &mut ActiveCameraMode), With<FlycamCameraMode>>,
     time: Res<Time>,
+    sim: Res<crate::runtime::sim_clock::SimClock>,
     #[cfg(feature = "inspector")]
     inspector_enabled: Option<Res<crate::inspector::InspectorEnabled>>,
 ) {
@@ -71,6 +72,12 @@ pub fn fly_camera_system(
     }
 
     if *state.get() != AppState::InGame {
+        return;
+    }
+    // Real pause: mouse look is not frame-time scaled, so it would still move the "frozen" tableau. Drain the reader
+    // so stale motion is not consumed on resume.
+    if !sim.is_running() {
+        for _ in mouse_motion.read() {}
         return;
     }
 

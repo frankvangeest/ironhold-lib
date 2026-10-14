@@ -179,9 +179,13 @@ pub fn action_bar_input_system(
     mut pending: ResMut<PendingIntentActions>,
     players: Query<(&SpawnId, &PlayerTarget, Option<&PlayerIndex>, Option<&StatMap>, &CharacterController, Option<&BoundGamepad>)>,
     gamepad_query: Query<&Gamepad>,
+    sim: Res<crate::runtime::sim_clock::SimClock>,
     #[cfg(feature = "inspector")]
     inspector_enabled: Option<Res<crate::inspector::InspectorEnabled>>,
 ) {
+    // Real pause: gated in the body, not with `run_if`, so this system keeps running and its `Ref<Interaction>`
+    // change baseline keeps advancing: a slot still `Pressed` on the first frame after resume must not fire.
+    if !sim.is_running() { return; }
     #[cfg(feature = "inspector")]
     let clicks_enabled = !inspector_enabled.is_some_and(|e| e.0);
     #[cfg(not(feature = "inspector"))]
@@ -439,6 +443,8 @@ fn action_needs_target(action: &Action) -> bool {
         Action::EmitEvent(s) => s.contains("{target}"),
         Action::PlayAnimationOn { target, .. } => target.contains("{target}"),
         Action::Spawn { at_entity, .. } => at_entity.as_deref().is_some_and(|e| e.contains("{target}")),
+        // Fieldless: nothing to substitute (explicit, so a reader knows pause was considered).
+        Action::PauseGame | Action::ResumeGame | Action::TogglePause => false,
         _ => false,
     }
 }

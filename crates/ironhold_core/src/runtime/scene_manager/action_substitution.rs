@@ -134,6 +134,9 @@ pub(crate) fn rewrite_self(action: Action, spawn_id: &str) -> Action {
             | Action::OpenInventory
             | Action::CloseInventory
             | Action::ToggleInventory
+            | Action::PauseGame
+            | Action::ResumeGame
+            | Action::TogglePause
             | Action::CloseShop
             | Action::CloseContainer
             | Action::TakeAllFromContainer
@@ -255,6 +258,9 @@ pub(crate) fn rewrite_target(action: Action, target_id: &str) -> Action {
             | Action::OpenInventory
             | Action::CloseInventory
             | Action::ToggleInventory
+            | Action::PauseGame
+            | Action::ResumeGame
+            | Action::TogglePause
             | Action::CloseShop
             | Action::CloseContainer
             | Action::TakeAllFromContainer

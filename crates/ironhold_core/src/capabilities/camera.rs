@@ -578,6 +578,7 @@ pub fn first_person_camera_system(
     mut mouse_motion_events: MessageReader<bevy::input::mouse::MouseMotion>,
     mut camera_query: Query<(&mut Transform, &mut ActiveCameraMode, &CameraTargets), With<FirstPersonCameraMode>>,
     mut target_query: Query<&mut Transform, (With<CharacterController>, Without<FirstPersonCameraMode>)>,
+    sim: Res<crate::runtime::sim_clock::SimClock>,
     #[cfg(feature = "inspector")]
     inspector_enabled: Option<Res<crate::inspector::InspectorEnabled>>,
 ) {
@@ -591,6 +592,13 @@ pub fn first_person_camera_system(
     let mut mouse_delta = Vec2::ZERO;
     for event in mouse_motion_events.read() {
         mouse_delta += event.delta;
+    }
+    // Real pause: yaw is not frame-time scaled and rotates the PLAYER's Transform, so look must not apply while the
+    // sim is held (the reader is drained above, so stale motion is not consumed on resume). Only the LOOK is gated:
+    // the loop below still positions the camera at the eye every frame, so a first-person camera that is spawned or
+    // switched to while paused (a hot join, a SetCameraMode from the pause menu) is not left at its spawn transform.
+    if !sim.is_running() {
+        mouse_delta = Vec2::ZERO;
     }
 
     for (mut transform, mut mode, targets) in &mut camera_query {

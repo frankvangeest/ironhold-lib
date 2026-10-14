@@ -4,6 +4,10 @@ use serde::Deserialize;
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub enum Action {
+    /// Replace the current scene with the given `.scene.ron`. Also **releases a designer pause** (`PauseGame`/
+    /// `TogglePause`) when the new scene loads, so a Retry or "main menu" button in a paused state never boots the
+    /// new scene frozen. To start a scene paused, run `PauseGame` from its `scene.ready:<scene>` rule. Example:
+    /// `LoadScene("scenes/main.scene.ron")`.
     LoadScene(String),
     Quit,
     Log(String),
@@ -438,6 +442,20 @@ pub enum Action {
     /// `ui.button_pressed:join -> Action::JoinPlayer`. See
     /// `planning/features/local_coop_hot_join_leave.md`.
     JoinPlayer,
+    /// Hold the simulation (`planning/features/real_pause.md`): freezes `Time<Virtual>` (so physics, NPCs,
+    /// the player, motion, particles, timers and animations stop) and gates edge-triggered input
+    /// (interact, loot, targeting, action bar, first-person/flycam look). The UI, the interpreters and
+    /// audio keep running. A **request**: the engine emits `game.paused` only when the clock really
+    /// stops, so build pause UI around that event. A no-op if the menu hold is already set (no nesting:
+    /// one `ResumeGame` always undoes it). Put it in a paused state's `entry_actions` and `ResumeGame` in
+    /// the **same state's** `exit_actions`. Example: `PauseGame`.
+    PauseGame,
+    /// Release the menu hold taken by `PauseGame`/`TogglePause`. A no-op if not held. A Replace-mode
+    /// `LoadScene` also releases it automatically. Example: `ResumeGame`.
+    ResumeGame,
+    /// Flip the menu hold. For flat (`global_on`-only) projects; inside `entry_actions`/`exit_actions` use
+    /// the `PauseGame`/`ResumeGame` pair instead (entering a state while already paused would unpause).
+    TogglePause,
 }
 
 impl Action {
@@ -466,6 +484,7 @@ impl Action {
             | Action::StartDialogue { .. } | Action::AdvanceDialogue | Action::EndDialogue
             | Action::AddItem { .. } | Action::RemoveItem { .. } | Action::TransferItem { .. }
             | Action::OpenInventory | Action::CloseInventory | Action::ToggleInventory
+            | Action::PauseGame | Action::ResumeGame | Action::TogglePause
             | Action::OpenShop(_) | Action::CloseShop | Action::BuyItem(_)
             | Action::OpenContainer(_) | Action::CloseContainer | Action::TakeAllFromContainer
             | Action::ToggleOwnNameplate | Action::JoinPlayer => false,
@@ -486,5 +505,9 @@ mod tests {
         assert!(Action::SetUiVisible { id: "x".into(), visible: false }.is_presentation_only());
         assert!(!Action::SetVariable("k".into(), "v".into()).is_presentation_only());
         assert!(!Action::SetEntityVisible { entity: "e".into(), visible: false }.is_presentation_only());
+        // Pause changes how many simulation ticks run: the opposite of presentation-only.
+        assert!(!Action::PauseGame.is_presentation_only());
+        assert!(!Action::ResumeGame.is_presentation_only());
+        assert!(!Action::TogglePause.is_presentation_only());
     }
 }

@@ -1559,16 +1559,21 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
     // for its own field. Catch it here too, so a typo'd button name surfaces at validate time
     // instead of only as a silent no-op the first time someone presses it.
     if let Some(config) = project_config {
-        for button_name in config.global_unclaimed_gamepad_bindings.keys() {
-            if InputMap::parse_gamepad_button(button_name).is_none() {
-                errors.push(CrossFileError {
-                    source_file: find_project_ron(project_dir).unwrap_or_default(),
-                    message: format!(
-                        "global_unclaimed_gamepad_bindings: unrecognised button name {:?} — binding will have no effect",
-                        button_name
-                    ),
-                    error_type: "invalid_binding",
-                });
+        for (field, keys) in [
+            ("global_unclaimed_gamepad_bindings", config.global_unclaimed_gamepad_bindings.keys().collect::<Vec<_>>()),
+            ("global_claimed_gamepad_bindings", config.global_claimed_gamepad_bindings.keys().collect::<Vec<_>>()),
+        ] {
+            for button_name in keys {
+                if InputMap::parse_gamepad_button(button_name).is_none() {
+                    errors.push(CrossFileError {
+                        source_file: find_project_ron(project_dir).unwrap_or_default(),
+                        message: format!(
+                            "{field}: unrecognised button name {:?} — binding will have no effect",
+                            button_name
+                        ),
+                        error_type: "invalid_binding",
+                    });
+                }
             }
         }
     }
@@ -2825,6 +2830,12 @@ fn check_ui_trigger_reachability(project: LoadedProject) -> Vec<CrossFileError> 
                 "when the gamepad button is pressed", "pressing it will do nothing",
             );
         }
+        for (button, trigger) in &config.global_claimed_gamepad_bindings {
+            check(
+                &mut errors, &source, format!("global_claimed_gamepad_bindings[{button:?}]"), trigger,
+                "when the gamepad button is pressed", "pressing it will do nothing",
+            );
+        }
     }
 
     for (scene_path, scene) in scenes {
@@ -2961,6 +2972,9 @@ fn collect_reachable_ui_triggers(
         for trigger in config.global_unclaimed_gamepad_bindings.values() {
             insert(trigger);
         }
+        for trigger in config.global_claimed_gamepad_bindings.values() {
+            insert(trigger);
+        }
     }
     for (_, scene) in scenes {
         for trigger in scene.scene_key_bindings.values() {
@@ -3095,6 +3109,269 @@ fn check_orphan_event(
 }
 
 // ── Strict (orphan) checks ────────────────────────────────────────────────────
+
+// ── Real-pause checks (`--strict` advisory) ──────────────────────────────────
+
+fn has_pause(actions: &[Action]) -> bool {
+    actions.iter().any(|a| matches!(a, Action::PauseGame))
+}
+fn has_resume(actions: &[Action]) -> bool {
+    actions.iter().any(|a| matches!(a, Action::ResumeGame))
+}
+fn has_toggle(actions: &[Action]) -> bool {
+    actions.iter().any(|a| matches!(a, Action::TogglePause))
+}
+fn has_replace_load(actions: &[Action]) -> bool {
+    actions.iter().any(|a| matches!(a, Action::LoadScene(_)))
+}
+fn has_delayed_event(actions: &[Action]) -> bool {
+    actions.iter().any(|a| matches!(a, Action::EmitEventAfterDelay { .. }))
+}
+
+/// The `real_pause` advisory checks (`unrecoverable_pause`, `toggle_pause_in_entry_exit`,
+/// `pause_in_behavior`, `pause_without_resume`, `delayed_event_while_paused`,
+/// `claimed_gamepad_collision`, `overlay_scene_bindings_ignored`). All are `--strict` warnings,
+/// never errors: the runtime's auto-resume on a Replace-mode `LoadScene` is the safety net.
+///
+/// Known limitation: `LoadedProject.actions` (`collect_actions`) does not scan ActionBar slot
+/// `do_actions` (backlog item), so a pause/resume/overlay load wired only through a slot is
+/// invisible here -- `pause_without_resume` and `overlay_scene_bindings_ignored` can therefore
+/// false-positive for a project that wires its only `ResumeGame`/base `LoadScene` via a slot.
+fn pause_checks(project: LoadedProject) -> Vec<StrictWarning> {
+    let LoadedProject {
+        project_dir, project_config, prefab_catalog, scenes, actions, state_machine, behaviors,
+        logic_files_parsed_cleanly, ..
+    } = project;
+    let mut warnings: Vec<StrictWarning> = Vec::new();
+
+    // Every FSM (project state machine first, then entity behaviors) for the per-state checks.
+    let mut fsms: Vec<(&str, &StateMachineAsset, bool)> = Vec::new();
+    if let Some((src, fsm)) = state_machine {
+        fsms.push((src, fsm, true));
+    }
+    for (path, b) in behaviors {
+        fsms.push((path.as_str(), b, false));
+    }
+
+    for (src, fsm, is_main) in &fsms {
+        for state in &fsm.states {
+            // 1. unrecoverable_pause (project state machine only; behaviors get pause_in_behavior).
+            if *is_main && has_pause(&state.entry_actions) && !has_resume(&state.exit_actions) {
+                // A transition out of this state (own `from`, or any-state) on a non-`scene.*`
+                // event (e.g. a Resume button) leaves without resuming, and the Replace-load
+                // auto-resume does not cover it -- even if some other button does a LoadScene.
+                let leaving_event = fsm
+                    .transitions
+                    .iter()
+                    .filter(|t| t.from.as_deref().map_or(true, |f| f == state.name))
+                    .find(|t| !t.on.starts_with("scene."))
+                    .map(|t| t.on.as_str());
+                let load_excuse = has_replace_load(&state.entry_actions)
+                    || has_replace_load(&state.exit_actions)
+                    || state.on.iter().any(|b| has_replace_load(&b.do_actions));
+                if let Some(ev) = leaving_event {
+                    warnings.push(StrictWarning {
+                        source_file: src.to_string(),
+                        message: format!(
+                            "state {:?} pauses the game (PauseGame in entry_actions) but a transition on {:?} leaves it without resuming - add ResumeGame to its exit_actions",
+                            state.name, ev
+                        ),
+                        kind: "unrecoverable_pause",
+                    });
+                } else if !load_excuse {
+                    warnings.push(StrictWarning {
+                        source_file: src.to_string(),
+                        message: format!(
+                            "state {:?} pauses the game (PauseGame in entry_actions) but leaving it never resumes - add ResumeGame to its exit_actions",
+                            state.name
+                        ),
+                        kind: "unrecoverable_pause",
+                    });
+                }
+            }
+            // 2. toggle_pause_in_entry_exit
+            for (list_name, list) in [("entry_actions", &state.entry_actions), ("exit_actions", &state.exit_actions)] {
+                if has_toggle(list) {
+                    warnings.push(StrictWarning {
+                        source_file: src.to_string(),
+                        message: format!(
+                            "state {:?} has TogglePause in {list_name} - entering while already paused would unpause; use PauseGame/ResumeGame there",
+                            state.name
+                        ),
+                        kind: "toggle_pause_in_entry_exit",
+                    });
+                }
+            }
+            // 5. delayed_event_while_paused (state-level: entry_actions + every own on: binding)
+            let pause_here = has_pause(&state.entry_actions)
+                || state.on.iter().any(|b| has_pause(&b.do_actions));
+            let delay_here = has_delayed_event(&state.entry_actions)
+                || state.on.iter().any(|b| has_delayed_event(&b.do_actions));
+            if pause_here && delay_here {
+                warnings.push(StrictWarning {
+                    source_file: src.to_string(),
+                    message: format!(
+                        "state {:?} combines PauseGame with EmitEventAfterDelay - the delayed event never fires until the game is resumed (a permanent freeze if that event is the way out of the pause); use a non-delayed event or resume first",
+                        state.name
+                    ),
+                    kind: "delayed_event_while_paused",
+                });
+            }
+        }
+        for binding in &fsm.global_on {
+            if has_pause(&binding.do_actions) && has_delayed_event(&binding.do_actions) {
+                warnings.push(StrictWarning {
+                    source_file: src.to_string(),
+                    message: format!(
+                        "global_on binding {:?} combines PauseGame with EmitEventAfterDelay - the delayed event never fires until the game is resumed (a permanent freeze if that event is the way out of the pause); use a non-delayed event or resume first",
+                        binding.event
+                    ),
+                    kind: "delayed_event_while_paused",
+                });
+            }
+        }
+    }
+
+    // 3. pause_in_behavior
+    for (path, fsm) in behaviors {
+        let acts = fsm_actions(fsm);
+        for (name, found) in [
+            ("PauseGame", has_pause(&acts)),
+            ("TogglePause", has_toggle(&acts)),
+        ] {
+            if found {
+                warnings.push(StrictWarning {
+                    source_file: path.clone(),
+                    message: format!(
+                        "behavior uses {name} - the entity may despawn while the game is paused and nothing would resume; pause from state_machine.ron instead"
+                    ),
+                    kind: "pause_in_behavior",
+                });
+            }
+        }
+    }
+
+    // 4. pause_without_resume (needs the full logic picture: skip if a logic file failed to parse)
+    if logic_files_parsed_cleanly {
+        let any_resume = actions
+            .iter()
+            .any(|(_, a)| matches!(a, Action::ResumeGame | Action::TogglePause));
+        if !any_resume {
+            if let Some((src, fsm)) = state_machine {
+                let bindings = fsm
+                    .states
+                    .iter()
+                    .flat_map(|s| s.on.iter())
+                    .chain(fsm.global_on.iter());
+                for binding in bindings {
+                    if has_pause(&binding.do_actions) {
+                        warnings.push(StrictWarning {
+                            source_file: src.to_string(),
+                            message: format!(
+                                "binding for {:?} runs PauseGame but no ResumeGame or TogglePause exists anywhere in the project's state machine, behaviors or dialogue - the game can never be resumed (except by a Replace-mode LoadScene)",
+                                binding.event
+                            ),
+                            kind: "pause_without_resume",
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // 6. claimed_gamepad_collision
+    if let Some(config) = project_config {
+        if !config.global_claimed_gamepad_bindings.is_empty() {
+            let project_ron = find_project_ron(project_dir).unwrap_or_default();
+            // (description of the colliding control, effective button)
+            let mut used = Vec::new();
+            if let Some(catalog) = prefab_catalog {
+                for (key, prefab) in &catalog.prefabs {
+                    if !prefab.is_player() {
+                        continue;
+                    }
+                    // A player prefab without `inputs` gets the InputMap defaults at runtime.
+                    let inputs = prefab.components.inputs.clone().unwrap_or_default();
+                    for (field, name) in [
+                        ("gamepad_jump", &inputs.gamepad_jump),
+                        ("gamepad_run", &inputs.gamepad_run),
+                        ("gamepad_interact", &inputs.gamepad_interact),
+                        ("gamepad_target_next", &inputs.gamepad_target_next),
+                    ] {
+                        if let Some(btn) = InputMap::parse_gamepad_button(name) {
+                            used.push((format!("player prefab {key:?} {field}"), btn));
+                        }
+                    }
+                }
+            }
+            for (scene_path, scene) in scenes {
+                for node in walk_ui_nodes(&scene.ui) {
+                    let UiNodeDef::ActionBar(bar) = node else { continue };
+                    for slot in &bar.slots {
+                        let Some(gk) = &slot.gamepad_key else { continue };
+                        if let Some(btn) = InputMap::parse_gamepad_button(gk) {
+                            used.push((
+                                format!("ActionBar {:?} slot {:?} gamepad_key in {scene_path}", bar.id, slot.key),
+                                btn,
+                            ));
+                        }
+                    }
+                }
+            }
+            for (button_name, trigger) in &config.global_claimed_gamepad_bindings {
+                let Some(btn) = InputMap::parse_gamepad_button(button_name) else { continue };
+                for (what, used_btn) in &used {
+                    if *used_btn == btn {
+                        warnings.push(StrictWarning {
+                            source_file: project_ron.clone(),
+                            message: format!(
+                                "global_claimed_gamepad_bindings[{button_name:?}] (-> {trigger:?}) collides with {what} - a joined player pressing it triggers both; pick a different button (note a gamepad-only player still cannot click Quit/Mute buttons)"
+                            ),
+                            kind: "claimed_gamepad_collision",
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // 7. overlay_scene_bindings_ignored
+    // Normalised so `./scenes/x.scene.ron` and `scenes\x.scene.ron` match `scenes/x.scene.ron`.
+    let norm = |p: &str| -> String {
+        let p = p.replace('\\', "/");
+        p.strip_prefix("./").unwrap_or(&p).to_string()
+    };
+    let mut base: HashSet<String> = HashSet::new();
+    let mut overlay: HashSet<String> = HashSet::new();
+    if let Some(config) = project_config {
+        base.insert(norm(&config.initial_scene));
+    }
+    for (_, action) in actions {
+        match action {
+            Action::LoadScene(p) => {
+                base.insert(norm(p));
+            }
+            Action::LoadSceneOverlay(p) | Action::ToggleOverlay(p) => {
+                overlay.insert(norm(p));
+            }
+            _ => {}
+        }
+    }
+    for (scene_path, scene) in scenes {
+        let has_bindings =
+            !scene.scene_key_bindings.is_empty() || !scene.scene_unclaimed_gamepad_bindings.is_empty();
+        let key = norm(scene_path);
+        if has_bindings && overlay.contains(&key) && !base.contains(&key) {
+            warnings.push(StrictWarning {
+                source_file: scene_path.clone(),
+                message: "scene is only ever loaded as an overlay (LoadSceneOverlay/ToggleOverlay) but declares scene_key_bindings/scene_unclaimed_gamepad_bindings - the runtime ignores them for overlays; move them to global_key_bindings/global_unclaimed_gamepad_bindings in the project file".to_string(),
+                kind: "overlay_scene_bindings_ignored",
+            });
+        }
+    }
+
+    warnings
+}
 
 fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
     let LoadedProject {
@@ -3712,6 +3989,8 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
         let reachable = collect_reachable_ui_triggers(project_config, scenes, prefab_catalog);
         warnings.extend(check_orphan_ui_bindings(&reachable, state_machine, behaviors));
     }
+
+    warnings.extend(pause_checks(project));
 
     warnings
 }

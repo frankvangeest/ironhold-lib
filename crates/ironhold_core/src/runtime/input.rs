@@ -99,11 +99,12 @@ pub fn unclaimed_gamepad_trigger_system(
     pending_spawns: Res<PendingEntitySpawns>,
     mut pending_join_gamepad: ResMut<PendingJoinGamepad>,
     mut ui_events: MessageWriter<UiEvent>,
+    claimed_bindings: Res<crate::runtime::scene_manager::ProjectClaimedGamepadBindings>,
 ) {
     pending_join_gamepad.0 = None;
 
     if *state.get() != AppState::InGame { return; }
-    if gamepad_bindings.0.is_empty() { return; }
+    if gamepad_bindings.0.is_empty() && claimed_bindings.0.is_empty() { return; }
 
     let mut sorted_gamepads: Vec<(Entity, &Gamepad)> = gamepad_query.iter().collect();
     sorted_gamepads.sort_by_key(|(e, _)| e.index());
@@ -140,6 +141,24 @@ pub fn unclaimed_gamepad_trigger_system(
         if let Some(seed) = controller.inputs.gamepad_index {
             if let Some(&e) = sorted_entities.get(seed) {
                 claimed.insert(e);
+            }
+        }
+    }
+
+    // Claimed pads: `global_claimed_gamepad_bindings` (a joined player's pause button). Evaluated against the SAME
+    // `claimed` set, so a pad is either claimed or unclaimed each frame, never both. Emits `UiEvent` only: it never
+    // touches `pending_join_gamepad`. Each trigger fires at most once per frame across ALL pads (pads in sorted order,
+    // buttons in `BTreeMap` order), otherwise two players pressing Start together would toggle the pause twice.
+    // Deliberately not gated on the pause state: the button that pauses must also resume.
+    if !claimed_bindings.0.is_empty() {
+        let mut emitted: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+        for (entity, gamepad) in sorted_gamepads.iter() {
+            if !claimed.contains(entity) { continue; }
+            for (button_name, trigger) in claimed_bindings.0.iter() {
+                let Some(button) = InputMap::parse_gamepad_button(button_name) else { continue };
+                if gamepad.just_pressed(button) && emitted.insert(trigger.as_str()) {
+                    ui_events.write(UiEvent::ButtonPressed(trigger.clone()));
+                }
             }
         }
     }
