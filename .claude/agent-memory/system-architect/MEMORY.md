@@ -14,6 +14,7 @@
 - [Nameplate gating](nameplate_gating.md) — should_insert_nameplate is the shipped single source of truth for all 6 spawn sites
 - [Shader resolution pattern](shader_resolution_pattern.md) — engine-owned shaders embed via include_str!+UUID handle (CUSTOM_MATERIAL_FALLBACK_HANDLE); designer shaders resolve through catalog; don't hardcode ShaderRef literals
 - [Time & animation advance](time_and_animation_advance.md) — Bevy (not our system) advances AnimationPlayer off Time<Virtual>; freeze/pause/slow features act on the clock, not by skipping our systems
+- [Real pause review facts](real_pause_review_facts.md) — what a Virtual pause misses (FirstPerson/flycam mouse look), resume at Replace teardown, hold-set clock owner
 - [Determinism & networking](determinism_networking.md) — enhanced-determinism already ON; real blockers are variable timestep + no snapshot layer
 - [Fixed-tick pipeline facts](fixed_tick_pipeline_facts.md) — verified Bevy 0.18 message-flip/deferred/first-update-0-ticks facts; pause control-tick whitelist; dead cross-schedule edges
 - [Update vs FixedUpdate schedule](schedule_update_vs_fixedupdate.md) — interpreter chain + action_executor in Update; NPC/physics AI in FixedUpdate; cross-schedule GameEvent timing hazard + combat damage flow

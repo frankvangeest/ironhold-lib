@@ -24,6 +24,7 @@
 
 - [entity.* event doc surfaces](project_entity_event_doc_surfaces.md) — 6 places a new entity.* event/InteractableDef field must land; STATUS.md event list + docs/60 check list lag most
 - [ShowFloatingText tracks its entity](project_floating_text_tracks_entity.md) — pairing it with Despawn of the same entity in one do_actions list = zero visible frames, no warning
+- [real_pause plan-review](project_real_pause_plan_review.md) — overlay scene_key_bindings NOT merged (verified); same-state entry/exit pairing; ToggleMute footgun; gamepad pause gap
 - [Pause is cosmetic](project_pause_is_cosmetic.md) — pause menu is an overlay only; nothing in the sim stops; 4 doc surfaces claim otherwise; no UI focus/keyboard-nav concept exists anywhere
 
 - [My top-5 UX wishlist status](project_ux_wishlist_status.md) — stakeholder list ownership; 3rd ed 2026-10-13: pause, slot validate gap, load-hang, docs/20 size+motion, demos
