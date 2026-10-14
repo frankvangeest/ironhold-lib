@@ -11,6 +11,7 @@
 
 ## Active
 
+- [ ] **D3 — Named pipeline `SystemSet`s + a deterministic order for every pre-interpreter event writer and direct `ActionQueue` pusher** _(Active 2026-10-14, branch `feature/pipeline_system_sets`)_ — see `planning/features/gameplay_pipeline_system_sets.md` (Ready, refreshed at `c6c4161`, adversarially reviewed). Introduces `runtime/schedule.rs` (`GameplaySet`/`EmitSet`/`GameStreamSet`), a `GameplaySchedulePlugin` at the exact spot of the inline `Update` block, set membership for `TargetingPlugin`/`ActionBarPlugin`, and `tests/schedule_order_tests.rs` (structure, access-based conflict check, gate inventory, run-order dump). D5 follows on its own branch.
 
 ---
 
