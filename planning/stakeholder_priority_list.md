@@ -55,7 +55,7 @@ hidden, ActionBar can't be hidden; Alignment #5).
 | # | Item | Status |
 |---|---|---|
 | 1 | Determinism harness before the ocean/buoyancy batch | **Still open, still on time.** Harness still Queued (`backlog.md:148`); no ocean/buoyancy code exists. Groundwork shipped: D1 deterministic gameplay maps (`9e167ca`, merge `00c1ab5`), D2 unmarked-`HashMap` source-scan guard (`7637605`, merge `e22ad3a`). D5 (in-process two-`App` smoke test) now queued as a cheaper first slice (`:151`) |
-| 2 | Declared schedule-ordering contract | **Changed (planned, not built).** Became D3 (`:149`, `features/gameplay_pipeline_system_sets.md`, Ready since 2026-10-02). Still zero `SystemSet`s and no ambiguity detection in `src/` |
+| 2 | Declared schedule-ordering contract | **Changed (planned, not built).** Became D3 (`:149`, `features/done/gameplay_pipeline_system_sets.md`, Ready since 2026-10-02). Still zero `SystemSet`s and no ambiguity detection in `src/` |
 | 3 | UI pointer capture vs. world input | **Still open.** Moved from Bugs to Queued (`:24`); no `UiPointerCaptured` or equivalent in code |
 | 4 | Loader failures visible, not infinite loading | **Still open in the engine.** `play.html` now explains module-load failure / early panic / 60 s with no frame (`b5c1800`), but `check_project_loaded` (`project_loader.rs:33-46`) still returns early on a `ProjectConfig` parse failure with no `Failed` arm, and the loading screen keeps drawing frames so the page check never fires. Stale `rules_path:` bug (`:41`) and scene-fetch retry (`:64`) still open |
 | 5 | scene_manager monolith / 16-param ceiling | **Still open, and growing.** `spawn_scene_v2` (`scene_loader.rs:41-58`) still exactly 16 params; `scene_loader.rs` 3,570 → 3,686 lines, folder 9,287. Panel-chrome extraction still Queued (`:275`) |
@@ -65,7 +65,7 @@ hidden, ActionBar can't be hidden; Alignment #5).
 **New top-5:**
 
 ### 1. Build D3 (named pipeline `SystemSet`s) now that its plan is Ready
-**Source:** `planning/backlog.md` ▸ Beta 0.5 ▸ D3; `planning/features/gameplay_pipeline_system_sets.md`; `.claude/agent-memory/system-architect/schedule_ordering_mechanism.md`
+**Source:** `planning/backlog.md` ▸ Beta 0.5 ▸ D3; `planning/features/done/gameplay_pipeline_system_sets.md`; `.claude/agent-memory/system-architect/schedule_ordering_mechanism.md`
 
 The one item where design is done and only building is left. It has been Ready for 11 days while
 the `Update` writer set kept growing (the `SetUiVisible` executor arm, the `ui_scale` system).

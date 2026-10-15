@@ -1,6 +1,6 @@
 # Feature: Named Pipeline `SystemSet`s + a Deterministic Order for Every Pre-Interpreter Event Writer
 
-_Status: Ready (refreshed 2026-10-14 against `c6c4161` after real pause, fixed timestep + D1/D2, SetUiVisible and ui_scale
+_Status: Done 2026-10-15 (was Ready; refreshed 2026-10-14 against `c6c4161` after real pause, fixed timestep + D1/D2, SetUiVisible and ui_scale
 landed; system-architect. Decisions D-a..D-d unchanged; **new D-e..D-h** below, one of which (D-g) replaces the
 `PlayerInputSet` task that `real_pause.md` added. Original plan-review 2026-10-02: see "Plan-review outcome")_
 _Planned at: `c6c4161` (2026-10-14)_ (originally `87dab15`, 2026-10-01)
@@ -412,10 +412,30 @@ inside D3's files (N3 cycle trace → Findings; N7 cross-frame read order → Ap
 nodes only, no per-frame cost, but count new sync points (Tasks); N9 → Bevy 0.19 note in §5; N10 → behavioral tests
 kept small).
 
+## Implementation notes (2026-10-15, as shipped)
+- **Deviation from the plan's "plugin owns every system":** `GameplaySchedulePlugin` defines the sets and their edges only.
+  Systems join with `.in_set(...)` at their original registration sites in `lib.rs`, `action_bar.rs` and `targeting.rs`
+  (keeps each system's registration position, which breaks ties on the web executor). The "every pipeline system is in a
+  `GameplaySet`" guarantee is therefore enforced by an access-based test (`tests/schedule_order_tests.rs`, read from each
+  system's real `Res`/`MessageWriter` access) instead of by ownership or a source scan.
+- **`PlayerInputSet` is superseded by D-g** (no such set; input systems are gated per system, and
+  `tests/schedule_order_tests.rs` carries the gate inventory by name + predicate).
+- **Scene stream:** `EmitSet::Scene` runs `check_project_loaded -> spawn_scene_v2` (`chain_ignore_deferred`) and has normal
+  edges to `Ui` and `Game`, so its commands are flushed before the input systems (one new sync node, 95 -> 96).
+- **Extra edge beyond the plan:** `pipeline_warmup_system.after(GameplaySet::Execute)`, so the warmup window still starts in
+  the load frame (it used to run after every sync point).
+- **Accepted, unordered:** the camera systems read `SimClock` while `spawn_scene_v2`/`action_executor_system` write it (four
+  pairs, allowlisted in the test). Follow-up: order the camera chain after `GameplaySet::Execute` and drop the allowlist.
+- **Known behavior notes:** an entity FSM sees its own spawn-frame `scene.loaded/ready` only when its behavior asset was
+  already loaded (first load vs reload differs; no shipped behavior uses `scene.*` events). The camera chain tail now waits
+  for the Scene sync, which could cost one camera frame on the load frame (unverified).
+- Tests: `schedule_order_tests` (16, mutation-checked) + `tests/support` helpers; full core suite and `cargo check -p
+  ironhold_cli` green. Dev playtest confirmed by Frank 2026-10-15.
+
 ## Tasks
 - [x] Re-verify the writer/reader/pusher inventory and reconcile against Findings (done at the 2026-10-14 refresh;
       re-run the greps once more on the branch's base commit before coding, and diff against Findings)
-- [ ] **Before touching registrations:** dump the `Update` schedule's executable order with
+- [x] **Before touching registrations:** dump the `Update` schedule's executable order with
       `ExecutorKind::SingleThreaded` (web's order) from a `setup_test_app()` build, save it to the scratchpad, and repeat
       after the change (`schedule.systems()` after `initialize` gives the executable order, `ApplyDeferred` nodes
       included). Diff: every pair that swapped and conflicts on any data is either now explicitly ordered or reviewed as
@@ -425,30 +445,30 @@ kept small).
       audio/render systems, no `inspector`/`webgpu` features. For the real web order, a temporary wasm-only exclusive
       system in `Last` (gated to frame >= 2) can print the `Update` schedule's `systems()` names to the console; remove it
       before committing. Diagnostic only, not a committed test.
-- [ ] `runtime/schedule.rs`: `GameplaySet`, `EmitSet`, `GameStreamSet` + module docs (unstable; never order
+- [x] `runtime/schedule.rs`: `GameplaySet`, `EmitSet`, `GameStreamSet` + module docs (unstable; never order
       against `stat_effective_value_system` by name; `keep_messages_flowing_while_held` stays in `Last`; the two D5
       observation points)
-- [ ] `GameplaySchedulePlugin` added from `GamePlugin::build` at `lib.rs:235`; carry over all comments and
+- [x] `GameplaySchedulePlugin` added from `GamePlugin::build` at `lib.rs:235`; carry over all comments and
       `// load-bearing:` markers (re-point them at the sets); `Scene → {Ui, Game}` normal edges, other intra-`Emit` edges
       `*_ignore_deferred`
-- [ ] Tag `TargetingPlugin`/`ActionBarPlugin` systems with sets; replace their `.before(fsm_interpreter_system)`
+- [x] Tag `TargetingPlugin`/`ActionBarPlugin` systems with sets; replace their `.before(fsm_interpreter_system)`
       with set membership; `Targeting → ActionBar` explicit through the `GameStreamSet` chain; keep every
       `run_if(sim_running)`, `run_if(any_action_slots)` and the `CooldownMap` condition on its system (never move a
       condition to a set)
-- [ ] Move `check_project_loaded`/`spawn_scene_v2`, `resolve_pending_behaviors_system`, `despawn_timer_system`,
+- [x] Move `check_project_loaded`/`spawn_scene_v2`, `resolve_pending_behaviors_system`, `despawn_timer_system`,
       `dialogue_tick_system` into the Emit sets; split today's interpreter `.chain()` into `Interpret` + `Execute`
       (keep `apply_sim_clock_system` and its condition in place); move `npc_hit_relay_system`, `inventory_ui_system`,
       `container_ui_system`, `audio_volume_var_system`, `preload_audio_system`, `preload_decals_system`,
       `clear_pool_on_scene_unload_system` into `PostExecute`; `audio_state_system` → `.before(GameplaySet::Interpret)`
-- [ ] Fix the false comment at `lib.rs:261-262`; update `fsm_interpreter.rs:12-19` (check_project_loaded is now ordered);
+- [x] Fix the false comment at `lib.rs:261-262`; update `fsm_interpreter.rs:12-19` (check_project_loaded is now ordered);
       add the cost-gate staleness comment in `action_bar_input_system`; update the "Never push to `ActionQueue` from a
       capability system" rule in `src/CLAUDE.md:25` to list the sanctioned `ActionQueue` pushers; update `src/CLAUDE.md`'s
       "`lib.rs` ordering edges are load-bearing" list and its pause paragraph (gates stay per-system; the gate-inventory
       test is the guard)
-- [ ] `tests/schedule_order_tests.rs` (structure + access-based membership + filtered conflicts incl. `SimClock` and the
+- [x] `tests/schedule_order_tests.rs` (structure + access-based membership + filtered conflicts incl. `SimClock` and the
       condition pass + gate inventory + few behavioral tests, incl. the pause carry-over position); schedule-reading helper
       in `tests/support/mod.rs`; add the file to `crates/ironhold_core/tests/CLAUDE.md` and the root `CLAUDE.md` test loop
-- [ ] Docs: rewrite `docs/30_runtime_events_and_logic.md` "System ordering" (~L944) as **"Same-frame event
+- [x] Docs: rewrite `docs/30_runtime_events_and_logic.md` "System ordering" (~L944) as **"Same-frame event
       order"** in designer language (no system/set names): lead with *design so order doesn't matter*; the
       stream order of Approach §3; push order (dialogue, then FSM, then action bar); two worked examples
       (e.g. Resume click + Esc in one frame — key first, so Esc leaves `paused` and the Resume transition no longer
@@ -458,20 +478,20 @@ kept small).
       `game.resumed` arrive the frame after the action; keyboard + pad pause in one frame cancel out) and
       "Per-event evaluation order" (~L338), and update "Ordering & determinism notes" (~L379). Add one-line pointers from
       `docs/20`'s key-binding (~L110, L165-166) and `stats.ron` sections (D1 owns its own docs line)
-- [ ] Update `runtime/scene_manager/CLAUDE.md` ("Entity FSM and the interpreter chain") and `capabilities/CLAUDE.md` (the
+- [x] Update `runtime/scene_manager/CLAUDE.md` ("Entity FSM and the interpreter chain") and `capabilities/CLAUDE.md` (the
       "Targeting systems are ordered on purpose" transitive-ordering paragraph — now explicit; "Dialogue system" ordering
       line)
-- [ ] Reconcile the backlog D3 entry's order text and line citations with Approach §3; extend the "Schedule-guard
+- [x] Reconcile the backlog D3 entry's order text and line citations with Approach §3; extend the "Schedule-guard
       follow-ups deferred from D3" entry with item (4) (camera chain after `Execute`, drop the allowlist); change D5's
       dependency per §7
-- [ ] Log the `ParticlePoolGroups` suspected bug (Notes) under `## Bugs` in `planning/backlog.md`
-- [ ] Mark the `real_pause.md`-sourced `PlayerInputSet` idea as superseded by D-g (one line in this plan suffices; do not
+- [x] Log the `ParticlePoolGroups` suspected bug (Notes) under `## Bugs` in `planning/backlog.md`
+- [x] Mark the `real_pause.md`-sourced `PlayerInputSet` idea as superseded by D-g (one line in this plan suffices; do not
       edit `features/done/real_pause.md`)
-- [ ] `cargo check -p ironhold_cli`; full suite one file at a time (disk rule), including `pause_tests` and
+- [x] `cargo check -p ironhold_cli`; full suite one file at a time (disk rule), including `pause_tests` and
       `same_frame_order_tests`
-- [ ] Reviews after implementation: alignment, system-architect, debug-detective; ux-gamedesigner-reviewer
+- [x] Reviews after implementation: alignment, system-architect, debug-detective; ux-gamedesigner-reviewer
       (docs); wasm-perf-reviewer (single-threaded executor order, the D-e sync point)
-- [ ] WASM dev build + playtest checklist below
+- [x] WASM dev build + playtest checklist below
 
 ## Playtest checklist
 - Bind **one physical key** to both a `global_key_bindings` UI binding and an action-bar slot: the UI reaction
