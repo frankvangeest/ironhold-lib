@@ -291,14 +291,16 @@ pub fn tab_targeting_system(
     let is_multiplayer = controllers.iter().count() >= 2;
 
     for (controller, player_gt, mut player_target, player_index, bound) in &mut controllers {
-        let tab_key = InputMap::parse_key(&controller.inputs.target_next)
-            .unwrap_or(KeyCode::Tab);
+        // `None` = unbound (keyboard cycling off, gamepad unaffected); an authored but
+        // unrecognised name keeps the historical fallback to Tab.
+        let tab_key = controller.inputs.target_next.as_deref()
+            .map(|name| InputMap::parse_key(name).unwrap_or(KeyCode::Tab));
         let gamepad = bound.and_then(|b| b.0).and_then(|e| gamepad_query.get(e).ok());
         let gamepad_target_next = controller.inputs.gamepad_button("target_next");
         let gamepad_pressed = gamepad.zip(gamepad_target_next)
             .map(|(gp, btn)| gp.just_pressed(btn))
             .unwrap_or(false);
-        if !keys.just_pressed(tab_key) && !gamepad_pressed {
+        if !tab_key.is_some_and(|k| keys.just_pressed(k)) && !gamepad_pressed {
             continue;
         }
 

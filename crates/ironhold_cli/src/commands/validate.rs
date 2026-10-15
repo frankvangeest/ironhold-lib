@@ -533,6 +533,49 @@ fn orbit_config_vocab_problems(cfg: &CameraConfig, context: &str) -> Vec<(String
     out
 }
 
+/// Every keyboard key field of an `InputMap` that is *set* (not `None`/unbound), as
+/// `(field name, authored value)`. The one list every `InputMap` key diagnostic walks, so a new key
+/// field only has to be added here (`input_strafe_bindings.md`).
+fn input_map_key_fields(inputs: &InputMap) -> Vec<(&'static str, &str)> {
+    let mut out = Vec::new();
+    for (name, value) in [
+        ("forward", &inputs.forward), ("backward", &inputs.backward),
+        ("left", &inputs.left), ("right", &inputs.right),
+        ("strafe_left", &inputs.strafe_left), ("strafe_right", &inputs.strafe_right),
+        ("jump", &inputs.jump), ("run", &inputs.run), ("interact", &inputs.interact),
+        ("target_next", &inputs.target_next),
+        ("look_left", &inputs.look_left), ("look_right", &inputs.look_right),
+        ("look_up", &inputs.look_up), ("look_down", &inputs.look_down),
+    ] {
+        if let Some(v) = value.as_deref() {
+            out.push((name, v));
+        }
+    }
+    out
+}
+
+/// Prefab-level `InputMap` key-name problems that are definitely wrong: an authored key name the
+/// runtime does not recognise (`InputMap::key` silently treats it as unbound, so the binding does
+/// nothing and nothing says why). An empty string is a softer `--strict` warning
+/// (`empty_key_binding`, in `strict_checks`): write `None` to unbind a key on purpose.
+fn input_map_unknown_key_problems(inputs: &InputMap, context: &str) -> Vec<String> {
+    input_map_key_fields(inputs)
+        .into_iter()
+        .filter(|(_, v)| !v.is_empty() && InputMap::parse_key(v).is_none())
+        .map(|(name, v)| if name == "target_next" {
+            format!(
+                "{context}: inputs.target_next {v:?} is not a recognised key name -- keyboard \
+                 target cycling falls back to Tab (write `None` to turn keyboard cycling off)"
+            )
+        } else {
+            format!(
+                "{context}: inputs.{name} {v:?} is not a recognised key name -- the binding is \
+                 silently ignored (write `None` to unbind it on purpose)"
+            )
+        })
+        .collect()
+}
+
 /// Checks a `FlyCamDef` payload's own vocabulary/key fields -- shared by `camera_mode:
 /// Flycam(...)` and the legacy `components.flycam` field it superseded (both resolved by the
 /// identical `parse_flycam_look_button`/`InputMap::parse_key` calls at every flycam-camera spawn
@@ -2069,6 +2112,25 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
         }
     }
 
+    // `InputMap` key fields: an unrecognised key name is silently ignored at runtime
+    // (`InputMap::key` returns `None`, same as `None`/unbound), so a typo like `"KeyWW"` or a
+    // Windows-only spelling never fires and never says why. Catalog-wide (a prefab is wrong by
+    // itself, no co-instantiation needed). See `planning/features/input_strafe_bindings.md`.
+    if let Some(catalog) = prefab_catalog {
+        let mut prefab_keys: Vec<&String> = catalog.prefabs.keys().collect();
+        prefab_keys.sort();
+        for key in prefab_keys {
+            let Some(inputs) = catalog.prefabs[key].components.inputs.as_ref() else { continue };
+            for message in input_map_unknown_key_problems(inputs, &format!("prefab {key:?}")) {
+                errors.push(CrossFileError {
+                    source_file: "prefabs/prefabs.ron".to_string(),
+                    message,
+                    error_type: "invalid_key",
+                });
+            }
+        }
+    }
+
     if let Some(catalog) = prefab_catalog {
         // Sorted, not the HashMap's arbitrary iteration order -- so error output (and any
         // snapshot/regression test asserting on it) is stable across runs instead of depending on
@@ -3381,6 +3443,129 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
     } = project;
     let orphan_binding_prereqs_clean = logic_files_parsed_cleanly && scenes_parsed_cleanly;
     let mut warnings: Vec<StrictWarning> = Vec::new();
+
+    // `InputMap` binding diagnostics (`input_strafe_bindings.md`), `--strict`-only: nothing crashes,
+    // the bindings just do something other than what the designer meant.
+    //  * `empty_key_binding`: `""` is parsed as an unrecognised key, i.e. silently unbound. `None`
+    //    is the deliberate way to unbind.
+    //  * `duplicate_input_key`: one key bound to two actions in the same `InputMap` (e.g. `left`
+    //    and `strafe_left` on one key turns **and** strafes at once). Compared on the resolved
+    //    `KeyCode`, so `"KeyA"` and `"A"` count as the same key.
+    // Catalog-wide: a prefab is wrong by itself.
+    if let Some(catalog) = prefab_catalog {
+        let mut prefab_keys: Vec<&String> = catalog.prefabs.keys().collect();
+        prefab_keys.sort();
+        for key in prefab_keys {
+            let Some(inputs) = catalog.prefabs[key].components.inputs.as_ref() else { continue };
+            for (name, value) in input_map_key_fields(inputs) {
+                if value.is_empty() {
+                    let effect = if name == "target_next" {
+                        "keyboard target cycling falls back to Tab"
+                    } else {
+                        "the binding is silently ignored"
+                    };
+                    warnings.push(StrictWarning {
+                        source_file: "prefabs/prefabs.ron".to_string(),
+                        message: format!(
+                            "prefab {key:?}: inputs.{name} is an empty string -- it is treated as an \
+                             unrecognised key, so {effect}; write `None` to unbind it on purpose"
+                        ),
+                        kind: "empty_key_binding",
+                    });
+                }
+            }
+            let mut seen: std::collections::BTreeMap<String, &str> = std::collections::BTreeMap::new();
+            for (name, value) in input_map_key_fields(inputs) {
+                let Some(kc) = InputMap::parse_key(value) else { continue };
+                // `{:?}` of a bevy `KeyCode` is stable text; used only as the map key so the
+                // check needs no ordering/hash impl on `KeyCode` itself.
+                if let Some(first) = seen.insert(format!("{kc:?}"), name) {
+                    warnings.push(StrictWarning {
+                        source_file: "prefabs/prefabs.ron".to_string(),
+                        message: format!(
+                            "prefab {key:?}: inputs.{first} and inputs.{name} are both bound to \
+                             {value:?} -- one key press triggers both actions"
+                        ),
+                        kind: "duplicate_input_key",
+                    });
+                }
+            }
+        }
+    }
+
+    // `movement_key_slot_collision`: a player's movement/action key is also an `ActionBar` slot key
+    // (or a scene/global key binding) in a scene that instantiates that player -- the press both
+    // moves/acts and fires the slot. Scoped to each scene's instantiated players (`entities:` plus
+    // `join_prefab_keys`), never the whole prefab catalog, like the `gamepad_index` checks:
+    // `local_coop_demo`'s catalog reuses keys across rooms' player variants that are never
+    // co-instantiated. Flycam keys are deliberately not compared: a flycam shares WASD with the
+    // player on purpose (`camera_modes`' spectator room).
+    if let Some(catalog) = prefab_catalog {
+        for (scene_path, scene) in scenes {
+            let mut slot_keys: Vec<(String, String)> = Vec::new();
+            for node in walk_ui_nodes(&scene.ui) {
+                let UiNodeDef::ActionBar(bar) = node else { continue };
+                for slot in &bar.slots {
+                    if let Some(kc) = InputMap::parse_key(&slot.key) {
+                        slot_keys.push((format!("{kc:?}"), format!("ActionBar {:?} slot {:?}", bar.id, slot.key)));
+                    }
+                }
+            }
+            for (binding, trigger) in scene.scene_key_bindings.iter() {
+                if let Some(kc) = InputMap::parse_key(binding) {
+                    slot_keys.push((
+                        format!("{kc:?}"),
+                        format!("scene_key_bindings[{binding:?}] (fires {trigger:?})"),
+                    ));
+                }
+            }
+            if let Some(config) = project_config {
+                // Sorted: `global_key_bindings` is a HashMap, and warning order must be stable.
+                let mut globals: Vec<(&String, &String)> = config.global_key_bindings.iter().collect();
+                globals.sort();
+                for (binding, trigger) in globals {
+                    if let Some(kc) = InputMap::parse_key(binding) {
+                        slot_keys.push((
+                            format!("{kc:?}"),
+                            format!("global_key_bindings[{binding:?}] (in the project's .project.ron, fires {trigger:?})"),
+                        ));
+                    }
+                }
+            }
+            if slot_keys.is_empty() { continue }
+            let mut instantiated: Vec<(String, &str)> = scene.entities.iter()
+                .map(|e| (format!("{:?}", e.id), e.prefab.as_str())).collect();
+            for (slot, entry) in scene.join_prefab_keys.iter().enumerate() {
+                if let Some(prefab_key) = entry {
+                    instantiated.push((format!("join slot {slot} (prefab {prefab_key})"), prefab_key.as_str()));
+                }
+            }
+            for (id, prefab_key) in instantiated {
+                let Some(prefab) = catalog.prefabs.get(prefab_key) else { continue };
+                if !prefab.is_player() { continue }
+                // A player with no `inputs:` block still has the default WASD/Space/Shift/F/Tab
+                // bindings, so compare those too (the common beginner setup).
+                let default_inputs = InputMap::default();
+                let inputs = prefab.components.inputs.as_ref().unwrap_or(&default_inputs);
+                for (name, value) in input_map_key_fields(inputs) {
+                    let Some(kc) = InputMap::parse_key(value) else { continue };
+                    let text = format!("{kc:?}");
+                    for (slot_text, owner) in &slot_keys {
+                        if *slot_text == text {
+                            warnings.push(StrictWarning {
+                                source_file: scene_path.clone(),
+                                message: format!(
+                                    "player {id}: inputs.{name} {value:?} is also {owner} -- one key \
+                                     press does both. Rebind one of them, or set the player's key to `None`"
+                                ),
+                                kind: "movement_key_slot_collision",
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     // `Group` layout settings that are legal but inert or surprising (the always-on errors live
     // in `cross_file_checks`).

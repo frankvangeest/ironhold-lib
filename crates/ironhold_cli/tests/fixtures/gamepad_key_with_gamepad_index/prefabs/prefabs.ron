@@ -11,8 +11,6 @@
                     backward: "KeyS",
                     left: "KeyA",
                     right: "KeyD",
-                    strafe_left: "KeyQ",
-                    strafe_right: "KeyE",
                     jump: "Space",
                     gamepad_index: 0,
                 ),

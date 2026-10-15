@@ -33,8 +33,6 @@
           backward:     "KeyS",
           left:         "KeyA",
           right:        "KeyD",
-          strafe_left:  "KeyQ",
-          strafe_right: "KeyE",
           jump:         "Space",
           // "Tab" is intercepted by browsers for focus management.
           // KeyT is reliable and won't fight the browser.
@@ -105,8 +103,6 @@
           backward:     "KeyS",
           left:         "KeyA",
           right:        "KeyD",
-          strafe_left:  "KeyQ",
-          strafe_right: "KeyE",
           jump:         "Space",
           target_next:  "KeyT",
         ),
@@ -160,8 +156,6 @@
           backward:     "KeyS",
           left:         "KeyA",
           right:        "KeyD",
-          strafe_left:  "KeyQ",
-          strafe_right: "KeyE",
           jump:         "Space",
           target_next:  "KeyT",
         ),

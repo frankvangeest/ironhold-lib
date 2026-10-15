@@ -112,7 +112,7 @@ Sample `watch` output (each save prints the changed file and a result):
 | `split`/`party` written **inside** a `camera_mode: Orbit(...)` instead of next to it under the prefab's `components:` | `camera_mode_nested_split_party` | silently ignored | move them next to `camera_mode` (in a `camera_modes:` registry entry, delete them) |
 | `Party(...)` as a player prefab's own `camera_mode`, or a `flycam`-tagged prefab whose `camera_mode` is not `Flycam(...)` | `unsupported_prefab_camera_mode` | the runtime silently falls back | use `Orbit(...)` / `Flycam(...)` |
 | an unrecognised `orbit_button` / `character_rotate_button` / `look_button` value, or an unrecognised gamepad button name in `global_unclaimed_gamepad_bindings`, `global_claimed_gamepad_bindings` or `scene_unclaimed_gamepad_bindings` | `invalid_binding` | the orbit/look settings fall back to `"Either"`; a bad gamepad button name makes that binding never fire | use a supported value (see [20_data_formats.md](20_data_formats.md)) |
-| an unrecognised flycam movement key (`forward`, `backward`, `left`, `right`, `up`, `down`), or an unrecognised action-bar slot `key` | `invalid_key` | silently uses the default key, with **no warning at all** | fix the key name |
+| an unrecognised flycam movement key (`forward`, `backward`, `left`, `right`, `up`, `down`), an unrecognised action-bar slot `key`, or an unrecognised key name in a prefab's `inputs:` block (`forward`, `left`, `strafe_left`, `jump`, `target_next`, `look_*`, ...) | `invalid_key` | a flycam key silently falls back to its default key, and a player `inputs:` key is silently left unbound, with **no warning at all** at runtime | fix the key name |
 
 ### Action bars
 | What you see | Code | What breaks if ignored | Fix |
@@ -160,6 +160,9 @@ Every row here, including the pause checks (`unrecoverable_pause`, `toggle_pause
 | `max_walkable_slope_deg` outside `(0, 90]`, a negative `coyote_time_secs`, or a coyote time longer than the jump | `invalid_walkable_slope_limit` / `negative_coyote_time_secs` / `coyote_time_exceeds_jump_airtime` | the setting is ignored or masks the whole jump |
 | `label_depth_scale.reference_distance` far outside the camera's radius range | `label_depth_scale_reference_distance_outside_camera_range` | depth scaling may never engage |
 | two player prefabs in a scene with the same `player_index` (including both omitting it, which means `0`) | `duplicate_player_index` | identical P{n} label/colour and a shared target-ring layer |
+| a key written as an empty string `""` in a prefab's `inputs:` block | `empty_key_binding` | treated as an unrecognised key, so the binding is silently ignored; write `None` to unbind on purpose |
+| one key bound to two actions in the same `inputs:` block (e.g. `left` and `strafe_left` on `ArrowLeft`) | `duplicate_input_key` | one press triggers both actions (turn **and** strafe); give each action its own key, or set one to `None` |
+| a player's `inputs:` key (including the default WASD/Space/Shift/F/Tab keys of a player with no `inputs:` block) that is also an action-bar slot `key`, or a `scene_key_bindings` / `global_key_bindings` entry, in a scene that uses the player | `movement_key_slot_collision` | one press both moves/acts and fires the slot or binding; rebind one of them, or set the player's key to `None` |
 | a `Group` whose `justify_content` spreads space but whose main axis is `Auto` | `inert_justify_content` | the setting does nothing; give it a `Px`/`Percent` size |
 | a `Group` with `clip: true` and both axes `Auto` | `inert_clip` | the setting does nothing |
 | an `Auto`-sized `Group` whose children are all `absolute: true` | `collapsed_group` | the group has zero size |

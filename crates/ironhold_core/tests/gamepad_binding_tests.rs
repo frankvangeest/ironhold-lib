@@ -97,12 +97,12 @@ fn minimal_player_config(gamepad_index: Option<usize>, player_index: u32, bound_
 
 fn test_input_map() -> InputMap {
     InputMap {
-        forward: "KeyW".to_string(), backward: "KeyS".to_string(),
-        left: "KeyA".to_string(), right: "KeyD".to_string(),
-        strafe_left: "KeyQ".to_string(), strafe_right: "KeyE".to_string(),
-        jump: "Space".to_string(), run: "ShiftLeft".to_string(),
-        interact: "KeyF".to_string(), strafe_mouse_button: None,
-        target_next: "Tab".to_string(), target_range: 30.0,
+        forward: Some("KeyW".to_string()), backward: Some("KeyS".to_string()),
+        left: Some("KeyA".to_string()), right: Some("KeyD".to_string()),
+        strafe_left: None, strafe_right: None,
+        jump: Some("Space".to_string()), run: Some("ShiftLeft".to_string()),
+        interact: Some("KeyF".to_string()), strafe_mouse_button: None,
+        target_next: Some("Tab".to_string()), target_range: 30.0,
         gamepad_index: None, look_left: None, look_right: None, look_up: None, look_down: None,
         gamepad_jump: "South".to_string(), gamepad_run: "East".to_string(),
         gamepad_interact: "West".to_string(), gamepad_target_next: "North".to_string(),
@@ -235,6 +235,69 @@ fn test_no_gamepad_index_authored_players_stay_unbound_and_keyboard_still_works(
         .iter_current_update_messages()
         .any(|m| matches!(m.action, InputAction::Move(v) if v.y > 0.0));
     assert!(move_fired, "keyboard movement must still fire exactly as before when no gamepad_index is authored anywhere");
+}
+
+// ── input_strafe_bindings.md: strafe keys are real, every key can be unbound ──────────────
+
+/// Spawns a bare `CharacterController` (no gamepad) with `inputs`, presses `keys`, runs
+/// `input_translator_system` once and returns every `InputAction` it wrote.
+fn translate_keys(inputs: InputMap, keys: &[KeyCode]) -> Vec<InputAction> {
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().spawn(CharacterController { inputs, ..test_character_controller() });
+    for k in keys {
+        app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(*k);
+    }
+    app.world_mut().run_system_once(input_translator_system).unwrap();
+    app.world()
+        .resource::<Messages<InputActionMessage>>()
+        .iter_current_update_messages()
+        .map(|m| m.action.clone())
+        .collect()
+}
+
+#[test]
+fn test_strafe_right_key_moves_sideways_without_turning() {
+    let inputs = InputMap { strafe_right: Some("KeyE".to_string()), ..test_input_map() };
+    let actions = translate_keys(inputs, &[KeyCode::KeyE]);
+    assert!(
+        actions.iter().any(|a| matches!(a, InputAction::Move(v) if v.x > 0.0 && v.y == 0.0)),
+        "a bound strafe_right key must emit a rightward Move, got {actions:?}"
+    );
+    assert!(
+        !actions.iter().any(|a| matches!(a, InputAction::Turn(_))),
+        "strafing must not also turn the character, got {actions:?}"
+    );
+}
+
+#[test]
+fn test_strafe_left_key_moves_left() {
+    let inputs = InputMap { strafe_left: Some("KeyQ".to_string()), ..test_input_map() };
+    let actions = translate_keys(inputs, &[KeyCode::KeyQ]);
+    assert!(
+        actions.iter().any(|a| matches!(a, InputAction::Move(v) if v.x < 0.0)),
+        "a bound strafe_left key must emit a leftward Move, got {actions:?}"
+    );
+}
+
+/// `InputMap::default()` leaves the strafe keys unbound, so Q/E do nothing in any project that
+/// never authored them (the behaviour-neutral default this feature depends on).
+#[test]
+fn test_default_inputs_ignore_q_and_e() {
+    assert!(InputMap::default().strafe_left.is_none() && InputMap::default().strafe_right.is_none());
+    let actions = translate_keys(InputMap::default(), &[KeyCode::KeyQ, KeyCode::KeyE]);
+    assert!(actions.is_empty(), "Q and E must do nothing by default, got {actions:?}");
+}
+
+/// `None` unbinds: a key field written as `None` no longer triggers its action.
+#[test]
+fn test_none_key_binding_is_unbound() {
+    let inputs = InputMap { forward: None, ..test_input_map() };
+    let actions = translate_keys(inputs, &[KeyCode::KeyW]);
+    assert!(actions.is_empty(), "forward: None must unbind W, got {actions:?}");
+    let inputs = InputMap { jump: None, ..test_input_map() };
+    let actions = translate_keys(inputs, &[KeyCode::Space]);
+    assert!(actions.is_empty(), "jump: None must unbind Space, got {actions:?}");
 }
 
 // ── Scenario 3: already-connected gamepad binds once stable and stays bound ────────────────

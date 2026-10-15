@@ -57,6 +57,12 @@ Today `InputMap.strafe_left` / `strafe_right` (defaults `KeyQ` / `KeyE`) are acc
 - Given `camera_modes` or `3rd_person_game_demo` is open, then pressing Q or E does nothing (checkable from a designer's chair; replaces "byte-identical").
 - House style: RON examples write `"KeyQ"`, never `Some("KeyQ")` (`ron_lint`).
 
+## Implementation notes (2026-10-16)
+- **Flycam keys are deliberately excluded from `movement_key_slot_collision`** (the plan-review asked for them): a flycam shares WASD with the player on purpose (`camera_modes`' spectator room), so comparing them would only produce false positives. Slot keys, `scene_key_bindings` and `global_key_bindings` are compared; a player with no `inputs:` block is compared using `InputMap::default()`.
+- **`target_next` keeps its historical fallback**: `None` turns keyboard cycling off, an unrecognised name still falls back to Tab (behaviour-neutral); the validate messages and docs say so.
+- **One real shipped-project fix (behaviour change, found by the new check):** `local_coop_demo`'s P3 `look_right: "KeyP"` collided with `global_key_bindings["KeyP"] = toggle_pause`, so looking right paused the game. Changed to `"KeyY"` (unused in the project) in `prefabs.ron` and the keyboard-look table in `docs/20_data_formats.md`.
+- **Follow-up (not in this change):** player `inputs:` key names have no runtime `warn!` (gamepad button names do, in `assemble_player_config`); only `ironhold validate` reports them. Logged as a backlog item.
+
 ## Plan-review 2026-10-16 (system-architect + ux-gamedesigner-reviewer)
 
 **Verdict: Ready. Frank's decisions (2026-10-16): (1) option (a), all key fields become `Option<String>` now and `InputMap` is stated to be the resolved type that `first_person_starter` later builds a raw `InputMapDef` + `serde(from)` on; (2) delete the Q/E lines in `camera_modes`.** Add to Approach 1 when implementing: say explicitly that `InputMap` is the resolved type. Original review text follows. Both reviewers verified the plan's factual claims (nothing reads `strafe_*`; `KeyE` slot at `main.scene.ron:509`; behaviour-neutral with a `None` default; parse-compatible under IMPLICIT_SOME). Their corrections are folded into Approach/Tasks above.
