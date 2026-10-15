@@ -36,7 +36,7 @@ not just gamepad logic), and look the pad up with `bound.and_then(|b| b.0).and_t
 <!-- b:1606.rule -->
 ## Gamepad-triggered hot join (`input.rs`)
 
-`unclaimed_gamepad_trigger_system` (`.before(fsm_interpreter_system)`) checks the global unclaimed-gamepad bindings
+`unclaimed_gamepad_trigger_system` (`EmitSet::Ui`, before the interpreters) checks the global unclaimed-gamepad bindings
 only against pads **not** claimed by a live player's `BoundGamepad`, by an undrained `is_hot_join` entry's captured
 `bound_gamepad`, or by a pending player's seed resolving this frame. On a `just_pressed` match it emits the usual
 `UiEvent::ButtonPressed` and writes the pad's `Entity` into `PendingJoinGamepad(Option<Entity>)`.

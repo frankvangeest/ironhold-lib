@@ -28,9 +28,11 @@ pattern is genuinely insufficient. Worked example: the "Removed: rules.ron" call
 ## Entity FSM and the interpreter chain
 
 Per-entity behavior uses the same `StateMachineAsset` schema as the global FSM (files in `behaviors/`). In behavior
-files `{self}` in any event pattern or action target is replaced by the entity's spawn id. The `Update` chain is
-`fsm_interpreter_system` -> `entity_fsm_interpreter_system` -> `flush_pending_intent_system` (flushes action-bar slot
-actions not suppressed by a matched intent) -> `action_executor_system`.
+files `{self}` in any event pattern or action target is replaced by the entity's spawn id. The pipeline is declared in
+`runtime/schedule.rs`: `GameplaySet::Interpret` is `fsm_interpreter_system` -> `entity_fsm_interpreter_system`, then
+`GameplaySet::Execute` is `flush_pending_intent_system` (flushes action-bar slot actions not suppressed by a matched intent) ->
+`action_executor_system` -> `apply_sim_clock_system` -> the drain/pool/decal tail. Everything that feeds them is in `GameplaySet::Emit`
+(`spawn_scene_v2` first, in `EmitSet::Scene`), so a new writer joins a set instead of ordering against the interpreters. An entity FSM sees its own spawn-frame `scene.loaded/ready` only if its behavior asset is already loaded (first load vs reload differ; backlog follow-up).
 
 **Never bypass the pipeline from entity behavior.** Entry/exit actions in a `.behavior.ron` push to the global
 `ActionQueue` and go through the same executor as everything else. Do not give the entity FSM interpreter `Commands`
@@ -124,8 +126,8 @@ makes it wildly heavy and effectively unpushable. Existing uses are safe only be
 
 Mirrors `AudioState.active_fraction` into `GameVariables[AUDIO_VOLUME_PERCENT_KEY]` (`"audio_volume_percent"`, the
 chosen preset as an integer string, not the effective volume) whenever `AudioState` changes, so a bound `Label` shows
-the live volume with no RON rules. Scheduled `.after(action_executor_system).before(update_dynamic_labels_system)` (the
-FSM interpreter never reads `GameVariables`, so `.before(fsm_interpreter_system)` would only add a frame of lag). Mute
+the live volume with no RON rules. Scheduled in `GameplaySet::PostExecute` (after the executor) and `.before(update_dynamic_labels_system)` (the
+FSM interpreter never reads `GameVariables`, so running it before the interpreters would only add a frame of lag). Mute
 is deliberately **not** mirrored: it still goes through the `audio.muted`/`audio.unmuted` RON `global_on` bridge. A test
 standing in for the project loader's `AudioState` re-insert must insert a non-default `active_fraction`, or it passes
 vacuously (the harness never completes a project load).

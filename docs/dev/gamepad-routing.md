@@ -83,7 +83,7 @@ surface alongside the per-player `InputMap.gamepad_*` fields (described earlier 
 `ProjectConfig.global_unclaimed_gamepad_bindings`/`GameSceneV2.scene_unclaimed_gamepad_bindings` at exactly the three
 sites `ProjectKeyBindings`/`LoadedKeyBindings` already use (two in `project_loader.rs`, one in
 `scene_loader.rs`), same per-key overlay semantics. `unclaimed_gamepad_trigger_system`
-(`runtime/input.rs`, `.before(fsm_interpreter_system)`) checks these bindings only against
+(`runtime/input.rs`, `EmitSet::Ui`, before the interpreters) checks these bindings only against
 gamepads **not** already claimed by a live player's `BoundGamepad`, by an undrained `is_hot_join`
 entry's own captured `PlayerConfig.bound_gamepad` in `PendingEntitySpawns`, or by a still-pending
 live player's own seed resolving to that pad this same frame (the last case exists because
