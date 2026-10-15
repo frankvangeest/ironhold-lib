@@ -18,7 +18,7 @@
 - [Determinism & networking](determinism_networking.md) — enhanced-determinism already ON; real blockers are variable timestep + no snapshot layer
 - [Fixed-tick pipeline facts](fixed_tick_pipeline_facts.md) — verified Bevy 0.18 message-flip/deferred/first-update-0-ticks facts; pause control-tick whitelist; dead cross-schedule edges
 - [Update vs FixedUpdate schedule](schedule_update_vs_fixedupdate.md) — interpreter chain + action_executor in Update; NPC/physics AI in FixedUpdate; cross-schedule GameEvent timing hazard + combat damage flow
-- [Schedule ordering mechanism](schedule_ordering_mechanism.md) — zero SystemSets; bare `.before(fn)` convention; set run_if evaluated once/skips all; conflicts ignore condition access; test App sees all of GamePlugin
+- [Schedule ordering mechanism](schedule_ordering_mechanism.md) — pre-D3 bare `.before(fn)`; D3 sets via in-place `.in_set`; set run_if once/skips all; UiEvents read before carry-over GameEvents
 - [Flaky-test trust gate](flaky_test_trust_gate.md) — stakeholder item #4: TargetingPlugin race fixed 2026-09-14 but its canary was removed; schedule-graph assertion + ambiguity detection still unbuilt and unlogged
 - [NPC state machine design](npc_state_machine_design.md) — NpcState is runtime-only (not schema); Investigating state (split from Chase) is SHIPPED, dist_opt.or hack is gone; centralize hit-handling
 - [Camera architecture](camera_architecture.md) — camera_modes v1+v2, Update chain, 8 spawn sites, fov 45→60 trap, flycam tag predicates + Action::Spawn flycam blind spot

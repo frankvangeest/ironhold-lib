@@ -44,7 +44,7 @@
 - [Serde-default loosening](serde_default_loosening_pattern.md) — adding `#[serde(default)]` to required fields: typo-detection loss without deny_unknown_fields, duplicate hardcoded ctor drift, stale-RON-comment sweep
 - [Stale feature base-branch hazard](stale_feature_base_branch_hazard.md) — branches cut from `main` miss `integration`'s schema fields; new test struct literals merge cleanly then fail to compile
 - [rules.ron removal / single FSM dialect](rules_vs_state_machine_coexistence.md) — rules.ron+EnterState removed 2026-09-28; `on:` overload, transitions have no do_actions, project-vs-behavior initial entry_actions asymmetry
-- [System-ordering determinism fixes](system_ordering_determinism_pattern.md) — how to review a pure `.chain()`/`.before()` fix: Update-tier ordering map, transitive pre-interpreter pull-in, deferred-spawn/auto-clear edge, test-fixture fallout
+- [System-ordering determinism / D3 sets](system_ordering_determinism_pattern.md) — GameplaySet/EmitSet map; real read order is UI > game carry-over > fixed > Emit > scene; D4 entity-order overclaim; doc traps
 - [UI trigger reachability map](ui_trigger_reachability_pattern.md) — 4 `UiEvent::ButtonPressed` emit sites + 5 panel triggers, both directions now covered; 3x literal duplication; buy_item scoping rationale
 - [Fixed timestep + det_math pattern](fixed_timestep_det_math_pattern.md) — why no RON knob for FIXED_TICK_RATE but yes for `max_fixed_delta_secs`; no-Time<Real>-consumer proof list; Duration::from_secs_f32 upper-bound hole
 - [Item-gated interactable pattern](item_gated_interactable_pattern.md) — 8-touchpoint "gate an existing capability event" recipe; hit_any polarity; catalog-wide-CLI vs scene-scoped-warn asymmetry; PlayerInventory-is-global is a legit boundary

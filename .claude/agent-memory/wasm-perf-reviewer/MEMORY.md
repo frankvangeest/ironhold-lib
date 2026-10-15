@@ -44,3 +44,4 @@
 - [D2 catalog BTreeMaps](project_d2_catalog_btreemaps.md) — catalogs/LoadedModifiers/particle buckets→BTreeMap perf-neutral; real nit = per-particle group_key String clone (pre-existing)
 - [Responsive canvas render cost](project_responsive_canvas.md) — pixel cap in play.html .canvas-scaler (3.69 MP, floor 1280x720); winit offsetX OK; stray AmbientLight camera removed
 - [Real pause / SimClock](project_real_pause.md) — paused Time<Virtual> stops FixedMain so Bevy Messages<T> never swap -> unbounded growth while paused; gates O(1)
+- [Pipeline system sets (D3)](project_pipeline_system_sets.md) — +1 ApplyDeferred (Scene->{Ui,Game}), sync nodes dedup per distance, cheap on web; warmup now sees PipelineWarmup 1 frame later

@@ -39,6 +39,13 @@ inventory slot is bare `"i"`). `"10"` is not a valid key name; the real tenth-sl
 events; global stats precede `stat_templates` stats; cross-entity instance-stat order still unordered (D4).
 Unclaimed-gamepad: only ONE trigger per frame across ALL pads (break after first match).
 
+**D3 docs review (2026-10-14, docs/30 "Same-frame event order" ~945):** the designer list folded key/pad/button
+input into step 3 AFTER carry-over + physics, contradicting its own "UI before game" parenthetical (interpreter reads
+UI stream first; verified in fsm_interpreter.rs). Under D3 thresholds moved to the carry-over head, so docs/20 stats
+"modifier-expiry events arrive before threshold events" (~4331) is only true causally, not within one frame's read.
+Recurring contradiction: "put must-not-lose reactions in global_on" vs Pausing's "bind gameplay triggers in playing's
+on:, not global_on" (~317). Escape+KeyP+pad Start all `toggle_pause` -> pressed together they cancel out.
+
 **How to apply:** for D1/D3/D4/fixed-tick reviews, check the designer doc states the whole model, not just
 the slice the feature touches; reliable manual repro = bind one key to two emitters (scene_key_binding +
 action-bar slot, or action-bar slot on the interact key). Related: [[fsm-designer-traps]].
