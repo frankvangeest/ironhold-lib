@@ -16,4 +16,6 @@ Key findings to re-check at implementation review:
 - first_person_starter still had stale `movement_style: Strafe` / `Classic` names from pre-consult design.
 - Pointer lock: Escape consumed by browser to release lock; Escape-to-pause needs an explicit one-press decision.
 
+Post-impl review of input_strafe_bindings (2026-10-16): strafe default None, example blocks cleaned, shipped strafe lines deleted (no leftover Q/E hints). Open: docs/15 strict table is 3-col but the 3 new rows have 4 cells (Fix text dropped by GFM); `movement_key_slot_collision` skips players with NO `inputs:` block (defaults never compared); global_key_bindings collision message names the scene file, not the .project.ron or the trigger; local_coop_demo P3 look_right "KeyP" = toggle_pause and docs/20 IJKL look table repeats KeyP while claiming "no key collisions"; docs/20 "Invalid key strings produce a warn!" is false for player inputs (no runtime warn); docs/15 invalid_key row says "uses the default key" but for inputs it unbinds.
+
 **How to apply:** at post-implementation review, verify each item above landed; see [[project_docs_lag_actions]], [[project_warn_vs_silent_fallback_principle]], [[project_quoted_string_vs_enum_house_style]].

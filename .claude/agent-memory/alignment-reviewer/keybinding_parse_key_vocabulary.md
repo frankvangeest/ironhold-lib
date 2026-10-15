@@ -20,6 +20,8 @@ e.g. `inputs: (gamepad_index: 0)` — parses. The struct still has no `deny_unkn
 combined with the missing key-name validation above means a typo'd InputMap *field name* is now
 completely silent; see [[serde-default-loosening-pattern]].
 
+**Update (feature/input_strafe_bindings, reviewed 2026-10-16):** InputMap now has `deny_unknown_fields`; all 10 keyboard key fields are `Option<String>` (`None` = unbound; implicit_some keeps `"KeyW"` parsing); `strafe_left/right` default `None` and are now READ (input.rs adds to Move.x). CLI now checks InputMap keys: `invalid_key` error (catalog-wide) + `--strict` `empty_key_binding`/`duplicate_input_key` (catalog-wide) and `movement_key_slot_collision` (per-scene `entities:`+`join_prefab_keys`). Still NO runtime warn for a bad InputMap key (CLI-only, asymmetric with gamepad buttons). Footguns found: slot-collision `continue`s when a player prefab has no `inputs:` block, so DEFAULT WASD/Space/F/Tab/ShiftLeft never get compared; docs/15 `invalid_key` row's "silently uses the default key" is only true for flycam, InputMap keys become unbound. Gamepad button fields stay `String` (not unbindable).
+
 **Dual runtime-warn + CLI-validate-error pattern** (good pattern to confirm, not flag): RON key mistakes are surfaced two ways —
 - Runtime (`scene_loader.rs`): lenient `warn!` only; an unparseable/duplicate slot key degrades gracefully (`resolved_key: None` -> slot never fires), the game still runs.
 - CLI (`ironhold_cli validate.rs`): strict — pushes a `CrossFileError` (`error_type: "invalid_key"`/`"duplicate_key"`), exit code 1, so a designer catches it before shipping rather than missing a browser-console warning.
