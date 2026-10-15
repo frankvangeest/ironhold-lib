@@ -12,9 +12,9 @@ use crate::runtime::scene_manager::action_substitution::{rewrite_target, scene_p
 /// Returns early when `LoadedStateMachine` is `None`, *before* draining its `MessageReader`s.
 /// This does NOT mean the project-load frame's `scene.requested:<initial>` event is lost: the
 /// readers aren't advanced, so the message stays in Bevy's double buffer and this system does see
-/// it, one frame later, once `LoadedStateMachine` becomes `Some` (`check_project_loaded` isn't
-/// ordered against this system, so the load can complete on the same frame the event was written
-/// or the frame after). Nothing observable changes either way today, since no live content binds
+/// it, one frame later, once `LoadedStateMachine` becomes `Some` (`check_project_loaded` runs in
+/// `EmitSet::Scene`, before `Interpret`, and its `LoadedStateMachine` insert is flushed before the interpreters, so
+/// the load completes in the frame the project finishes loading). Nothing observable changes either way today, since no live content binds
 /// `scene.requested:` for the initial scene — but this comment previously claimed the event was
 /// "never seen," which is false; don't build a workaround for a problem that doesn't exist.
 pub fn fsm_interpreter_system(

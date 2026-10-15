@@ -23,7 +23,8 @@ Capability emits Message  →  Interpreter matches rules  →  ActionQueue  → 
 
 **Physics sensors emit messages, not actions.** A sensor that detects overlap emits `GameEvent::Trigger("entity.collected:{id}")`;
 it must NOT push `Action::Despawn` or `Action::PlaySound`. **Never push to `ActionQueue` from a capability system:** only the
-interpreters do. If you are adding `ResMut<ActionQueue>` to a physics or gameplay system, stop, emit a `GameEvent`/`UiEvent`
+interpreters and the sanctioned pushers named in `runtime/schedule.rs` (behaviour activation, despawn timers, dialogue, the
+action-bar flush, the executor) do. If you are adding `ResMut<ActionQueue>` to a physics or gameplay system, stop, emit a `GameEvent`/`UiEvent`
 and handle the response in `state_machine.ron`. Hardwired actions lock behaviour in code; going through the pipeline lets
 designers add rewards, score and conditions in RON without recompiling.
 
@@ -57,10 +58,12 @@ loop silently misses every nested `ui:` node. Detail in `schema/CLAUDE.md`.
 Many system-ordering edges in `lib.rs` exist only to prevent scheduling races, and `lib.rs` loads only this file.
 Each group of them is marked with a `// load-bearing:` comment in `lib.rs`: **never remove, reorder or "simplify" an edge
 that sits under one**, and give any new system that touches the same state an explicit edge against them (a passing test run does not prove
-an ordering). The ones that cross folders: the interpreter chain `fsm_interpreter_system` → `entity_fsm_interpreter_system`
-→ `flush_pending_intent_system` → `action_executor_system` → … → `drain_spawn_queue_system` → `drain_dynamic_stat_ui_system`;
-`unclaimed_gamepad_trigger_system.before(fsm_interpreter_system)`; `gamepad_bind_system` before `input_translator_system`;
-`interactable_system` and `dialogue_tick_system` before the interpreters; the targeting chain before `action_bar_input_system` (registered in `TargetingPlugin`, see `capabilities/CLAUDE.md`);
+an ordering). **The message → interpreter → executor order is declared in `runtime/schedule.rs`** (`GameplaySet`: Emit → Interpret →
+Execute → PostExecute, with the `EmitSet`/`GameStreamSet` streams inside Emit): a system that writes `UiEvent`/`GameEvent`/`SceneEvent`,
+pushes `ActionQueue` or writes `SimClock` (or reads those messages) joins the right set with `.in_set(...)`, never a bare
+`.before(fsm_interpreter_system)`; `tests/schedule_order_tests.rs` fails if it is in no set or leaves an unordered conflict on those
+resources. **Never write `.before/.after(stat_effective_value_system)`:** it is registered twice (Stats and Execute), so order against
+`GameStreamSet::Stats` / `GameplaySet::Execute`. The other edges that cross folders: `gamepad_bind_system` before `input_translator_system`;
 `camera_blend_system` last of the camera systems and `world_label_screen_pos_system` after it; `nameplate_visibility_system`
 after `world_label_screen_pos_system`; `target_hud_update_system` after `split_screen_viewport_system`; the audio-volume
 mirror after `action_executor_system` and before `update_dynamic_labels_system`.

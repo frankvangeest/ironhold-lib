@@ -100,8 +100,8 @@ Mitigations:
 - Enforced in code: `crates/ironhold_core/tests/determinism_lint.rs` fails on any std `HashMap`/`HashSet` in
   `ironhold_core/src` that is not marked `// det: lookup-only` or `// det: order-independent` (rules and limits:
   `crates/ironhold_core/src/CLAUDE.md`, "Deterministic iteration order on gameplay paths"). Shipped so far:
-  the gameplay maps (D1) and the guard plus ordered catalogs (D2); schedule/writer order (D3) and entity/query
-  order (D4) are separate, still-queued items
+  the gameplay maps (D1) and the guard plus ordered catalogs (D2); schedule/writer order (D3, `runtime/schedule.rs`) has shipped; entity/query
+  order (D4) is a separate, still-queued item
 
 ### Dynamic spawn ids are not reproducible across runs 🧭
 `SpawnRegistry.counter` (backing both `Action::Spawn`'s auto-generated id and the `{new_id}` RON

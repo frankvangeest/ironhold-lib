@@ -185,7 +185,7 @@ Actions represent explicit operations the runtime can execute.
 - `ModifyStat(key: "key", delta: -25.0)` — adds `delta` to a stat, clamped to `[min, max]`. Negative delta resets the regen cooldown. **Dot-routing:** `"spawn_id.stat_name"` targets that entity's `StatMap` component; a key with no dot targets the global `LoadedStats` resource. In behavior files, `{self}` in `key` is substituted with the entity's spawn ID (e.g. `ModifyStat(key: "{self}.health", delta: -35.0)`).
 - `SetStat(key: "key", value: 100.0)` — sets a stat to an absolute value, clamped to `[min, max]`. Decreasing the value resets the regen cooldown. Same dot-routing and `{self}` substitution as `ModifyStat`.
 
-After either action executes, `stat_threshold_system` runs in the same frame and emits `GameEvent::Trigger` events for any false→true threshold crossings. Those events are then available to the rule interpreter on the next frame.
+After either action executes, the engine checks the stat thresholds in the same frame, and any false→true crossing reaches your rules at the start of the **next** frame (see [Same-frame event order](#same-frame-event-order)).
 
 **Global stats** (defined in `stats.ron`, persisted in `LoadedStats`): addressed without a dot, e.g. `"player_health"`.  
 **Instance stats** (defined in `stat_templates` on a `PrefabDef`, stored in `StatMap` component): addressed with a dot, e.g. `"goblin_01.health"`.
@@ -326,6 +326,8 @@ Things to know when you author one:
   other pause mistakes (a paused state with no `ResumeGame` in its `exit_actions`, `TogglePause` in an entry/exit list, ...).
 - **Audio keeps playing.** Do not use `ToggleMute` (it un-mutes a player who had muted) or `StopMusic` followed by
   `PlayMusicLoop` (the track restarts) in the pause entry/exit. React to `game.paused`/`game.resumed` if you want to duck.
+- **Same frame:** a keyboard pause and a joined pad's pause button pressed in the same frame produce two `toggle_pause` events and
+  cancel out (the once-per-frame dedupe is per binding map); see [Same-frame event order](#same-frame-event-order).
 - **Keys and pads.** Bind a pause key in `global_key_bindings` (`"Escape": "toggle_pause"`; add `"KeyP"` too, since a browser
   can swallow Escape in fullscreen). A joined gamepad player's own buttons never reach `global_unclaimed_gamepad_bindings`,
   so use `global_claimed_gamepad_bindings: { "Start": "toggle_pause" }` (project file). Per-scene bindings in an *overlay*
@@ -341,7 +343,73 @@ For each event, in this order:
 2. The current state's own `on:` list — fires only while that state is active, never changes state.
 3. The first matching `transitions` entry — changes state, running the source state's `exit_actions` then the destination state's `entry_actions`.
 
-Only the first matching transition fires per event; all matching `global_on`/in-state bindings fire.
+Only the first matching transition fires per event; all matching `global_on`/in-state bindings fire. When several events arrive in the
+same frame, see [Same-frame event order](#same-frame-event-order) for the order they are read in.
+
+### Same-frame event order
+
+**Design so the order does not matter.** When several things happen in the same frame the engine always handles them in the
+same order (on the same build and in the browser), but your logic is easiest to read, and to keep working, if it does not depend
+on it. The interpreter takes the **first matching** transition for each event and applies it immediately, so the order can change
+where the state machine ends up. (One thing is *not* fixed yet: the order **between entities**, for example two behaviors
+reacting in the same frame or two coins collected in the same physics tick, still follows the engine's internal entity order.)
+
+**What the rules read in a frame, in order**
+
+1. **Key presses, gamepad buttons, UI buttons** (all UI events are read before any game event):
+   key presses (`global_key_bindings` and `scene_key_bindings`) first, then gamepad triggers (a joined player's
+   `global_claimed_gamepad_bindings`, then the unclaimed-pad join trigger), then buttons and icon buttons.
+2. **Game events**:
+   1. *carried over from the previous frame*: `action_bar.activated:*`, the events your actions emitted (`EmitEvent`, combat,
+      `container.*`, `inventory.*`, `dialogue.*`, `audio.*`), then `game.paused` / `game.resumed`, then stat **threshold**
+      crossings (`stat.*.depleted`, `.low`, ...). Thresholds and the pause events are always read one frame after the action
+      that caused them;
+   2. *physics-tick events*: player movement, collectibles, trigger zones, NPC reactions (none while paused);
+   3. *this frame*: clicking an entity to target it and Tab, the action bar, the interact key, delayed events
+      (`EmitEventAfterDelay`), and last a modifier expiring (regeneration emits no event of its own; a threshold it crosses
+      is read next frame, see 2.1).
+3. **Scene events** last: last frame's `scene.requested` / `scene.unloading`, then this frame's `scene.loaded` / `scene.ready`.
+
+**A scene load runs first in the frame.** Keys and buttons work on the very first frame of the new scene (they use the new scene's
+key bindings and UI, and a pause you left open is already released; a Replace-mode `LoadScene` does this, an overlay never
+does), but timers, regeneration, cooldowns and camera smoothing start counting one frame later. A key pressed on the load frame
+is read *before* that frame's `scene.ready`, so it is matched against the old state.
+
+**What order your actions run in** (the order actions are queued is the order they execute):
+
+1. a spawned entity's behavior starting, and a `SetDespawnTimer` running out;
+2. dialogue (`StartDialogue` on interact, and a chosen dialogue choice's actions);
+3. your `state_machine.ron` rules, then each entity's own `.behavior.ron`;
+4. the action bar's own slot actions.
+
+So a slot's built-in `do_actions` run *after* every `state_machine.ron` reaction to the same frame, and dialogue actions run
+*before* them. A skill key and the pause key pressed in the same frame still fire the skill: the pause lands after the slot's
+actions were queued, and the input gate only closes the next frame.
+
+**Worked examples**
+
+- *Esc and the Resume button in the same frame* (different triggers, as in the demos): Esc is read first, so it un-pauses, and the
+  Resume transition (which only matches while paused) no longer applies. If a key and a button share **one** trigger and both fire in
+  the same frame they cancel each other out (rare: give overlay buttons their own trigger, like `resume`; a keyboard pause and a
+  joined pad's pause button pressed together do the same).
+- *Damage in one frame, Esc in the next:* Esc is read first (UI events come before game events), so the state machine is already
+  `paused` when `stat.player_health.depleted` arrives. A transition written `from: "playing"` then silently misses the death. Handle
+  must-not-lose events in `global_on`, or give the transition a `from: "paused"` row too (`primitive_world` does).
+- *Esc and a `playing`-scoped click in the same frame:* if Esc moves the state machine to `paused` first, the click's rule (written
+  in `playing`'s `on:`) does not match. That is usually what you want (the pause wins). A reaction in `global_on` would still fire,
+  and also while paused, which is why [Pausing the game](#pausing-the-game) says to keep gameplay triggers in `playing`'s `on:`.
+- *One key bound in `global_key_bindings` and also on an action-bar slot:* the key binding's rule always reacts first (a key is read
+  before the slot's events), and the slot's built-in actions run after it.
+
+**Rules that follow:** timers, stat thresholds, NPC and physics events arrive in *any* state (the menu, game over, a dialogue
+state, and `paused` for events produced just before the pause), so handle them in `global_on` or author the transition from
+every state they can land in. The action bar's resource check sees the previous frame's stat regeneration (one frame, about
+16 ms). An NPC's AI sees its own `stat.*.health.depleted` in the same frame your rules do, and the AI goes first. Particle
+effects are cleared once, when a scene is requested; an old scene's emitters may keep spawning until the new scene appears, so do
+not `SpawnEffect` in the same list as `LoadScene`: use the new scene's `scene.ready:<scene>` rule.
+
+See also: [Per-event evaluation order](#per-event-evaluation-order), [Pausing the game](#pausing-the-game), and in
+[20_data_formats.md](20_data_formats.md) the key bindings, the action bar's same-frame slot order and the `stats.ron` order notes.
 
 ### The `initial_state` entry-actions gotcha
 **`entry_actions` on the `initial_state` do *not* run at boot.** Entry actions only run when a **transition** enters a state — the state you start in was never "entered" by a transition, so its `entry_actions` are silently skipped. If you follow "start flat, add states later" and move boot-time work (like `PlayMusicLoop` on scene-ready) into your first state's `entry_actions`, expecting it to fire immediately, it won't. Keep boot-time work in a `global_on` `scene.ready:<scene>` binding instead, or restructure so the initial state is only reached via an explicit transition from a dedicated boot state.
@@ -379,6 +447,7 @@ Applies actions to the world. Key design points:
 ### Ordering & determinism notes 🧭
 - For determinism, prefer a **fixed tick** for gameplay actions.
 - Separate deterministic gameplay actions from non-deterministic presentation effects.
+- The order of same-frame events and actions is fixed and documented: see [Same-frame event order](#same-frame-event-order).
 
 (See `docs/dev/40_determinism_and_networking.md` for design notes.)
 
@@ -940,22 +1009,3 @@ A walkthrough portal between two scenes is the standard pattern for multi-scene 
 The `TriggerZone` radius should cover the gate opening but not the frame — 1.0–1.5 m works for a standard doorway width. The trigger fires `entity.entered:{id}` on player overlap; `LoadScene` then transitions immediately.
 
 **Quality and warmup on scene entry**: if the destination scene uses `SetParticleQuality`, include it in the `scene.ready:{name}` binding alongside any warmup `SpawnEffect` calls (see [Warming up particle pipelines](20_data_formats.md#warming-up-particle-pipelines-web-builds)) — quality persists across `LoadScene` and must be reset explicitly per scene.
-
-### System ordering
-
-The interpreter chain in `Update` is:
-
-```
-tick_delayed_events_system  →  interactable_system  →  action_bar_input_system
-                            →  fsm_interpreter_system
-                            →  entity_fsm_interpreter_system
-                            →  flush_pending_intent_system
-                            →  action_executor_system
-```
-
-`tick_delayed_events_system` runs before the interpreter chain so delayed events fired in a given frame are visible to both interpreters in the same frame.
-
-`trigger_zone_system` runs in `FixedUpdate` alongside `collectible_system`, so its events are visible to both interpreter systems in the following `Update` tick.
-
-The targeting systems (`click_select_system`, `tab_targeting_system`, `target_auto_clear_system`) are also ordered before the interpreter chain, same as `tick_delayed_events_system` above — a `target.*` event fired by a click or Tab-cycle in a given frame is guaranteed visible to all three interpreters, and to the action bar's `{target}` substitution, in that same frame.
-

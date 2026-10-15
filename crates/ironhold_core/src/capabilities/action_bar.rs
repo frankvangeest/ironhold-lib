@@ -8,7 +8,6 @@ use crate::schema::stats::{LoadedStats, StatMap};
 use crate::runtime::actions::ActionQueue;
 use crate::runtime::messages::GameEvent;
 use crate::runtime::scene_manager::action_substitution::rewrite_target;
-use crate::runtime::scene_manager::fsm_interpreter::fsm_interpreter_system;
 use crate::runtime::scene_manager::SpawnId;
 use crate::capabilities::player::{BoundGamepad, CharacterController, PlayerIndex, PlayerTarget};
 use crate::capabilities::targeting::is_primary_player;
@@ -104,7 +103,10 @@ impl Plugin for ActionBarPlugin {
                     action_bar_visual_system.run_if(any_action_slots),
                 )
                     .chain()
-                    .before(fsm_interpreter_system),
+                    // GameStreamSet::ActionBar (inside EmitSet::Game, after Targeting): this is what orders the action bar
+                    // before the interpreters, and the targeting chain before it, explicitly (D3; it used to hold only
+                    // transitively through this one edge).
+                    .in_set(crate::runtime::schedule::GameStreamSet::ActionBar),
             );
     }
 }
@@ -245,6 +247,8 @@ pub fn action_bar_input_system(
         // Resolved once (own StatMap vs. global LoadedStats) and reused below for the deduct —
         // must not be independently re-resolved at each site, or the two could disagree about
         // which pool to hit (system-architect finding, per_player_stat_pools.md).
+        // The cost gate reads `.current` (not `effective`) from the previous frame's stat pass: `GameStreamSet::Stats` runs
+        // after the action bar in the same frame, so a gate decision sees last frame's regen (one frame, ~16 ms, deterministic).
         let cost_resolution = slot.cost.as_ref().map(|cost| {
             resolve_cost_source(&cost.stat, player_stats, loaded_stats.as_deref())
         });

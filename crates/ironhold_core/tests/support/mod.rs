@@ -124,3 +124,231 @@ pub fn set_gamepad_axis(app: &mut App, gamepad: Entity, axis: GamepadAxis, value
         .resource_mut::<Messages<RawGamepadEvent>>()
         .write(RawGamepadEvent::Axis(RawGamepadAxisChangedEvent::new(gamepad, axis, value)));
 }
+
+/// The `Update` schedule's executable system order (what the single-threaded executor, i.e. the web build,
+/// runs, `ApplyDeferred` sync nodes included), read without running a frame. Builds the schedule by
+/// `initialize`, so call it on a fresh `setup_test_app()`; it never calls `app.update()`.
+///
+/// Note: the test app is `MinimalPlugins` + `GamePlugin` (no UI/picking/audio/render systems, no `inspector`/`webgpu`),
+/// so this is a proxy for the web graph, not the web graph itself.
+pub fn update_schedule_order(app: &mut App) -> Vec<String> {
+    app.finish();
+    app.cleanup();
+    app.world_mut().schedule_scope(Update, |world, schedule| {
+        schedule.initialize(world).expect("the Update schedule must build");
+        schedule
+            .systems()
+            .expect("the schedule was just initialized")
+            .map(|(_, system)| system.name().to_string())
+            .collect()
+    })
+}
+
+/// Every pair of `Update` systems that still conflict on data without being ordered (what Bevy would call an
+/// ambiguity), as `(system a, system b, conflicting component/resource names)`. An empty list means the two conflict on
+/// whole-`World` access (an exclusive system). `Schedule::initialize` computes it regardless of `ScheduleBuildSettings`.
+pub fn update_schedule_conflicts(app: &mut App) -> Vec<(String, String, Vec<String>)> {
+    app.finish();
+    app.cleanup();
+    app.world_mut().schedule_scope(Update, |world, schedule| {
+        schedule.initialize(world).expect("the Update schedule must build");
+        // `Schedule::initialize` moves the systems out of the graph, so resolve names through `schedule.systems()`
+        // (same `SystemKey`s) instead of `graph().get_node_name`.
+        let names: std::collections::HashMap<_, _> = schedule
+            .systems()
+            .expect("the schedule was just initialized")
+            .map(|(key, system)| (key, system.name().to_string()))
+            .collect();
+        let components = world.components();
+        schedule
+            .graph()
+            .conflicting_systems()
+            .iter()
+            .map(|(a, b, ids)| {
+                (
+                    names[a].clone(),
+                    names[b].clone(),
+                    ids.iter().map(|id| components.get_name(*id).map(|n| n.to_string()).unwrap_or_default()).collect(),
+                )
+            })
+            .collect()
+    })
+}
+
+/// What one `Update` system touches, read from its real access (so writers hidden inside `SystemParam` bundles,
+/// e.g. `SimClock` inside `SceneV2Params`, are seen). Resource labels: `UiEvent`, `GameEvent`, `SceneEvent`
+/// (the `Messages<T>` buffers), `ActionQueue`, `SimClock`, `KeyCode`, `MouseButton` (`ButtonInput<T>`), `MouseMotion`.
+pub struct SystemReport {
+    pub name: String,
+    pub short: String,
+    pub reads: std::collections::BTreeSet<&'static str>,
+    pub writes: std::collections::BTreeSet<&'static str>,
+    /// Resources read by the system's own run conditions (`conflicting_systems()` ignores condition access).
+    pub cond_reads: std::collections::BTreeSet<&'static str>,
+}
+
+/// A read-only picture of the built `Update` schedule (D3 tests). Nothing here runs a frame.
+pub struct UpdateReport {
+    /// Executable order, `ApplyDeferred` sync nodes included (what the single-threaded executor runs).
+    pub order: Vec<String>,
+    pub systems: Vec<SystemReport>,
+    /// `"GameplaySet::Emit"`-style label -> short names of the systems in that set (nested sets included).
+    pub members: std::collections::HashMap<String, std::collections::BTreeSet<String>>,
+    pub warnings: Vec<String>,
+    /// Still-unordered conflicts: `(system a, system b, conflicting component/resource names)`.
+    pub conflicts: Vec<(String, String, Vec<String>)>,
+    /// Gameplay sets that carry a run condition (there must be none: Bevy evaluates a set condition once, at the first
+    /// member's turn, and skips every member).
+    pub set_conditions: Vec<String>,
+}
+
+impl UpdateReport {
+    pub fn short(name: &str) -> &str {
+        name.rsplit("::").next().unwrap_or(name)
+    }
+    pub fn system(&self, short: &str) -> &SystemReport {
+        let hits: Vec<_> = self.systems.iter().filter(|s| s.short == short).collect();
+        assert!(!hits.is_empty(), "no Update system named `{short}` (renamed or unregistered?)");
+        hits[0]
+    }
+    pub fn count(&self, short: &str) -> usize {
+        self.systems.iter().filter(|s| s.short == short).count()
+    }
+    /// Index of the first/last executable-order entry whose short name is `short`.
+    pub fn first_pos(&self, short: &str) -> usize {
+        self.order.iter().position(|n| Self::short(n) == short).unwrap_or_else(|| panic!("`{short}` is not in the Update order"))
+    }
+    pub fn last_pos(&self, short: &str) -> usize {
+        self.order.iter().rposition(|n| Self::short(n) == short).unwrap_or_else(|| panic!("`{short}` is not in the Update order"))
+    }
+    pub fn in_set(&self, set: &str, short: &str) -> bool {
+        self.members.get(set).is_some_and(|m| m.contains(short))
+    }
+}
+
+pub fn inspect_update_schedule(app: &mut App) -> UpdateReport {
+    inspect_schedule(app, Update)
+}
+
+/// Same as [`inspect_update_schedule`] for any schedule (e.g. `FixedUpdate`).
+pub fn inspect_schedule<L: bevy::ecs::schedule::ScheduleLabel + Clone>(app: &mut App, label: L) -> UpdateReport {
+    use bevy::ecs::schedule::SystemSet;
+    use ironhold_core::runtime::{ActionQueue, EmitSet, GameStreamSet, GameplaySet, SimClock};
+    use std::collections::{BTreeSet, HashMap};
+
+    app.finish();
+    app.cleanup();
+    app.world_mut().schedule_scope(label, |world, schedule| {
+        let tracked: Vec<(&'static str, Option<bevy::ecs::component::ComponentId>)> = vec![
+            ("UiEvent", world.resource_id::<Messages<UiEvent>>()),
+            ("GameEvent", world.resource_id::<Messages<GameEvent>>()),
+            ("SceneEvent", world.resource_id::<Messages<SceneEvent>>()),
+            ("ActionQueue", world.resource_id::<ActionQueue>()),
+            ("SimClock", world.resource_id::<SimClock>()),
+            ("KeyCode", world.resource_id::<ButtonInput<KeyCode>>()),
+            ("MouseButton", world.resource_id::<ButtonInput<MouseButton>>()),
+            ("MouseMotion", world.resource_id::<Messages<bevy::input::mouse::MouseMotion>>()),
+            ("LoadedKeyBindings", world.resource_id::<ironhold_core::runtime::LoadedKeyBindings>()),
+            ("LoadedGamepadBindings", world.resource_id::<ironhold_core::runtime::LoadedGamepadBindings>()),
+            ("CurrentTarget", world.resource_id::<ironhold_core::capabilities::action_bar::CurrentTarget>()),
+        ];
+        let label = |access: &bevy::ecs::query::FilteredAccessSet, write: bool| -> BTreeSet<&'static str> {
+            let combined = access.combined_access();
+            tracked
+                .iter()
+                .filter_map(|(name, id)| {
+                    // A missing resource would silently turn a check vacuous: fail loudly instead.
+                    let id = id.unwrap_or_else(|| panic!("tracked resource `{name}` is not registered in the test app (renamed or removed?)"));
+                    let hit = if write { combined.has_resource_write(id) } else { combined.has_resource_read(id) };
+                    hit.then_some(*name)
+                })
+                .collect()
+        };
+
+        // Step 1: `Schedule::initialize` moves systems and conditions out of the graph, so collect access first.
+        schedule.graph_mut().initialize(world);
+        let mut systems = Vec::new();
+        for (key, system, conditions) in schedule.graph().systems.iter() {
+            let name = system.name().to_string();
+            let access = &schedule.graph().systems.get(key).expect("system exists").access;
+            let mut cond_reads = BTreeSet::new();
+            for c in conditions {
+                cond_reads.extend(label(&c.access, false));
+            }
+            systems.push(SystemReport {
+                short: UpdateReport::short(&name).to_string(),
+                name,
+                reads: label(access, false),
+                writes: label(access, true),
+                cond_reads,
+            });
+        }
+
+        // Set-level run conditions (checked before the build moves them): the gameplay sets must carry none.
+        let mut set_conditions: Vec<String> = Vec::new();
+        {
+            let sets = &schedule.graph().system_sets;
+            let mut check = |label: String, set: bevy::ecs::intern::Interned<dyn SystemSet>| {
+                if let Some(key) = sets.get_key(set) {
+                    if sets.get_conditions(key).is_some_and(|c| !c.is_empty()) {
+                        set_conditions.push(label);
+                    }
+                }
+            };
+            for set in [GameplaySet::Emit, GameplaySet::Interpret, GameplaySet::Execute, GameplaySet::PostExecute] {
+                check(format!("GameplaySet::{set:?}"), set.intern());
+            }
+            for set in [EmitSet::Scene, EmitSet::Ui, EmitSet::Game, EmitSet::DirectActions, EmitSet::Dialogue] {
+                check(format!("EmitSet::{set:?}"), set.intern());
+            }
+            for set in [GameStreamSet::Targeting, GameStreamSet::ActionBar, GameStreamSet::Interact, GameStreamSet::DelayedEvents, GameStreamSet::Stats] {
+                check(format!("GameStreamSet::{set:?}"), set.intern());
+            }
+        }
+
+        // Step 2: build the schedule and read what only exists after it.
+        schedule.initialize(world).expect("the Update schedule must build");
+        let order: Vec<String> = schedule
+            .systems()
+            .expect("the schedule was just initialized")
+            .map(|(_, s)| s.name().to_string())
+            .collect();
+        let exec_names: HashMap<_, _> = schedule.systems().expect("initialized").map(|(k, s)| (k, s.name().to_string())).collect();
+
+        let mut members: HashMap<String, BTreeSet<String>> = HashMap::new();
+        let mut record = |label: &str, set: bevy::ecs::intern::Interned<dyn SystemSet>| {
+            if let Ok(keys) = schedule.graph().systems_in_set(set) {
+                members.insert(
+                    label.to_string(),
+                    keys.iter().filter_map(|k| exec_names.get(k)).map(|n| UpdateReport::short(n).to_string()).collect(),
+                );
+            }
+        };
+        for s in [GameplaySet::Emit, GameplaySet::Interpret, GameplaySet::Execute, GameplaySet::PostExecute] {
+            record(&format!("GameplaySet::{s:?}"), s.intern());
+        }
+        for s in [EmitSet::Scene, EmitSet::Ui, EmitSet::Game, EmitSet::DirectActions, EmitSet::Dialogue] {
+            record(&format!("EmitSet::{s:?}"), s.intern());
+        }
+        for s in [GameStreamSet::Targeting, GameStreamSet::ActionBar, GameStreamSet::Interact, GameStreamSet::DelayedEvents, GameStreamSet::Stats] {
+            record(&format!("GameStreamSet::{s:?}"), s.intern());
+        }
+
+        let components = world.components();
+        let conflicts = schedule
+            .graph()
+            .conflicting_systems()
+            .iter()
+            .map(|(a, b, ids)| {
+                (
+                    exec_names[a].clone(),
+                    exec_names[b].clone(),
+                    ids.iter().map(|id| components.get_name(*id).map(|n| n.to_string()).unwrap_or_default()).collect(),
+                )
+            })
+            .collect();
+        let warnings = schedule.warnings().iter().map(|w| format!("{w:?}")).collect();
+
+        UpdateReport { order, systems, members, warnings, conflicts, set_conditions }
+    })
+}

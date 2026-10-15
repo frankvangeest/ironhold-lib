@@ -22,16 +22,13 @@ player-construction site inserts it; re-check all of them when touching player c
 <!-- b:286 -->
 ## Targeting systems are ordered on purpose
 
-`TargetingPlugin`'s `click_select_system` -> `tab_targeting_system` -> `target_auto_clear_system` are `.chain()`ed and
-ordered `.before(action_bar_input_system)`; `target_indicator_system` and `target_hud_update_system` are ordered
-`.after(target_auto_clear_system)`. **This is load-bearing:** they touch `PlayerTarget`/`CurrentTarget` with no data
+`TargetingPlugin`'s `click_select_system` -> `tab_targeting_system` -> `target_auto_clear_system` are `.chain()`ed in
+`GameStreamSet::Targeting`, which the pipeline declares before `GameStreamSet::ActionBar` and so before both interpreters
+(`runtime/schedule.rs`, asserted by `tests/schedule_order_tests.rs`); `target_indicator_system` and `target_hud_update_system` are
+ordered `.after(target_auto_clear_system)`. **This is load-bearing:** they touch `PlayerTarget`/`CurrentTarget` with no data
 dependency, so an unordered system races the action bar on the frame a target despawns and shows up as flaky tests.
 **Any new system that reads or writes `PlayerTarget`/`CurrentTarget` in `Update` must be ordered explicitly against
 this chain**; a passing test run does not prove an ordering, since the failure is a scheduling race.
-The targeting-before-interpreters guarantee is transitive: it exists only because `ActionBarPlugin`'s
-`(cooldown_tick_system, action_bar_input_system, action_bar_visual_system).chain().before(fsm_interpreter_system)`
-(`action_bar.rs`) pulls the whole chain ahead of both interpreters. Removing or restructuring that edge silently drops
-the guarantee, and no test asserts the schedule graph, so this note is the only guard.
 
 <!-- b:284.rule -->
 ## Mouse-click action-bar slots
@@ -71,8 +68,8 @@ until the id is reused.
 `entity.interacted:{id}`, or `entity.interact_blocked:{id}` instead (never both) when `requires_item` names an item the
 player lacks; a blocked press still counts as a hit for miss detection. **`interactable_system` fires for every
 in-range `Interactable` on one keypress, not just the nearest**, so place interactables apart (see the
-`seal_door`/`merchant_01` note in `3rd_person_game_demo`'s `main.scene.ron`). It runs in `Update`
-`.before(fsm_interpreter_system)`; `trigger_zone_system` runs in `FixedUpdate`.
+`seal_door`/`merchant_01` note in `3rd_person_game_demo`'s `main.scene.ron`). It runs in `Update` in
+`GameStreamSet::Interact` (before the interpreters); `trigger_zone_system` runs in `FixedUpdate`.
 
 <!-- b:524 -->
 ## Per-entity decay timers use `SetDespawnTimer`
@@ -153,8 +150,8 @@ silently un-freeze a frozen pose (a corpse) on the web.
 ## Dialogue system (`dialogue.rs`)
 
 `DialoguePath(String)` is inserted by the scene loader on entities whose `PrefabDef.dialogue` is set;
-`dialogue_tick_system` matches `entity.interacted:{id}` against them and fires `Action::StartDialogue`. It runs
-`.after(button_system).after(interactable_system).before(fsm_interpreter_system)`. `ActiveDialogue` tracks the current
+`dialogue_tick_system` matches `entity.interacted:{id}` against them and fires `Action::StartDialogue`. It is in
+`EmitSet::Dialogue` (last in `Emit`) and `.after(button_system).after(interactable_system)`. `ActiveDialogue` tracks the current
 conversation and is cleared on `EndDialogue` and `LoadScene`. `advance_delay_secs` applies only when
 `node.choices.is_empty()`. `{self}` in a choice's `do_actions` is replaced with `active.npc_id` by
 `substitute_self_in_action()` before queueing. Events: `dialogue.started:{npc_id}`, `dialogue.ended:{dialogue_path}`.

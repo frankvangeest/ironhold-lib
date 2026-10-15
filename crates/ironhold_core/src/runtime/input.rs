@@ -63,7 +63,7 @@ pub fn global_input_system(
 /// `scene_unclaimed_gamepad_bindings` trigger) on an **unclaimed** gamepad and, for the specific
 /// purpose of `Action::JoinPlayer` binding the right physical pad to a freshly-joined player,
 /// records which pad triggered it in `PendingJoinGamepad`. Only fires in `InGame` state. Must run
-/// `.before(fsm_interpreter_system)` so `Action::JoinPlayer`'s executor sees this frame's
+/// `EmitSet::Ui` (before the interpreters) so `Action::JoinPlayer`'s executor sees this frame's
 /// value, not last frame's.
 ///
 /// No separate "live signal" prefilter is needed: a phantom/dead duplicate gamepad entry (the

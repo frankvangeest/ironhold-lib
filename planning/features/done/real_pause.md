@@ -244,7 +244,7 @@ music-volume action) is a follow-up. Designers can react to `game.paused`/`game.
 - `crates/ironhold_core/src/CLAUDE.md` rule b:575 ("`tick_delayed_events_system` ticks on raw `Time` with no pause gate") and the
   `lib.rs:365` `load-bearing:` comment: both become wrong (the timer freezes during a real pause but still fires in any non-`playing`
   state; the `global_on` rule stays). `capabilities/CLAUDE.md`: the new gate rule + the first-person/flycam camera note.
-- `planning/features/gameplay_fixed_tick_pipeline.md` §6 (forward invariant above), `planning/features/gameplay_pipeline_system_sets.md`
+- `planning/features/gameplay_fixed_tick_pipeline.md` §6 (forward invariant above), `planning/features/done/gameplay_pipeline_system_sets.md`
   (new task: `PlayerInputSet`), `planning/features/static_scene_mode.md` and the focus-loss backlog item (use `SimClock` holds).
 - Backlog: close/update `:21` (Bug) and the interim docs item; log: overlay key-binding merge/restore, real music ducking.
 - Regenerate `pause_nav` baselines (`python test_web.py --update-baseline pause_nav`, `--real-gpu`, own commit).
