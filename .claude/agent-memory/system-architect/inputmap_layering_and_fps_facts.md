@@ -1,0 +1,20 @@
+---
+name: inputmap-layering-and-fps-facts
+description: InputMap tri-state (authored/scheme/default) needs a raw-def + serde(from) layer; strafe keys are character-relative; FPS aim/cursor/mouse-slot review facts (2026-10-16 plan review)
+metadata:
+  type: project
+---
+
+Facts verified at `eb56cf3` (2026-10-16) while plan-reviewing `input_strafe_bindings.md` + `first_person_starter.md`.
+
+- **Layered defaults (authored > scheme > engine) cannot be done with `#[serde(default = fn)]`**: the default fn can't see `controls:`, and with IMPLICIT_SOME an authored `None` and an omitted field both deserialize to outer `None` in `Option<Option<String>>`. Correct mechanism: a raw `InputMapDef` whose key fields use `#[serde(default, deserialize_with = ...)]` to record presence (deserialize_with only runs when the field is present), then `#[serde(from = "InputMapDef")]` on the resolved `InputMap` (deny_unknown_fields goes on the raw struct). Keeps runtime/tests on one resolved type; provenance for `inspect` stored alongside.
+- `InputAction::Move` is applied in `player_movement_system` relative to the **player Transform** (`transform.forward()/right()`), not the camera, so "strafe (camera-relative)" in docs is wrong.
+- `input_translator_system` is `FixedUpdate` (after `gamepad_bind_system`); `first_person_camera_system` is `Update` in the camera chain and writes player yaw. Right stick X already emits `Turn` -> adding stick yaw in the FP camera double-yaws unless one consumer owns the stick.
+- Camera chain is NOT in `GameplaySet`; deferred `CameraChainSet` will put it after `Execute`. A targeting-set system ordered `.after(first_person_camera_system)` would become a cycle then; `.before` is cycle-safe now and later.
+- `parse_key` returns `KeyCode` and is shared by InputMap, flycam, `global_key_bindings`, slot keys: mouse-button slot keys need a separate path (sibling field like `gamepad_key` is the precedent).
+- Hidden key-collision sources beyond slot keys: flycam keys (`down` default KeyQ) coexist with a player in `camera_modes/flycam_spectator_test`; `global_key_bindings` in `.project.ron`.
+- Many core tests parse with plain `ron::de::from_str` (no IMPLICIT_SOME) but none on shipped prefab files; ~28 `InputMap {` literals across 12 test files.
+
+- Follow-up review facts: `action_bar.no_target:{key}` uses the slot's `key` string (not any mouse/gamepad name) and fires AFTER the cooldown and cost gates, so a miss neither starts the cooldown nor deducts cost (unbounded miss rate). No external edges reference camera-chain systems, so `.before(first_person_camera_system)` from `Targeting` is cycle-free. `PauseHold::Menu` is the only designer hold; an engine "lock lost" signal should be a GameEvent that RON turns into `PauseGame`, not an engine-added hold. Shipped projects have no FirstPerson player with a `gamepad_index`, and camera_modes switches to FirstPerson at runtime via SetCameraMode.
+
+Related: [[schema-field-defaults-ssot]], [[parse-key-case-sensitivity-trap]], [[schedule-ordering-mechanism]], [[targeting-currenttarget-mirror]]
