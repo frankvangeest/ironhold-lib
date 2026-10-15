@@ -228,64 +228,86 @@ impl Plugin for GamePlugin {
             .add_plugins(capabilities::particle_renderer::ParticleRendererPlugin)
             .add_plugins(capabilities::flame_material::FlameParticleMaterialPlugin)
             .add_plugins(capabilities::foliage::FoliagePlugin)
+            // Defines GameplaySet/EmitSet/GameStreamSet and their order (D3). Before the plugins whose systems join the sets.
+            .add_plugins(crate::runtime::schedule::GameplaySchedulePlugin)
             .add_plugins(capabilities::action_bar::ActionBarPlugin)
             .add_plugins(capabilities::targeting::TargetingPlugin)
             .add_plugins(capabilities::target_indicator::TargetIndicatorPlugin)
             .add_systems(Startup, setup)
-            .add_systems(Update, check_project_loaded.run_if(in_state(AppState::LoadingProject)))
-            // Scene + UI + input
+            // Scene stream (EmitSet::Scene, first in Emit): the project loader, then the scene spawner.
             .add_systems(Update, (
-                // spawn_scene_v2 must run BEFORE the message/action pipeline each frame.
+                check_project_loaded.run_if(in_state(AppState::LoadingProject)),
+                // spawn_scene_v2 must run BEFORE the message/action pipeline each frame (GameplaySet::Emit comes before
+                // Interpret and Execute).
                 // The action executor sets load_mode (ResMut, immediate) but updates
                 // SceneHandleV2 via commands (deferred). If spawn_scene_v2 ran after the
                 // executor in the same frame it would see load_mode=Overlay with the old
                 // SceneHandleV2, triggering a spurious spawn and resetting load_mode to
                 // Replace before the correct handle is ever visible.
-                spawn_scene_v2.before(fsm_interpreter_system),
-                preload_audio_system,
-                preload_decals_system,
+                // It is also the Replace-load auto-resume writer of SimClock and rewrites the key/gamepad bindings, so it
+                // runs before every input system of the frame (Scene -> {Ui, Game}).
+                spawn_scene_v2,
+            ).chain_ignore_deferred().in_set(crate::runtime::schedule::EmitSet::Scene))
+            // Scene + UI + input
+            .add_systems(Update, (
+                // SceneEvent readers: after every writer (spawn_scene_v2 and the executor), so they see the frame's events.
+                preload_audio_system.in_set(crate::runtime::schedule::GameplaySet::PostExecute),
+                preload_decals_system.in_set(crate::runtime::schedule::GameplaySet::PostExecute),
                 spawn_player_when_terrain_ready,
                 animation_policy_loader_system,
-                resolve_pending_behaviors_system,
                 apply_material_overrides,
+            ))
+            // Direct ActionQueue pushers that are not interpreters (EmitSet::DirectActions): behaviour activation, then
+            // despawn timers. They run after the UI/game streams and before the dialogue and the interpreters, so their
+            // actions are first in the frame's push order.
+            .add_systems(Update, (
+                resolve_pending_behaviors_system,
+                despawn_timer_system,
+            ).chain_ignore_deferred().in_set(crate::runtime::schedule::EmitSet::DirectActions))
+            // UI stream (EmitSet::Ui), in this order: global key input (ESC, etc.) → UI messages, then the gamepad triggers
+            // (claimed-pad bindings and the unclaimed join trigger, the gamepad equivalent of global_input_system) — all of
+            // which must run before the interpreter (GameplaySet::Emit comes before Interpret) so Action::JoinPlayer sees
+            // this frame's PendingJoinGamepad value, not a stale one from last frame — then the UI buttons.
+            // load-bearing: Action::JoinPlayer reads PendingJoinGamepad; Emit -> Interpret keeps it current.
+            .add_systems(Update, (
+                global_input_system,
+                unclaimed_gamepad_trigger_system,
                 button_system,
                 icon_button_click_system,
-            ))
-            // Global key input (ESC, etc.) → UI messages, must run before interpreter
-            .add_systems(Update, global_input_system.before(fsm_interpreter_system))
-            // Unclaimed-gamepad join trigger (gamepad equivalent of global_input_system above) —
-            // must also run before the interpreter so Action::JoinPlayer sees this frame's
-            // PendingJoinGamepad value, not a stale one from last frame.
-            // load-bearing: Action::JoinPlayer reads PendingJoinGamepad; this edge keeps it current.
-            .add_systems(Update, unclaimed_gamepad_trigger_system.before(fsm_interpreter_system))
-            // Stat pipeline: modifier ticks → regen → effective value recompute — all before
-            // the interpreter chain so threshold crossings are visible in the same frame.
+            ).chain().in_set(crate::runtime::schedule::EmitSet::Ui))
+            // Stat pipeline (GameStreamSet::Stats, last of the game stream): modifier ticks → regen → effective value
+            // recompute, all before the interpreter chain. Threshold CROSSINGS are NOT visible in the same frame: they are
+            // detected after the executor (`stat_threshold_system`) and interpreted at the head of the next frame.
+            // (`stat_effective_value_system` is registered twice; never order against it by name, see `runtime/schedule.rs`.)
             .add_systems(Update, (
                 stat_modifier_system,
                 stat_regen_system,
                 stat_effective_value_system,
-            ).chain().before(fsm_interpreter_system))
+            ).chain().in_set(crate::runtime::schedule::GameStreamSet::Stats))
             // Apply AudioState changes (mute_on_start, ToggleMute, SetVolume) to GlobalVolume
             // before any actions fire so mute_on_start is respected before PlayMusicLoop runs.
-            .add_systems(Update, audio_state_system.before(fsm_interpreter_system))
+            .add_systems(Update, audio_state_system.before(crate::runtime::schedule::GameplaySet::Interpret))
             // Mirror the chosen volume preset into `GameVariables["audio_volume_percent"]`. After
             // action_executor_system (which applies SetVolume) and before the label system, so the
             // bound Label updates the same frame. The FSM interpreter never reads GameVariables, so
             // there is no reason to run this earlier.
             // load-bearing: after action_executor_system (SetVolume applies there), before update_dynamic_labels_system.
             .add_systems(Update, audio_volume_var_system
-                .after(action_executor_system)
+                .in_set(crate::runtime::schedule::GameplaySet::PostExecute)
                 .before(update_dynamic_labels_system))
             // Messages -> actions (chained: interpreters must run before executor each frame)
             // stat_threshold_system runs after action_executor to detect crossings from
             // ModifyStat/SetStat actions executed this frame; emitted GameEvents fire next frame.
             // drain_spawn_queue_system runs last: processes items queued by action_executor
             // this frame at a rate-limited SPAWNS_PER_FRAME to spread pipeline compile stalls.
-            // load-bearing: this .chain() IS the interpreter -> executor order; every ActionQueue pusher and reader (interpreters,
-            // flush_pending_intent, executor, the drain_* systems) depends on it. See `src/CLAUDE.md`, "`lib.rs` ordering edges".
+            // load-bearing: these two set-ordered chains (GameplaySet::Interpret, then Execute) ARE the interpreter -> executor
+            // order; every ActionQueue pusher and reader (interpreters, flush_pending_intent, executor, the drain_* systems)
+            // depends on it. See `runtime/schedule.rs` and `src/CLAUDE.md`, "`lib.rs` ordering edges".
             .add_systems(Update, (
                 fsm_interpreter_system,
                 entity_fsm_interpreter_system,
+            ).chain().in_set(crate::runtime::schedule::GameplaySet::Interpret))
+            .add_systems(Update, (
                 flush_pending_intent_system,
                 action_executor_system,
                 // The only caller of Time<Virtual>::pause()/unpause(); runs after every writer of SimClock this frame.
@@ -299,15 +321,17 @@ impl Plugin for GamePlugin {
                 simulate_pool_system,
                 rebuild_pool_meshes_system,
                 spawn_decal_system,
-            ).chain())
+            ).chain().in_set(crate::runtime::schedule::GameplaySet::Execute))
             .add_systems(Update, fading_light_system.after(drain_particle_effects_system))
             .add_systems(Update, fading_decal_system.after(spawn_decal_system))
-            .add_systems(Update, clear_pool_on_scene_unload_system)
+            // SceneEvent::Unloading reader: after the pool systems (and every SceneEvent writer) so particles spawned in the
+            // LoadScene frame are always wiped.
+            .add_systems(Update, clear_pool_on_scene_unload_system.in_set(crate::runtime::schedule::GameplaySet::PostExecute))
             .add_systems(Update, capabilities::player::update_player_speed_system)
             // Relay: reads GameEvent messages written by action_executor_system in the same
             // Update tick and populates NpcHitQueue for npc_behavior_system (FixedUpdate).
             // Staying in Update avoids all cross-schedule double-buffer timing complexity.
-            .add_systems(Update, npc_hit_relay_system.after(action_executor_system))
+            .add_systems(Update, npc_hit_relay_system.in_set(crate::runtime::schedule::GameplaySet::PostExecute))
             // Physics-driven input + movement must run in FixedUpdate for stable simulation.
             // npc_behavior_system reads NpcHitQueue drained at the start of each FixedUpdate tick.
             // motion_system (moved from `Update` — see its doc comment) is folded into the same
@@ -358,21 +382,23 @@ impl Plugin for GamePlugin {
             // Interactable input runs before all interpreters so both readers
             // see the emitted GameEvent in the same frame.
             // Real pause: edge-triggered input gate (`sim_running`); the `panels_open` early-return inside stays separate on purpose.
-            .add_systems(Update, interactable_system.before(fsm_interpreter_system).run_if(crate::runtime::sim_clock::sim_running))
+            .add_systems(Update, interactable_system
+                .in_set(crate::runtime::schedule::GameStreamSet::Interact)
+                .run_if(crate::runtime::sim_clock::sim_running))
             // Keeps Bevy's message buffers flowing while the sim is held (a paused clock runs zero fixed ticks, which is what normally flips them).
             .add_systems(Last, crate::runtime::sim_clock::keep_messages_flowing_while_held)
             // Dialogue tick: auto-wires entity.interacted→StartDialogue and manages panel UI.
             // Runs after button_system and interactable_system so all events are in the buffer.
             // load-bearing: dialogue_tick_system after button + interactable and before the interpreters.
             .add_systems(Update, dialogue_tick_system
+                .in_set(crate::runtime::schedule::EmitSet::Dialogue)
                 .after(button_system)
-                .after(interactable_system)
-                .before(fsm_interpreter_system))
+                .after(interactable_system))
             // Delayed events tick down each frame; emitted GameEvents are visible to both
             // interpreter systems in the same frame they fire.
             // load-bearing: tick_delayed_events_system before the interpreters. It reads the (virtual) `Res<Time>`, so a real
             // pause freezes it with no gate; it still fires in any non-`playing` FSM state, so rules that must catch it live in `global_on`.
-            .add_systems(Update, tick_delayed_events_system.before(fsm_interpreter_system))
+            .add_systems(Update, tick_delayed_events_system.in_set(crate::runtime::schedule::GameStreamSet::DelayedEvents))
             // Visual/animation pipeline stays in Update (rendering cadence, not physics)
             // load-bearing: the order inside this .chain() is the camera pipeline: animation_resolver_system first and
             // animation_playback_system last; dynamic_split_screen_system after party_camera_follow_system and before
@@ -413,9 +439,11 @@ impl Plugin for GamePlugin {
                 .before(target_hud_update_system))
             .add_systems(Update, split_viewport_player_label_spawn_system)
             .add_systems(Update, target_hud_spawn_system)
-            .add_systems(Update, pipeline_warmup_system)
+            // After the executor and its command flush: `spawn_scene_v2` inserts `PipelineWarmup(4)` and spawns the scene's
+            // meshes through commands, so ordering this after `Execute` keeps the warmup window starting in the load frame
+            // (before D3's sets it ran after every sync point; without the edge it would see them one frame late).
+            .add_systems(Update, pipeline_warmup_system.after(crate::runtime::schedule::GameplaySet::Execute))
             .add_systems(Update, damage_popup_system.before(world_label_screen_pos_system))
-            .add_systems(Update, despawn_timer_system)
             // load-bearing: world_label_screen_pos_system after camera_blend_system, nameplate_visibility_system after it.
             // `.after(camera_blend_system)`: must see this frame's *final* camera pose (after the
             // whole per-mode camera chain above, blended) — previously unordered relative to that
@@ -434,12 +462,12 @@ impl Plugin for GamePlugin {
             .add_systems(Update, (stat_bar_update_system, stat_bar_value_text_system, stat_label_update_system, world_stat_bar_update_system, world_pixel_bar_update_system, world_icon_bar_update_system, world_textured_bar_update_system))
             .add_systems(Update, stat_widget_cleanup_system)
             .add_systems(Update, stat_radar_update_system)
-            // .after(action_executor_system): AddItem/RemoveItem/TransferItem/BuyItem/
+            // GameplaySet::PostExecute (after the executor): AddItem/RemoveItem/TransferItem/BuyItem/
             // TakeAllFromContainer all mutate PlayerInventory/Inventory this same frame — without
             // this ordering the scheduler is free to run these before the executor, rendering one
             // frame of stale slot counts/icons on the same frame an item is added or removed.
-            .add_systems(Update, crate::capabilities::inventory::inventory_ui_system.after(action_executor_system))
-            .add_systems(Update, crate::capabilities::inventory::container_ui_system.after(action_executor_system))
+            .add_systems(Update, crate::capabilities::inventory::inventory_ui_system.in_set(crate::runtime::schedule::GameplaySet::PostExecute))
+            .add_systems(Update, crate::capabilities::inventory::container_ui_system.in_set(crate::runtime::schedule::GameplaySet::PostExecute))
             .add_systems(PostUpdate, update_debug_state);
 
         #[cfg(target_arch = "wasm32")]

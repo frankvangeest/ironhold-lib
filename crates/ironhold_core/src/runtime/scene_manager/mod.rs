@@ -153,7 +153,7 @@ pub fn volume_percent_string(active_fraction: f32) -> String {
 /// bound to it shows the live volume with no `state_machine.ron` rules (same shape as the targeting
 /// capability's `target_display`). Runs whenever `AudioState` changes: it is `init_resource`d at
 /// startup (so the variable exists from frame 1), re-inserted at project load, and mutated by
-/// `Action::SetVolume`. Scheduled `.after(action_executor_system).before(update_dynamic_labels_system)`
+/// `Action::SetVolume`. Scheduled in `GameplaySet::PostExecute` (after the executor) and `.before(update_dynamic_labels_system)`
 /// in `lib.rs` so a `SetVolume` is visible in the label the same frame. Mute is deliberately not
 /// reflected here (it has its own `audio.muted`/`audio.unmuted` RON bridge).
 pub fn audio_volume_var_system(

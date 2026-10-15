@@ -4,7 +4,7 @@ use bevy::window::PrimaryWindow;
 use bevy::input::gamepad::Gamepad;
 use crate::runtime::messages::GameEvent;
 use crate::runtime::scene_manager::{SpawnId, PrefabKey, SpawnRegistry};
-use crate::capabilities::action_bar::{action_bar_input_system, CurrentTarget};
+use crate::capabilities::action_bar::CurrentTarget;
 use crate::capabilities::player::{BoundGamepad, CharacterController, PlayerIndex, PlayerTarget};
 use crate::schema::player::InputMap;
 use crate::GameVariables;
@@ -63,7 +63,10 @@ impl Plugin for TargetingPlugin {
                 target_auto_clear_system,
             )
                 .chain()
-                .before(action_bar_input_system),
+                // GameStreamSet::Targeting comes before GameStreamSet::ActionBar (the explicit replacement of the old
+                // `.before(action_bar_input_system)` edge; the guarantee is now a declared set order, tested in
+                // `tests/schedule_order_tests.rs`).
+                .in_set(crate::runtime::schedule::GameStreamSet::Targeting),
             debug_selectables_system.run_if(resource_exists::<GizmoConfigStore>),
         ));
     }
