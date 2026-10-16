@@ -259,34 +259,45 @@ fn default_character_rotate_button() -> Option<String> { Some("Right".to_string(
 fn default_initial_pitch() -> f32 { 0.5 }
 fn default_look_speed() -> f32 { 2.0 }
 
+/// A player's input bindings. **This is the resolved type**: every consumer reads it as-is, and a
+/// future raw-definition layer (`controls:` schemes, `planning/features/first_person_starter.md`)
+/// resolves *into* it rather than replacing it.
+///
+/// Every key field is an `Option<String>`: `None` means **unbound** (write a bare `None` in RON;
+/// `implicit_some` makes `forward: "KeyW"` still parse unchanged). An omitted field takes the
+/// default shown on each field.
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct InputMap {
-    /// Default: `"KeyW"`.
+    /// Move forward. Default: `"KeyW"`.
     #[serde(default = "default_forward_key")]
-    pub forward: String,
-    /// Default: `"KeyS"`.
+    pub forward: Option<String>,
+    /// Move backward. Default: `"KeyS"`.
     #[serde(default = "default_backward_key")]
-    pub backward: String,
+    pub backward: Option<String>,
+    /// **Turn** left (rotate the character). Strafes instead while `strafe_mouse_button` is held.
     /// Default: `"KeyA"`.
     #[serde(default = "default_left_key")]
-    pub left: String,
+    pub left: Option<String>,
+    /// **Turn** right (rotate the character). Strafes instead while `strafe_mouse_button` is held.
     /// Default: `"KeyD"`.
     #[serde(default = "default_right_key")]
-    pub right: String,
-    /// Default: `"KeyQ"`.
-    #[serde(default = "default_strafe_left_key")]
-    pub strafe_left: String,
-    /// Default: `"KeyE"`.
-    #[serde(default = "default_strafe_right_key")]
-    pub strafe_right: String,
+    pub right: Option<String>,
+    /// Strafe left, relative to the character's facing. Default: `None` (unbound).
+    #[serde(default)]
+    pub strafe_left: Option<String>,
+    /// Strafe right, relative to the character's facing. Default: `None` (unbound).
+    #[serde(default)]
+    pub strafe_right: Option<String>,
     /// Default: `"Space"`.
     #[serde(default = "default_jump_key")]
-    pub jump: String,
+    pub jump: Option<String>,
+    /// Default: `"ShiftLeft"`.
     #[serde(default = "default_run_key")]
-    pub run: String,
+    pub run: Option<String>,
+    /// Default: `"KeyF"`.
     #[serde(default = "default_interact_key")]
-    pub interact: String,
+    pub interact: Option<String>,
     /// Mouse button that enables strafe-mode (A/D strafe instead of rotate).
     /// `"Left"`, `"Right"`, or `None` to disable mouse-strafe entirely.
     /// Default: `"Left"` (preserves existing behavior).
@@ -295,7 +306,7 @@ pub struct InputMap {
     /// Key to cycle to the next nearest `targetable: true` entity (default: `"Tab"`).
     /// Hold Shift while pressing to cycle in reverse (nearest-last).
     #[serde(default = "default_target_next_key")]
-    pub target_next: String,
+    pub target_next: Option<String>,
     /// Maximum world-space distance (in units) to consider for Tab targeting (default: 30.0).
     #[serde(default = "default_target_range")]
     pub target_range: f32,
@@ -347,11 +358,10 @@ pub struct InputMap {
     pub look_down: Option<String>,
 }
 
-// Hand-written, not `#[derive(Default)]`: a derived `Default` would silently give every
-// `String` field an EMPTY string (`InputMap::parse_key("")` matches no arm, leaving that
-// binding entirely unbound with no warning) rather than the real WASD/Space scheme -- strictly
-// worse than the RON parse error this type's `#[serde(default = ...)]` attributes exist to
-// avoid. Every field below calls the exact same fn its own `#[serde(default = ...)]` attribute
+// Hand-written, not `#[derive(Default)]`: a derived `Default` would give every key field `None`
+// (unbound) and every `String` button field an EMPTY string (`InputMap::parse_gamepad_button("")`
+// matches no arm) rather than the real WASD/Space scheme -- strictly worse than the RON parse
+// error this type's `#[serde(default = ...)]` attributes exist to avoid. Every field below calls the exact same fn its own `#[serde(default = ...)]` attribute
 // does, so this and the per-field RON defaults can never drift apart. Same convention as
 // `FlyCamDef`/`MovementConfig` (`schema/catalog.rs`).
 impl Default for InputMap {
@@ -361,8 +371,8 @@ impl Default for InputMap {
             backward: default_backward_key(),
             left: default_left_key(),
             right: default_right_key(),
-            strafe_left: default_strafe_left_key(),
-            strafe_right: default_strafe_right_key(),
+            strafe_left: None,
+            strafe_right: None,
             jump: default_jump_key(),
             run: default_run_key(),
             interact: default_interact_key(),
@@ -388,24 +398,22 @@ impl Default for InputMap {
 // resolves to" are structurally the same values, not two hand-maintained copies that could drift
 // -- a designer authoring only `inputs: (gamepad_index: 0)` gets the identical WASD/Space bindings
 // a designer who omits `inputs:` entirely gets. Same convention as `FlyCamDef`/`MovementConfig`.
-fn default_forward_key() -> String { "KeyW".to_string() }
-fn default_backward_key() -> String { "KeyS".to_string() }
-fn default_left_key() -> String { "KeyA".to_string() }
-fn default_right_key() -> String { "KeyD".to_string() }
-fn default_strafe_left_key() -> String { "KeyQ".to_string() }
-fn default_strafe_right_key() -> String { "KeyE".to_string() }
-fn default_jump_key() -> String { "Space".to_string() }
+fn default_forward_key() -> Option<String> { Some("KeyW".to_string()) }
+fn default_backward_key() -> Option<String> { Some("KeyS".to_string()) }
+fn default_left_key() -> Option<String> { Some("KeyA".to_string()) }
+fn default_right_key() -> Option<String> { Some("KeyD".to_string()) }
+fn default_jump_key() -> Option<String> { Some("Space".to_string()) }
 
-fn default_run_key() -> String {
-    "ShiftLeft".to_string()
+fn default_run_key() -> Option<String> {
+    Some("ShiftLeft".to_string())
 }
 
-fn default_interact_key() -> String {
-    "KeyF".to_string()
+fn default_interact_key() -> Option<String> {
+    Some("KeyF".to_string())
 }
 
 fn default_strafe_mouse_button() -> Option<String> { Some("Left".to_string()) }
-fn default_target_next_key() -> String { "Tab".to_string() }
+fn default_target_next_key() -> Option<String> { Some("Tab".to_string()) }
 fn default_target_range() -> f32 { 30.0 }
 fn default_gamepad_jump() -> String { "South".to_string() }
 fn default_gamepad_run() -> String { "East".to_string() }
@@ -436,7 +444,7 @@ impl InputMap {
             "interact" => &self.interact,
             _ => return None,
         };
-        Self::parse_key(s)
+        s.as_deref().and_then(Self::parse_key)
     }
 
     /// Looks up a gamepad button field by name (`"jump"`, `"run"`, `"interact"`,

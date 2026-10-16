@@ -346,6 +346,14 @@ pub fn input_translator_system(
         if let Some(key) = controller.inputs.key("backward") {
             if keyboard_input.pressed(key) { move_vec.y -= 1.0; }
         }
+        // Dedicated strafe keys (unbound by default), additive with the rest below.
+        if let Some(key) = controller.inputs.key("strafe_right") {
+            if keyboard_input.pressed(key) { move_vec.x += 1.0; }
+        }
+        if let Some(key) = controller.inputs.key("strafe_left") {
+            if keyboard_input.pressed(key) { move_vec.x -= 1.0; }
+        }
+
         // A/D strafe only when left mouse is held; otherwise A/D rotates instead.
         if strafe_mode {
             if let Some(key) = controller.inputs.key("right") {

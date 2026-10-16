@@ -1,0 +1,18 @@
+(
+    schema_version: 2,
+    prefabs: {
+        "test_player": (
+            kind: Primitive,
+            shape: Capsule3d,
+            components: (
+                tags: ["player"],
+                inputs: (
+                    strafe_left: "KeyA",
+                    strafe_right: "KeyD",
+                    left: None,
+                    right: None,
+                ),
+            ),
+        ),
+    },
+)

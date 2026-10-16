@@ -1791,15 +1791,15 @@ fn test_player_prefab_inputs_all_keys_parses() {
     assert!(catalog.validate().is_ok());
     let inputs = catalog.prefabs["player"].components.inputs.as_ref()
         .expect("inputs should be Some after explicit RON block");
-    assert_eq!(inputs.forward,      "KeyW");
-    assert_eq!(inputs.backward,     "KeyS");
-    assert_eq!(inputs.left,         "KeyA");
-    assert_eq!(inputs.right,        "KeyD");
-    assert_eq!(inputs.strafe_left,  "KeyQ");
-    assert_eq!(inputs.strafe_right, "KeyE");
-    assert_eq!(inputs.jump,         "Space");
-    assert_eq!(inputs.run,          "ShiftLeft");
-    assert_eq!(inputs.interact,     "KeyF");
+    assert_eq!(inputs.forward.as_deref(),      Some("KeyW"));
+    assert_eq!(inputs.backward.as_deref(),     Some("KeyS"));
+    assert_eq!(inputs.left.as_deref(),         Some("KeyA"));
+    assert_eq!(inputs.right.as_deref(),        Some("KeyD"));
+    assert_eq!(inputs.strafe_left.as_deref(),  Some("KeyQ"));
+    assert_eq!(inputs.strafe_right.as_deref(), Some("KeyE"));
+    assert_eq!(inputs.jump.as_deref(),         Some("Space"));
+    assert_eq!(inputs.run.as_deref(),          Some("ShiftLeft"));
+    assert_eq!(inputs.interact.as_deref(),     Some("KeyF"));
 }
 
 #[test]
@@ -1830,9 +1830,9 @@ fn test_player_prefab_inputs_optional_keys_default() {
     "#;
     let catalog: PrefabCatalog = from_str(ron_str).expect("inputs missing run/interact should parse");
     let inputs = catalog.prefabs["player"].components.inputs.as_ref().unwrap();
-    assert_eq!(inputs.run,      "ShiftLeft", "run should default to ShiftLeft");
-    assert_eq!(inputs.interact, "KeyF",      "interact should default to KeyF");
-    assert_eq!(inputs.forward,  "ArrowUp");
+    assert_eq!(inputs.run.as_deref(),      Some("ShiftLeft"), "run should default to ShiftLeft");
+    assert_eq!(inputs.interact.as_deref(), Some("KeyF"),      "interact should default to KeyF");
+    assert_eq!(inputs.forward.as_deref(),  Some("ArrowUp"));
     assert_eq!(inputs.strafe_mouse_button, Some("Left".to_string()),
         "strafe_mouse_button should default to Left");
 }
@@ -4495,13 +4495,13 @@ fn test_scene_no_target_indicator_defaults_to_none() {
 fn test_input_map_empty_defaults_to_wasd_space() {
     let ron_str = "()";
     let inputs: InputMap = from_str(ron_str).expect("a fully-empty inputs: block must parse");
-    assert_eq!(inputs.forward, "KeyW");
-    assert_eq!(inputs.backward, "KeyS");
-    assert_eq!(inputs.left, "KeyA");
-    assert_eq!(inputs.right, "KeyD");
-    assert_eq!(inputs.strafe_left, "KeyQ");
-    assert_eq!(inputs.strafe_right, "KeyE");
-    assert_eq!(inputs.jump, "Space");
+    assert_eq!(inputs.forward.as_deref(), Some("KeyW"));
+    assert_eq!(inputs.backward.as_deref(), Some("KeyS"));
+    assert_eq!(inputs.left.as_deref(), Some("KeyA"));
+    assert_eq!(inputs.right.as_deref(), Some("KeyD"));
+    assert_eq!(inputs.strafe_left, None);
+    assert_eq!(inputs.strafe_right, None);
+    assert_eq!(inputs.jump.as_deref(), Some("Space"));
 }
 
 /// The bug's own real-world repro: a designer authoring `inputs: (gamepad_index: 0)` purely to
@@ -4514,18 +4514,18 @@ fn test_input_map_partial_gamepad_only_still_parses() {
     assert_eq!(inputs.gamepad_index, Some(0));
     // Every omitted keyboard field must fall back to the same WASD/Space scheme
     // `InputMap::default()` uses for a fully-omitted `inputs:` block.
-    assert_eq!(inputs.forward, "KeyW");
-    assert_eq!(inputs.backward, "KeyS");
-    assert_eq!(inputs.left, "KeyA");
-    assert_eq!(inputs.right, "KeyD");
-    assert_eq!(inputs.strafe_left, "KeyQ");
-    assert_eq!(inputs.strafe_right, "KeyE");
-    assert_eq!(inputs.jump, "Space");
+    assert_eq!(inputs.forward.as_deref(), Some("KeyW"));
+    assert_eq!(inputs.backward.as_deref(), Some("KeyS"));
+    assert_eq!(inputs.left.as_deref(), Some("KeyA"));
+    assert_eq!(inputs.right.as_deref(), Some("KeyD"));
+    assert_eq!(inputs.strafe_left, None);
+    assert_eq!(inputs.strafe_right, None);
+    assert_eq!(inputs.jump.as_deref(), Some("Space"));
 }
 
-/// `impl Default for InputMap`'s 18 fn-backed fields structurally can't drift from their
-/// `#[serde(default = ...)]` counterparts (both call the same fn) -- but its 4 hand-written
-/// `None` literals (`gamepad_index`, `look_left`/`right`/`up`/`down`) are matched against bare
+/// `impl Default for InputMap`'s fn-backed fields structurally can't drift from their
+/// `#[serde(default = ...)]` counterparts (both call the same fn) -- but its hand-written
+/// `None` literals (`strafe_left`/`strafe_right`, `gamepad_index`, `look_left`/`right`/`up`/`down`) are matched against bare
 /// `#[serde(default)]` only by convention, not by construction. If a future field ever gained a
 /// `Some(...)`-returning default fn without `impl Default` being updated to match, this is the
 /// one test that would catch it (debug-detective finding, `input_map_defaults` review).
@@ -4564,11 +4564,24 @@ fn test_input_map_default_impl_matches_fully_empty_ron() {
 fn test_input_map_explicit_keys_override_defaults() {
     let ron_str = r#"(forward: "ArrowUp", jump: "Enter")"#;
     let inputs: InputMap = from_str(ron_str).expect("must parse");
-    assert_eq!(inputs.forward, "ArrowUp");
-    assert_eq!(inputs.jump, "Enter");
+    assert_eq!(inputs.forward.as_deref(), Some("ArrowUp"));
+    assert_eq!(inputs.jump.as_deref(), Some("Enter"));
     // Untouched fields still default.
-    assert_eq!(inputs.backward, "KeyS");
-    assert_eq!(inputs.left, "KeyA");
+    assert_eq!(inputs.backward.as_deref(), Some("KeyS"));
+    assert_eq!(inputs.left.as_deref(), Some("KeyA"));
+}
+
+/// `input_strafe_bindings.md`: a bare `None` unbinds a key field (and `implicit_some` keeps the
+/// plain `"KeyW"` form working in the same block), while an authored strafe key parses as bound.
+#[test]
+fn test_input_map_none_unbinds_and_authored_strafe_binds() {
+    let inputs: InputMap = from_str(r#"(forward: None, left: "ArrowLeft", strafe_left: "KeyQ")"#)
+        .expect("None and bare key strings must both parse for Option<String> key fields");
+    assert_eq!(inputs.forward, None, "`forward: None` must unbind, not fall back to the default");
+    assert_eq!(inputs.left.as_deref(), Some("ArrowLeft"));
+    assert_eq!(inputs.strafe_left.as_deref(), Some("KeyQ"));
+    assert_eq!(inputs.strafe_right, None, "an omitted strafe key stays unbound");
+    assert_eq!(inputs.backward.as_deref(), Some("KeyS"), "an omitted key still takes its default");
 }
 
 /// `InputMap` now carries `#[serde(deny_unknown_fields)]` -- added alongside the 7 new per-field
@@ -4614,8 +4627,8 @@ fn test_prefab_catalog_partial_inputs_block_parses() {
     let inputs = catalog.prefabs["player"].components.inputs.as_ref()
         .expect("inputs must be Some");
     assert_eq!(inputs.gamepad_index, Some(0));
-    assert_eq!(inputs.forward, "KeyW");
-    assert_eq!(inputs.jump, "Space");
+    assert_eq!(inputs.forward.as_deref(), Some("KeyW"));
+    assert_eq!(inputs.jump.as_deref(), Some("Space"));
 }
 
 /// D1: `StatCatalog.stats` is an `IndexMap`, so the order stats are written in `stats.ron` is the

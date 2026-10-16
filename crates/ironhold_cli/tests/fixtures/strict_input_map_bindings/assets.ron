@@ -1,0 +1,14 @@
+(
+    schema_version: 1,
+    effects: {
+        "hit_spark": (
+            particle_count: 4,
+            lifetime_secs: 1.0,
+            color_start: (1.0, 1.0, 1.0, 1.0),
+            color_end: (1.0, 1.0, 1.0, 0.0),
+        ),
+    },
+    audio: {
+        "click": (path: "shared/audio/click.wav"),
+    },
+)

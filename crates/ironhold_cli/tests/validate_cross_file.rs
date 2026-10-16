@@ -2399,3 +2399,56 @@ fn set_ui_visible_group_containing_action_bar_exits_1() {
 {stdout}");
     assert!(stdout.contains("contains ActionBar \"skill_bar\"") && stdout.contains("keys would keep firing"), "{stdout}");
 }
+
+// ── input_strafe_bindings.md: `InputMap` key diagnostics ─────────────────────────────────────
+
+/// An unrecognised key name in a prefab's `inputs:` is silently unbound at runtime, so it is a
+/// hard error (the sibling of `bad_action_bar_key` for slot keys).
+#[test]
+fn unrecognised_input_map_key_exits_1() {
+    let (code, stdout) = validate("bad_input_map_key");
+    assert_eq!(code, 1, "expected exit 1, got {code}:
+{stdout}");
+    assert!(
+        stdout.contains("KeyWW") && stdout.contains("inputs.forward"),
+        "expected the bad key name and field in output:
+{stdout}"
+    );
+}
+
+/// `None` unbinds and `strafe_left`/`strafe_right` are valid fields: a clean project, exit 0, with
+/// no strict warnings either (A/D moved to the strafe fields, turn keys unbound).
+#[test]
+fn none_unbind_and_strafe_keys_are_clean_even_strict() {
+    let (code, stdout) = validate_strict("clean_input_map_none_unbind");
+    assert_eq!(code, 0, "expected exit 0, got {code}:
+{stdout}");
+}
+
+/// `--strict`: `left`/`strafe_left` on one key (turn and strafe at once), an empty-string binding,
+/// and a movement key that is also an action-bar slot key (`KeyE`) in a scene using that player.
+#[test]
+fn strict_input_map_binding_warnings() {
+    let (code, stdout) = validate_strict("strict_input_map_bindings");
+    assert_eq!(code, 1, "expected exit 1 (strict warnings), got {code}:
+{stdout}");
+    assert!(
+        stdout.contains("inputs.left and inputs.strafe_left"),
+        "expected the duplicate left/strafe_left warning:
+{stdout}"
+    );
+    assert!(
+        stdout.contains("inputs.jump is an empty string"),
+        "expected the empty-string binding warning:
+{stdout}"
+    );
+    assert!(
+        stdout.contains("inputs.strafe_right") && stdout.contains("ActionBar \"skill_bar\" slot \"KeyE\""),
+        "expected the movement-key/slot-key collision warning:
+{stdout}"
+    );
+    // Not an error: the plain (non-strict) run of the same project passes.
+    let (plain_code, plain_out) = validate("strict_input_map_bindings");
+    assert_eq!(plain_code, 0, "non-strict run must stay clean, got {plain_code}:
+{plain_out}");
+}

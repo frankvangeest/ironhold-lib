@@ -38,12 +38,12 @@ use bevy::input::gamepad::{GamepadButton, GamepadAxis};
 
 fn test_input_map() -> InputMap {
     InputMap {
-        forward: "KeyW".to_string(), backward: "KeyS".to_string(),
-        left: "KeyA".to_string(), right: "KeyD".to_string(),
-        strafe_left: "KeyQ".to_string(), strafe_right: "KeyE".to_string(),
-        jump: "Space".to_string(), run: "ShiftLeft".to_string(),
-        interact: "KeyF".to_string(), strafe_mouse_button: None,
-        target_next: "Tab".to_string(), target_range: 30.0,
+        forward: Some("KeyW".to_string()), backward: Some("KeyS".to_string()),
+        left: Some("KeyA".to_string()), right: Some("KeyD".to_string()),
+        strafe_left: None, strafe_right: None,
+        jump: Some("Space".to_string()), run: Some("ShiftLeft".to_string()),
+        interact: Some("KeyF".to_string()), strafe_mouse_button: None,
+        target_next: Some("Tab".to_string()), target_range: 30.0,
         gamepad_index: None, look_left: None, look_right: None, look_up: None, look_down: None,
         gamepad_jump: "South".to_string(), gamepad_run: "East".to_string(),
         gamepad_interact: "West".to_string(), gamepad_target_next: "North".to_string(),
@@ -3864,7 +3864,7 @@ fn test_tab_targeting_each_player_cycles_independently() {
     app.update();
 
     let mut p1_inputs = test_input_map();
-    p1_inputs.target_next = "Tab".to_string();
+    p1_inputs.target_next = Some("Tab".to_string());
     let player1 = app.world_mut().spawn((
         CharacterController { inputs: p1_inputs, ..test_character_controller() },
         PlayerTarget::default(),
@@ -3874,7 +3874,7 @@ fn test_tab_targeting_each_player_cycles_independently() {
     )).id();
 
     let mut p2_inputs = test_input_map();
-    p2_inputs.target_next = "KeyT".to_string();
+    p2_inputs.target_next = Some("KeyT".to_string());
     let player2 = app.world_mut().spawn((
         CharacterController { inputs: p2_inputs, ..test_character_controller() },
         PlayerTarget::default(),
@@ -3926,14 +3926,14 @@ fn test_interact_fires_for_pressing_player_with_two_players_present() {
     app.update();
 
     let mut p1_inputs = test_input_map();
-    p1_inputs.interact = "KeyF".to_string();
+    p1_inputs.interact = Some("KeyF".to_string());
     app.world_mut().spawn((
         CharacterController { inputs: p1_inputs, ..test_character_controller() },
         Transform::from_xyz(0.0, 0.0, 0.0),
     ));
 
     let mut p2_inputs = test_input_map();
-    p2_inputs.interact = "KeyH".to_string();
+    p2_inputs.interact = Some("KeyH".to_string());
     app.world_mut().spawn((
         CharacterController { inputs: p2_inputs, ..test_character_controller() },
         Transform::from_xyz(100.0, 0.0, 0.0),
@@ -4003,7 +4003,7 @@ fn test_gated_interactable_fires_blocked_when_player_lacks_item() {
     app.update();
 
     let mut inputs = test_input_map();
-    inputs.interact = "KeyF".to_string();
+    inputs.interact = Some("KeyF".to_string());
     app.world_mut().spawn((
         CharacterController { inputs, ..test_character_controller() },
         Transform::from_xyz(0.0, 0.0, 0.0),
@@ -4046,7 +4046,7 @@ fn test_gated_interactable_fires_interacted_when_player_has_item() {
     app.update();
 
     let mut inputs = test_input_map();
-    inputs.interact = "KeyF".to_string();
+    inputs.interact = Some("KeyF".to_string());
     app.world_mut().spawn((
         CharacterController { inputs, ..test_character_controller() },
         Transform::from_xyz(0.0, 0.0, 0.0),
@@ -4085,7 +4085,7 @@ fn test_ungated_interactable_unaffected_by_item_gating() {
     app.update();
 
     let mut inputs = test_input_map();
-    inputs.interact = "KeyF".to_string();
+    inputs.interact = Some("KeyF".to_string());
     app.world_mut().spawn((
         CharacterController { inputs, ..test_character_controller() },
         Transform::from_xyz(0.0, 0.0, 0.0),
@@ -4169,7 +4169,7 @@ fn test_gamepad_interact_works_independently_in_two_player_local_coop() {
     // always carries `BoundGamepad` in production (inserted unconditionally by
     // `spawn_player_entity_core`) — `None` here since player 2 has no gamepad_index authored.
     let mut p2_inputs = test_input_map();
-    p2_inputs.interact = "KeyH".to_string();
+    p2_inputs.interact = Some("KeyH".to_string());
     app.world_mut().spawn((
         CharacterController { inputs: p2_inputs, ..test_character_controller() },
         Transform::from_xyz(100.0, 0.0, 0.0),
@@ -4220,7 +4220,7 @@ fn test_gamepad_target_next_advances_targeting_independently_in_two_player_scene
     )).id();
 
     let mut p2_inputs = test_input_map();
-    p2_inputs.target_next = "KeyT".to_string();
+    p2_inputs.target_next = Some("KeyT".to_string());
     let player2 = app.world_mut().spawn((
         CharacterController { inputs: p2_inputs, ..test_character_controller() },
         PlayerTarget::default(),
@@ -4297,7 +4297,7 @@ fn test_only_primary_player_target_mirrors_into_current_target_and_global_events
     app.update();
 
     let mut p2_inputs = test_input_map();
-    p2_inputs.target_next = "KeyT".to_string();
+    p2_inputs.target_next = Some("KeyT".to_string());
     app.world_mut().spawn((
         CharacterController { inputs: p2_inputs, ..test_character_controller() },
         PlayerTarget::default(),
@@ -4359,7 +4359,7 @@ fn test_legacy_target_vars_blank_when_multiplayer() {
     app.update();
 
     let mut p1_inputs = test_input_map();
-    p1_inputs.target_next = "Tab".to_string();
+    p1_inputs.target_next = Some("Tab".to_string());
     app.world_mut().spawn((
         CharacterController { inputs: p1_inputs, ..test_character_controller() },
         PlayerTarget::default(), PlayerIndex(0),

@@ -12,8 +12,6 @@
                     backward: "KeyS",
                     left: "KeyA",
                     right: "KeyD",
-                    strafe_left: "KeyQ",
-                    strafe_right: "KeyE",
                     jump: "Space",
                     gamepad_index: 0,
                 ),
@@ -30,8 +28,6 @@
                     backward: "ArrowDown",
                     left: "ArrowLeft",
                     right: "ArrowRight",
-                    strafe_left: "ArrowLeft",
-                    strafe_right: "ArrowRight",
                     jump: "Enter",
                     // Deliberately the same seed as test_player_1 -- a hot-joined player reads
                     // this seed exactly like a scene-placed player, so this collides too.

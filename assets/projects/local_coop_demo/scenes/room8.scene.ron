@@ -35,7 +35,7 @@
   // IJKL/Numpad prefabs room6 spawns statically at load, reused here as join-time prefabs.
   join_prefab_keys: [None, None, "player_p3_grid", "player_p4_grid"],
 
-  // "G" (not "J" — KeyJ is already P3's own strafe_left/left key once they've joined; binding
+  // "G" (not "J" — KeyJ is already P3's own left key once they've joined; binding
   // join to KeyJ would make P3's own movement repeatedly re-trigger the join action) fires
   // Action::JoinPlayer via the ui.button_pressed:join rule below.
   scene_key_bindings: {

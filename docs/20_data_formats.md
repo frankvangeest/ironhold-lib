@@ -2256,23 +2256,25 @@ See `local_coop_demo`'s `player_p1_primitive`/`player_p2_primitive` prefabs (`pr
 
 **`InputMap` fields** (`components.inputs`, all optional — omit individual fields or the entire block to use WASD/Space defaults):
 
+> **Every keyboard key field can be unbound** (the `gamepad_*` button fields cannot). A field you leave out takes its default; write a bare `None` to unbind it (`forward: None`), or a key name to rebind it (`forward: "ArrowUp"`, no `Some(...)` needed). `ironhold validate` rejects an unrecognised key name (it would be silently ignored) and, with `--strict`, warns on an empty `""` (use `None`), on one key bound to two actions in the same `inputs:` block (e.g. `left` and `strafe_left` on one key), and on a movement key that is also an action-bar slot key or a `scene_key_bindings`/`global_key_bindings` entry in a scene that uses the player.
+
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `forward` | `String` | `"KeyW"` | Move forward |
-| `backward` | `String` | `"KeyS"` | Move backward |
-| `left` | `String` | `"KeyA"` | Rotate/strafe left |
-| `right` | `String` | `"KeyD"` | Rotate/strafe right |
-| `strafe_left` | `String` | `"KeyQ"` | Strafe left (camera-relative) |
-| `strafe_right` | `String` | `"KeyE"` | Strafe right (camera-relative) |
-| `jump` | `String` | `"Space"` | Jump |
-| `run` | `String` | `"ShiftLeft"` | Hold to run |
-| `interact` | `String` | `"KeyF"` | Interact with nearby `interactable` entities |
-| `strafe_mouse_button` | `Option<String>` | `Some("Left")` | Mouse button that enables strafe-mode (A/D strafe instead of rotate): `"Left"`, `"Right"`, or `None` to disable entirely |
-| `target_next` | `String` | `"Tab"` | Key to cycle to the next nearest `targetable: true` entity. Hold Shift while pressing to cycle in reverse. **Note:** `"Tab"` is intercepted by browsers for focus navigation in WASM builds — prefer another key such as `"KeyT"` (as `3rd_person_game_demo` does). |
+| `forward` | `Option<String>` | `"KeyW"` | Move forward |
+| `backward` | `Option<String>` | `"KeyS"` | Move backward |
+| `left` | `Option<String>` | `"KeyA"` | **Turn** left (rotates the character). Strafes instead while `strafe_mouse_button` is held |
+| `right` | `Option<String>` | `"KeyD"` | **Turn** right (rotates the character). Strafes instead while `strafe_mouse_button` is held |
+| `strafe_left` | `Option<String>` | `None` | Strafe left, relative to the character's facing. Unbound by default. Works alongside `left` (bind a different key, or `left` would turn **and** strafe on one press) |
+| `strafe_right` | `Option<String>` | `None` | Strafe right, relative to the character's facing. Unbound by default. Bind a different key from `right`, or one press turns **and** strafes |
+| `jump` | `Option<String>` | `"Space"` | Jump |
+| `run` | `Option<String>` | `"ShiftLeft"` | Run toggle: each press switches between walking and running |
+| `interact` | `Option<String>` | `"KeyF"` | Interact with nearby `interactable` entities |
+| `strafe_mouse_button` | `Option<String>` | `Some("Left")` | Mouse button that enables strafe-mode (the `left`/`right` keys strafe instead of turn): `"Left"`, `"Right"`, or `None` to disable entirely |
+| `target_next` | `Option<String>` | `"Tab"` | Key to cycle to the next nearest `targetable: true` entity. Hold Shift while pressing to cycle in reverse. `None` turns keyboard cycling off (the gamepad button still works); an unrecognised name falls back to `"Tab"`. **Note:** `"Tab"` is intercepted by browsers for focus navigation in WASM builds — prefer another key such as `"KeyT"` (as `3rd_person_game_demo` does). |
 | `target_range` | `f32` | `30.0` | Maximum world-space distance (units) for Tab targeting. Entities beyond this range are excluded. |
-| `gamepad_index` | `Option<usize>` | `None` | **Local co-op only.** When set, this player **additionally** reads movement/camera input from a connected gamepad: left stick = move/strafe, right stick X = turn, right stick Y = camera pitch, jump/run/interact/target-cycle use the buttons below (all overridable, not fixed), and any `ActionSlotDef.gamepad_key` on a bar owned by this player (`owner_player` matching this player's `player_index`) resolves against this same gamepad. **This is additive, not a replacement** — the player's keyboard bindings stay fully active; gamepad input is layered on top, so one player can freely mix both at once (e.g. move with the stick, jump with the keyboard). `None` (default) means no gamepad is bound; keyboard behaves exactly as before. **Note:** this is a one-time *seed*, not a live slot — see "How a controller gets assigned to a player" below for exactly what it means and what it doesn't. |
+| `gamepad_index` | `Option<usize>` | `None` | **Required for any gamepad input, single-player included** (it is also how local co-op seeds each player's pad). When set, this player **additionally** reads movement/camera input from a connected gamepad: left stick = move/strafe, right stick X = turn, right stick Y = camera pitch, jump/run/interact/target-cycle use the buttons below (all overridable, not fixed), and any `ActionSlotDef.gamepad_key` on a bar owned by this player (`owner_player` matching this player's `player_index`) resolves against this same gamepad. **This is additive, not a replacement** — the player's keyboard bindings stay fully active; gamepad input is layered on top, so one player can freely mix both at once (e.g. move with the stick, jump with the keyboard). `None` (default) means no gamepad is bound; keyboard behaves exactly as before. **Note:** this is a one-time *seed*, not a live slot — see "How a controller gets assigned to a player" below for exactly what it means and what it doesn't. |
 | `gamepad_jump` | `String` | `"South"` | Gamepad button for jump — Xbox **A** / PlayStation **Cross**. |
-| `gamepad_run` | `String` | `"East"` | Gamepad button to hold-run — Xbox **B** / PlayStation **Circle**. |
+| `gamepad_run` | `String` | `"East"` | Gamepad button to toggle run — Xbox **B** / PlayStation **Circle**. |
 | `gamepad_interact` | `String` | `"West"` | Gamepad button to interact with nearby `interactable` entities — Xbox **X** / PlayStation **Square**, the genre-conventional "use/interact/action" face button. Works in local co-op (each player's own gamepad button is checked independently). |
 | `gamepad_target_next` | `String` | `"North"` | Gamepad button to cycle Tab-targeting — Xbox **Y** / PlayStation **Triangle**, the genre-conventional "cycle/secondary" face button. To rebind to a shoulder button/stick-click instead (some games' convention), use `"RightThumb"` or `"RightTrigger"` — see the valid button names below. |
 | `gamepad_deadzone` | `f32` | `0.15` | Analog stick input below this magnitude (movement, turn, and camera pitch) is ignored, to avoid stick drift producing tiny unintended input. |
@@ -2371,7 +2373,7 @@ Example `inputs:` block wiring every gamepad field (movement/turn are always act
 ```ron
 inputs: (
   forward: "KeyW", backward: "KeyS", left: "KeyA", right: "KeyD",
-  strafe_left: "KeyQ", strafe_right: "KeyE", jump: "Space", run: "ShiftLeft",
+  jump: "Space", run: "ShiftLeft",
   gamepad_index: 1,
   gamepad_jump: "South",
   gamepad_run: "East",
@@ -2402,7 +2404,7 @@ inputs: (
 | Arrows | `"ArrowUp"`, `"ArrowDown"`, `"ArrowLeft"`, `"ArrowRight"` |
 | Punctuation | `"Comma"`, `"Period"`, `"Semicolon"`, `"Quote"`, `"Slash"`, `"BracketLeft"`, `"BracketRight"`, `"Minus"`, `"Equal"` |
 
-Invalid key strings produce a `warn!` at load time and that binding has no effect. Case is significant for multi-character names — `"space"` and `"shiftleft"` are not valid. **Exception:** a single bare letter (e.g. `"q"`) is case-insensitive and resolves the same as `"Q"`; only letter keys get this leniency.
+An unrecognised key string never fires. `ironhold validate` reports it as `invalid_key` for action-bar slots, flycam keys and player `inputs:` keys (the runtime itself does not warn for player keys). Case is significant for multi-character names — `"space"` and `"shiftleft"` are not valid. **Exception:** a single bare letter (e.g. `"q"`) is case-insensitive and resolves the same as `"Q"`; only letter keys get this leniency.
 
 **`MovementConfig` fields** (all optional — defaults apply when omitted):
 
@@ -2477,15 +2479,14 @@ Invalid key strings produce a `warn!` at load time and that binding has no effec
 >
 > | Scheme | Movement keys | `look_left` / `look_right` |
 > |---|---|---|
-> | WASD | W/A/S/D, Q/E strafe | `"KeyZ"` / `"KeyX"` |
+> | WASD | W/A/S/D | `"KeyZ"` / `"KeyX"` |
 > | Arrows | ↑/↓/←/→ | `"Comma"` / `"Period"` |
-> | IJKL | I/J/K/L | `"KeyH"` / `"KeyP"` |
+> | IJKL | I/J/K/L | `"KeyH"` / `"KeyY"` |
 > | Numpad | 5/1/2/3 | `"Numpad7"` / `"Numpad9"` |
 >
 > ```ron
 > inputs: (
 >   forward: "KeyW", backward: "KeyS", left: "KeyA", right: "KeyD",
->   strafe_left: "KeyQ", strafe_right: "KeyE",
 >   jump: "Space", run: "ShiftLeft",
 >   strafe_mouse_button: None,
 >   look_left: "KeyZ", look_right: "KeyX",
@@ -2746,7 +2747,7 @@ For local co-op scenes with two or more `"player"`-tagged entities, `camera.part
     ),
     inputs: (
       forward: "KeyW", backward: "KeyS", left: "KeyA", right: "KeyD",
-      strafe_left: "KeyQ", strafe_right: "KeyE", jump: "Space", run: "ShiftLeft",
+      jump: "Space", run: "ShiftLeft",
     ),
   ),
 ),
@@ -2762,7 +2763,7 @@ For local co-op scenes with two or more `"player"`-tagged entities, `camera.part
     tags: ["player"],
     inputs: (
       forward: "ArrowUp", backward: "ArrowDown", left: "ArrowLeft", right: "ArrowRight",
-      strafe_left: "ArrowLeft", strafe_right: "ArrowRight", jump: "Enter", run: "ShiftRight",
+      jump: "Enter", run: "ShiftRight",
     ),
   ),
 ),
@@ -2826,7 +2827,7 @@ For local co-op scenes with two or more `"player"`-tagged entities, `camera.spli
     ),
     inputs: (
       forward: "KeyW", backward: "KeyS", left: "KeyA", right: "KeyD",
-      strafe_left: "KeyQ", strafe_right: "KeyE", jump: "Space", run: "ShiftLeft",
+      jump: "Space", run: "ShiftLeft",
       strafe_mouse_button: None,
     ),
   ),
@@ -2853,7 +2854,7 @@ For local co-op scenes with two or more `"player"`-tagged entities, `camera.spli
     ),
     inputs: (
       forward: "ArrowUp", backward: "ArrowDown", left: "ArrowLeft", right: "ArrowRight",
-      strafe_left: "ArrowLeft", strafe_right: "ArrowRight", jump: "Enter", run: "ShiftRight",
+      jump: "Enter", run: "ShiftRight",
       strafe_mouse_button: None,
     ),
   ),
@@ -2935,7 +2936,7 @@ field: it's simply never read, no warning is logged, and this is a documented no
     ),
     inputs: (
       forward: "KeyW", backward: "KeyS", left: "KeyA", right: "KeyD",
-      strafe_left: "KeyQ", strafe_right: "KeyE", jump: "Space", run: "ShiftLeft",
+      jump: "Space", run: "ShiftLeft",
       strafe_mouse_button: None,
     ),
   ),
@@ -3005,7 +3006,7 @@ Dynamic mode is self-contained: it does **not** require also authoring a `party:
     ),
     inputs: (
       forward: "KeyW", backward: "KeyS", left: "KeyA", right: "KeyD",
-      strafe_left: "KeyQ", strafe_right: "KeyE", jump: "Space", run: "ShiftLeft",
+      jump: "Space", run: "ShiftLeft",
       strafe_mouse_button: None,
     ),
   ),
@@ -3031,7 +3032,7 @@ Dynamic mode is self-contained: it does **not** require also authoring a `party:
     ),
     inputs: (
       forward: "ArrowUp", backward: "ArrowDown", left: "ArrowLeft", right: "ArrowRight",
-      strafe_left: "ArrowLeft", strafe_right: "ArrowRight", jump: "Enter", run: "ShiftRight",
+      jump: "Enter", run: "ShiftRight",
       strafe_mouse_button: None,
     ),
   ),
@@ -3080,7 +3081,7 @@ This is **local, same-machine co-op** — same scope note as the sections above:
     ),
     inputs: (
       forward: "KeyW", backward: "KeyS", left: "KeyA", right: "KeyD",
-      strafe_left: "KeyQ", strafe_right: "KeyE", jump: "Space", run: "ShiftLeft",
+      jump: "Space", run: "ShiftLeft",
       strafe_mouse_button: None,
     ),
   ),
@@ -3108,7 +3109,7 @@ This is **local, same-machine co-op** — same scope note as the sections above:
     ),
     inputs: (
       forward: "KeyI", backward: "KeyK", left: "KeyJ", right: "KeyL",
-      strafe_left: "KeyJ", strafe_right: "KeyL", jump: "KeyU", run: "KeyO",
+      jump: "KeyU", run: "KeyO",
       strafe_mouse_button: None,
     ),
   ),
@@ -3136,7 +3137,7 @@ This is **local, same-machine co-op** — same scope note as the sections above:
     ),
     inputs: (
       forward: "Numpad5", backward: "Numpad2", left: "Numpad1", right: "Numpad3",
-      strafe_left: "Numpad1", strafe_right: "Numpad3", jump: "Numpad0", run: "Numpad4",
+      jump: "Numpad0", run: "Numpad4",
       strafe_mouse_button: None,
     ),
   ),
@@ -3212,7 +3213,7 @@ scene_key_bindings: {
 > **Pick a join key that no join-target prefab's own `inputs:` also binds.** `global_input_system`
 > reads the physical key unconditionally, independent of any player's `InputMap` — so if a scene's
 > join key collides with an already-joined player's own movement/action key (e.g. binding join to
-> `"KeyJ"` in a scene whose IJKL-scheme player uses `KeyJ` for `left`/`strafe_left`), that player's
+> `"KeyJ"` in a scene whose IJKL-scheme player uses `KeyJ` for `left`), that player's
 > ordinary movement input will *also* re-trigger `Action::JoinPlayer` every time they press it —
 > harmless once the lobby is full (a spurious `warn!` each press), but a real join can accidentally
 > fire early otherwise. `assets/projects/local_coop_demo/scenes/room8.scene.ron` uses `"KeyG"` for
