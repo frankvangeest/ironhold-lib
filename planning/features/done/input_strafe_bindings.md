@@ -1,6 +1,6 @@
 # Feature: Make `strafe_left` / `strafe_right` real, and make every `InputMap` key unbindable
 
-_Status: In Progress (plan-reviewed 2026-10-16; Frank decided both open items the same day, see "Plan-review" at the end of this file)_
+_Status: Done (plan-reviewed 2026-10-16; Frank decided both open items the same day, see "Plan-review" at the end of this file)_
 _Planned at: `eb56cf3` (2026-10-16)_
 
 Prerequisite for `planning/features/first_person_starter.md` (v1 control schemes build on this). Split out so that branch's diff stays about first person, and so this one can be judged on one question only: **is every existing project's behaviour unchanged?**
