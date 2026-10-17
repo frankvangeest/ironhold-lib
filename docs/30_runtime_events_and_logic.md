@@ -121,6 +121,7 @@ The name is used as-is in the rules pipeline — the caller is responsible for n
 - `"audio.muted"` — emitted by `ToggleMute` when transitioning to muted ✅
 - `"audio.unmuted"` — emitted by `ToggleMute` when transitioning to unmuted ✅
 - `"game.paused"` — emitted when the simulation actually stops (`PauseGame`/`TogglePause` took effect); only on a real change, so a second `PauseGame` emits nothing ✅
+- `"cursor.lock_lost"` — a first-person camera with `capture_cursor: true` had the mouse captured and the browser took it back (the player pressed Escape, which the page cannot see as a key press). Emitted once per loss; typical rule: `( event: "cursor.lock_lost", do_actions: [ LoadSceneOverlay("scenes/pause.scene.ron"), PauseGame ] )`. See `docs/20_data_formats.md`, "Control schemes" ✅
 - `"game.resumed"` — emitted when the simulation actually restarts (`ResumeGame`/`TogglePause`, or the automatic resume on a Replace-mode `LoadScene`) ✅
 - `"audio.volume_changed"` — emitted by `SetVolume` after the active fraction changes ✅ (the audio system also keeps the `audio_volume_percent` `GameVariables` entry in sync — bind a `Label` to it, no rule needed; mute is not auto-written)
 - `"dialogue.started:{npc_id}"` — dialogue panel opened for the NPC with the given spawn ID; emitted by `Action::StartDialogue` ✅

@@ -162,6 +162,7 @@ Every row here, including the pause checks (`unrecoverable_pause`, `toggle_pause
 | two player prefabs in a scene with the same `player_index` (including both omitting it, which means `0`) | `duplicate_player_index` | identical P{n} label/colour and a shared target-ring layer |
 | a key written as an empty string `""` in a prefab's `inputs:` block | `empty_key_binding` | treated as an unrecognised key, so the binding is silently ignored; write `None` to unbind on purpose |
 | one key bound to two actions in the same `inputs:` block (e.g. `left` and `strafe_left` on `ArrowLeft`) | `duplicate_input_key` | one press triggers both actions (turn **and** strafe); give each action its own key, or set one to `None` |
+| `inputs: (controls: FirstPerson)` on a player prefab whose authored `camera_mode` is not `FirstPerson(...)` | `controls_camera_mismatch` | A/D strafe and the right stick looks, which assumes a first-person camera (a runtime `SetCameraMode` switch is invisible to `validate`, so a deliberate switch can ignore this); give the prefab a `FirstPerson(...)` camera |
 | a player's `inputs:` key (including the default WASD/Space/Shift/F/Tab keys of a player with no `inputs:` block) that is also an action-bar slot `key`, or a `scene_key_bindings` / `global_key_bindings` entry, in a scene that uses the player | `movement_key_slot_collision` | one press both moves/acts and fires the slot or binding; rebind one of them, or set the player's key to `None` |
 | a `Group` whose `justify_content` spreads space but whose main axis is `Auto` | `inert_justify_content` | the setting does nothing; give it a `Px`/`Percent` size |
 | a `Group` with `clip: true` and both axes `Auto` | `inert_clip` | the setting does nothing |
@@ -205,11 +206,14 @@ ironhold query scenes  assets/projects/3rd_person_game_demo/
 ironhold query logic   assets/projects/3rd_person_game_demo/
 ironhold query actions assets/projects/3rd_person_game_demo/
 ironhold query events  assets/projects/3rd_person_game_demo/
+ironhold query bindings assets/projects/first_person_starter/
 ```
 
 - `stats`: scene/prefab/effect/rule counts, catalog sizes and project size on disk.
 - `query prefabs|effects`: the catalog keys you can reference (`--keys-only` for one per line; `--filter` by kind,
   tag, behavior, additive, priority, layers, sprite).
+- `query bindings`: every player prefab's effective key bindings and where each came from (`authored`, `scheme:FirstPerson`,
+  `default`), so a `controls:` scheme can be checked without running the game.
 - `query scenes|logic|actions|events`: every scene (entities, UI elements, player, overlay), the state machine's
   shape, every action type used and where, and every event trigger and what it fires.
 - Any command accepts `--json` (placed **before** the command: `ironhold --json stats …`) for machine-readable

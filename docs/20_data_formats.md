@@ -2260,19 +2260,21 @@ See `local_coop_demo`'s `player_p1_primitive`/`player_p2_primitive` prefabs (`pr
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
+| `controls` | `ThirdPerson` \| `FirstPerson` | `ThirdPerson` | Which [control scheme](#control-schemes) supplies the defaults of every field you leave out. `ThirdPerson` is today's behaviour; `FirstPerson` is the shooter layout |
 | `forward` | `Option<String>` | `"KeyW"` | Move forward |
 | `backward` | `Option<String>` | `"KeyS"` | Move backward |
-| `left` | `Option<String>` | `"KeyA"` | **Turn** left (rotates the character). Strafes instead while `strafe_mouse_button` is held |
-| `right` | `Option<String>` | `"KeyD"` | **Turn** right (rotates the character). Strafes instead while `strafe_mouse_button` is held |
-| `strafe_left` | `Option<String>` | `None` | Strafe left, relative to the character's facing. Unbound by default. Works alongside `left` (bind a different key, or `left` would turn **and** strafe on one press) |
-| `strafe_right` | `Option<String>` | `None` | Strafe right, relative to the character's facing. Unbound by default. Bind a different key from `right`, or one press turns **and** strafes |
+| `left` | `Option<String>` | `"KeyA"` (`FirstPerson`: unbound) | **Turn** left (rotates the character). Strafes instead while `strafe_mouse_button` is held |
+| `right` | `Option<String>` | `"KeyD"` (`FirstPerson`: unbound) | **Turn** right (rotates the character). Strafes instead while `strafe_mouse_button` is held |
+| `strafe_left` | `Option<String>` | `None` (`FirstPerson`: `"KeyA"`) | Strafe left, relative to the character's facing. Unbound by default. Works alongside `left` (bind a different key, or `left` would turn **and** strafe on one press) |
+| `strafe_right` | `Option<String>` | `None` (`FirstPerson`: `"KeyD"`) | Strafe right, relative to the character's facing. Unbound by default. Bind a different key from `right`, or one press turns **and** strafes |
 | `jump` | `Option<String>` | `"Space"` | Jump |
-| `run` | `Option<String>` | `"ShiftLeft"` | Run toggle: each press switches between walking and running |
+| `run` | `Option<String>` | `"ShiftLeft"` | The run key. What it does depends on `run_mode` |
+| `run_mode` | `Toggle` \| `Hold` | `Toggle` (`FirstPerson`: `Hold`) | `Toggle`: each press switches between walking and running. `Hold`: run only while the key (or the gamepad run button) is held |
 | `interact` | `Option<String>` | `"KeyF"` | Interact with nearby `interactable` entities |
-| `strafe_mouse_button` | `Option<String>` | `Some("Left")` | Mouse button that enables strafe-mode (the `left`/`right` keys strafe instead of turn): `"Left"`, `"Right"`, or `None` to disable entirely |
+| `strafe_mouse_button` | `Option<String>` | `Some("Left")` (`FirstPerson`: `None`) | Mouse button that enables strafe-mode (the `left`/`right` keys strafe instead of turn): `"Left"`, `"Right"`, or `None` to disable entirely |
 | `target_next` | `Option<String>` | `"Tab"` | Key to cycle to the next nearest `targetable: true` entity. Hold Shift while pressing to cycle in reverse. `None` turns keyboard cycling off (the gamepad button still works); an unrecognised name falls back to `"Tab"`. **Note:** `"Tab"` is intercepted by browsers for focus navigation in WASM builds — prefer another key such as `"KeyT"` (as `3rd_person_game_demo` does). |
 | `target_range` | `f32` | `30.0` | Maximum world-space distance (units) for Tab targeting. Entities beyond this range are excluded. |
-| `gamepad_index` | `Option<usize>` | `None` | **Required for any gamepad input, single-player included** (it is also how local co-op seeds each player's pad). When set, this player **additionally** reads movement/camera input from a connected gamepad: left stick = move/strafe, right stick X = turn, right stick Y = camera pitch, jump/run/interact/target-cycle use the buttons below (all overridable, not fixed), and any `ActionSlotDef.gamepad_key` on a bar owned by this player (`owner_player` matching this player's `player_index`) resolves against this same gamepad. **This is additive, not a replacement** — the player's keyboard bindings stay fully active; gamepad input is layered on top, so one player can freely mix both at once (e.g. move with the stick, jump with the keyboard). `None` (default) means no gamepad is bound; keyboard behaves exactly as before. **Note:** this is a one-time *seed*, not a live slot — see "How a controller gets assigned to a player" below for exactly what it means and what it doesn't. |
+| `gamepad_index` | `Option<usize>` | `None` | **Required for any gamepad input, single-player included** (it is also how local co-op seeds each player's pad). When set, this player **additionally** reads movement/camera input from a connected gamepad: left stick = move/strafe, right stick X = turn, right stick Y = camera pitch (through a `FirstPerson` camera the right stick instead looks: X turns the player, Y pitches the camera), jump/run/interact/target-cycle use the buttons below (all overridable, not fixed), and any `ActionSlotDef.gamepad_key` on a bar owned by this player (`owner_player` matching this player's `player_index`) resolves against this same gamepad. **This is additive, not a replacement** — the player's keyboard bindings stay fully active; gamepad input is layered on top, so one player can freely mix both at once (e.g. move with the stick, jump with the keyboard). `None` (default) means no gamepad is bound; keyboard behaves exactly as before. **Note:** this is a one-time *seed*, not a live slot — see "How a controller gets assigned to a player" below for exactly what it means and what it doesn't. |
 | `gamepad_jump` | `String` | `"South"` | Gamepad button for jump — Xbox **A** / PlayStation **Cross**. |
 | `gamepad_run` | `String` | `"East"` | Gamepad button to toggle run — Xbox **B** / PlayStation **Circle**. |
 | `gamepad_interact` | `String` | `"West"` | Gamepad button to interact with nearby `interactable` entities — Xbox **X** / PlayStation **Square**, the genre-conventional "use/interact/action" face button. Works in local co-op (each player's own gamepad button is checked independently). |
@@ -2282,6 +2284,50 @@ See `local_coop_demo`'s `player_p1_primitive`/`player_p2_primitive` prefabs (`pr
 | `look_right` | `Option<String>` | `None` | Keyboard-held camera yaw turn (right). |
 | `look_up` | `Option<String>` | `None` | Keyboard-held camera pitch (toward overhead). |
 | `look_down` | `Option<String>` | `None` | Keyboard-held camera pitch (toward horizontal). |
+
+#### Control schemes
+
+`controls:` picks the layout the engine uses for every `inputs:` field you leave out. **Resolution order for each field: the value you wrote, then the scheme's default, then the engine default.** One sentence to remember: *leave a field out to get the scheme's key; write `None` to unbind it; write a key name to replace it.*
+
+| Field | `ThirdPerson` (default) | `FirstPerson` |
+|-------|-------------------------|---------------|
+| `left` / `right` (turn) | `"KeyA"` / `"KeyD"` | unbound (the mouse and stick turn the character) |
+| `strafe_left` / `strafe_right` | unbound | `"KeyA"` / `"KeyD"` |
+| `strafe_mouse_button` | `"Left"` | `None` (the left mouse button is free for firing) |
+| `run_mode` | `Toggle` | `Hold` |
+| right stick (gamepad) | turns the character | looks: X turns, Y pitches (owned by the `FirstPerson` camera, see below) |
+| everything else | engine defaults | engine defaults |
+
+```ron
+inputs: (
+  controls: FirstPerson,   // A/D strafe, mouse + right stick look, hold Shift to sprint
+  gamepad_index: 0,        // a gamepad only works for a player that names one
+  run_mode: Toggle,        // anything you write beats the scheme
+  strafe_left: "KeyQ",     // ... including the keys
+)
+```
+
+`SideScroll` is not a scheme yet: side-scrolling needs different movement, not just different keys.
+
+Which camera owns the right stick is decided by the **live camera**: while a `FirstPerson` camera targets a player the right stick looks (it never also turns the character), and when a `SetCameraMode` switches that camera away the stick turns the character again. `ironhold validate --strict` warns when `controls: FirstPerson` is used on a prefab whose authored `camera_mode` is not `FirstPerson(...)` (a runtime `SetCameraMode` switch is invisible to `validate`); `ThirdPerson` with a first-person camera is valid. `ironhold query bindings <project>` prints every player's effective bindings and where each came from (`authored`, `scheme:FirstPerson`, `default`).
+
+<a id="firstperson-camera-fields"></a>**`FirstPerson` camera fields** (`camera_mode: FirstPerson((...))`):
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `eye_offset` | `(f32, f32, f32)` | required | Camera position relative to the player's origin (its feet), in metres, e.g. `(0.0, 1.65, 0.0)` |
+| `sensitivity` | `f32` | `0.002` | Mouse look, radians per pixel moved |
+| `min_pitch` / `max_pitch` | `f32` | `-1.4` / `1.4` | How far you can look down / up, in radians |
+| `fov` | `f32` | `90.0` | Field of view in degrees |
+| `look_speed` | `f32` | `2.5` | Right-stick and keyboard-look speed, radians per second (the mouse uses `sensitivity`) |
+| `invert_y` | `bool` | `false` | Flip the vertical look direction for the mouse, the stick and the look keys |
+| `capture_cursor` | `bool` | `false` | Grab and hide the mouse on the first click, release it while paused (see below) |
+| `hide_own_body` | `bool` | `false` | Hide the player's own body so the camera does not look inside the head. It also hides the player's nameplate, stat label and world stat bar; a `SetEntityVisible` on the player overrides it (last writer wins), and the body casts no shadow |
+| `transition` | `Option<CameraTransition>` | `None` | Blend when a `SetCameraMode` switches onto this mode |
+
+Look comes from the mouse, the right stick (X turns the player, Y pitches the camera) and the player's `inputs.look_left/right/up/down` keys, all behind the pause gate. Stick and keyboard look are scaled by time; the mouse is not.
+
+**`capture_cursor` and pointer lock.** With `capture_cursor: true` the first click on the game grabs and hides the mouse (a browser needs that click as a gesture), mouse look only turns the player while the mouse really is captured, and the mouse is released while the game is paused (so the pause menu is clickable) and when the camera leaves first person. After a pause, one click captures it again. In a browser the lock can also be taken away without the game's say-so: pressing **Escape** while the mouse is captured releases it, and the page never sees that key press. The engine then raises the **`cursor.lock_lost`** event (a game event, so a `global_on` rule can react to it); `first_person_starter` maps it to `LoadSceneOverlay("scenes/pause.scene.ron"), PauseGame`. The web runner (`ironhold_web`) reports the browser's real lock state to the engine; a native build knows its own grab directly.
 
 #### How a controller gets assigned to a player ✅
 
@@ -2526,7 +2572,7 @@ required (see "Backward compatibility" below). New authoring should prefer `came
 |---|---|---|---|
 | `Orbit` | Mouse/keyboard/gamepad-orbitable camera following a target at a variable radius — the same behavior `camera:` below describes | Reuses `CameraConfig` (the same struct `camera:` uses) | Yes |
 | `Follow` | Fixed-offset follow camera, no free orbit — good for top-down/side-scrollers | `offset`, `look_at_offset`, `smoothing`, `rotation_smoothing`, `fov` | Yes |
-| `FirstPerson` | Camera locked to the target's head position; mouse look controls pitch, yaw rotates the character directly | `eye_offset`, `sensitivity`, `min_pitch`, `max_pitch`, `fov` | Yes |
+| `FirstPerson` | Camera locked to the target's head position; mouse look controls pitch, yaw rotates the character directly | `eye_offset`, `sensitivity`, `min_pitch`, `max_pitch`, `fov`, `look_speed`, `invert_y`, `capture_cursor`, `hide_own_body` (see [`FirstPerson` fields](#firstperson-camera-fields)) | Yes |
 | `Fixed` | Static camera at a world position, looking at a fixed point or a named tracked entity (re-resolved every frame) | `position`, `look_at` or `look_at_entity`, `fov` | Yes — the mode most `camera_modes:` presets will use |
 | `Flycam` | Free-flying, keyboard + mouse look, no target — the same behavior `flycam:` above describes | Reuses `FlyCamDef` (the same struct `flycam:` uses) | Yes |
 | `Party` | Shared camera framing every local-coop target at once — in practice always spawned internally by the `split:`/`party:` sibling-field dispatch below, not authored directly (see note) | `look_at_offset`, `zoom_margin`, `min_radius`, `max_radius`, `orbit_speed`, `zoom_speed`, `orbit_button`, `allow_manual_zoom` | **No** — rejected with a load-time `warn!` and an `ironhold_cli validate` error; no per-camera meaning under a `SetCameraMode` fired at one camera. Authoring it directly on a player prefab's `camera_mode:` is also an `ironhold_cli validate` error for the same reason — the runtime silently falls back to `Orbit`. |
