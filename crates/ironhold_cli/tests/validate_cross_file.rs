@@ -2452,3 +2452,76 @@ fn strict_input_map_binding_warnings() {
     assert_eq!(plain_code, 0, "non-strict run must stay clean, got {plain_code}:
 {plain_out}");
 }
+
+// ── first_person_starter.md: control schemes ─────────────────────────────────────────────────
+
+fn query_bindings(fixture_name: &str, json: bool) -> (i32, String) {
+    let mut cmd = ironhold();
+    if json {
+        cmd.arg("--json");
+    }
+    let out = cmd
+        .args(["query", "bindings"])
+        .arg(fixture(fixture_name))
+        .output()
+        .unwrap_or_else(|e| panic!("failed to run ironhold: {e}"));
+    (out.status.code().unwrap_or(-1), String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// `controls: FirstPerson` on a prefab with no first-person camera is almost certainly a mistake:
+/// a `--strict` warning, not an error (the plain run passes).
+#[test]
+fn strict_controls_first_person_without_a_first_person_camera_warns() {
+    let (code, stdout) = validate_strict("strict_controls_camera_mismatch");
+    assert_eq!(code, 1, "expected exit 1 (strict warning), got {code}:\n{stdout}");
+    assert!(
+        stdout.contains("inputs.controls is FirstPerson but its camera_mode is not"),
+        "expected the controls/camera mismatch warning:\n{stdout}"
+    );
+    let (plain_code, plain_out) = validate("strict_controls_camera_mismatch");
+    assert_eq!(plain_code, 0, "the plain run must stay clean, got {plain_code}:\n{plain_out}");
+}
+
+/// A first-person scheme with a first-person camera (capture_cursor / hide_own_body set), an
+/// authored strafe key and an authored run mode is clean even under `--strict`.
+#[test]
+fn clean_first_person_controls_pass_strict() {
+    let (code, stdout) = validate_strict("clean_controls_first_person");
+    assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
+}
+
+/// `query bindings` lists each player's effective bindings with their source.
+#[test]
+fn query_bindings_shows_each_effective_binding_and_where_it_came_from() {
+    let (code, stdout) = query_bindings("clean_controls_first_person", false);
+    assert_eq!(code, 0, "{stdout}");
+    assert!(stdout.contains("controls: FirstPerson"), "{stdout}");
+    let line = |field: &str| {
+        stdout
+            .lines()
+            .find(|l| l.trim_start().starts_with(field))
+            .unwrap_or_else(|| panic!("no {field} row:\n{stdout}"))
+            .to_string()
+    };
+    assert!(line("strafe_left").contains("KeyA") && line("strafe_left").contains("scheme:FirstPerson"), "{}", line("strafe_left"));
+    assert!(line("strafe_right").contains("KeyE") && line("strafe_right").contains("authored"), "{}", line("strafe_right"));
+    assert!(line("left ").contains("(unbound)") && line("left ").contains("scheme:FirstPerson"), "{}", line("left "));
+    assert!(line("forward").contains("KeyW") && line("forward").contains("default"), "{}", line("forward"));
+    assert!(line("run_mode").contains("Toggle") && line("run_mode").contains("authored"), "{}", line("run_mode"));
+}
+
+#[test]
+fn query_bindings_json_has_one_entry_per_player_prefab() {
+    let (code, stdout) = query_bindings("clean_controls_first_person", true);
+    assert_eq!(code, 0, "{stdout}");
+    let v: serde_json::Value = serde_json::from_str(&stdout).expect("valid json");
+    let arr = v.as_array().expect("an array");
+    assert_eq!(arr.len(), 1);
+    assert_eq!(arr[0]["prefab"], "test_player");
+    assert_eq!(arr[0]["controls"], "FirstPerson");
+    assert!(arr[0]["bindings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|b| b["field"] == "strafe_left" && b["source"] == "scheme:FirstPerson"));
+}

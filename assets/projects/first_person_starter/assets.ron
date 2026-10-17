@@ -1,0 +1,14 @@
+(
+  schema_version: 1,
+  models: {
+    // The male character, the same model `3rd_person_game_demo` uses. The player's own body is
+    // hidden in first person (`hide_own_body` on the camera), so it needs no animation policy:
+    // a first-person player never sees it. Add an `animation_policy` on the prefab if you show the
+    // body (a mirror, a third-person camera preset, a multiplayer opponent).
+    "character_male": ( path: "shared/models/characters/character-male-01.glb#Scene0" ),
+  },
+  textures: {},
+  audio: {},
+  effects: {},
+  materials: {},
+)

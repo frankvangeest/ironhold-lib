@@ -1,0 +1,33 @@
+(
+    schema_version: 3,
+    project_id: "first_person_starter",
+    display_name: "First Person Starter",
+
+    initial_scene: "scenes/main.scene.ron",
+
+    asset_catalog: "assets.ron",
+    prefab_catalog: "prefabs/prefabs.ron",
+    state_machine_path: "logic/state_machine.ron",
+    model_fixes_path: "overrides/model_fixes.ron",
+
+    global_environment: (
+        intensity: 400.0,
+        fallback: (
+            top_color: (0.10, 0.18, 0.38),
+            bottom_color: (0.01, 0.01, 0.01),
+        ),
+    ),
+
+    // Pause: P toggles it. Escape pauses too while the mouse is NOT captured; once the
+    // browser has captured the mouse, Escape is taken by the browser to release it and the
+    // game never sees the key - that release raises `cursor.lock_lost` (see logic/state_machine.ron),
+    // which pauses the game and shows the menu.
+    global_key_bindings: {
+        "KeyP": "toggle_pause",
+        "Escape": "toggle_pause",
+    },
+
+    // The Start button of a gamepad that belongs to a player pauses too (the "unclaimed" map only
+    // applies to pads no player owns).
+    global_claimed_gamepad_bindings: { "Start": "toggle_pause" },
+)

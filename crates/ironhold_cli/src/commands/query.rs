@@ -29,6 +29,18 @@ pub enum QueryCommand {
         filter: Option<String>,
     },
     #[command(
+        about = "Show every player prefab's effective key bindings and where each one came from",
+        after_help = "Each binding is `authored` (written in the prefab's `inputs:`), `scheme:FirstPerson` (supplied by `controls: FirstPerson`) or `default` (the engine default); `(unbound)` means no key.
+
+Examples:
+  ironhold query bindings assets/projects/camera_modes/
+  ironhold --json query bindings assets/projects/first_person_starter/"
+    )]
+    Bindings {
+        /// Path to the project directory (e.g. assets/projects/camera_modes)
+        project_dir: PathBuf,
+    },
+    #[command(
         about = "List particle effect definitions in a project",
         after_help = "Examples:\n  ironhold query effects assets/projects/particles_demo/\n  ironhold query effects assets/projects/particles_demo/ --keys-only\n  ironhold query effects assets/projects/particles_demo/ --filter additive=true\n  ironhold query effects assets/projects/particles_demo/ --filter priority=Ambient\n  ironhold --json query effects assets/projects/particles_demo/"
     )]
@@ -83,6 +95,7 @@ pub fn run(cmd: QueryCommand, mode: &OutputMode) -> Result<(), Box<dyn std::erro
         QueryCommand::Effects { project_dir, keys_only, filter } => {
             query_effects(&project_dir, keys_only, filter.as_deref(), mode)
         }
+        QueryCommand::Bindings { project_dir } => query_bindings(&project_dir, mode),
         QueryCommand::Scenes { project_dir } => query_scenes(&project_dir, mode),
         QueryCommand::Logic { project_dir } => query_logic(&project_dir, mode),
         QueryCommand::Actions { project_dir } => query_actions(&project_dir, mode),
@@ -105,6 +118,81 @@ fn parse_filter(
             Ok((Some(parts[0].to_string()), Some(parts[1].to_string())))
         }
     }
+}
+
+// ── query bindings ────────────────────────────────────────────────────────────
+
+/// One resolved binding for display: `(field, shown value, source text)`.
+fn binding_rows(inputs: &ironhold_core::schema::player::InputMap) -> Vec<(&'static str, String, String)> {
+    use ironhold_core::schema::player::BindingSource;
+    let source_text = |field: &str, set: bool| -> String {
+        match inputs.sources.get(field) {
+            Some(BindingSource::Authored) => "authored".to_string(),
+            Some(BindingSource::Scheme(scheme)) => format!("scheme:{scheme:?}"),
+            Some(BindingSource::Default) => "default".to_string(),
+            // Fields the schemes never touch (the `look_*` keys) are authored when set.
+            None => if set { "authored".to_string() } else { "default".to_string() },
+        }
+    };
+    let key = |v: &Option<String>| v.clone().unwrap_or_else(|| "(unbound)".to_string());
+    let mut rows = Vec::new();
+    for (field, v) in [
+        ("forward", &inputs.forward), ("backward", &inputs.backward),
+        ("left", &inputs.left), ("right", &inputs.right),
+        ("strafe_left", &inputs.strafe_left), ("strafe_right", &inputs.strafe_right),
+        ("jump", &inputs.jump), ("run", &inputs.run), ("interact", &inputs.interact),
+        ("target_next", &inputs.target_next),
+        ("strafe_mouse_button", &inputs.strafe_mouse_button),
+        ("look_left", &inputs.look_left), ("look_right", &inputs.look_right),
+        ("look_up", &inputs.look_up), ("look_down", &inputs.look_down),
+    ] {
+        rows.push((field, key(v), source_text(field, v.is_some())));
+    }
+    rows.push(("run_mode", format!("{:?}", inputs.run_mode), source_text("run_mode", true)));
+    rows
+}
+
+fn query_bindings(project_dir: &Path, mode: &OutputMode) -> Result<(), Box<dyn std::error::Error>> {
+    let path = resolve_catalog_paths(project_dir).prefab_catalog;
+    let catalog: PrefabCatalog = silent_parse(project_dir, &path).ok_or_else(|| {
+        format!("{path} not found or could not be parsed in {}", project_dir.display())
+    })?;
+    catalog.validate().map_err(|e| format!("{path}: {e}"))?;
+
+    let mut players: Vec<(&String, ironhold_core::schema::player::InputMap)> = catalog
+        .prefabs
+        .iter()
+        .filter(|(_, def)| def.is_player())
+        .map(|(key, def)| (key, def.components.inputs.clone().unwrap_or_default()))
+        .collect();
+    players.sort_by_key(|(k, _)| k.as_str());
+
+    if mode.json {
+        let items: Vec<_> = players
+            .iter()
+            .map(|(key, inputs)| {
+                serde_json::json!({
+                    "prefab": key,
+                    "controls": format!("{:?}", inputs.controls),
+                    "bindings": binding_rows(inputs).into_iter().map(|(field, value, source)| {
+                        serde_json::json!({ "field": field, "key": value, "source": source })
+                    }).collect::<Vec<_>>(),
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&serde_json::json!(items)).unwrap());
+        return Ok(());
+    }
+
+    println!("Bindings: {} ({} player prefabs)", project_dir.display(), players.len());
+    for (key, inputs) in &players {
+        println!();
+        println!("  {key}  (controls: {:?})", inputs.controls);
+        for (field, value, source) in binding_rows(inputs) {
+            println!("    {field:<22} {value:<14} {source}");
+        }
+    }
+    Ok(())
 }
 
 // ── query prefabs ─────────────────────────────────────────────────────────────

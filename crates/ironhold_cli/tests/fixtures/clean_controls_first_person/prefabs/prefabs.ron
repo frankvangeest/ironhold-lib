@@ -1,0 +1,14 @@
+(
+    schema_version: 2,
+    prefabs: {
+        "test_player": (
+            kind: Primitive,
+            shape: Capsule3d,
+            components: (
+                tags: ["player"],
+                camera_mode: FirstPerson((eye_offset: (0.0, 1.6, 0.0), capture_cursor: true, hide_own_body: true)),
+                inputs: (controls: FirstPerson, strafe_right: "KeyE", run_mode: Toggle),
+            ),
+        ),
+    },
+)

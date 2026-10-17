@@ -1,0 +1,19 @@
+(
+    schema_version: 1,
+    // A flat project: every rule lives in `global_on`. See "Pausing the game" in
+    // docs/30_runtime_events_and_logic.md for the state-based alternative.
+    global_on: [
+        ( event: "scene.ready:main", do_actions: [ Log("First person starter ready") ] ),
+
+        // P / Escape / the gamepad Start button: open the pause menu and hold the simulation. The
+        // menu button (or pressing the key again) resumes. ToggleOverlay closes ANY open overlay,
+        // which is fine here because this project has no other overlays.
+        ( event: "ui.button_pressed:toggle_pause", do_actions: [ ToggleOverlay("scenes/pause.scene.ron"), TogglePause ] ),
+        ( event: "ui.button_pressed:resume",       do_actions: [ UnloadOverlay, ResumeGame ] ),
+
+        // The browser took the mouse back (the player pressed Escape while it was captured): the
+        // game cannot see that key press, so the engine raises this event instead. Pause and show
+        // the menu; the click on Resume is the gesture that lets the mouse be captured again.
+        ( event: "cursor.lock_lost", do_actions: [ LoadSceneOverlay("scenes/pause.scene.ron"), PauseGame ] ),
+    ],
+)
