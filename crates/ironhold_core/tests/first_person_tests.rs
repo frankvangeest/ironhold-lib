@@ -326,3 +326,153 @@ fn toggle_run_mode_only_reports_the_press() {
     let pressed = translate_keys(InputMap::default(), &[KeyCode::ShiftLeft]);
     assert!(pressed.iter().any(|a| matches!(a, InputAction::Run(true))), "a press reports Run(true), got {pressed:?}");
 }
+
+// ── hide_own_body ────────────────────────────────────────────────────────────────────────
+
+mod hide_own_body {
+    use super::*;
+    use ironhold_core::capabilities::camera::OwnBodyHidden;
+    use ironhold_core::capabilities::nameplate::NameplateTag;
+    use ironhold_core::runtime::{LoadedAssetCatalog, LoadedPrefabCatalog, SceneHandleV2};
+    use ironhold_core::schema::camera::CameraModeDef;
+    use ironhold_core::schema::catalog::{
+        AssetCatalog, ModelCatalogEntry, PrefabCatalog, PrefabComponents, PrefabDef, PrefabKind,
+    };
+    use ironhold_core::schema::{AppState, GameSceneV2, ProjectConfig, ProjectConfigHandle};
+
+    fn ron_value<T: serde::de::DeserializeOwned>(s: &str) -> T {
+        ron::Options::default()
+            .with_default_extension(ron::extensions::Extensions::IMPLICIT_SOME)
+            .from_str(s)
+            .expect("must parse")
+    }
+
+    fn player_prefab(camera_mode: &str, index: u32) -> PrefabDef {
+        PrefabDef {
+            kind: PrefabKind::Actor,
+            model: "char_a".to_string(),
+            player_index: index,
+            components: PrefabComponents {
+                tags: vec!["player".to_string()],
+                camera_mode: Some(ron_value::<CameraModeDef>(camera_mode)),
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    /// Loads a single-player scene (one player, so the loader gives it its own `FirstPerson`
+    /// camera: with two players and no split/party block it would fall back to one shared Orbit
+    /// camera) using prefab `fp_hidden` (`hide_own_body: true`) or `fp_visible`, with a `far`
+    /// Fixed camera preset in the registry. Returns `(app, player)`.
+    fn loaded_app(prefab: &str) -> (App, Entity) {
+        let mut app = setup_test_app();
+        pin_one_tick_per_update(&mut app);
+        app.update();
+        app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+            models: std::collections::BTreeMap::from([(
+                "char_a".to_string(),
+                ModelCatalogEntry { path: "shared/models/characters/character-male-01.glb#Scene0".to_string() },
+            )]),
+            ..Default::default()
+        }));
+        app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+            prefabs: std::collections::BTreeMap::from([
+                (
+                    "fp_hidden".to_string(),
+                    player_prefab("FirstPerson((eye_offset: (0.0, 1.6, 0.0), hide_own_body: true))", 0),
+                ),
+                (
+                    "fp_visible".to_string(),
+                    player_prefab("FirstPerson((eye_offset: (0.0, 1.6, 0.0)))", 0),
+                ),
+            ]),
+            ..Default::default()
+        }));
+        let config = app.world_mut().resource_mut::<Assets<ProjectConfig>>().add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/t.ron".to_string(),
+            ..Default::default()
+        });
+        app.world_mut().insert_resource(ProjectConfigHandle(config));
+        let scene: GameSceneV2 = ron_value(&format!(
+            r#"(
+                schema_version: 2,
+                nameplate_options: (show_player_nameplate: true),
+                camera_modes: {{ "far": Fixed((position: (0.0, 8.0, 8.0), look_at: (0.0, 0.0, 0.0))) }},
+                entities: [
+                    (id: "p", prefab: "{prefab}", transform: (translation: (0.0, 0.5, 0.0))),
+                ],
+                ui: [],
+            )"#
+        ));
+        let handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+        app.world_mut().insert_resource(SceneHandleV2(handle));
+        app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::LoadingScene);
+        for _ in 0..4 {
+            app.update();
+        }
+        let player = app
+            .world_mut()
+            .query::<(Entity, &ironhold_core::runtime::SpawnId)>()
+            .iter(app.world())
+            .find(|(_, s)| s.0 == "p")
+            .map(|(e, _)| e)
+            .expect("player p spawned");
+        (app, player)
+    }
+
+    fn switch_camera(app: &mut App, mode: &str) {
+        app.world_mut().resource_mut::<ActionQueue>().push(Action::SetCameraMode {
+            mode: mode.to_string(),
+            owner_player: Some(0),
+        });
+        for _ in 0..3 {
+            app.update();
+        }
+    }
+
+    #[test]
+    fn the_body_is_hidden_from_the_first_frame_and_carries_no_floating_widgets() {
+        let (app, hidden) = loaded_app("fp_hidden");
+        assert_eq!(app.world().get::<Visibility>(hidden), Some(&Visibility::Hidden), "hide_own_body hides the player root");
+        assert!(app.world().get::<OwnBodyHidden>(hidden).is_some());
+        assert!(app.world().get::<NameplateTag>(hidden).is_none(), "a hidden body gets no nameplate");
+    }
+
+    #[test]
+    fn an_ordinary_first_person_player_is_untouched() {
+        let (app, visible) = loaded_app("fp_visible");
+        assert_ne!(app.world().get::<Visibility>(visible), Some(&Visibility::Hidden));
+        assert!(app.world().get::<OwnBodyHidden>(visible).is_none());
+        assert!(
+            app.world().get::<NameplateTag>(visible).is_some(),
+            "control: the same scene gives a player without hide_own_body its nameplate"
+        );
+    }
+
+    #[test]
+    fn leaving_first_person_unhides_the_body_and_returning_hides_it_again() {
+        let (mut app, hidden) = loaded_app("fp_hidden");
+        switch_camera(&mut app, "far");
+        assert_ne!(app.world().get::<Visibility>(hidden), Some(&Visibility::Hidden), "a non-hiding camera shows the body");
+        assert!(app.world().get::<OwnBodyHidden>(hidden).is_none());
+
+        switch_camera(&mut app, "default");
+        assert_eq!(app.world().get::<Visibility>(hidden), Some(&Visibility::Hidden), "back in first person the body is hidden again");
+        assert!(app.world().get::<OwnBodyHidden>(hidden).is_some());
+    }
+
+    #[test]
+    fn a_body_the_designer_hid_is_not_unhidden_by_a_camera_switch() {
+        let (mut app, player) = loaded_app("fp_visible");
+        // The camera does not hide the body; the designer hid it with SetEntityVisible.
+        app.world_mut().entity_mut(player).insert(Visibility::Hidden);
+        switch_camera(&mut app, "far");
+        assert_eq!(
+            app.world().get::<Visibility>(player),
+            Some(&Visibility::Hidden),
+            "no OwnBodyHidden marker, so the engine must not un-hide it"
+        );
+    }
+}

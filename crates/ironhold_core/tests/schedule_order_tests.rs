@@ -66,7 +66,7 @@ fn the_documented_systems_are_in_the_documented_sets() {
         ("EmitSet::Dialogue", &["dialogue_tick_system"]),
         ("GameStreamSet::Targeting", &["click_select_system", "tab_targeting_system", "target_auto_clear_system"]),
         ("GameStreamSet::ActionBar", &["cooldown_tick_system", "action_bar_input_system", "action_bar_visual_system"]),
-        ("GameStreamSet::Interact", &["interactable_system"]),
+        ("GameStreamSet::Interact", &["interactable_system", "cursor_capture_system"]),
         ("GameStreamSet::DelayedEvents", &["tick_delayed_events_system"]),
         ("GameStreamSet::Stats", &["stat_modifier_system", "stat_regen_system", "stat_effective_value_system"]),
         ("GameplaySet::Interpret", &["fsm_interpreter_system", "entity_fsm_interpreter_system"]),
@@ -294,7 +294,7 @@ fn every_edge_triggered_input_system_reads_the_pause_clock() {
     let r = report();
     let gated = [
         "interactable_system", "click_select_system", "tab_targeting_system", "action_bar_input_system",
-        "first_person_camera_system", "fly_camera_system", "dialogue_tick_system",
+        "cursor_capture_system", "first_person_camera_system", "fly_camera_system", "dialogue_tick_system",
     ];
     for name in gated {
         let s = r.system(name);

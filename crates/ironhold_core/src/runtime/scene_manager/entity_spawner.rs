@@ -1196,6 +1196,14 @@ fn spawn_player_entity_core(
         });
     }
 
+    // Inserted in the spawn bundle's commands, so the body is never visible for even one frame
+    // (hiding from a `scene.ready` rule always shows at least one frame of the inside of the head).
+    if player_config.hide_own_body {
+        commands.entity(player_entity).insert((
+            Visibility::Hidden,
+            crate::capabilities::camera::OwnBodyHidden,
+        ));
+    }
     if let Some(display_name) = &player_config.nameplate_display_name {
         commands.entity(player_entity).insert(crate::capabilities::nameplate::NameplateTag {
             display_name: display_name.clone(),
@@ -1768,6 +1776,11 @@ pub(crate) fn assemble_player_config(
         .or_else(|| prefab.components.camera.as_ref().and_then(|c| c.split.clone()));
     let party = prefab.components.party.clone()
         .or_else(|| prefab.components.camera.as_ref().and_then(|c| c.party.clone()));
+    // A hidden body must not carry floating widgets: they would hover over nothing.
+    let hide_own_body = matches!(
+        &prefab.components.camera_mode,
+        Some(crate::schema::camera::CameraModeDef::FirstPerson(fp)) if fp.hide_own_body
+    );
     PlayerConfig {
         model_source,
         initial_position,
@@ -1782,7 +1795,8 @@ pub(crate) fn assemble_player_config(
         prefab_key: prefab_key.to_string(),
         player_index: prefab.player_index,
         bound_gamepad: None,
-        nameplate_display_name: if should_insert_nameplate(prefab.nameplate, player_nameplate_enabled) {
+        hide_own_body,
+        nameplate_display_name: if !hide_own_body && should_insert_nameplate(prefab.nameplate, player_nameplate_enabled) {
             Some(prefab.display_name.clone().unwrap_or_else(|| prefab_key.to_string()))
         } else {
             None
@@ -1790,7 +1804,7 @@ pub(crate) fn assemble_player_config(
         nameplate_override: prefab.nameplate,
         material: prefab.material.clone(),
         stat_templates: prefab.stat_templates.clone(),
-        stat_label: prefab.stat_label.clone(),
-        world_stat_bar: prefab.world_stat_bar.clone(),
+        stat_label: if hide_own_body { None } else { prefab.stat_label.clone() },
+        world_stat_bar: if hide_own_body { None } else { prefab.world_stat_bar.clone() },
     }
 }

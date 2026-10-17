@@ -561,6 +561,12 @@ pub fn follow_camera_system(
     }
 }
 
+/// Marks a player whose body the engine hid because its `FirstPerson` camera asked for
+/// `hide_own_body`. `SetCameraMode` away from first person removes it and un-hides the body; a
+/// body hidden any other way (`Action::SetEntityVisible`) has no marker and is left alone.
+#[derive(Component, Debug, Clone, Copy, Default)]
+pub struct OwnBodyHidden;
+
 /// Runtime state for `ActiveCameraMode::FirstPerson` — new in v1, no pre-existing behavior to
 /// match.
 pub struct FirstPersonState {
@@ -611,6 +617,7 @@ pub fn first_person_camera_system(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
     sim: Res<crate::runtime::sim_clock::SimClock>,
+    cursor_lock: Res<crate::capabilities::cursor_capture::CursorLockState>,
     #[cfg(feature = "inspector")]
     inspector_enabled: Option<Res<crate::inspector::InspectorEnabled>>,
 ) {
@@ -621,10 +628,11 @@ pub fn first_person_camera_system(
         }
     }
 
-    let mut mouse_delta = Vec2::ZERO;
+    let mut raw_mouse_delta = Vec2::ZERO;
     for event in mouse_motion_events.read() {
-        mouse_delta += event.delta;
+        raw_mouse_delta += event.delta;
     }
+    let mut mouse_delta = raw_mouse_delta;
     // Real pause: yaw is not frame-time scaled and rotates the PLAYER's Transform, so look must not apply while the
     // sim is held (the reader is drained above, so stale motion is not consumed on resume). Only the LOOK is gated:
     // the loop below still positions the camera at the eye every frame, so a first-person camera that is spawned or
@@ -638,6 +646,10 @@ pub fn first_person_camera_system(
     for (mut transform, mut mode, targets) in &mut camera_query {
         let Some(target_entity) = targets.0.first().copied() else { continue };
         let ActiveCameraMode::FirstPerson(fp) = &mut *mode else { continue };
+        // A camera that asked to capture the cursor only turns on mouse movement while the cursor
+        // really is captured (otherwise the mouse is just moving over the page / a menu). Stick and
+        // keyboard look never depend on capture.
+        let mouse_delta = if fp.capture_cursor && !cursor_lock.locked { Vec2::ZERO } else { mouse_delta };
 
         // Stick + keyboard look, read from the target player's own bindings (`None` when the
         // target has no controller, e.g. a minimal test fixture: mouse look still works).

@@ -67,6 +67,10 @@ pub struct PlayerConfig {
     pub nameplate_display_name: Option<String>,
     /// `PrefabDef.nameplate` override forwarded to `NameplateTag`.
     pub nameplate_override: Option<bool>,
+    /// The player's own body is hidden from the start (`FirstPersonCameraDef.hide_own_body` on a
+    /// `FirstPerson` camera): `Visibility::Hidden` on the player root, plus no nameplate, stat label
+    /// or world stat bar (all of which would hover over an invisible body). See `OwnBodyHidden`.
+    pub hide_own_body: bool,
     /// Forwarded from `PrefabDef.player_index`. Distinguishes local co-op players (P1/P2/...)
     /// from a single-player scene, where it stays `0` and is unused.
     pub player_index: u32,

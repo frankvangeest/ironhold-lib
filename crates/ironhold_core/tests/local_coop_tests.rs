@@ -1861,6 +1861,7 @@ fn minimal_player_config(gamepad_index: Option<usize>, player_index: u32, bound_
         prefab_key: "test_player_3".to_string(),
         nameplate_display_name: None,
         nameplate_override: None,
+        hide_own_body: false,
         player_index,
         bound_gamepad,
         material: None,

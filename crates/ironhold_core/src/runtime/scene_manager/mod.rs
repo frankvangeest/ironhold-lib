@@ -741,6 +741,9 @@ pub struct SceneStateParams<'w, 's> {
     /// switching a camera onto `CameraModeDef::Orbit` (needed for its keyboard-look bindings) —
     /// the switch-time analog of `PlayerConfig.inputs` at spawn time.
     pub character_controllers: Query<'w, 's, &'static crate::capabilities::player::CharacterController>,
+    /// Players whose body the engine hid for a `hide_own_body` first-person camera; read by
+    /// `Action::SetCameraMode` to un-hide the body when the camera leaves first person.
+    pub own_body_hidden: Query<'w, 's, (), With<crate::capabilities::camera::OwnBodyHidden>>,
     /// Named camera-mode registry for the current scene (**v2**) — `Action::SetCameraMode`
     /// resolves its `mode` string against this (the `"default"` sentinel is handled separately,
     /// against each target camera's own `AuthoredCameraMode`).
