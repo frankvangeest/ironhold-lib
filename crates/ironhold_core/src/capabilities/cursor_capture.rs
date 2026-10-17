@@ -21,6 +21,11 @@
 //! Mouse look is gated on `CursorLockState::locked` in `first_person_camera_system`.
 //!
 //! Cosmetic window state only: this system never pushes to the `ActionQueue`.
+//!
+//! **It is the only writer of `CursorOptions` in the engine.** The release branch below writes whenever
+//! the cursor is grabbed or hidden while no capture is wanted, so a second writer (another system that
+//! hides the cursor) would make it write every frame, and on the web every write re-requests pointer
+//! lock. Add any new cursor behaviour here.
 
 use bevy::input::mouse::MouseButton;
 use bevy::prelude::*;
@@ -101,6 +106,10 @@ pub fn cursor_capture_system(
     if progress.requested && progress.was_locked && !lock.locked && runner_reports {
         events.write(GameEvent::Trigger("cursor.lock_lost".to_string()));
         progress.requested = false;
+        // Release fully: the browser took the lock, so the cursor must be visible again even in a
+        // project that does not pause on `cursor.lock_lost` (nothing else would show it).
+        cursor.grab_mode = CursorGrabMode::None;
+        cursor.visible = true;
     }
     progress.was_locked = lock.locked;
 
@@ -122,10 +131,18 @@ pub fn cursor_capture_system(
             // Assigning through `DerefMut` marks `CursorOptions` changed even when the value is
             // identical, which is what makes `bevy_winit` re-apply the grab.
             cursor.grab_mode = CursorGrabMode::Locked;
-            cursor.visible = false;
+            // With a reporting runner the cursor is hidden only once the lock is real (below): a
+            // refused request must not leave the player with an invisible cursor.
+            cursor.visible = runner_reports;
             progress.requested = true;
             if !runner_reports && !lock.locked {
                 lock.locked = true;
+            }
+        }
+        if runner_reports && progress.requested {
+            let hidden = lock.locked;
+            if cursor.visible == hidden {
+                cursor.visible = !hidden;
             }
         }
     } else if progress.requested || cursor.grab_mode != CursorGrabMode::None || !cursor.visible {

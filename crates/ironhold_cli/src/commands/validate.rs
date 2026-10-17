@@ -3488,9 +3488,10 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
                     source_file: "prefabs/prefabs.ron".to_string(),
                     message: format!(
                         "prefab {key:?}: inputs.controls is FirstPerson but its camera_mode is not \
-                         FirstPerson(...) -- A/D strafe and the right stick looks, which assumes a \
-                         first-person camera. Give the prefab `camera_mode: FirstPerson(...)` (a later \
-                         `SetCameraMode` switch is not visible to validate)"
+                         FirstPerson(...) -- controls: FirstPerson makes A/D strafe and leaves nothing \
+                         to turn the character, which only suits a first-person camera. Give the \
+                         prefab `camera_mode: FirstPerson(...)` (a later `SetCameraMode` switch is not \
+                         visible to validate)"
                     ),
                     kind: "controls_camera_mismatch",
                 });

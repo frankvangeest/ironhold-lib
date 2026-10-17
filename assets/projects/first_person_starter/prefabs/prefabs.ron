@@ -23,8 +23,9 @@
                     // How far you can look down (negative) and up (positive), in radians.
                     min_pitch: -1.4,
                     max_pitch: 1.4,
-                    // Horizontal-ish field of view in degrees (90 is the usual shooter default).
-                    fov: 90.0,
+                    // Vertical field of view in degrees (the engine uses the vertical angle, so 90 is very
+                    // wide: about 120 degrees horizontal on a 16:9 screen). 75 is about 100 horizontal.
+                    fov: 75.0,
                     // Right-stick and keyboard-look speed, in radians per second (the mouse uses
                     // `sensitivity` instead).
                     look_speed: 2.5,
@@ -41,7 +42,8 @@
                     // `FirstPerson` supplies the shooter defaults: A/D strafe, no turn keys, the
                     // mouse buttons are free for firing, and Shift is hold-to-sprint. Anything you
                     // write here beats the scheme: leave a field out to get the scheme's key, write
-                    // `None` to unbind it, write a key name to replace it. For example:
+                    // `None` to unbind it, write a key name to replace it. For example (A and D then do
+                    // nothing: bind `left`/`right` too if you want keys that turn):
                     //   strafe_left: "KeyQ", strafe_right: "KeyE", run_mode: Toggle,
                     controls: FirstPerson,
                     // A gamepad only works for a player that names one. 0 = the first controller.

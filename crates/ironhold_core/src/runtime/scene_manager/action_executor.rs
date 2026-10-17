@@ -797,7 +797,9 @@ pub fn action_executor_system(
                 let entity = spawn_params.registry.entities.get(&entity_id).copied();
                 if let Some(e) = entity {
                     let vis = if visible { Visibility::Visible } else { Visibility::Hidden };
-                    commands.entity(e).insert(vis);
+                    // The designer's explicit visibility is the last writer: it clears the marker the engine
+                    // uses for `hide_own_body`, so a later camera switch does not undo it.
+                    commands.entity(e).insert(vis).remove::<crate::capabilities::camera::OwnBodyHidden>();
                     info!("Action::SetEntityVisible: '{}' -> {:?}", entity_id, vis);
                 } else {
                     warn!("Action::SetEntityVisible: entity '{}' not found in spawn registry", entity_id);

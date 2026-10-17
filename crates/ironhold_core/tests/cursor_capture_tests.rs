@@ -69,6 +69,16 @@ fn capture_app(capture_cursor: bool) -> (App, Entity, Entity) {
     (app, window, player)
 }
 
+/// Counts frames in which `CursorOptions` was written (marked changed).
+#[derive(Resource, Default)]
+struct OptionsWrites(usize);
+
+fn count_options_writes(changed: Query<(), Changed<CursorOptions>>, mut n: ResMut<OptionsWrites>) {
+    if !changed.is_empty() {
+        n.0 += 1;
+    }
+}
+
 fn click(app: &mut App) {
     let mut m = app.world_mut().resource_mut::<ButtonInput<MouseButton>>();
     m.press(MouseButton::Left);
@@ -204,7 +214,7 @@ fn with_a_reporting_runner_the_engine_waits_for_the_real_lock() {
     runner_reports_pointer_lock();
     let (mut app, window, player) = capture_app(true);
     click(&mut app);
-    assert_eq!(cursor(&app, window), (CursorGrabMode::Locked, false), "the request is made on the click");
+    assert_eq!(cursor(&app, window), (CursorGrabMode::Locked, true), "the request is made on the click, the cursor stays visible");
     assert!(!locked(&app), "but a request is not a lock: the engine must not assume it succeeded");
     mouse_look(&mut app);
     assert_eq!(yaw(&app, player), 0.0, "no mouse look until the browser reports the lock");
@@ -212,6 +222,7 @@ fn with_a_reporting_runner_the_engine_waits_for_the_real_lock() {
     report_pointer_lock(true);
     app.update();
     assert!(locked(&app));
+    assert_eq!(cursor(&app, window), (CursorGrabMode::Locked, false), "the cursor is hidden once the lock is real");
     mouse_look(&mut app);
     assert!(yaw(&app, player) != 0.0, "mouse look works once the lock is real");
     reset_pointer_lock_report();
@@ -222,17 +233,23 @@ fn losing_a_granted_lock_emits_cursor_lock_lost_once() {
     let _g = GUARD.lock().unwrap_or_else(|e| e.into_inner());
     reset_pointer_lock_report();
     runner_reports_pointer_lock();
-    let (mut app, _window, _p) = capture_app(true);
+    let (mut app, window, _p) = capture_app(true);
     click(&mut app);
     report_pointer_lock(true);
     app.update();
     assert!(locked(&app));
+    assert_eq!(cursor(&app, window), (CursorGrabMode::Locked, false));
     assert_eq!(lock_lost_events(&mut app), 0);
 
     // The user presses Escape: the browser drops the lock without the engine asking.
     report_pointer_lock(false);
     app.update();
     assert_eq!(lock_lost_events(&mut app), 1, "losing the lock must raise `cursor.lock_lost`");
+    assert_eq!(
+        cursor(&app, window),
+        (CursorGrabMode::None, true),
+        "a lost lock releases fully: the cursor must be visible again even in a project that does not pause on the event"
+    );
     app.update();
     // The message buffer is not flipped by a plain `Update` in a test app, so a second emission
     // would show up as a count of 2.
@@ -246,14 +263,27 @@ fn a_refused_request_is_retried_on_the_next_click_without_a_lost_event() {
     reset_pointer_lock_report();
     runner_reports_pointer_lock();
     let (mut app, window, _p) = capture_app(true);
+    app.init_resource::<OptionsWrites>().add_systems(Update, count_options_writes);
+    app.update();
+    let baseline = app.world().resource::<OptionsWrites>().0;
+
     click(&mut app); // browser refuses (e.g. Chrome's re-lock delay): no report arrives
     app.update();
     assert!(!locked(&app));
     assert_eq!(lock_lost_events(&mut app), 0, "a request that was never granted is not a *lost* lock");
+    assert_eq!(cursor(&app, window), (CursorGrabMode::Locked, true), "a refused request leaves the cursor visible");
+    let after_first = app.world().resource::<OptionsWrites>().0;
+    assert_eq!(after_first, baseline + 1, "the first click writes the grab once");
 
-    app.world_mut().get_mut::<CursorOptions>(window).unwrap().grab_mode = CursorGrabMode::None;
-    app.world_mut().get_mut::<CursorOptions>(window).unwrap().visible = true;
+    // No click: nothing writes again (a per-frame write would re-request the lock every frame).
+    app.update();
+    app.update();
+    assert_eq!(app.world().resource::<OptionsWrites>().0, after_first, "idle frames must not write CursorOptions");
+
+    // The cursor is still `Locked` in the options (as in real use), yet the next click must write
+    // again: that write is what makes bevy_winit call `request_pointer_lock` once more.
     click(&mut app);
-    assert_eq!(cursor(&app, window), (CursorGrabMode::Locked, false), "the next click asks again");
+    app.update(); // the counter system is unordered against the capture system: give it a frame to see the write
+    assert_eq!(app.world().resource::<OptionsWrites>().0, after_first + 1, "the next click asks again");
     reset_pointer_lock_report();
 }

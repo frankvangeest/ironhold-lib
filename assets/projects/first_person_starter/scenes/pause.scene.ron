@@ -25,7 +25,7 @@
     )),
     Label((
       id: "pause_hint",
-      text: "Click Resume, then click the game to capture the mouse again.",
+      text: "Click Resume (or press P / Start), then click the game to capture the mouse again.",
       size: (300.0, 70.0),
       font_size: 16.0,
     )),

@@ -149,6 +149,12 @@ fn binding_rows(inputs: &ironhold_core::schema::player::InputMap) -> Vec<(&'stat
         rows.push((field, key(v), source_text(field, v.is_some())));
     }
     rows.push(("run_mode", format!("{:?}", inputs.run_mode), source_text("run_mode", true)));
+    // The silent "my stick does nothing" mistake: a player that names no gamepad ignores every pad.
+    rows.push((
+        "gamepad_index",
+        inputs.gamepad_index.map_or_else(|| "(none: no gamepad)".to_string(), |i| i.to_string()),
+        if inputs.gamepad_index.is_some() { "authored" } else { "default" }.to_string(),
+    ));
     rows
 }
 

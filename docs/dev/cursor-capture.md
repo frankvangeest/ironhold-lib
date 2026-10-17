@@ -30,8 +30,10 @@ grab: native winit grabs synchronously.
 - Wanted and not paused: the first left click (the user gesture) writes `grab_mode: Locked, visible: false`. With a reporting runner a
   request that was never confirmed is repeated on the next click.
 - Not wanted, or paused: the cursor is released (`None`, visible) and the request forgotten. After a pause one click captures again.
+- With a reporting runner the cursor is hidden only once the lock is real (a refused request must not leave an invisible cursor).
 - A lock the engine asked for, had, and no longer has, with no release from the engine, emits `GameEvent::Trigger("cursor.lock_lost")`
-  once. The project decides what that means (the starter pauses in RON). An engine-owned `SimClock` hold was rejected: `ResumeGame` only
+  once and releases fully (`None`, visible), so a project that does not react still gets its cursor back. The project decides what
+  else it means (the starter pauses in RON). An engine-owned `SimClock` hold was rejected: `ResumeGame` only
   releases the `Menu` hold, so a designer could never release it.
 - The test hook `reset_pointer_lock_report` and the mutex in `tests/cursor_capture_tests.rs` exist because the report channel is
   process-wide.
@@ -45,9 +47,14 @@ turning the character twice the translator skips the `Turn` for any player targe
 
 ## `hide_own_body`
 
-`Visibility::Hidden` on the player root, inserted in the spawn bundle in `spawn_player_entity_core` (so there is no first-frame flash: a
-`scene.ready` rule always shows at least one frame of the inside of the head), plus the `OwnBodyHidden` marker. `assemble_player_config`
-also drops the nameplate, stat label and world stat bar. `Action::SetCameraMode` hides the body when a hiding first-person camera takes
+`Visibility::Hidden` on the player root plus the `OwnBodyHidden` marker, inserted in `spawn_active_camera_for_player`'s `FirstPerson` arm:
+the camera that **really** spawns decides (two such prefabs with no split/party block fall back to one shared Orbit camera, and a flycam
+scene suppresses the camera; in both the player stays visible). The camera and the player are spawned in the same system, so there is no
+first-frame flash (a `scene.ready` rule always shows at least one frame of the inside of the head). `assemble_player_config` also drops the
+nameplate, stat label and world stat bar at spawn, from the prefab's authored `camera_mode` (they float free of the root, so hiding it
+would not hide them; a runtime `SetCameraMode` neither adds nor removes them). The animation system reveals a model by inserting
+`Visibility::Inherited` on the root (`animation_playback_system` pose confirmed and 5 s failsafe, `animation_policy_loader_system`): all
+three skip a player carrying `OwnBodyHidden`. `Action::SetEntityVisible` removes the marker (the designer is the last writer). `Action::SetCameraMode` hides the body when a hiding first-person camera takes
 over and un-hides it, only if the marker is present, when the camera leaves. `RenderLayers` was rejected: a GLB's descendants spawn
 asynchronously and a non-zero layer loses layer-0 light shadows anyway. Limits: the body casts no shadow; `Action::SetEntityVisible` on
 the player overrides it (last writer wins); split-screen first person would need per-camera layers (out of scope).

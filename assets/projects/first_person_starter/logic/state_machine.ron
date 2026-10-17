@@ -5,15 +5,22 @@
     global_on: [
         ( event: "scene.ready:main", do_actions: [ Log("First person starter ready") ] ),
 
-        // P / Escape / the gamepad Start button: open the pause menu and hold the simulation. The
-        // menu button (or pressing the key again) resumes. ToggleOverlay closes ANY open overlay,
-        // which is fine here because this project has no other overlays.
-        ( event: "ui.button_pressed:toggle_pause", do_actions: [ ToggleOverlay("scenes/pause.scene.ron"), TogglePause ] ),
-        ( event: "ui.button_pressed:resume",       do_actions: [ UnloadOverlay, ResumeGame ] ),
+        // Three ways to ask for a pause. They only change the clock; the menu is shown by the
+        // `game.paused` / `game.resumed` rules below, which fire once per REAL change, so asking
+        // twice in a frame (Escape plus a lost mouse lock) cannot open the menu twice.
+        //   P or the gamepad Start button: toggle
+        ( event: "ui.button_pressed:toggle_pause", do_actions: [ TogglePause ] ),
+        //   Escape: pause only
+        ( event: "ui.button_pressed:pause", do_actions: [ PauseGame ] ),
+        //   The browser took the mouse back (the player pressed Escape while it was captured; the
+        //   game cannot see that key press, so the engine raises this event instead): pause only.
+        ( event: "cursor.lock_lost", do_actions: [ PauseGame ] ),
 
-        // The browser took the mouse back (the player pressed Escape while it was captured): the
-        // game cannot see that key press, so the engine raises this event instead. Pause and show
-        // the menu; the click on Resume is the gesture that lets the mouse be captured again.
-        ( event: "cursor.lock_lost", do_actions: [ LoadSceneOverlay("scenes/pause.scene.ron"), PauseGame ] ),
+        // The menu button resumes.
+        ( event: "ui.button_pressed:resume", do_actions: [ ResumeGame ] ),
+
+        // The pause menu follows the clock.
+        ( event: "game.paused",  do_actions: [ LoadSceneOverlay("scenes/pause.scene.ron") ] ),
+        ( event: "game.resumed", do_actions: [ UnloadOverlay ] ),
     ],
 )

@@ -182,8 +182,12 @@ pub struct FirstPersonCameraDef {
     #[serde(default)]
     pub capture_cursor: bool,
     /// Hide the player's own body so the camera does not look at the inside of the head.
-    /// Default: `false`. Hiding is `Visibility::Hidden` on the player root, so it also hides the
-    /// player's nameplate and world stat bar; a `SetEntityVisible` on the player overrides it.
+    /// Default: `false`. Hiding is `Visibility::Hidden` on the player root, applied when this
+    /// first-person camera spawns (and by a `SetCameraMode` onto it), so a scene that falls back to
+    /// another camera keeps the body visible. At spawn the player's nameplate, stat label and world
+    /// stat bar are not created (they float free of the root, so hiding the root would not hide them);
+    /// a runtime `SetCameraMode` does not add or remove them. A `SetEntityVisible` on the player
+    /// overrides the hiding (last writer wins).
     #[serde(default)]
     pub hide_own_body: bool,
     /// Blend behavior when `SetCameraMode` switches onto this mode (**v2**). Absent = instant cut.

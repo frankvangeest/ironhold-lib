@@ -483,6 +483,7 @@ pub fn animation_policy_loader_system(
     asset_catalog: Res<LoadedAssetCatalog>,
     asset_server: Res<AssetServer>,
     time: Res<Time>,
+    own_body_hidden: Query<(), With<crate::capabilities::camera::OwnBodyHidden>>,
 ) {
     for (entity, pending_policy, mut controller, mut active_override) in &mut pending {
         if let Some(policy) = policies.get(&pending_policy.0) {
@@ -527,7 +528,10 @@ pub fn animation_policy_loader_system(
                     if controller.awaiting_reveal {
                         controller.awaiting_reveal = false;
                         controller.awaiting_reveal_since = None;
-                        commands.entity(entity).insert(Visibility::Inherited);
+                        // A `hide_own_body` player stays hidden (see `animation_playback_system`).
+                        if !own_body_hidden.contains(entity) {
+                            commands.entity(entity).insert(Visibility::Inherited);
+                        }
                     }
                 }
             }
@@ -1196,14 +1200,6 @@ fn spawn_player_entity_core(
         });
     }
 
-    // Inserted in the spawn bundle's commands, so the body is never visible for even one frame
-    // (hiding from a `scene.ready` rule always shows at least one frame of the inside of the head).
-    if player_config.hide_own_body {
-        commands.entity(player_entity).insert((
-            Visibility::Hidden,
-            crate::capabilities::camera::OwnBodyHidden,
-        ));
-    }
     if let Some(display_name) = &player_config.nameplate_display_name {
         commands.entity(player_entity).insert(crate::capabilities::nameplate::NameplateTag {
             display_name: display_name.clone(),
@@ -1610,6 +1606,17 @@ fn spawn_active_camera_for_player(
             entity
         }
         CameraModeDef::FirstPerson(fp) => {
+            // The body is hidden when the first-person camera is the one that really spawns (not from
+            // the prefab's authored `camera_mode`): two such prefabs in one scene fall back to one shared
+            // Orbit camera, and a flycam scene suppresses the camera, and in both the player must stay
+            // visible. The camera and the player are spawned in the same system, so the body is never
+            // rendered for a frame before it is hidden.
+            if fp.hide_own_body {
+                commands.entity(player_entity).insert((
+                    Visibility::Hidden,
+                    crate::capabilities::camera::OwnBodyHidden,
+                ));
+            }
             let entity = commands.spawn((
                 Name::new("First Person Camera"),
                 Camera3d::default(),

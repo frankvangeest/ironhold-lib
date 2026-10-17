@@ -388,7 +388,8 @@ pub fn input_translator_system(
             // `first_person_camera_system` (the one owner of that stick); also emitting `Turn`
             // here would turn the character twice. Decided from the live camera, not from
             // `InputMap.controls`, because `SetCameraMode` can swap the camera at runtime.
-            let first_person_look = first_person_cameras.iter().any(|t| t.0.contains(&entity));
+            // `first()`, like `first_person_camera_system`, which only drives a camera's first target.
+            let first_person_look = first_person_cameras.iter().any(|t| t.0.first() == Some(&entity));
             let rx = gp.get(GamepadAxis::RightStickX).unwrap_or(0.0);
             if !first_person_look && rx.abs() > deadzone { turn -= rx; }
         }

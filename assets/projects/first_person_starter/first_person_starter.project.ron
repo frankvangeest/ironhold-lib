@@ -18,13 +18,13 @@
         ),
     ),
 
-    // Pause: P toggles it. Escape pauses too while the mouse is NOT captured; once the
-    // browser has captured the mouse, Escape is taken by the browser to release it and the
-    // game never sees the key - that release raises `cursor.lock_lost` (see logic/state_machine.ron),
-    // which pauses the game and shows the menu.
+    // P toggles the pause (press it again to resume). Escape only ever PAUSES: once the browser has
+    // captured the mouse it takes Escape to release it, the game never sees that key, and the release
+    // raises `cursor.lock_lost` (see logic/state_machine.ron), which also only pauses. Because both
+    // just pause, an Escape that arrives together with the lock loss cannot undo itself.
     global_key_bindings: {
         "KeyP": "toggle_pause",
-        "Escape": "toggle_pause",
+        "Escape": "pause",
     },
 
     // The Start button of a gamepad that belongs to a player pauses too (the "unclaimed" map only

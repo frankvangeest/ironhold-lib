@@ -258,6 +258,47 @@ fn translator_skips_right_stick_turn_for_a_player_seen_through_a_first_person_ca
     );
 }
 
+/// `first_person_camera_system` only drives a camera's first target, so the translator must only hand the
+/// stick to that one: a second target of a shared camera keeps turning on the stick.
+#[test]
+fn translator_only_skips_the_stick_turn_for_the_first_target_of_a_first_person_camera() {
+    let mut app = setup_test_app();
+    pin_one_tick_per_update(&mut app);
+    app.update();
+    let gp = connect_test_gamepad(&mut app);
+    app.update();
+    app.update();
+    let spawn_player = |app: &mut App| {
+        app.world_mut()
+            .spawn((
+                Transform::default(),
+                controller(inputs_from_ron("(gamepad_index: 0)")),
+                BoundGamepad(Some(gp)),
+            ))
+            .id()
+    };
+    let first = spawn_player(&mut app);
+    let second = spawn_player(&mut app);
+    app.world_mut().spawn((
+        Transform::default(),
+        ActiveCameraMode::FirstPerson(fp_state(false)),
+        CameraTargets(vec![first, second]),
+        FirstPersonCameraMode,
+    ));
+    set_gamepad_axis(&mut app, gp, GamepadAxis::RightStickX, 1.0);
+    app.update();
+    app.world_mut().run_system_once(input_translator_system).unwrap();
+    let turns: Vec<Entity> = app
+        .world()
+        .resource::<Messages<InputActionMessage>>()
+        .iter_current_update_messages()
+        .filter(|m| matches!(m.action, InputAction::Turn(_)))
+        .map(|m| m.entity)
+        .collect();
+    assert!(!turns.contains(&first), "the camera's first target is owned by the camera, no Turn");
+    assert!(turns.contains(&second), "a later target of a shared camera is not driven by the camera, so it still turns");
+}
+
 #[test]
 fn translator_still_turns_on_the_right_stick_without_a_first_person_camera() {
     let mut app = setup_test_app();
@@ -420,6 +461,86 @@ mod hide_own_body {
             .map(|(e, _)| e)
             .expect("player p spawned");
         (app, player)
+    }
+
+    /// Two players whose prefab asks for `hide_own_body`, with no split/party block: the loader falls back
+    /// to one shared Orbit camera, so neither body may be hidden (no first-person camera exists).
+    #[test]
+    fn two_hidden_body_prefabs_without_a_split_keep_their_bodies_when_the_camera_falls_back() {
+        let mut app = setup_test_app();
+        pin_one_tick_per_update(&mut app);
+        app.update();
+        app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog {
+            models: std::collections::BTreeMap::from([(
+                "char_a".to_string(),
+                ModelCatalogEntry { path: "shared/models/characters/character-male-01.glb#Scene0".to_string() },
+            )]),
+            ..Default::default()
+        }));
+        app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog {
+            prefabs: std::collections::BTreeMap::from([
+                ("fp_a".to_string(), player_prefab("FirstPerson((eye_offset: (0.0, 1.6, 0.0), hide_own_body: true))", 0)),
+                ("fp_b".to_string(), player_prefab("FirstPerson((eye_offset: (0.0, 1.6, 0.0), hide_own_body: true))", 1)),
+            ]),
+            ..Default::default()
+        }));
+        let config = app.world_mut().resource_mut::<Assets<ProjectConfig>>().add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/t.ron".to_string(),
+            ..Default::default()
+        });
+        app.world_mut().insert_resource(ProjectConfigHandle(config));
+        let scene: GameSceneV2 = ron_value(
+            r#"(
+                schema_version: 2,
+                entities: [
+                    (id: "a", prefab: "fp_a", transform: (translation: (-2.0, 0.5, 0.0))),
+                    (id: "b", prefab: "fp_b", transform: (translation: (2.0, 0.5, 0.0))),
+                ],
+                ui: [],
+            )"#,
+        );
+        let handle = app.world_mut().resource_mut::<Assets<GameSceneV2>>().add(scene);
+        app.world_mut().insert_resource(SceneHandleV2(handle));
+        app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::LoadingScene);
+        for _ in 0..4 {
+            app.update();
+        }
+        let mut players = app.world_mut().query_filtered::<(Entity, Option<&Visibility>), With<CharacterController>>();
+        let rows: Vec<_> = players.iter(app.world()).map(|(e, v)| (e, v.copied())).collect();
+        assert_eq!(rows.len(), 2, "both players spawned");
+        for (e, v) in rows {
+            assert_ne!(v, Some(Visibility::Hidden), "player {e:?}: no first-person camera spawned, so its body must stay visible");
+            assert!(app.world().get::<OwnBodyHidden>(e).is_none());
+        }
+        let first_person_cameras = app
+            .world_mut()
+            .query_filtered::<(), With<FirstPersonCameraMode>>()
+            .iter(app.world())
+            .count();
+        assert_eq!(first_person_cameras, 0, "precondition: the loader really fell back to a shared non-first-person camera");
+    }
+
+    /// `SetEntityVisible` is the designer's explicit word: it clears the engine's own hide marker, so a later
+    /// camera switch does not undo it.
+    #[test]
+    fn set_entity_visible_clears_the_hide_own_body_marker() {
+        let (mut app, hidden) = loaded_app("fp_hidden");
+        assert!(app.world().get::<OwnBodyHidden>(hidden).is_some(), "precondition");
+        app.world_mut().resource_mut::<ActionQueue>().push(Action::SetEntityVisible {
+            entity: "p".to_string(),
+            visible: false,
+        });
+        for _ in 0..3 {
+            app.update();
+        }
+        assert!(app.world().get::<OwnBodyHidden>(hidden).is_none(), "the explicit visibility takes over from the marker");
+        switch_camera(&mut app, "far");
+        assert_eq!(
+            app.world().get::<Visibility>(hidden),
+            Some(&Visibility::Hidden),
+            "leaving first person must not un-hide a body the designer hid explicitly"
+        );
     }
 
     fn switch_camera(app: &mut App, mode: &str) {

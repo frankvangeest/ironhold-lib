@@ -2276,7 +2276,7 @@ See `local_coop_demo`'s `player_p1_primitive`/`player_p2_primitive` prefabs (`pr
 | `target_range` | `f32` | `30.0` | Maximum world-space distance (units) for Tab targeting. Entities beyond this range are excluded. |
 | `gamepad_index` | `Option<usize>` | `None` | **Required for any gamepad input, single-player included** (it is also how local co-op seeds each player's pad). When set, this player **additionally** reads movement/camera input from a connected gamepad: left stick = move/strafe, right stick X = turn, right stick Y = camera pitch (through a `FirstPerson` camera the right stick instead looks: X turns the player, Y pitches the camera), jump/run/interact/target-cycle use the buttons below (all overridable, not fixed), and any `ActionSlotDef.gamepad_key` on a bar owned by this player (`owner_player` matching this player's `player_index`) resolves against this same gamepad. **This is additive, not a replacement** — the player's keyboard bindings stay fully active; gamepad input is layered on top, so one player can freely mix both at once (e.g. move with the stick, jump with the keyboard). `None` (default) means no gamepad is bound; keyboard behaves exactly as before. **Note:** this is a one-time *seed*, not a live slot — see "How a controller gets assigned to a player" below for exactly what it means and what it doesn't. |
 | `gamepad_jump` | `String` | `"South"` | Gamepad button for jump — Xbox **A** / PlayStation **Cross**. |
-| `gamepad_run` | `String` | `"East"` | Gamepad button to toggle run — Xbox **B** / PlayStation **Circle**. |
+| `gamepad_run` | `String` | `"East"` | Gamepad button to run (toggle or hold, see `run_mode`) — Xbox **B** / PlayStation **Circle**. |
 | `gamepad_interact` | `String` | `"West"` | Gamepad button to interact with nearby `interactable` entities — Xbox **X** / PlayStation **Square**, the genre-conventional "use/interact/action" face button. Works in local co-op (each player's own gamepad button is checked independently). |
 | `gamepad_target_next` | `String` | `"North"` | Gamepad button to cycle Tab-targeting — Xbox **Y** / PlayStation **Triangle**, the genre-conventional "cycle/secondary" face button. To rebind to a shoulder button/stick-click instead (some games' convention), use `"RightThumb"` or `"RightTrigger"` — see the valid button names below. |
 | `gamepad_deadzone` | `f32` | `0.15` | Analog stick input below this magnitude (movement, turn, and camera pitch) is ignored, to avoid stick drift producing tiny unintended input. |
@@ -2303,7 +2303,8 @@ inputs: (
   controls: FirstPerson,   // A/D strafe, mouse + right stick look, hold Shift to sprint
   gamepad_index: 0,        // a gamepad only works for a player that names one
   run_mode: Toggle,        // anything you write beats the scheme
-  strafe_left: "KeyQ",     // ... including the keys
+  strafe_left: "KeyQ",     // ... including the keys (A then does nothing: bind `left`/`right` if you want turn keys)
+  strafe_right: "KeyE",
 )
 ```
 
@@ -2318,16 +2319,16 @@ Which camera owns the right stick is decided by the **live camera**: while a `Fi
 | `eye_offset` | `(f32, f32, f32)` | required | Camera position relative to the player's origin (its feet), in metres, e.g. `(0.0, 1.65, 0.0)` |
 | `sensitivity` | `f32` | `0.002` | Mouse look, radians per pixel moved |
 | `min_pitch` / `max_pitch` | `f32` | `-1.4` / `1.4` | How far you can look down / up, in radians |
-| `fov` | `f32` | `90.0` | Field of view in degrees |
+| `fov` | `f32` | `90.0` | **Vertical** field of view in degrees (the engine uses the vertical angle: 90 is about 120 degrees horizontal on a 16:9 screen, 75 about 100). `first_person_starter` uses 75 |
 | `look_speed` | `f32` | `2.5` | Right-stick and keyboard-look speed, radians per second (the mouse uses `sensitivity`) |
 | `invert_y` | `bool` | `false` | Flip the vertical look direction for the mouse, the stick and the look keys |
 | `capture_cursor` | `bool` | `false` | Grab and hide the mouse on the first click, release it while paused (see below) |
-| `hide_own_body` | `bool` | `false` | Hide the player's own body so the camera does not look inside the head. It also hides the player's nameplate, stat label and world stat bar; a `SetEntityVisible` on the player overrides it (last writer wins), and the body casts no shadow |
+| `hide_own_body` | `bool` | `false` | Hide the player's own body so the camera does not look inside the head. Applied when this first-person camera actually spawns (a scene that falls back to another camera keeps the body) and by a `SetCameraMode` onto it; the player's nameplate, stat label and world stat bar are not created at spawn (they float free of the body, so hiding it would not hide them) and a runtime `SetCameraMode` neither adds nor removes them. A `SetEntityVisible` on the player overrides it (last writer wins), and the body casts no shadow |
 | `transition` | `Option<CameraTransition>` | `None` | Blend when a `SetCameraMode` switches onto this mode |
 
 Look comes from the mouse, the right stick (X turns the player, Y pitches the camera) and the player's `inputs.look_left/right/up/down` keys, all behind the pause gate. Stick and keyboard look are scaled by time; the mouse is not.
 
-**`capture_cursor` and pointer lock.** With `capture_cursor: true` the first click on the game grabs and hides the mouse (a browser needs that click as a gesture), mouse look only turns the player while the mouse really is captured, and the mouse is released while the game is paused (so the pause menu is clickable) and when the camera leaves first person. After a pause, one click captures it again. In a browser the lock can also be taken away without the game's say-so: pressing **Escape** while the mouse is captured releases it, and the page never sees that key press. The engine then raises the **`cursor.lock_lost`** event (a game event, so a `global_on` rule can react to it); `first_person_starter` maps it to `LoadSceneOverlay("scenes/pause.scene.ron"), PauseGame`. The web runner (`ironhold_web`) reports the browser's real lock state to the engine; a native build knows its own grab directly.
+**`capture_cursor` and pointer lock.** With `capture_cursor: true` the first click on the game grabs and hides the mouse (a browser needs that click as a gesture), mouse look only turns the player while the mouse really is captured, and the mouse is released while the game is paused (so the pause menu is clickable) and when the camera leaves first person. After a pause, one click captures it again. In a browser the lock can also be taken away without the game's say-so: pressing **Escape** while the mouse is captured releases it, and the page never sees that key press. The engine then raises the **`cursor.lock_lost`** event (a game event, so a `global_on` rule can react to it) and shows the cursor again; `first_person_starter` maps it to `PauseGame`. The event only exists on the web (the web runner, `ironhold_web`, reports the browser's real lock state; a native build knows its own grab and never loses it that way). With no rule bound to it nothing else happens: the game keeps running with the cursor visible and mouse look off until the next click captures again. The capturing click is always the **left** mouse button, and any left click while unpaused captures, including a click on an in-game HUD button.
 
 #### How a controller gets assigned to a player ✅
 
