@@ -1,6 +1,6 @@
 # Feature: First-Person Shooter Starter Demo (`first_person_starter`)
 
-_Status: Ready (plan-reviewed 2026-10-16, every review decision folded into the body on 2026-10-17; v1 starts with the cursor-capture spike, Task 1, whose result is recorded in this file before the rest of v1 is coded)_
+_Status: In Progress, v1 (plan-reviewed 2026-10-16, every review decision folded into the body on 2026-10-17; v1 starts with the cursor-capture spike, Task 1, whose result is recorded in this file before the rest of v1 is coded)_
 _Planned at: `eb56cf3` (2026-10-16)_
 
 ## Phases
