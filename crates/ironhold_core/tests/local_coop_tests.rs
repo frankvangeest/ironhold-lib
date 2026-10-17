@@ -47,7 +47,7 @@ fn test_input_map() -> InputMap {
         gamepad_index: None, look_left: None, look_right: None, look_up: None, look_down: None,
         gamepad_jump: "South".to_string(), gamepad_run: "East".to_string(),
         gamepad_interact: "West".to_string(), gamepad_target_next: "North".to_string(),
-        gamepad_deadzone: 0.15,
+        gamepad_deadzone: 0.15, ..InputMap::default()
     }
 }
 

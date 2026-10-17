@@ -573,9 +573,13 @@ pub fn player_movement_system(
                     InputAction::Turn(val) => {
                         rotation += val;
                     }
-                    InputAction::Run(_) => {
-                        controller.is_running = !controller.is_running;
-                    }
+                    InputAction::Run(held) => match controller.inputs.run_mode {
+                        // Hold: the translator reports the held state every tick.
+                        crate::schema::player::RunMode::Hold => controller.is_running = *held,
+                        crate::schema::player::RunMode::Toggle => {
+                            controller.is_running = !controller.is_running;
+                        }
+                    },
                     InputAction::Jump(true) => {
                         jumping = true;
                     }

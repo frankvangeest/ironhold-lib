@@ -259,56 +259,82 @@ fn default_character_rotate_button() -> Option<String> { Some("Right".to_string(
 fn default_initial_pitch() -> f32 { 0.5 }
 fn default_look_speed() -> f32 { 2.0 }
 
-/// A player's input bindings. **This is the resolved type**: every consumer reads it as-is, and a
-/// future raw-definition layer (`controls:` schemes, `planning/features/first_person_starter.md`)
-/// resolves *into* it rather than replacing it.
+/// Which control scheme supplies the **defaults** for the `inputs:` fields a designer left out.
+/// Any field the designer writes always wins over the scheme, and a bare `None` unbinds it.
+/// `ThirdPerson` (the default) reproduces the engine's long-standing defaults exactly.
+///
+/// `FirstPerson` defaults: `left`/`right` (turn) unbound, `strafe_left: "KeyA"`,
+/// `strafe_right: "KeyD"`, `strafe_mouse_button: None` (the left mouse button is the fire
+/// button), `run_mode: Hold`. See `planning/features/first_person_starter.md`.
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ControlScheme {
+    #[default]
+    ThirdPerson,
+    FirstPerson,
+}
+
+/// How the run key behaves: `Toggle` flips between walking and running on each press (the
+/// engine's long-standing behaviour); `Hold` runs only while the key (or gamepad button) is held.
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RunMode {
+    #[default]
+    Toggle,
+    Hold,
+}
+
+/// Where a resolved `InputMap` binding came from, for `ironhold inspect`/`query`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BindingSource {
+    /// The designer wrote the field in `inputs:`.
+    Authored,
+    /// The field was left out and the selected scheme supplies a non-engine default.
+    Scheme(ControlScheme),
+    /// The field was left out and the engine default applies.
+    Default,
+}
+
+/// A player's input bindings. **This is the resolved type**: every consumer reads it as-is. It is
+/// deserialized from the raw `InputMapDef` (`#[serde(from = ...)]`), which applies the layering
+/// "written by the designer, then the `controls:` scheme's default, then the engine default".
 ///
 /// Every key field is an `Option<String>`: `None` means **unbound** (write a bare `None` in RON;
-/// `implicit_some` makes `forward: "KeyW"` still parse unchanged). An omitted field takes the
-/// default shown on each field.
+/// `implicit_some` makes `forward: "KeyW"` still parse unchanged). A field you leave out takes the
+/// scheme's key; write `None` to unbind it; write a key name to replace it.
 #[derive(Deserialize, Debug, Clone)]
-#[serde(deny_unknown_fields)]
+#[serde(from = "InputMapDef")]
 pub struct InputMap {
+    /// Which scheme supplied the defaults (`controls:` in RON). Default: `ThirdPerson`.
+    pub controls: ControlScheme,
     /// Move forward. Default: `"KeyW"`.
-    #[serde(default = "default_forward_key")]
     pub forward: Option<String>,
     /// Move backward. Default: `"KeyS"`.
-    #[serde(default = "default_backward_key")]
     pub backward: Option<String>,
     /// **Turn** left (rotate the character). Strafes instead while `strafe_mouse_button` is held.
-    /// Default: `"KeyA"`.
-    #[serde(default = "default_left_key")]
+    /// Default: `"KeyA"` (`FirstPerson`: unbound).
     pub left: Option<String>,
     /// **Turn** right (rotate the character). Strafes instead while `strafe_mouse_button` is held.
-    /// Default: `"KeyD"`.
-    #[serde(default = "default_right_key")]
+    /// Default: `"KeyD"` (`FirstPerson`: unbound).
     pub right: Option<String>,
-    /// Strafe left, relative to the character's facing. Default: `None` (unbound).
-    #[serde(default)]
+    /// Strafe left, relative to the character's facing. Default: unbound (`FirstPerson`: `"KeyA"`).
     pub strafe_left: Option<String>,
-    /// Strafe right, relative to the character's facing. Default: `None` (unbound).
-    #[serde(default)]
+    /// Strafe right, relative to the character's facing. Default: unbound (`FirstPerson`: `"KeyD"`).
     pub strafe_right: Option<String>,
     /// Default: `"Space"`.
-    #[serde(default = "default_jump_key")]
     pub jump: Option<String>,
     /// Default: `"ShiftLeft"`.
-    #[serde(default = "default_run_key")]
     pub run: Option<String>,
+    /// How `run` behaves. Default: `Toggle` (`FirstPerson`: `Hold`).
+    pub run_mode: RunMode,
     /// Default: `"KeyF"`.
-    #[serde(default = "default_interact_key")]
     pub interact: Option<String>,
     /// Mouse button that enables strafe-mode (A/D strafe instead of rotate).
     /// `"Left"`, `"Right"`, or `None` to disable mouse-strafe entirely.
-    /// Default: `"Left"` (preserves existing behavior).
-    #[serde(default = "default_strafe_mouse_button")]
+    /// Default: `"Left"` (`FirstPerson`: `None`).
     pub strafe_mouse_button: Option<String>,
     /// Key to cycle to the next nearest `targetable: true` entity (default: `"Tab"`).
     /// Hold Shift while pressing to cycle in reverse (nearest-last).
-    #[serde(default = "default_target_next_key")]
     pub target_next: Option<String>,
     /// Maximum world-space distance (in units) to consider for Tab targeting (default: 30.0).
-    #[serde(default = "default_target_range")]
     pub target_range: f32,
     /// When set, this player **additionally** reads input from a gamepad — lets local co-op
     /// scenes bind player 2 to a controller. Additive, not a replacement: the player's keyboard
@@ -318,29 +344,23 @@ pub struct InputMap {
     /// player.rs`; `gamepad_bind_system`, `runtime/input.rs`). `None` (default) keeps
     /// keyboard-only behavior identical to before this field existed. See "How a controller gets
     /// assigned to a player" in `docs/20_data_formats.md`.
-    #[serde(default)]
     pub gamepad_index: Option<usize>,
     /// Gamepad button for jump. Default `"South"` (Xbox A / PlayStation Cross) matches the
     /// hardcoded behavior every scene had before this field existed.
-    #[serde(default = "default_gamepad_jump")]
     pub gamepad_jump: String,
     /// Gamepad button for run. Default `"East"` (Xbox B / PlayStation Circle) matches the
     /// hardcoded behavior every scene had before this field existed.
-    #[serde(default = "default_gamepad_run")]
     pub gamepad_run: String,
     /// Gamepad button for interact. Default `"West"` — the genre-conventional "use/interact/
     /// action" face button (Xbox X / PlayStation Square), not merely "whatever doesn't collide
     /// with South/East".
-    #[serde(default = "default_gamepad_interact")]
     pub gamepad_interact: String,
     /// Gamepad button to cycle Tab-targeting. Default `"North"` — the genre-conventional
     /// "cycle/secondary" face button (Xbox Y / PlayStation Triangle).
-    #[serde(default = "default_gamepad_target_next")]
     pub gamepad_target_next: String,
     /// Analog stick input below this magnitude is ignored, to avoid stick drift producing tiny
     /// unintended movement/turn/camera-pitch. Default `0.15` matches the hardcoded constant every
     /// scene had before this field existed.
-    #[serde(default = "default_gamepad_deadzone")]
     pub gamepad_deadzone: f32,
     /// Keyboard-held camera yaw/pitch turning, independent of every other player's camera —
     /// needed because split-screen scenes disable mouse-orbit per camera (`orbit_button: "None"`,
@@ -348,6 +368,74 @@ pub struct InputMap {
     /// (default) leaves that axis unbound; all four are optional and independent of each other.
     /// See `docs/20_data_formats.md`'s `InputMap` table for the "valid key name strings" this
     /// accepts (parsed the same way as `forward`/`jump`/etc., via `InputMap::parse_key`).
+    pub look_left: Option<String>,
+    pub look_right: Option<String>,
+    pub look_up: Option<String>,
+    pub look_down: Option<String>,
+    /// Where each layered binding (`forward` ... `target_next`, `strafe_mouse_button`, `run_mode`)
+    /// came from, keyed by RON field name. For `ironhold inspect`/`query`; never read at runtime.
+    pub sources: std::collections::BTreeMap<&'static str, BindingSource>,
+}
+
+/// Deserializes a field **only when it is present** in the RON, wrapping the parsed value in
+/// `Some`. Together with `#[serde(default)]` on `Option<Option<..>>` fields this separates the
+/// three states a layered binding needs: omitted (`None`), written as `None` (`Some(None)`, an
+/// explicit unbind), and written as a key (`Some(Some(..))`). A plain `Option<String>` cannot:
+/// under `implicit_some` an omitted field and a written `None` both come out as `None`.
+fn written<'de, D, T>(d: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    T::deserialize(d).map(Some)
+}
+
+/// The raw `inputs:` block as authored. Layered fields are three-state (see `written`); everything
+/// else is a plain field with the same serde default it always had. Resolved into `InputMap` by
+/// `From<InputMapDef>`. `InputMapDef::default()` is a fully-omitted block.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct InputMapDef {
+    #[serde(default)]
+    pub controls: ControlScheme,
+    #[serde(default, deserialize_with = "written")]
+    pub forward: Option<Option<String>>,
+    #[serde(default, deserialize_with = "written")]
+    pub backward: Option<Option<String>>,
+    #[serde(default, deserialize_with = "written")]
+    pub left: Option<Option<String>>,
+    #[serde(default, deserialize_with = "written")]
+    pub right: Option<Option<String>>,
+    #[serde(default, deserialize_with = "written")]
+    pub strafe_left: Option<Option<String>>,
+    #[serde(default, deserialize_with = "written")]
+    pub strafe_right: Option<Option<String>>,
+    #[serde(default, deserialize_with = "written")]
+    pub jump: Option<Option<String>>,
+    #[serde(default, deserialize_with = "written")]
+    pub run: Option<Option<String>>,
+    #[serde(default)]
+    pub run_mode: Option<RunMode>,
+    #[serde(default, deserialize_with = "written")]
+    pub interact: Option<Option<String>>,
+    #[serde(default, deserialize_with = "written")]
+    pub strafe_mouse_button: Option<Option<String>>,
+    #[serde(default, deserialize_with = "written")]
+    pub target_next: Option<Option<String>>,
+    #[serde(default = "default_target_range")]
+    pub target_range: f32,
+    #[serde(default)]
+    pub gamepad_index: Option<usize>,
+    #[serde(default = "default_gamepad_jump")]
+    pub gamepad_jump: String,
+    #[serde(default = "default_gamepad_run")]
+    pub gamepad_run: String,
+    #[serde(default = "default_gamepad_interact")]
+    pub gamepad_interact: String,
+    #[serde(default = "default_gamepad_target_next")]
+    pub gamepad_target_next: String,
+    #[serde(default = "default_gamepad_deadzone")]
+    pub gamepad_deadzone: f32,
     #[serde(default)]
     pub look_left: Option<String>,
     #[serde(default)]
@@ -358,26 +446,29 @@ pub struct InputMap {
     pub look_down: Option<String>,
 }
 
-// Hand-written, not `#[derive(Default)]`: a derived `Default` would give every key field `None`
-// (unbound) and every `String` button field an EMPTY string (`InputMap::parse_gamepad_button("")`
-// matches no arm) rather than the real WASD/Space scheme -- strictly worse than the RON parse
-// error this type's `#[serde(default = ...)]` attributes exist to avoid. Every field below calls the exact same fn its own `#[serde(default = ...)]` attribute
-// does, so this and the per-field RON defaults can never drift apart. Same convention as
-// `FlyCamDef`/`MovementConfig` (`schema/catalog.rs`).
-impl Default for InputMap {
+// Hand-written, not `#[derive(Default)]`: a derived `Default` would give every button field an
+// EMPTY string (`InputMap::parse_gamepad_button("")` matches no arm) rather than the real
+// defaults. Every non-layered field calls the exact same fn its own `#[serde(default = ...)]`
+// attribute does, so this and the per-field RON defaults can never drift apart, and
+// `InputMap::default()` is `InputMap::from(InputMapDef::default())`, one source for both the
+// "fully omitted block" and "one omitted field" cases. Same convention as `FlyCamDef`/
+// `MovementConfig` (`schema/catalog.rs`).
+impl Default for InputMapDef {
     fn default() -> Self {
         Self {
-            forward: default_forward_key(),
-            backward: default_backward_key(),
-            left: default_left_key(),
-            right: default_right_key(),
+            controls: ControlScheme::ThirdPerson,
+            forward: None,
+            backward: None,
+            left: None,
+            right: None,
             strafe_left: None,
             strafe_right: None,
-            jump: default_jump_key(),
-            run: default_run_key(),
-            interact: default_interact_key(),
-            strafe_mouse_button: default_strafe_mouse_button(),
-            target_next: default_target_next_key(),
+            jump: None,
+            run: None,
+            run_mode: None,
+            interact: None,
+            strafe_mouse_button: None,
+            target_next: None,
             target_range: default_target_range(),
             gamepad_index: None,
             gamepad_jump: default_gamepad_jump(),
@@ -393,11 +484,106 @@ impl Default for InputMap {
     }
 }
 
-// `InputMap::default()` (below) is built from these same fns, so "what a fully-omitted `inputs:`
-// block resolves to" and "what a single omitted field within a partially-authored `inputs:` block
-// resolves to" are structurally the same values, not two hand-maintained copies that could drift
-// -- a designer authoring only `inputs: (gamepad_index: 0)` gets the identical WASD/Space bindings
-// a designer who omits `inputs:` entirely gets. Same convention as `FlyCamDef`/`MovementConfig`.
+impl Default for InputMap {
+    fn default() -> Self {
+        InputMap::from(InputMapDef::default())
+    }
+}
+
+/// What a scheme supplies for one layered key field: `None` = the scheme has no opinion (the
+/// engine default applies), `Some(None)` = the scheme leaves the field unbound, `Some(Some(k))` =
+/// the scheme binds `k`. `ThirdPerson` never has an opinion, so it reproduces the engine defaults.
+fn scheme_key(scheme: ControlScheme, field: &str) -> Option<Option<&'static str>> {
+    match (scheme, field) {
+        (ControlScheme::FirstPerson, "left") | (ControlScheme::FirstPerson, "right") => Some(None),
+        (ControlScheme::FirstPerson, "strafe_left") => Some(Some("KeyA")),
+        (ControlScheme::FirstPerson, "strafe_right") => Some(Some("KeyD")),
+        (ControlScheme::FirstPerson, "strafe_mouse_button") => Some(None),
+        _ => None,
+    }
+}
+
+impl From<InputMapDef> for InputMap {
+    fn from(d: InputMapDef) -> Self {
+        let scheme = d.controls;
+        let mut sources = std::collections::BTreeMap::new();
+        // authored > scheme default > engine default, recording which one won.
+        let mut layer = |field: &'static str,
+                         authored: Option<Option<String>>,
+                         engine: Option<String>|
+         -> Option<String> {
+            match authored {
+                Some(v) => {
+                    sources.insert(field, BindingSource::Authored);
+                    v
+                }
+                None => match scheme_key(scheme, field) {
+                    Some(v) => {
+                        sources.insert(field, BindingSource::Scheme(scheme));
+                        v.map(str::to_string)
+                    }
+                    None => {
+                        sources.insert(field, BindingSource::Default);
+                        engine
+                    }
+                },
+            }
+        };
+        let forward = layer("forward", d.forward, default_forward_key());
+        let backward = layer("backward", d.backward, default_backward_key());
+        let left = layer("left", d.left, default_left_key());
+        let right = layer("right", d.right, default_right_key());
+        let strafe_left = layer("strafe_left", d.strafe_left, None);
+        let strafe_right = layer("strafe_right", d.strafe_right, None);
+        let jump = layer("jump", d.jump, default_jump_key());
+        let run = layer("run", d.run, default_run_key());
+        let interact = layer("interact", d.interact, default_interact_key());
+        let strafe_mouse_button = layer("strafe_mouse_button", d.strafe_mouse_button, default_strafe_mouse_button());
+        let target_next = layer("target_next", d.target_next, default_target_next_key());
+        let run_mode = match d.run_mode {
+            Some(m) => {
+                sources.insert("run_mode", BindingSource::Authored);
+                m
+            }
+            None if scheme == ControlScheme::FirstPerson => {
+                sources.insert("run_mode", BindingSource::Scheme(scheme));
+                RunMode::Hold
+            }
+            None => {
+                sources.insert("run_mode", BindingSource::Default);
+                RunMode::Toggle
+            }
+        };
+        InputMap {
+            controls: scheme,
+            forward,
+            backward,
+            left,
+            right,
+            strafe_left,
+            strafe_right,
+            jump,
+            run,
+            run_mode,
+            interact,
+            strafe_mouse_button,
+            target_next,
+            target_range: d.target_range,
+            gamepad_index: d.gamepad_index,
+            gamepad_jump: d.gamepad_jump,
+            gamepad_run: d.gamepad_run,
+            gamepad_interact: d.gamepad_interact,
+            gamepad_target_next: d.gamepad_target_next,
+            gamepad_deadzone: d.gamepad_deadzone,
+            look_left: d.look_left,
+            look_right: d.look_right,
+            look_up: d.look_up,
+            look_down: d.look_down,
+            sources,
+        }
+    }
+}
+
 fn default_forward_key() -> Option<String> { Some("KeyW".to_string()) }
 fn default_backward_key() -> Option<String> { Some("KeyS".to_string()) }
 fn default_left_key() -> Option<String> { Some("KeyA".to_string()) }

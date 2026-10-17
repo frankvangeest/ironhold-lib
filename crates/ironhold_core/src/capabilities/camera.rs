@@ -569,15 +569,47 @@ pub struct FirstPersonState {
     pub pitch: f32,
     pub min_pitch: f32,
     pub max_pitch: f32,
+    /// Stick and keyboard look speed, rad/s.
+    pub look_speed: f32,
+    pub invert_y: bool,
+    pub capture_cursor: bool,
+    pub hide_own_body: bool,
 }
 
-/// Locks a `FirstPerson`-mode camera to its `CameraTargets` entity's head position. Mouse look
-/// yaw rotates the character directly (so the body faces where the camera looks, standard FPS
-/// convention); pitch is camera-only.
+impl FirstPersonState {
+    /// The one place a `FirstPersonCameraDef` becomes runtime state: the spawn path and the
+    /// `SetCameraMode` switch path both go through it, so a new field cannot be forgotten at one.
+    pub fn from_def(fp: &crate::schema::camera::FirstPersonCameraDef) -> Self {
+        Self {
+            eye_offset: Vec3::from(fp.eye_offset),
+            sensitivity: fp.sensitivity,
+            pitch: 0.0,
+            min_pitch: fp.min_pitch,
+            max_pitch: fp.max_pitch,
+            look_speed: fp.look_speed,
+            invert_y: fp.invert_y,
+            capture_cursor: fp.capture_cursor,
+            hide_own_body: fp.hide_own_body,
+        }
+    }
+}
+
+/// Locks a `FirstPerson`-mode camera to its `CameraTargets` entity's head position. Look yaw
+/// rotates the character directly (so the body faces where the camera looks, standard FPS
+/// convention); pitch is camera-only. Look comes from the mouse (pixels, not frame-scaled), the
+/// owning player's right stick (X yaw, Y pitch) and the keyboard look keys
+/// (`inputs.look_left/right/up/down`), the latter two at `look_speed` rad/s. This system is the
+/// **only** owner of right-stick look for these players: `input_translator_system` skips the
+/// right-stick `Turn` while a `FirstPersonCameraMode` camera targets the player, so the stick
+/// never turns the character twice.
 pub fn first_person_camera_system(
     mut mouse_motion_events: MessageReader<bevy::input::mouse::MouseMotion>,
     mut camera_query: Query<(&mut Transform, &mut ActiveCameraMode, &CameraTargets), With<FirstPersonCameraMode>>,
     mut target_query: Query<&mut Transform, (With<CharacterController>, Without<FirstPersonCameraMode>)>,
+    controllers: Query<(&CharacterController, Option<&BoundGamepad>)>,
+    gamepad_query: Query<&Gamepad>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    time: Res<Time>,
     sim: Res<crate::runtime::sim_clock::SimClock>,
     #[cfg(feature = "inspector")]
     inspector_enabled: Option<Res<crate::inspector::InspectorEnabled>>,
@@ -597,24 +629,56 @@ pub fn first_person_camera_system(
     // sim is held (the reader is drained above, so stale motion is not consumed on resume). Only the LOOK is gated:
     // the loop below still positions the camera at the eye every frame, so a first-person camera that is spawned or
     // switched to while paused (a hot join, a SetCameraMode from the pause menu) is not left at its spawn transform.
-    if !sim.is_running() {
+    let running = sim.is_running();
+    if !running {
         mouse_delta = Vec2::ZERO;
     }
+    let dt = if running { time.delta_secs() } else { 0.0 };
 
     for (mut transform, mut mode, targets) in &mut camera_query {
         let Some(target_entity) = targets.0.first().copied() else { continue };
         let ActiveCameraMode::FirstPerson(fp) = &mut *mode else { continue };
-        let Ok(mut target_transform) = target_query.get_mut(target_entity) else { continue };
 
-        let yaw_delta = -mouse_delta.x * fp.sensitivity;
-        if yaw_delta != 0.0 {
-            target_transform.rotate_y(yaw_delta);
+        // Stick + keyboard look, read from the target player's own bindings (`None` when the
+        // target has no controller, e.g. a minimal test fixture: mouse look still works).
+        let mut yaw_rate = 0.0_f32; // + = turn left
+        let mut pitch_rate = 0.0_f32; // + = look up
+        if let Ok((controller, bound)) = controllers.get(target_entity) {
+            let inputs = &controller.inputs;
+            let key_down = |k: &Option<String>| {
+                k.as_deref()
+                    .and_then(InputMap::parse_key)
+                    .is_some_and(|k| keyboard_input.pressed(k))
+            };
+            if key_down(&inputs.look_left) { yaw_rate += 1.0; }
+            if key_down(&inputs.look_right) { yaw_rate -= 1.0; }
+            if key_down(&inputs.look_up) { pitch_rate += 1.0; }
+            if key_down(&inputs.look_down) { pitch_rate -= 1.0; }
+            let gamepad = bound
+                .and_then(|b| b.0)
+                .and_then(|e| gamepad_query.get(e).ok());
+            if let Some(gp) = gamepad {
+                let rx = gp.get(GamepadAxis::RightStickX).unwrap_or(0.0);
+                let ry = gp.get(GamepadAxis::RightStickY).unwrap_or(0.0);
+                if rx.abs() > inputs.gamepad_deadzone { yaw_rate -= rx; }
+                if ry.abs() > inputs.gamepad_deadzone { pitch_rate += ry; }
+            }
         }
+        let vertical = if fp.invert_y { -1.0 } else { 1.0 };
+
+        let yaw_delta = -mouse_delta.x * fp.sensitivity + yaw_rate * fp.look_speed * dt;
+        if yaw_delta != 0.0 {
+            if let Ok(mut target_transform) = target_query.get_mut(target_entity) {
+                target_transform.rotate_y(yaw_delta);
+            }
+        }
+        let Ok(target_transform) = target_query.get(target_entity) else { continue };
         // `.min()`/`.max()`, not a bare `.clamp(min_pitch, max_pitch)`: `f32::clamp` panics if
         // min > max, and unlike Orbit's positive 0.1/0.9 defaults, FirstPerson's negative-min
         // default (-1.4/1.4) makes an authored-backwards pair an easy mistake to make, not just a
         // theoretical one (found by post-implementation review).
-        fp.pitch = (fp.pitch - mouse_delta.y * fp.sensitivity)
+        let pitch_delta = -mouse_delta.y * fp.sensitivity * vertical + pitch_rate * fp.look_speed * dt * vertical;
+        fp.pitch = (fp.pitch + pitch_delta)
             .clamp(fp.min_pitch.min(fp.max_pitch), fp.min_pitch.max(fp.max_pitch));
 
         transform.translation = target_transform.translation + fp.eye_offset;

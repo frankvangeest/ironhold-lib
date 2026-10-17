@@ -1469,13 +1469,7 @@ pub(crate) fn apply_camera_mode(
         }
         CameraModeDef::FirstPerson(fp) => {
             commands.entity(entity).insert((
-                ActiveCameraMode::FirstPerson(crate::capabilities::camera::FirstPersonState {
-                    eye_offset: Vec3::from(fp.eye_offset),
-                    sensitivity: fp.sensitivity,
-                    pitch: 0.0,
-                    min_pitch: fp.min_pitch,
-                    max_pitch: fp.max_pitch,
-                }),
+                ActiveCameraMode::FirstPerson(crate::capabilities::camera::FirstPersonState::from_def(&fp)),
                 crate::capabilities::camera::FirstPersonCameraMode,
             ));
             fp.fov
@@ -1614,13 +1608,7 @@ fn spawn_active_camera_for_player(
                 tonemapping,
                 Transform::from_translation(initial_pos + Vec3::from(fp.eye_offset)),
                 LevelEntity,
-                ActiveCameraMode::FirstPerson(crate::capabilities::camera::FirstPersonState {
-                    eye_offset: Vec3::from(fp.eye_offset),
-                    sensitivity: fp.sensitivity,
-                    pitch: 0.0,
-                    min_pitch: fp.min_pitch,
-                    max_pitch: fp.max_pitch,
-                }),
+                ActiveCameraMode::FirstPerson(crate::capabilities::camera::FirstPersonState::from_def(&fp)),
                 crate::capabilities::camera::FirstPersonCameraMode,
                 CameraTargets(vec![player_entity]),
             )).id();

@@ -194,7 +194,7 @@ fn test_player_jump_emits_game_event() {
                 gamepad_index: None, look_left: None, look_right: None, look_up: None, look_down: None,
                 gamepad_jump: "South".to_string(), gamepad_run: "East".to_string(),
                 gamepad_interact: "West".to_string(), gamepad_target_next: "North".to_string(),
-                gamepad_deadzone: 0.15,
+                gamepad_deadzone: 0.15, ..InputMap::default()
             },
             is_running: false,
             jump_velocity: 5.94,
@@ -541,7 +541,7 @@ fn test_target_indicator_spawns_on_set_target_and_despawns_on_clear() {
                 gamepad_index: None, look_left: None, look_right: None, look_up: None, look_down: None,
                 gamepad_jump: "South".to_string(), gamepad_run: "East".to_string(),
                 gamepad_interact: "West".to_string(), gamepad_target_next: "North".to_string(),
-                gamepad_deadzone: 0.15,
+                gamepad_deadzone: 0.15, ..InputMap::default()
             },
             is_running: false, jump_velocity: 5.94, double_jump_enabled: false,
             double_jump_velocity: 5.94, jumps_used: 0, max_jumps: 1,
@@ -598,7 +598,7 @@ fn test_character_controller_for_ring_tests() -> CharacterController {
             gamepad_index: None, look_left: None, look_right: None, look_up: None, look_down: None,
             gamepad_jump: "South".to_string(), gamepad_run: "East".to_string(),
             gamepad_interact: "West".to_string(), gamepad_target_next: "North".to_string(),
-            gamepad_deadzone: 0.15,
+            gamepad_deadzone: 0.15, ..InputMap::default()
         },
         is_running: false, jump_velocity: 5.94, double_jump_enabled: false,
         double_jump_velocity: 5.94, jumps_used: 0, max_jumps: 1,
@@ -762,7 +762,7 @@ fn test_target_indicator_tints_rings_per_player_when_multiplayer() {
                 target_next: Some("Tab".to_string()), target_range: 30.0, gamepad_index: None, look_left: None, look_right: None, look_up: None, look_down: None,
                 gamepad_jump: "South".to_string(), gamepad_run: "East".to_string(),
                 gamepad_interact: "West".to_string(), gamepad_target_next: "North".to_string(),
-                gamepad_deadzone: 0.15,
+                gamepad_deadzone: 0.15, ..InputMap::default()
             },
             is_running: false, jump_velocity: 5.94, double_jump_enabled: false,
             double_jump_velocity: 5.94, jumps_used: 0, max_jumps: 1,
@@ -783,7 +783,7 @@ fn test_target_indicator_tints_rings_per_player_when_multiplayer() {
                 target_next: Some("Tab".to_string()), target_range: 30.0, gamepad_index: None, look_left: None, look_right: None, look_up: None, look_down: None,
                 gamepad_jump: "South".to_string(), gamepad_run: "East".to_string(),
                 gamepad_interact: "West".to_string(), gamepad_target_next: "North".to_string(),
-                gamepad_deadzone: 0.15,
+                gamepad_deadzone: 0.15, ..InputMap::default()
             },
             is_running: false, jump_velocity: 5.94, double_jump_enabled: false,
             double_jump_velocity: 5.94, jumps_used: 0, max_jumps: 1,
@@ -885,7 +885,7 @@ fn test_target_indicator_ring_not_double_despawned_when_target_dies_and_owner_re
                 target_next: Some("Tab".to_string()), target_range: 30.0, gamepad_index: None, look_left: None, look_right: None, look_up: None, look_down: None,
                 gamepad_jump: "South".to_string(), gamepad_run: "East".to_string(),
                 gamepad_interact: "West".to_string(), gamepad_target_next: "North".to_string(),
-                gamepad_deadzone: 0.15,
+                gamepad_deadzone: 0.15, ..InputMap::default()
             },
             is_running: false, jump_velocity: 5.94, double_jump_enabled: false,
             double_jump_velocity: 5.94, jumps_used: 0, max_jumps: 1,
@@ -906,7 +906,7 @@ fn test_target_indicator_ring_not_double_despawned_when_target_dies_and_owner_re
                 target_next: Some("Tab".to_string()), target_range: 30.0, gamepad_index: None, look_left: None, look_right: None, look_up: None, look_down: None,
                 gamepad_jump: "South".to_string(), gamepad_run: "East".to_string(),
                 gamepad_interact: "West".to_string(), gamepad_target_next: "North".to_string(),
-                gamepad_deadzone: 0.15,
+                gamepad_deadzone: 0.15, ..InputMap::default()
             },
             is_running: false, jump_velocity: 5.94, double_jump_enabled: false,
             double_jump_velocity: 5.94, jumps_used: 0, max_jumps: 1,
@@ -976,7 +976,7 @@ fn test_set_target_and_clear_target_actions_mirror_into_primary_player() {
                 target_next: Some("Tab".to_string()), target_range: 30.0, gamepad_index: None, look_left: None, look_right: None, look_up: None, look_down: None,
                 gamepad_jump: "South".to_string(), gamepad_run: "East".to_string(),
                 gamepad_interact: "West".to_string(), gamepad_target_next: "North".to_string(),
-                gamepad_deadzone: 0.15,
+                gamepad_deadzone: 0.15, ..InputMap::default()
             },
             is_running: false, jump_velocity: 5.94, double_jump_enabled: false,
             double_jump_velocity: 5.94, jumps_used: 0, max_jumps: 1,

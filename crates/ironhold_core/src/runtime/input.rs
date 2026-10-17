@@ -312,6 +312,10 @@ pub fn input_translator_system(
     mouse_input: Res<ButtonInput<MouseButton>>,
     query: Query<(Entity, &CharacterController, Option<&BoundGamepad>)>,
     gamepad_query: Query<&Gamepad>,
+    first_person_cameras: Query<
+        &crate::capabilities::camera::CameraTargets,
+        With<crate::capabilities::camera::FirstPersonCameraMode>,
+    >,
     mut input_events: MessageWriter<InputActionMessage>,
     #[cfg(feature = "inspector")]
     inspector_enabled: Option<Res<crate::inspector::InspectorEnabled>>,
@@ -380,8 +384,13 @@ pub fn input_translator_system(
             if lx.abs() > deadzone { move_vec.x += lx; }
             if ly.abs() > deadzone { move_vec.y += ly; }
 
+            // A player seen through a `FirstPerson` camera gets right-stick look from
+            // `first_person_camera_system` (the one owner of that stick); also emitting `Turn`
+            // here would turn the character twice. Decided from the live camera, not from
+            // `InputMap.controls`, because `SetCameraMode` can swap the camera at runtime.
+            let first_person_look = first_person_cameras.iter().any(|t| t.0.contains(&entity));
             let rx = gp.get(GamepadAxis::RightStickX).unwrap_or(0.0);
-            if rx.abs() > deadzone { turn -= rx; }
+            if !first_person_look && rx.abs() > deadzone { turn -= rx; }
         }
 
         // `clamp_length_max` (not `normalize`) so a fully-analog gamepad tilt keeps its
@@ -413,15 +422,28 @@ pub fn input_translator_system(
         }
 
         let gamepad_run = controller.inputs.gamepad_button("run");
-        let run_pressed = controller.inputs.key("run")
-            .map(|k| keyboard_input.just_pressed(k))
-            .unwrap_or(false)
-            || gamepad.zip(gamepad_run).map(|(gp, btn)| gp.just_pressed(btn)).unwrap_or(false);
-        if run_pressed {
+        if controller.inputs.run_mode == crate::schema::player::RunMode::Hold {
+            // Hold: report the held state every tick so releasing the key stops the run;
+            // `player_movement_system` sets `is_running` from it instead of toggling.
+            let held = controller.inputs.key("run")
+                .map(|k| keyboard_input.pressed(k))
+                .unwrap_or(false)
+                || gamepad.zip(gamepad_run).map(|(gp, btn)| gp.pressed(btn)).unwrap_or(false);
             input_events.write(InputActionMessage {
                 entity,
-                action: InputAction::Run(true),
+                action: InputAction::Run(held),
             });
+        } else {
+            let run_pressed = controller.inputs.key("run")
+                .map(|k| keyboard_input.just_pressed(k))
+                .unwrap_or(false)
+                || gamepad.zip(gamepad_run).map(|(gp, btn)| gp.just_pressed(btn)).unwrap_or(false);
+            if run_pressed {
+                input_events.write(InputActionMessage {
+                    entity,
+                    action: InputAction::Run(true),
+                });
+            }
         }
     }
 }
