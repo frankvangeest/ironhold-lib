@@ -78,7 +78,7 @@ The combat pipeline already exists (`{target}`, slot cost/cooldown, `ModifyStat`
 ## Tasks
 
 ### v1
-- [ ] **Spike A: cursor capture** (see Approach v1 item 5): native and WASM (Chrome/Edge, WebGPU), lock-state signal, Escape behaviour, UI under a locked cursor, winit grab-mode fallback. **Record the result in this file before coding the rest.** Decide the runner -> core fallback with Frank if needed.
+- [x] **Spike A, source reading (2026-10-17): result recorded below (runner -> core `CursorLockState` contract needed, Frank to approve).** Remaining: browser confirmation. **Spike A: cursor capture** (see Approach v1 item 5): native and WASM (Chrome/Edge, WebGPU), lock-state signal, Escape behaviour, UI under a locked cursor, winit grab-mode fallback. **Record the result in this file before coding the rest.** Decide the runner -> core fallback with Frank if needed.
 - [ ] **Spike B:** centred crosshair `Group`/`Rect` layout, `Visibility::Hidden` on the player root hides the whole GLB model (camera not a child), `character_male` resolves from a new project's `assets.ron` with the shared animation packs.
 - [ ] `InputMapDef` + `serde(from)` resolution, `controls`, `run_mode`, per-field source, `inspect`/`query` output; `ThirdPerson` byte-identical (existing suites pass unchanged). Regression test: `strafe_left: None` under `controls: FirstPerson` stays unbound.
 - [ ] Translator: skip stick-X `Turn` for FirstPerson-camera players; `Run(held)`; `player_movement_system` Hold-mode handling.
@@ -97,6 +97,21 @@ The combat pipeline already exists (`{target}`, slot cost/cooldown, `ModifyStat`
 - [ ] `target_name` crosshair label (single-player GameVariable).
 - [ ] Tests: aim picks the centre-nearest targetable; LOS blocks behind a wall; `aim_target` unset leaves click/tab selection untouched; schedule-order test; capture-gated mouse fire.
 - [ ] Docs (slot `mouse_button`, `FirstPersonCameraDef.aim_target`; `docs/30_runtime_events_and_logic.md` for `cursor.lock_lost`) and baseline refresh.
+
+## Spike A result: cursor capture (source reading, 2026-10-17; browser confirmation still to do)
+
+Read from `bevy_window 0.18.0`, `bevy_winit 0.18.0` and `winit 0.30.12` in the cargo registry. **Conclusion: the engine has no way to see the real pointer-lock state on the web, so the runner -> core fallback is required, not optional.**
+- Bevy 0.18 exposes the grab as the `CursorOptions` **component** on the window (`grab_mode`, `visible`). `bevy_winit`'s apply system runs only on `Changed<CursorOptions>` (`bevy_winit/src/system.rs` ~575-600), tries `Confined` then falls back to `Locked` (and the reverse) in `attempt_grab` (`winit_windows.rs` ~415-440), and its own comment says the grab "can change through external means, leaving the cache outdated".
+- On the web, `winit` implements `set_cursor_grab` as `canvas.request_pointer_lock()` / `document.exit_pointer_lock()` and **always returns `Ok`** (`web/web_sys/canvas.rs` ~175-181, `web/window.rs` ~230-240); `Confined` is `NotSupported` (so Bevy's fallback to `Locked` is what runs). There is **no `pointerlockchange` / `pointerlockerror` listener anywhere in winit's web backend** (grep over `platform_impl/web` finds only the two calls above). So: a request made while the browser refuses it (no recent user activation, or Chrome's re-lock delay after an Escape exit) fails silently; the user pressing Escape releases the lock with nothing reaching Bevy; and `CursorOptions.grab_mode` stays `Locked` while the real state is unlocked. Re-grabbing after an external release needs a **forced** `Changed<CursorOptions>` (write `None`, then `Locked`).
+- `ironhold_web` today only reads URL params through `web-sys` (`Window`, `Location`, `UrlSearchParams`; `crates/ironhold_web/src/lib.rs`). It has no event listeners.
+- Native (Windows/macOS/Linux): grab is synchronous through winit and Escape is not special, so the engine's own `CursorOptions` is a reliable state there.
+
+**Design that follows (needs Frank's approval, a new runner -> core contract):**
+1. `ironhold_core` defines a platform-agnostic resource `CursorLockState { locked: bool, source_reliable: bool }` (no `web-sys`, no `cfg(wasm32)` in core).
+2. `ironhold_web` (the thin runner) registers `document` `pointerlockchange` and `pointerlockerror` listeners and writes the resource from `document.pointerLockElement == canvas`; adds the `Document`, `Element`, `Event` web-sys features it needs.
+3. Native: the core capture system sets `locked` itself right after it writes `CursorOptions` (synchronous, reliable).
+4. The capture system emits `cursor.lock_lost` (locked -> not locked without the engine having asked), applies mouse-look gating and the swallowed capture click from `CursorLockState`, never from `CursorOptions`, and forces a `Changed<CursorOptions>` to re-grab.
+Browser confirmation (Chrome/Edge WebGPU) of the user-gesture timing (the request is issued from a Bevy system on the frame after the click, inside Chrome's transient-activation window) and of the ~1 s re-lock delay happens in the first slice of code, behind this contract.
 
 ## Out of scope (logged as follow-ups when v2 lands, not part of this plan)
 Ammo and reload, hold-to-repeat fire, recoil and spread, weapon view-model (hands/gun mesh attached to the camera), aim-down-sights zoom (a `fov` change via `SetCameraMode` preset), hit-marker and damage-direction HUD, enemy AI that shoots back, shadow-only own body, pick-ups, multiple weapons and weapon switching, **local co-op / split-screen first person** (one shared mouse cannot drive two first-person cameras, same limit as Orbit's `orbit_button: "None"` rule), input remapping UI (already queued separately), `Fixed`-tick sim for the shot (aim runs in `Update` like targeting, deliberately).
