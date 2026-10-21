@@ -2560,3 +2560,12 @@ fn clean_aim_and_mouse_wiring_pass_strict() {
     let (code, stdout) = validate_strict("clean_aim_mouse_wiring");
     assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
 }
+
+/// An action-bar slot's `do_actions` are real actions: a sound or effect used only there is used, not an orphan
+/// (before this fix `--strict` reported them as "defined but never used").
+#[test]
+fn strict_counts_action_bar_slot_actions_as_uses() {
+    let (code, stdout) = validate_strict("strict_slot_actions_count_as_use");
+    assert_eq!(code, 0, "a slot-only sound/effect must not be reported unused, got {code}:
+{stdout}");
+}

@@ -1,0 +1,42 @@
+// A target dummy: it stands there until its health reaches 0, then goes down.
+//
+// How it works:
+//  - the prefab's `stat_templates` give every dummy its own `{self}.health`, and a threshold there emits
+//    `stat.{self}.health.depleted` when it hits 0;
+//  - a shot (see the fire slot in scenes/main.scene.ron) does `ModifyStat(key: "{target}.health", ...)`;
+//  - this file reacts to the depleted event: poof, sound, and the dummy removes itself a moment later.
+//  - A dummy never revives in place. `logic/state_machine.ron` has one rule per dummy that listens for
+//    `dummy.respawn:<id>` (armed below, 3 seconds after it goes down) and spawns a fresh one at the same spot.
+//    That event is armed BEFORE this entity despawns itself, so it can only be caught by a global rule.
+(
+    schema_version: 1,
+    initial_state: "up",
+
+    global_on: [],
+
+    states: [
+        (
+            name: "up",
+            entry_actions: [],
+            exit_actions: [],
+            on: [],
+        ),
+        (
+            name: "down",
+            entry_actions: [
+                PlaySound(key: "hit"),
+                SpawnEffect(key: "death_poof", entity: "{self}"),
+                EmitEventAfterDelay(event: "dummy.respawn:{self}", delay_secs: 3.0),
+                // A timer on the entity itself (not a delayed event + Despawn): it can never hit a different
+                // entity that later reuses this id.
+                SetDespawnTimer(entity: "{self}", delay_secs: 0.3),
+            ],
+            exit_actions: [],
+            on: [],
+        ),
+    ],
+
+    transitions: [
+        ( from: "up", on: "stat.{self}.health.depleted", to: "down" ),
+    ],
+)

@@ -16,6 +16,18 @@
         //   game cannot see that key press, so the engine raises this event instead): pause only.
         ( event: "cursor.lock_lost", do_actions: [ PauseGame ] ),
 
+        // Fire with nothing under the crosshair: the shot slot needs a `{target}`, so the engine skips it and
+        // raises this event instead. A dry click is the whole "miss" feedback. (The event name carries the
+        // slot's `key`, "1".) Note a miss neither starts the cooldown nor costs anything.
+        ( event: "action_bar.no_target:1", do_actions: [ PlaySound(key: "click") ] ),
+
+        // Targets come back. Each dummy arms `dummy.respawn:<id>` (see behaviors/training_dummy.behavior.ron)
+        // just before it removes itself, so the rule has to live here, matched by the dummy's literal id.
+        // Positions are copied from scenes/main.scene.ron: keep them in step if you move a dummy.
+        ( event: "dummy.respawn:dummy_near", do_actions: [ Spawn(prefab: "training_dummy", id: "dummy_near", position: (-3.0, 0.9, 6.0)) ] ),
+        ( event: "dummy.respawn:dummy_mid",  do_actions: [ Spawn(prefab: "training_dummy", id: "dummy_mid",  position: (4.0, 0.9, -13.0)) ] ),
+        ( event: "dummy.respawn:dummy_far",  do_actions: [ Spawn(prefab: "training_dummy", id: "dummy_far",  position: (-8.0, 0.9, -17.0)) ] ),
+
         // The menu button resumes.
         ( event: "ui.button_pressed:resume", do_actions: [ ResumeGame ] ),
 

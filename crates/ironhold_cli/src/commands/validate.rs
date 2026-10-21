@@ -4427,7 +4427,7 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
         &mut file_results,
     );
 
-    let all_actions = collect_actions(
+    let mut all_actions = collect_actions(
         state_machine.as_ref().map(|s| (state_machine_source.as_str(), s)),
         &behaviors,
         &dialogues,
@@ -4440,6 +4440,21 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
         &mut scenes,
         &mut file_results,
     );
+
+    // An action-bar slot's `do_actions` are real actions (they run through the same executor), so the checks that
+    // ask "is this effect / sound / scene used anywhere?" must see them too; without this a fire slot's
+    // `PlaySound`/`SpawnEffect` looks unused. Added after scene discovery so it cannot change which scenes are
+    // loaded, and before the checks run.
+    for (scene_path, scene) in &scenes {
+        for node in walk_ui_nodes(&scene.ui) {
+            let UiNodeDef::ActionBar(bar) = node else { continue };
+            for slot in &bar.slots {
+                for action in &slot.do_actions {
+                    all_actions.push((scene_path.clone(), action.clone()));
+                }
+            }
+        }
+    }
 
     let logic_files_parsed_cleanly = file_results
         .iter()
