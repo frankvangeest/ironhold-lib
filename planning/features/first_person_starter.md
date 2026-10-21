@@ -1,13 +1,13 @@
 # Feature: First-Person Shooter Starter Demo (`first_person_starter`)
 
-_Status: In Progress, v1 (plan-reviewed 2026-10-16, every review decision folded into the body on 2026-10-17; v1 starts with the cursor-capture spike, Task 1, whose result is recorded in this file before the rest of v1 is coded)_
+_Status: In Progress (v1 Done 2026-10-22, v2 Queued). Plan-reviewed 2026-10-16; every review decision is folded into the body. v2 starts from a fresh plan-review pass of its own section._
 _Planned at: `eb56cf3` (2026-10-16)_
 
 ## Phases
 
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
-| v1 | FPS control scheme (strafe movement, gamepad look yaw+pitch, hold-to-sprint, cursor capture) + `first_person_starter` project with the male character, arena and crosshair: move and look on keyboard + mouse and gamepad | Queued | — |
+| v1 | FPS control scheme (strafe movement, gamepad look yaw+pitch, hold-to-sprint, cursor capture) + `first_person_starter` project with the male character, arena and crosshair: move and look on keyboard + mouse and gamepad | Done | `ed09dd5` (2026-10-22) |
 | v2 | Crosshair aim targeting + fire input (mouse button / trigger) + hit feedback: the shooting starting point | Queued | — |
 
 v2 depends on v1 (same project, same camera mode). Each phase ships and is play-tested on its own branch before the next starts.
