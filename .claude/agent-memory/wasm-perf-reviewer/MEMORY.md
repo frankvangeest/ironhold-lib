@@ -45,3 +45,4 @@
 - [Responsive canvas render cost](project_responsive_canvas.md) — pixel cap in play.html .canvas-scaler (3.69 MP, floor 1280x720); winit offsetX OK; stray AmbientLight camera removed
 - [Real pause / SimClock](project_real_pause.md) — paused Time<Virtual> stops FixedMain so Bevy Messages<T> never swap -> unbounded growth while paused; gates O(1)
 - [Pipeline system sets (D3)](project_pipeline_system_sets.md) — +1 ApplyDeferred (Scene->{Ui,Game}), sync nodes dedup per distance, cheap on web; warmup now sees PipelineWarmup 1 frame later
+- [First-person cursor capture](project_first_person_cursor_capture.md) — cursor_capture_system writes CursorOptions only on click/self-clearing release (no per-frame relock); FP look parse_key/frame nit; hide_own_body kills self-shadow

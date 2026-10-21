@@ -88,3 +88,4 @@
 - [play.html ready signal never fires on adapter failure](project_play_html_ready_signal_never_fires_on_adapter_failure.md) — overlay waits on first #debug-state write; no WebGPU adapter = no update ever = eternal spin...
 - [Schedule tests: position != edge](project_schedule_test_positional_vs_edge.md) — toposort-index asserts pass without the edge; only conflicting_systems() is edge-sensitive; cross-chain by-name edge drags camera tail
 - [InputMap key fallback asymmetry](project_inputmap_key_fallback_asymmetry.md) — unknown key = unbound except target_next->Tab; validate skips players with no inputs: block
+- [Root Visibility::Hidden is not a durable hide](project_visibility_hide_overridden_by_reveal_and_unparented_widgets.md) — animation_policy reveal re-inserts Inherited; nameplate/WorldLabel anchors are unparented
