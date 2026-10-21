@@ -60,6 +60,7 @@ fn fp_state(invert_y: bool) -> FirstPersonState {
         invert_y,
         capture_cursor: false,
         hide_own_body: false,
+        aim_target: None,
     }
 }
 

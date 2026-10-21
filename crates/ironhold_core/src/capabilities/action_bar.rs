@@ -65,6 +65,10 @@ pub struct ActionSlotUi {
     /// `gamepad_key` was omitted (ordinary keyboard-only slot) or unparseable (the scene loader
     /// already `warn!`s about this at spawn time) — such a slot never fires from gamepad.
     pub resolved_gamepad_button: Option<GamepadButton>,
+    /// `InputMap::parse_mouse_button(&mouse_button)`, resolved once at scene load. `None` when
+    /// `mouse_button` was omitted or unparseable (the scene loader `warn!`s about the latter). Fires
+    /// only while the cursor is captured (`CursorLockState.locked`).
+    pub resolved_mouse_button: Option<MouseButton>,
     pub do_actions: Vec<Action>,
     pub cooldown_secs: Option<f32>,
     pub cost: Option<SlotCost>,
@@ -174,6 +178,8 @@ pub fn cooldown_tick_system(time: Res<Time>, mut cooldowns: ResMut<CooldownMap>)
 /// acting player id against).
 pub fn action_bar_input_system(
     keys: Res<ButtonInput<KeyCode>>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    cursor_lock: Res<crate::capabilities::cursor_capture::CursorLockState>,
     slots: Query<(&ActionSlotUi, Option<Ref<Interaction>>)>,
     mut game_events: MessageWriter<GameEvent>,
     cooldowns: Res<CooldownMap>,
@@ -203,7 +209,12 @@ pub fn action_bar_input_system(
         let key_pressed = slot.resolved_key.is_some_and(|kc| keys.just_pressed(kc));
         let click_fired = clicks_enabled
             && interaction.is_some_and(|i| i.is_changed() && *i == Interaction::Pressed);
-        let direct_fired = key_pressed || click_fired;
+        // A mouse-button slot fires only while the cursor is captured: with a free cursor a click is aimed at
+        // the page or an in-game panel, and the click that captures the cursor must not also shoot (the
+        // capture system runs after this one in the frame, so that click still sees `locked == false`).
+        let mouse_pressed = cursor_lock.locked
+            && slot.resolved_mouse_button.is_some_and(|b| mouse.just_pressed(b));
+        let direct_fired = key_pressed || click_fired || mouse_pressed;
         // Fast path: unchanged perf profile for the common case (no gamepad binding, not pressed).
         if !direct_fired && slot.resolved_gamepad_button.is_none() { continue; }
 
