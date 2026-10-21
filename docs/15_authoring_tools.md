@@ -150,6 +150,9 @@ Every row here, including the pause checks (`unrecoverable_pause`, `toggle_pause
 
 | What you see | Code | Meaning |
 |---|---|---|
+| an action-bar slot's `mouse_button` that is not `"Left"`, `"Right"` or `"Middle"`, or two slots of one player on the same mouse button | `invalid_mouse_button` / `duplicate_mouse_button` | the slot never fires from the mouse / one click fires both slots | fix the name; give each slot its own button |
+| a slot with `mouse_button` in a scene where no player has a `FirstPerson` camera with `capture_cursor: true`; or whose button is also a player's `strafe_mouse_button` or Orbit `orbit_button` | `mouse_button_without_capture` / `mouse_button_shared_binding` | the slot never fires (it fires only while the mouse is captured) / one click also strafes or orbits | add `capture_cursor: true` to the player's camera; set `strafe_mouse_button: None` (the `FirstPerson` scheme does) |
+| a player's first-person camera has `aim_target` but no placed entity has a `targetable: true` prefab | `aim_target_without_targetable` | the crosshair has nothing to aim at (a target created later by `Action::Spawn` is not seen by `validate`) | place a targetable entity, or ignore if the targets are spawned at runtime |
 | a prefab, effect, audio or decal key defined but never used | `unused_prefab` / `unused_effect` / `unused_audio` / `unused_decal` | dead data; delete or use it |
 | text containing a non-ASCII character in a `Label`/`Button`/entity `label:`/`world_labels:`/dialogue text | `non_ascii_char_in_text` | renders as a box (the built-in font is ASCII-only); use plain ASCII (hyphen, straight quotes) |
 | a `ui.button_pressed:<trigger>` binding that no button, key or gamepad binding can ever fire | `orphan_binding` | dead code left over from a scene rewrite |

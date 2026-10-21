@@ -27,6 +27,7 @@ player-construction site inserts it; re-check all of them when touching player c
 (`runtime/schedule.rs`, asserted by `tests/schedule_order_tests.rs`); `target_indicator_system` and `target_hud_update_system` are
 ordered `.after(target_auto_clear_system)`. **This is load-bearing:** they touch `PlayerTarget`/`CurrentTarget` with no data
 dependency, so an unordered system races the action bar on the frame a target despawns and shows up as flaky tests.
+`aim_target_system` is its last member, `.before(first_person_camera_system)` (never `.after`).
 **Any new system that reads or writes `PlayerTarget`/`CurrentTarget` in `Update` must be ordered explicitly against
 this chain**; a passing test run does not prove an ordering, since the failure is a scheduling race.
 
@@ -62,11 +63,11 @@ removes it from the registry outright, and a hidden-only check lets a stale `Pla
 until the id is reused.
 
 <!-- b:472 -->
-## Cursor capture and the right stick (first person)
+## Cursor capture and the right stick
 
 `cursor_capture_system` is the only writer of `CursorOptions`, `CursorLockState` and `cursor.lock_lost`; core never touches the DOM
 (`ironhold_web` pushes the web lock state via `report_pointer_lock`). A player seen through a `FirstPersonCameraMode` camera has its
-right stick owned by `first_person_camera_system`: the translator skips stick-X `Turn`, decided from the live camera, never from
+right stick owned by `first_person_camera_system`: the translator skips stick-X `Turn`, decided from the live camera, not
 `InputMap.controls`. Detail: `docs/dev/cursor-capture.md`.
 
 ## `Interactable`
