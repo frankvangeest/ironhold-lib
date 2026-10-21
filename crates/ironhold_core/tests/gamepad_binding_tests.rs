@@ -86,6 +86,7 @@ fn minimal_player_config(gamepad_index: Option<usize>, player_index: u32, bound_
         prefab_key: "test_player_3".to_string(),
         nameplate_display_name: None,
         nameplate_override: None,
+        hide_own_body: false,
         player_index,
         bound_gamepad,
         material: None,
@@ -106,7 +107,7 @@ fn test_input_map() -> InputMap {
         gamepad_index: None, look_left: None, look_right: None, look_up: None, look_down: None,
         gamepad_jump: "South".to_string(), gamepad_run: "East".to_string(),
         gamepad_interact: "West".to_string(), gamepad_target_next: "North".to_string(),
-        gamepad_deadzone: 0.15,
+        gamepad_deadzone: 0.15, ..InputMap::default()
     }
 }
 

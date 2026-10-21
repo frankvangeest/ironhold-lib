@@ -59,7 +59,7 @@ fn input_map() -> InputMap {
         gamepad_run: "East".to_string(),
         gamepad_interact: "West".to_string(),
         gamepad_target_next: "North".to_string(),
-        gamepad_deadzone: 0.15,
+        gamepad_deadzone: 0.15, ..InputMap::default()
     }
 }
 

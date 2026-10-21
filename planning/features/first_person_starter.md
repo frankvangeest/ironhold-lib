@@ -1,13 +1,13 @@
 # Feature: First-Person Shooter Starter Demo (`first_person_starter`)
 
-_Status: Ready (plan-reviewed 2026-10-16, every review decision folded into the body on 2026-10-17; v1 starts with the cursor-capture spike, Task 1, whose result is recorded in this file before the rest of v1 is coded)_
+_Status: In Progress (v1 Done 2026-10-22, v2 Queued). Plan-reviewed 2026-10-16; every review decision is folded into the body. v2 starts from a fresh plan-review pass of its own section._
 _Planned at: `eb56cf3` (2026-10-16)_
 
 ## Phases
 
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
-| v1 | FPS control scheme (strafe movement, gamepad look yaw+pitch, hold-to-sprint, cursor capture) + `first_person_starter` project with the male character, arena and crosshair: move and look on keyboard + mouse and gamepad | Queued | — |
+| v1 | FPS control scheme (strafe movement, gamepad look yaw+pitch, hold-to-sprint, cursor capture) + `first_person_starter` project with the male character, arena and crosshair: move and look on keyboard + mouse and gamepad | Done | `ed09dd5` (2026-10-22) |
 | v2 | Crosshair aim targeting + fire input (mouse button / trigger) + hit feedback: the shooting starting point | Queued | — |
 
 v2 depends on v1 (same project, same camera mode). Each phase ships and is play-tested on its own branch before the next starts.
@@ -46,7 +46,7 @@ The "Decisions made 2026-10-16" section at the end of this file records why each
    - **Mechanism:** a raw `InputMapDef` whose key fields record whether they were written (`#[serde(default, deserialize_with = ...)]` runs only when the field is present, wrapping the inner `Option<String>`; works under `implicit_some`), `#[serde(deny_unknown_fields)]`, and `#[serde(from = "InputMapDef")]` on the resolved `InputMap`, which applies the three-step order and keeps a per-field source (`authored` / `scheme:FirstPerson` / `default`). `InputMap::default()` must equal `InputMap::from(InputMapDef::default())` (one source). A bare `None` is how a designer unbinds (lint-clean, `ron_lint` only flags `Some(`). Doc rule, one sentence: "Leave a field out to get the scheme's key; write `None` to unbind it; write a key name to replace it."
    - **Layer split:** what keys and sticks do (turn vs strafe, sprint mode) belongs to `InputMap`/`controls:`; how look feels (`look_speed`, `invert_y`, `capture_cursor`, `hide_own_body`) belongs to `FirstPersonCameraDef`. `controls:` never sets camera fields.
    - Authored example: `inputs: ( controls: FirstPerson, gamepad_index: 0, run_mode: Toggle )` (doc override example: `run_mode`, not an unbinding).
-   - **Validate/CLI:** warn when `controls:` does not match the player's camera mode (`FirstPerson` with an `Orbit` camera, `ThirdPerson` with a `FirstPerson` camera; runtime `SetCameraMode` switches are invisible to `validate`, document that); the existing duplicate-key and key-vs-slot checks run on the **resolved** bindings (they already deserialize through `InputMap`); `ironhold inspect`/`query` prints each effective binding with its source.
+   - **Validate/CLI:** warn when `controls: FirstPerson` is used on a player whose authored camera is not `FirstPerson(...)` (runtime `SetCameraMode` switches are invisible to `validate`, document that); the reverse (`ThirdPerson` with a first-person camera) is valid and not reported; the existing duplicate-key and key-vs-slot checks run on the **resolved** bindings (they already deserialize through `InputMap`); `ironhold inspect`/`query` prints each effective binding with its source.
 2. **Right-stick ownership: decided from the active camera.** The translator (`input_translator_system`) skips right-stick-X -> `Turn` for any player targeted by an active camera carrying `FirstPersonCameraMode` (found by scanning the camera query each tick; `apply_camera_mode` already inserts/removes that component, `entity_spawner.rs`), and `first_person_camera_system` always owns stick look. No `right_stick` field. This is correct under runtime `SetCameraMode` switches, which a scheme-based switch is not. No shipped `FirstPerson` player has a `gamepad_index`, so existing projects are unaffected.
 3. **Look in `first_person_camera_system`.** Add right stick X (yaw) and Y (pitch) via the owning player's `Option<&BoundGamepad>` resolved through `CameraTargets` (never a required `&BoundGamepad`, `capabilities/CLAUDE.md`), and keyboard look through the existing `InputMap.look_left/right/up/down` fields (Orbit-only today). New `FirstPersonCameraDef` fields: `look_speed: f32` (rad/s, default `2.5`, used for **stick and keyboard** look, not mouse), `invert_y: bool` (default `false`, applies to mouse, stick and keyboard). Stick/keyboard look is dt-scaled on the sim clock and sits behind the existing `sim.is_running()` gate; yaw is written to the player `Transform` exactly like the mouse path, so inputs compose. Pitch sign is pinned by a regression test, not asserted from hardware feel.
 4. **`InputMap.run_mode: Toggle | Hold`** (default from the scheme: `Toggle` / `Hold`; overridable). `Hold` emits `InputAction::Run(held)` every tick and `player_movement_system` sets `is_running = held`; in Hold mode a `Run(_)` must never toggle. The toggle path is unchanged. (`player_movement_system` is therefore touched, minimally.)
@@ -61,9 +61,9 @@ The "Decisions made 2026-10-16" section at the end of this file records why each
 | Move | WASD (A/D strafe) | Left stick |
 | Look | Mouse (keyboard look keys as a fallback) | Right stick (X yaw, Y pitch) |
 | Jump | Space | South (A) |
-| Sprint (hold) | Shift | East (B) |
+| Sprint (hold) | Shift | Left trigger (`LeftTrigger2`; B and the A jump button are both right-thumb buttons, which made a running jump awkward, found in the v1 play-test) |
 | Fire (v2) | Left mouse | Right trigger (`RightTrigger2`) |
-| Aim down sights (later) | Right mouse | Left trigger |
+| Aim down sights (later) | Right mouse | Left bumper (`LeftTrigger`; the left trigger is the sprint) |
 | Pause | Escape (releases the cursor) / P | Start |
 
 ### v2: aim targeting and fire
@@ -78,7 +78,7 @@ The combat pipeline already exists (`{target}`, slot cost/cooldown, `ModifyStat`
 ## Tasks
 
 ### v1
-- [ ] **Spike A: cursor capture** (see Approach v1 item 5): native and WASM (Chrome/Edge, WebGPU), lock-state signal, Escape behaviour, UI under a locked cursor, winit grab-mode fallback. **Record the result in this file before coding the rest.** Decide the runner -> core fallback with Frank if needed.
+- [x] **Spike A, source reading (2026-10-17): result recorded below (runner -> core `CursorLockState` contract needed, Frank to approve).** Remaining: browser confirmation. **Spike A: cursor capture** (see Approach v1 item 5): native and WASM (Chrome/Edge, WebGPU), lock-state signal, Escape behaviour, UI under a locked cursor, winit grab-mode fallback. **Record the result in this file before coding the rest.** Decide the runner -> core fallback with Frank if needed.
 - [ ] **Spike B:** centred crosshair `Group`/`Rect` layout, `Visibility::Hidden` on the player root hides the whole GLB model (camera not a child), `character_male` resolves from a new project's `assets.ron` with the shared animation packs.
 - [ ] `InputMapDef` + `serde(from)` resolution, `controls`, `run_mode`, per-field source, `inspect`/`query` output; `ThirdPerson` byte-identical (existing suites pass unchanged). Regression test: `strafe_left: None` under `controls: FirstPerson` stays unbound.
 - [ ] Translator: skip stick-X `Turn` for FirstPerson-camera players; `Run(held)`; `player_movement_system` Hold-mode handling.
@@ -97,6 +97,21 @@ The combat pipeline already exists (`{target}`, slot cost/cooldown, `ModifyStat`
 - [ ] `target_name` crosshair label (single-player GameVariable).
 - [ ] Tests: aim picks the centre-nearest targetable; LOS blocks behind a wall; `aim_target` unset leaves click/tab selection untouched; schedule-order test; capture-gated mouse fire.
 - [ ] Docs (slot `mouse_button`, `FirstPersonCameraDef.aim_target`; `docs/30_runtime_events_and_logic.md` for `cursor.lock_lost`) and baseline refresh.
+
+## Spike A result: cursor capture (source reading, 2026-10-17; browser confirmation still to do)
+
+Read from `bevy_window 0.18.0`, `bevy_winit 0.18.0` and `winit 0.30.12` in the cargo registry. **Conclusion: the engine has no way to see the real pointer-lock state on the web, so the runner -> core fallback is required, not optional.**
+- Bevy 0.18 exposes the grab as the `CursorOptions` **component** on the window (`grab_mode`, `visible`). `bevy_winit`'s apply system runs only on `Changed<CursorOptions>` (`bevy_winit/src/system.rs` ~575-600), tries `Confined` then falls back to `Locked` (and the reverse) in `attempt_grab` (`winit_windows.rs` ~415-440), and its own comment says the grab "can change through external means, leaving the cache outdated".
+- On the web, `winit` implements `set_cursor_grab` as `canvas.request_pointer_lock()` / `document.exit_pointer_lock()` and **always returns `Ok`** (`web/web_sys/canvas.rs` ~175-181, `web/window.rs` ~230-240); `Confined` is `NotSupported` (so Bevy's fallback to `Locked` is what runs). There is **no `pointerlockchange` / `pointerlockerror` listener anywhere in winit's web backend** (grep over `platform_impl/web` finds only the two calls above). So: a request made while the browser refuses it (no recent user activation, or Chrome's re-lock delay after an Escape exit) fails silently; the user pressing Escape releases the lock with nothing reaching Bevy; and `CursorOptions.grab_mode` stays `Locked` while the real state is unlocked. Re-grabbing after an external release needs a **forced** `Changed<CursorOptions>` (write `None`, then `Locked`).
+- `ironhold_web` today only reads URL params through `web-sys` (`Window`, `Location`, `UrlSearchParams`; `crates/ironhold_web/src/lib.rs`). It has no event listeners.
+- Native (Windows/macOS/Linux): grab is synchronous through winit and Escape is not special, so the engine's own `CursorOptions` is a reliable state there.
+
+**Design that follows (needs Frank's approval, a new runner -> core contract):**
+1. `ironhold_core` defines a platform-agnostic resource `CursorLockState { locked: bool, source_reliable: bool }` (no `web-sys`, no `cfg(wasm32)` in core).
+2. `ironhold_web` (the thin runner) registers `document` `pointerlockchange` and `pointerlockerror` listeners and writes the resource from `document.pointerLockElement == canvas`; adds the `Document`, `Element`, `Event` web-sys features it needs.
+3. Native: the core capture system sets `locked` itself right after it writes `CursorOptions` (synchronous, reliable).
+4. The capture system emits `cursor.lock_lost` (locked -> not locked without the engine having asked), applies mouse-look gating and the swallowed capture click from `CursorLockState`, never from `CursorOptions`, and forces a `Changed<CursorOptions>` to re-grab.
+Browser confirmation (Chrome/Edge WebGPU) of the user-gesture timing (the request is issued from a Bevy system on the frame after the click, inside Chrome's transient-activation window) and of the ~1 s re-lock delay happens in the first slice of code, behind this contract.
 
 ## Out of scope (logged as follow-ups when v2 lands, not part of this plan)
 Ammo and reload, hold-to-repeat fire, recoil and spread, weapon view-model (hands/gun mesh attached to the camera), aim-down-sights zoom (a `fov` change via `SetCameraMode` preset), hit-marker and damage-direction HUD, enemy AI that shoots back, shadow-only own body, pick-ups, multiple weapons and weapon switching, **local co-op / split-screen first person** (one shared mouse cannot drive two first-person cameras, same limit as Orbit's `orbit_button: "None"` rule), input remapping UI (already queued separately), `Fixed`-tick sim for the shot (aim runs in `Update` like targeting, deliberately).
@@ -120,7 +135,7 @@ v1
 - Given the simulation is paused or the window loses focus, then look input does not rotate the player and the cursor is released and visible; on resume and a click, capture resumes.
 - Given the browser releases pointer lock (Escape), then `cursor.lock_lost` fires, the game pauses with the menu shown, and resuming (a click) re-captures.
 - Given `camera_modes` and `3rd_person_game_demo`, then play is unchanged (existing suites pass unchanged; Q and E still do nothing; a `FirstPerson` player in `camera_modes` still turns on A/D).
-- Given a project with `controls: FirstPerson` on an Orbit-camera player (or `ThirdPerson` on a FirstPerson-camera player), then `ironhold validate` warns; and `ironhold inspect`/`query` lists each effective binding with its source (`authored`, `scheme:FirstPerson`, `default`).
+- Given a project with `controls: FirstPerson` on a player whose authored camera is not `FirstPerson(...)`, then `ironhold validate --strict` warns (`ThirdPerson` with a first-person camera is valid and deliberately silent: it is the default and `camera_modes` uses it); and `ironhold inspect`/`query` lists each effective binding with its source (`authored`, `scheme:FirstPerson`, `default`).
 - Given `strafe_left: None` under `controls: FirstPerson`, then the key stays unbound.
 - Given the male model, then the player's own body is not visible and nothing clips through the near plane.
 

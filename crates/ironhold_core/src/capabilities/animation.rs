@@ -80,6 +80,10 @@ pub fn animation_playback_system(
     children_query: Query<&Children>,
     names: Query<&Name>,
     time: Res<Time>,
+    // A player whose `hide_own_body` camera hid it must stay hidden: both reveal paths below
+    // (pose confirmed, 5 s failsafe) insert `Visibility::Inherited` on the root, which would put the
+    // body back in front of the camera as soon as the animation policy loads.
+    own_body_hidden: Query<(), With<crate::capabilities::camera::OwnBodyHidden>>,
 ) {
     /// If an entity is still hidden waiting for a confirmed pose this long after
     /// `awaiting_reveal_since` was stamped, reveal it anyway — an incorrect pose is preferable
@@ -99,7 +103,9 @@ pub fn animation_playback_system(
                     );
                     controller.awaiting_reveal = false;
                     controller.awaiting_reveal_since = None;
-                    commands.entity(entity).insert(Visibility::Inherited);
+                    if !own_body_hidden.contains(entity) {
+                        commands.entity(entity).insert(Visibility::Inherited);
+                    }
                 }
             }
         }
@@ -384,7 +390,9 @@ pub fn animation_playback_system(
                                 controller.awaiting_reveal = false;
                                 controller.awaiting_reveal_since = None;
                                 info!("[DIAG] [{}] revealing {:?} — pose confirmed applied", entity_name, entity);
-                                commands.entity(entity).insert(Visibility::Inherited);
+                                if !own_body_hidden.contains(entity) {
+                                    commands.entity(entity).insert(Visibility::Inherited);
+                                }
                             }
                         } else {
                             // AnimationTransitions not yet applied (normal 1-frame deferred window

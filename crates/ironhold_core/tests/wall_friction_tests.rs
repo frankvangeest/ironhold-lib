@@ -38,7 +38,7 @@ fn input_map() -> InputMap {
         interact: Some("KeyF".to_string()), strafe_mouse_button: Some("Left".to_string()), target_next: Some("Tab".to_string()), target_range: 30.0,
         gamepad_index: None, look_left: None, look_right: None, look_up: None, look_down: None,
         gamepad_jump: "South".to_string(), gamepad_run: "East".to_string(), gamepad_interact: "West".to_string(),
-        gamepad_target_next: "North".to_string(), gamepad_deadzone: 0.15,
+        gamepad_target_next: "North".to_string(), gamepad_deadzone: 0.15, ..InputMap::default()
     }
 }
 

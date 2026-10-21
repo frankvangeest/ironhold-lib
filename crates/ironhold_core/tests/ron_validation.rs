@@ -4584,6 +4584,75 @@ fn test_input_map_none_unbinds_and_authored_strafe_binds() {
     assert_eq!(inputs.backward.as_deref(), Some("KeyS"), "an omitted key still takes its default");
 }
 
+// ── `controls:` schemes: authored > scheme default > engine default (first_person_starter.md) ──
+
+/// Source of a layered binding by field name, for the `sources` map `inspect` prints.
+fn binding_source(inputs: &InputMap, field: &str) -> ironhold_core::schema::player::BindingSource {
+    *inputs.sources.get(field).unwrap_or_else(|| panic!("no source recorded for {field}"))
+}
+
+#[test]
+fn test_controls_first_person_supplies_its_defaults() {
+    use ironhold_core::schema::player::{BindingSource, ControlScheme, RunMode};
+    let inputs: InputMap = from_str("(controls: FirstPerson)").expect("must parse");
+    assert_eq!(inputs.controls, ControlScheme::FirstPerson);
+    assert_eq!(inputs.left, None, "FirstPerson leaves the turn keys unbound");
+    assert_eq!(inputs.right, None);
+    assert_eq!(inputs.strafe_left.as_deref(), Some("KeyA"));
+    assert_eq!(inputs.strafe_right.as_deref(), Some("KeyD"));
+    assert_eq!(inputs.strafe_mouse_button, None, "left mouse is the fire button");
+    assert_eq!(inputs.run_mode, RunMode::Hold);
+    // Fields the scheme has no opinion on keep the engine defaults.
+    assert_eq!(inputs.forward.as_deref(), Some("KeyW"));
+    assert_eq!(inputs.jump.as_deref(), Some("Space"));
+    assert_eq!(binding_source(&inputs, "strafe_left"), BindingSource::Scheme(ControlScheme::FirstPerson));
+    assert_eq!(binding_source(&inputs, "run_mode"), BindingSource::Scheme(ControlScheme::FirstPerson));
+    assert_eq!(binding_source(&inputs, "forward"), BindingSource::Default);
+}
+
+#[test]
+fn test_controls_third_person_is_exactly_the_engine_default() {
+    use ironhold_core::schema::player::{ControlScheme, RunMode};
+    let explicit: InputMap = from_str("(controls: ThirdPerson)").expect("must parse");
+    let omitted: InputMap = from_str("()").expect("must parse");
+    let default = InputMap::default();
+    for inputs in [&explicit, &omitted, &default] {
+        assert_eq!(inputs.controls, ControlScheme::ThirdPerson);
+        assert_eq!(inputs.left.as_deref(), Some("KeyA"));
+        assert_eq!(inputs.right.as_deref(), Some("KeyD"));
+        assert_eq!(inputs.strafe_left, None);
+        assert_eq!(inputs.strafe_right, None);
+        assert_eq!(inputs.strafe_mouse_button.as_deref(), Some("Left"));
+        assert_eq!(inputs.run_mode, RunMode::Toggle);
+    }
+}
+
+/// The reason `InputMapDef` exists: under `implicit_some` a plain `Option<String>` cannot tell an
+/// omitted field from a written `None`, so `strafe_left: None` would silently get the scheme's key
+/// back. A written `None` must stay unbound, and a written key must replace the scheme's.
+#[test]
+fn test_controls_authored_fields_beat_the_scheme() {
+    use ironhold_core::schema::player::{BindingSource, RunMode};
+    let inputs: InputMap = from_str(
+        r#"(controls: FirstPerson, strafe_left: None, strafe_right: "KeyE", left: "KeyZ", run_mode: Toggle)"#,
+    )
+    .expect("must parse");
+    assert_eq!(inputs.strafe_left, None, "a written `None` must stay unbound under a scheme");
+    assert_eq!(inputs.strafe_right.as_deref(), Some("KeyE"), "a written key replaces the scheme's");
+    assert_eq!(inputs.left.as_deref(), Some("KeyZ"));
+    assert_eq!(inputs.run_mode, RunMode::Toggle);
+    assert_eq!(binding_source(&inputs, "strafe_left"), BindingSource::Authored);
+    assert_eq!(binding_source(&inputs, "strafe_right"), BindingSource::Authored);
+    assert_eq!(binding_source(&inputs, "run_mode"), BindingSource::Authored);
+    assert_eq!(inputs.right, None, "an unwritten field still takes the scheme's default");
+}
+
+#[test]
+fn test_controls_unknown_scheme_name_is_a_parse_error() {
+    let result: Result<InputMap, _> = from_str("(controls: SideScroll)");
+    assert!(result.is_err(), "SideScroll is deliberately not a scheme yet");
+}
+
 /// `InputMap` now carries `#[serde(deny_unknown_fields)]` -- added alongside the 7 new per-field
 /// defaults, since defaulting a field also silently drops a typo'd version of it (e.g.
 /// `frward: "KeyT"` used to hard-fail as "missing field `forward`"; post-fix it would otherwise

@@ -305,6 +305,68 @@ fn awaiting_reveal_entity_stays_hidden_until_the_pose_is_confirmed_applied() {
     assert!(anim.is_paused(), "the revealed pose must actually be the correct frozen one, not an intermediate state");
 }
 
+/// `hide_own_body` regression: every GLB player with an `animation_policy` is spawned hidden and revealed by
+/// `animation_playback_system` once its pose is confirmed (or by the 5 s failsafe). A player the first-person
+/// camera hid (`OwnBodyHidden`) must stay hidden through BOTH reveal paths, or the camera ends up inside the
+/// head as soon as the policy loads.
+#[test]
+fn a_hide_own_body_player_stays_hidden_through_the_pose_confirmed_reveal() {
+    use ironhold_core::capabilities::camera::OwnBodyHidden;
+    let mut app = setup_test_app();
+    app.init_asset::<bevy::animation::AnimationClip>();
+    app.update();
+
+    let entity = spawn_test_entity(&mut app);
+    app.world_mut().entity_mut(entity).insert((Visibility::Hidden, OwnBodyHidden));
+    app.world_mut().get_mut::<AnimationController>(entity).unwrap().awaiting_reveal = true;
+    push_request(&mut app, entity, AnimationRequest {
+        clip_or_id: "pose_a".to_string(),
+        start_at_fraction: Some(1.0),
+        freeze: true,
+    });
+    for _ in 0..6 {
+        app.update();
+    }
+    assert!(
+        !app.world().get::<AnimationController>(entity).unwrap().awaiting_reveal,
+        "precondition: the pose was confirmed, so the reveal path ran"
+    );
+    assert_eq!(*app.world().get::<Visibility>(entity).unwrap(), Visibility::Hidden, "the reveal must not show a hide_own_body player");
+}
+
+#[test]
+fn a_hide_own_body_player_stays_hidden_through_the_failsafe_reveal() {
+    use ironhold_core::capabilities::camera::OwnBodyHidden;
+    let mut app = setup_test_app();
+    app.init_asset::<bevy::animation::AnimationClip>();
+    app.update();
+
+    let entity = spawn_test_entity(&mut app);
+    app.world_mut().entity_mut(entity).insert((Visibility::Hidden, OwnBodyHidden));
+    {
+        let mut c = app.world_mut().get_mut::<AnimationController>(entity).unwrap();
+        c.awaiting_reveal = true;
+        c.awaiting_reveal_since = Some(-100.0); // far past the 5 s failsafe window
+    }
+    app.update();
+    assert!(
+        !app.world().get::<AnimationController>(entity).unwrap().awaiting_reveal,
+        "precondition: the failsafe reveal path ran"
+    );
+    assert_eq!(*app.world().get::<Visibility>(entity).unwrap(), Visibility::Hidden, "the failsafe must not show a hide_own_body player");
+
+    // Control: the same entity without the marker IS revealed by the failsafe.
+    let control = spawn_test_entity(&mut app);
+    app.world_mut().entity_mut(control).insert(Visibility::Hidden);
+    {
+        let mut c = app.world_mut().get_mut::<AnimationController>(control).unwrap();
+        c.awaiting_reveal = true;
+        c.awaiting_reveal_since = Some(-100.0);
+    }
+    app.update();
+    assert_eq!(*app.world().get::<Visibility>(control).unwrap(), Visibility::Inherited, "control: an ordinary player is revealed");
+}
+
 #[test]
 fn out_of_range_fraction_is_clamped() {
     let mut app = setup_test_app();

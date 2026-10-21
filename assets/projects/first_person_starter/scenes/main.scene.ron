@@ -1,0 +1,98 @@
+(
+    schema_version: 2,
+    name: "main",
+
+    lighting: (
+        ambient: (0.8, 0.85, 1.0),
+        ambient_brightness: 80.0,
+        directional: (
+            color: (1.0, 0.95, 0.82),
+            intensity: 28000.0,
+            rotation_euler_deg: (-42.0, 30.0, 0.0),
+            shadows_enabled: true,
+        ),
+    ),
+
+    spawn_points: {
+        "player_start": (0.0, 0.5, 14.0),
+    },
+
+    entities: [
+
+        // The player starts at the south end of the arena looking north (-Z), towards the targets.
+        (
+            id: "player_01",
+            prefab: "player_male_fps",
+            transform: (
+                translation: (0.0, 0.5, 14.0),
+                rotation_euler_deg: (0.0, 0.0, 0.0),
+                scale: (1.0, 1.0, 1.0),
+            ),
+        ),
+
+        (
+            id: "ground",
+            prefab: "ground",
+            transform: (
+                translation: (0.0, -0.5, 0.0),
+                rotation_euler_deg: (0.0, 0.0, 0.0),
+                scale: (1.0, 1.0, 1.0),
+            ),
+        ),
+
+        // Perimeter walls (a 40 x 40 arena).
+        ( id: "wall_north", prefab: "wall_ns", transform: ( translation: (0.0, 2.0, -20.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
+        ( id: "wall_south", prefab: "wall_ns", transform: ( translation: (0.0, 2.0, 20.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
+        ( id: "wall_east", prefab: "wall_ew", transform: ( translation: (20.0, 2.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
+        ( id: "wall_west", prefab: "wall_ew", transform: ( translation: (-20.0, 2.0, 0.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
+
+        // Cover.
+        ( id: "cover_01", prefab: "cover_box", transform: ( translation: (-6.0, 0.6, 4.0), rotation_euler_deg: (0.0, 15.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
+        ( id: "cover_02", prefab: "cover_box", transform: ( translation: (6.0, 0.6, -2.0), rotation_euler_deg: (0.0, -10.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
+        ( id: "cover_03", prefab: "cover_box", transform: ( translation: (0.0, 0.6, -9.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
+
+        // A ramp on the east side, rising towards the north wall.
+        ( id: "ramp_01", prefab: "ramp", transform: ( translation: (12.0, 0.55, -6.0), rotation_euler_deg: (12.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
+
+        // Three steps on the west side, each 0.4 m higher than the last.
+        ( id: "step_01", prefab: "step", transform: ( translation: (-12.0, 0.2, -4.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
+        ( id: "step_02", prefab: "step", transform: ( translation: (-12.0, 0.6, -5.2), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
+        ( id: "step_03", prefab: "step", transform: ( translation: (-12.0, 1.0, -6.4), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
+
+        // Targets at three ranges.
+        ( id: "dummy_near", prefab: "training_dummy", transform: ( translation: (-3.0, 0.9, 6.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
+        ( id: "dummy_mid", prefab: "training_dummy", transform: ( translation: (4.0, 0.9, -13.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
+        ( id: "dummy_far", prefab: "training_dummy", transform: ( translation: (-8.0, 0.9, -17.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
+
+    ],
+
+    ui: [
+        // Crosshair: a full-screen layout group that centres a 24 x 24 box holding two thin bars.
+        // A Group is a pure layout wrapper and never blocks the mouse.
+        Group((
+            id: "crosshair_layer",
+            width: Percent(100.0),
+            height: Percent(100.0),
+            justify_content: Center,
+            align_items: Center,
+            children: [
+                Group((
+                    id: "crosshair",
+                    width: Px(24.0),
+                    height: Px(24.0),
+                    children: [
+                        Rect(( id: "crosshair_h", position: (0.0, 11.0), size: (24.0, 2.0), color: (1.0, 1.0, 1.0, 0.85), absolute: true )),
+                        Rect(( id: "crosshair_v", position: (11.0, 0.0), size: (2.0, 24.0), color: (1.0, 1.0, 1.0, 0.85), absolute: true )),
+                    ],
+                )),
+            ],
+        )),
+
+        // Hints, one short line each so they fit a narrow window (ASCII only: the built-in UI font has no glyph
+        // for dashes). They are plain text: update them if you change a key, `run_mode` or a pause binding.
+        Label(( id: "hint_keys", text: "WASD move, mouse look, Space jump, Shift sprint", position: (16.0, 16.0), size: (560.0, 26.0), align: Left, font_size: 18.0 )),
+        Label(( id: "hint_pad", text: "Gamepad: sticks move and look, A jump, LT sprint", position: (16.0, 44.0), size: (560.0, 26.0), align: Left, font_size: 18.0 )),
+        Label(( id: "hint_pause", text: "P or Start pauses. Esc pauses and frees the mouse.", position: (16.0, 72.0), size: (560.0, 26.0), align: Left, font_size: 18.0 )),
+        Label(( id: "hint_capture", text: "Click the game to capture the mouse.", position: (16.0, 100.0), size: (560.0, 26.0), align: Left, font_size: 18.0 )),
+    ],
+)

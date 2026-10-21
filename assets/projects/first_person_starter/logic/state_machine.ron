@@ -1,0 +1,26 @@
+(
+    schema_version: 1,
+    // A flat project: every rule lives in `global_on`. See "Pausing the game" in
+    // docs/30_runtime_events_and_logic.md for the state-based alternative.
+    global_on: [
+        ( event: "scene.ready:main", do_actions: [ Log("First person starter ready") ] ),
+
+        // Three ways to ask for a pause. They only change the clock; the menu is shown by the
+        // `game.paused` / `game.resumed` rules below, which fire once per REAL change, so asking
+        // twice in a frame (Escape plus a lost mouse lock) cannot open the menu twice.
+        //   P or the gamepad Start button: toggle
+        ( event: "ui.button_pressed:toggle_pause", do_actions: [ TogglePause ] ),
+        //   Escape: pause only
+        ( event: "ui.button_pressed:pause", do_actions: [ PauseGame ] ),
+        //   The browser took the mouse back (the player pressed Escape while it was captured; the
+        //   game cannot see that key press, so the engine raises this event instead): pause only.
+        ( event: "cursor.lock_lost", do_actions: [ PauseGame ] ),
+
+        // The menu button resumes.
+        ( event: "ui.button_pressed:resume", do_actions: [ ResumeGame ] ),
+
+        // The pause menu follows the clock.
+        ( event: "game.paused",  do_actions: [ LoadSceneOverlay("scenes/pause.scene.ron") ] ),
+        ( event: "game.resumed", do_actions: [ UnloadOverlay ] ),
+    ],
+)

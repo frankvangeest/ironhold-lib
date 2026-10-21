@@ -62,6 +62,13 @@ removes it from the registry outright, and a hidden-only check lets a stale `Pla
 until the id is reused.
 
 <!-- b:472 -->
+## Cursor capture and the right stick (first person)
+
+`cursor_capture_system` is the only writer of `CursorOptions`, `CursorLockState` and `cursor.lock_lost`; core never touches the DOM
+(`ironhold_web` pushes the web lock state via `report_pointer_lock`). A player seen through a `FirstPersonCameraMode` camera has its
+right stick owned by `first_person_camera_system`: the translator skips stick-X `Turn`, decided from the live camera, never from
+`InputMap.controls`. Detail: `docs/dev/cursor-capture.md`.
+
 ## `Interactable`
 
 `interactable: (radius: ..)` on a `PrefabDef`, no collider needed. On the interact key within `radius` it emits

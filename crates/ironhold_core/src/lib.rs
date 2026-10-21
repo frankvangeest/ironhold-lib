@@ -153,6 +153,7 @@ impl Plugin for GamePlugin {
             .init_resource::<DebugState>()
             .init_resource::<PipelineWarmup>()
             .init_resource::<crate::runtime::sim_clock::SimClock>()
+            .init_resource::<crate::capabilities::cursor_capture::CursorLockState>()
             .init_resource::<ActionQueue>()
             .init_resource::<ModelSpawner>()
             .init_resource::<crate::runtime::scene_manager::MergedModelFixes>()
@@ -385,6 +386,14 @@ impl Plugin for GamePlugin {
             .add_systems(Update, interactable_system
                 .in_set(crate::runtime::schedule::GameStreamSet::Interact)
                 .run_if(crate::runtime::sim_clock::sim_running))
+            // Cursor capture for first-person cameras (`capture_cursor`): reads the click and the lock state the runner
+            // reports, writes `CursorOptions`, and emits `cursor.lock_lost` (a `GameEvent`), so it sits in the game stream.
+            // It must also run while paused (it releases the cursor then), so no `sim_running` condition.
+            // load-bearing: after `interactable_system`; both write `GameEvent` inside `GameStreamSet::Interact`, so they need an
+            // explicit edge (`schedule_order_tests` fails on an unordered writer pair).
+            .add_systems(Update, crate::capabilities::cursor_capture::cursor_capture_system
+                .in_set(crate::runtime::schedule::GameStreamSet::Interact)
+                .after(interactable_system))
             // Keeps Bevy's message buffers flowing while the sim is held (a paused clock runs zero fixed ticks, which is what normally flips them).
             .add_systems(Last, crate::runtime::sim_clock::keep_messages_flowing_while_held)
             // Dialogue tick: auto-wires entity.interacted→StartDialogue and manages panel UI.

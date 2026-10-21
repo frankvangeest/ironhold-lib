@@ -3474,6 +3474,28 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
                     });
                 }
             }
+            // `controls: FirstPerson` only makes sense seen through a first-person camera: its A/D strafe
+            // and right-stick look assume one. Compared on the authored `camera_mode`; a runtime
+            // `SetCameraMode` switch is invisible to `validate`, so a deliberate switch can ignore this.
+            // The reverse (the default `ThirdPerson` scheme with a first-person camera) is valid: it is
+            // the engine default and keeps A/D turning, so it is deliberately not reported.
+            let prefab = &catalog.prefabs[key];
+            if prefab.is_player()
+                && inputs.controls == ironhold_core::schema::player::ControlScheme::FirstPerson
+                && !matches!(prefab.components.camera_mode, Some(CameraModeDef::FirstPerson(_)))
+            {
+                warnings.push(StrictWarning {
+                    source_file: "prefabs/prefabs.ron".to_string(),
+                    message: format!(
+                        "prefab {key:?}: inputs.controls is FirstPerson but its camera_mode is not \
+                         FirstPerson(...) -- controls: FirstPerson makes A/D strafe and leaves nothing \
+                         to turn the character, which only suits a first-person camera. Give the \
+                         prefab `camera_mode: FirstPerson(...)` (a later `SetCameraMode` switch is not \
+                         visible to validate)"
+                    ),
+                    kind: "controls_camera_mismatch",
+                });
+            }
             let mut seen: std::collections::BTreeMap<String, &str> = std::collections::BTreeMap::new();
             for (name, value) in input_map_key_fields(inputs) {
                 let Some(kc) = InputMap::parse_key(value) else { continue };

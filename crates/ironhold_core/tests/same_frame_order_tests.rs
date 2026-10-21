@@ -47,7 +47,7 @@ fn intent_test_player_controller() -> CharacterController {
             gamepad_index: None, look_left: None, look_right: None, look_up: None, look_down: None,
             gamepad_jump: "South".to_string(), gamepad_run: "East".to_string(),
             gamepad_interact: "West".to_string(), gamepad_target_next: "North".to_string(),
-            gamepad_deadzone: 0.15,
+            gamepad_deadzone: 0.15, ..InputMap::default()
         },
         is_running: false, jump_velocity: 5.94, double_jump_enabled: false,
         double_jump_velocity: 5.94, jumps_used: 0, max_jumps: 1,

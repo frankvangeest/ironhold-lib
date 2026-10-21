@@ -1,0 +1,33 @@
+(
+  schema_version: 2,
+  name: "pause",
+
+  entities: [],
+
+  ui_panel: (
+    background_color: (0.04, 0.04, 0.08, 0.92),
+    padding: 32.0,
+    gap: 16.0,
+    width: 340.0,
+  ),
+
+  ui: [
+    Label((
+      id: "pause_title",
+      text: "Paused",
+      size: (300.0, 50.0),
+    )),
+    Button((
+      id: "resume_button",
+      text: "Resume",
+      action: "ui.resume",
+      size: (300.0, 60.0),
+    )),
+    Label((
+      id: "pause_hint",
+      text: "Click Resume (or press P / Start), then click the game to capture the mouse again.",
+      size: (300.0, 70.0),
+      font_size: 16.0,
+    )),
+  ],
+)

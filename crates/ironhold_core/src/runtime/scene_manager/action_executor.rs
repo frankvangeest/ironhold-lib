@@ -797,7 +797,9 @@ pub fn action_executor_system(
                 let entity = spawn_params.registry.entities.get(&entity_id).copied();
                 if let Some(e) = entity {
                     let vis = if visible { Visibility::Visible } else { Visibility::Hidden };
-                    commands.entity(e).insert(vis);
+                    // The designer's explicit visibility is the last writer: it clears the marker the engine
+                    // uses for `hide_own_body`, so a later camera switch does not undo it.
+                    commands.entity(e).insert(vis).remove::<crate::capabilities::camera::OwnBodyHidden>();
                     info!("Action::SetEntityVisible: '{}' -> {:?}", entity_id, vis);
                 } else {
                     warn!("Action::SetEntityVisible: entity '{}' not found in spawn registry", entity_id);
@@ -1122,6 +1124,21 @@ pub fn action_executor_system(
                     let Some(new_fov) = apply_camera_mode(&mut commands, camera_entity, from_rotation, &resolved_mode, owner_inputs) else {
                         continue; // Party(...) rejected inside apply_camera_mode; already warned there
                     };
+                    // `hide_own_body`: hide the owning player's body when a first-person camera that asks for it
+                    // takes over, and un-hide it (only if the engine hid it) when the camera leaves.
+                    if let Some(&owner) = camera_targets.0.first() {
+                        let hide = matches!(&resolved_mode, CameraModeDef::FirstPerson(fp) if fp.hide_own_body);
+                        if hide {
+                            commands.entity(owner).insert((
+                                Visibility::Hidden,
+                                crate::capabilities::camera::OwnBodyHidden,
+                            ));
+                        } else if scene_state.own_body_hidden.get(owner).is_ok() {
+                            commands.entity(owner)
+                                .remove::<crate::capabilities::camera::OwnBodyHidden>()
+                                .insert(Visibility::Inherited);
+                        }
+                    }
                     // A registry preset switch marks this camera "overridden" so
                     // dynamic_split_screen_system suspends its automatic merge/split is_active
                     // toggling on it; restoring "default" clears the marker again.

@@ -1,0 +1,12 @@
+(
+    schema_version: 2,
+    // The model faces the opposite way from the engine's forward axis; the same correction every
+    // project that uses this character applies.
+    model_fixes: {
+        "shared/models/characters/character-male-01.glb#Scene0": (
+            pivot_offset: (0.0, 0.0, 0.0),
+            rotation_deg: (0.0, 180.0, 0.0),
+            scale: (1.0, 1.0, 1.0),
+        ),
+    },
+)

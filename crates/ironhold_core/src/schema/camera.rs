@@ -155,6 +155,7 @@ fn default_first_person_sensitivity() -> f32 { 0.002 }
 fn default_first_person_min_pitch() -> f32 { -1.4 }
 fn default_first_person_max_pitch() -> f32 { 1.4 }
 fn default_first_person_fov() -> f32 { 90.0 }
+fn default_first_person_look_speed() -> f32 { 2.5 }
 
 /// `camera_mode: FirstPerson(...)` payload.
 #[derive(Deserialize, Debug, Clone)]
@@ -168,6 +169,27 @@ pub struct FirstPersonCameraDef {
     pub max_pitch: f32,
     #[serde(default = "default_first_person_fov")]
     pub fov: f32,
+    /// Stick and keyboard look speed in radians per second (the right stick and the player's
+    /// `inputs.look_left/right/up/down` keys). Mouse look uses `sensitivity` instead. Default: 2.5.
+    #[serde(default = "default_first_person_look_speed")]
+    pub look_speed: f32,
+    /// Flip the vertical look direction for mouse, stick and keyboard. Default: `false`.
+    #[serde(default)]
+    pub invert_y: bool,
+    /// Grab and hide the mouse cursor while playing (browser pointer lock on the web), release it
+    /// while the game is paused. Default: `false`, so a first-person room that does not ask for it
+    /// is unchanged. See `planning/features/first_person_starter.md`.
+    #[serde(default)]
+    pub capture_cursor: bool,
+    /// Hide the player's own body so the camera does not look at the inside of the head.
+    /// Default: `false`. Hiding is `Visibility::Hidden` on the player root, applied when this
+    /// first-person camera spawns (and by a `SetCameraMode` onto it), so a scene that falls back to
+    /// another camera keeps the body visible. At spawn the player's nameplate, stat label and world
+    /// stat bar are not created (they float free of the root, so hiding the root would not hide them);
+    /// a runtime `SetCameraMode` does not add or remove them. A `SetEntityVisible` on the player
+    /// overrides the hiding (last writer wins).
+    #[serde(default)]
+    pub hide_own_body: bool,
     /// Blend behavior when `SetCameraMode` switches onto this mode (**v2**). Absent = instant cut.
     #[serde(default)]
     pub transition: Option<CameraTransition>,

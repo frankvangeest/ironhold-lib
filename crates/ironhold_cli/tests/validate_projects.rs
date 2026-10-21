@@ -46,3 +46,4 @@ fn validate(name: &str) {
 #[test] fn validate_stats_demo()               { validate("stats_demo"); }
 #[test] fn validate_blank_project()            { validate("blank_project"); }
 #[test] fn validate_ui_demo()                  { validate("ui_demo"); }
+#[test] fn validate_first_person_starter()      { validate("first_person_starter"); }

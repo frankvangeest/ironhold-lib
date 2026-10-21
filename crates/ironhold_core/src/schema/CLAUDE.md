@@ -22,6 +22,17 @@ The same attribute is on every FSM container an `Action` lives in (`StateMachine
 `DialogueChoiceDef`, `DialogueCondition`): a typo anywhere in that chain is a parse error, not an empty action list.
 
 <!-- b:54 -->
+## `InputMap` is the resolved type; `InputMapDef` is what RON parses
+
+`InputMap` is `#[serde(from = "InputMapDef")]`. Layered fields (`forward` ... `target_next`, `strafe_mouse_button`, `run_mode`) are
+three-state in `InputMapDef` (`Option<Option<String>>`, parsed by `deserialize_with = "written"`, which runs only when the field is
+present), because under `implicit_some` a plain `Option<String>` cannot tell an omitted field from a written `None`; resolution is
+**written, then the `controls:` scheme default (`scheme_key`), then the engine default**, and a per-field source is kept in
+`InputMap.sources` for `ironhold query bindings`. Runtime code, tests and the CLI only ever read `InputMap`. `InputMap::default()` is
+`InputMap::from(InputMapDef::default())`: never hand-write a second default. Adding a key field means: the field on both structs, a
+`layer(...)` call in `From<InputMapDef>`, an entry in `input_map_key_fields` (CLI), and a row in the docs table. Struct literals of
+`InputMap` in tests should end with `..InputMap::default()`.
+
 ## RON syntax follows the variant shape
 
 A struct variant (`SpawnEffect { key, entity, position }`) takes named fields: `SpawnEffect(key: "hit_spark",

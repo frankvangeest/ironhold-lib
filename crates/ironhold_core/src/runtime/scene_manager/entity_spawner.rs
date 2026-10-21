@@ -483,6 +483,7 @@ pub fn animation_policy_loader_system(
     asset_catalog: Res<LoadedAssetCatalog>,
     asset_server: Res<AssetServer>,
     time: Res<Time>,
+    own_body_hidden: Query<(), With<crate::capabilities::camera::OwnBodyHidden>>,
 ) {
     for (entity, pending_policy, mut controller, mut active_override) in &mut pending {
         if let Some(policy) = policies.get(&pending_policy.0) {
@@ -527,7 +528,10 @@ pub fn animation_policy_loader_system(
                     if controller.awaiting_reveal {
                         controller.awaiting_reveal = false;
                         controller.awaiting_reveal_since = None;
-                        commands.entity(entity).insert(Visibility::Inherited);
+                        // A `hide_own_body` player stays hidden (see `animation_playback_system`).
+                        if !own_body_hidden.contains(entity) {
+                            commands.entity(entity).insert(Visibility::Inherited);
+                        }
                     }
                 }
             }
@@ -1469,13 +1473,7 @@ pub(crate) fn apply_camera_mode(
         }
         CameraModeDef::FirstPerson(fp) => {
             commands.entity(entity).insert((
-                ActiveCameraMode::FirstPerson(crate::capabilities::camera::FirstPersonState {
-                    eye_offset: Vec3::from(fp.eye_offset),
-                    sensitivity: fp.sensitivity,
-                    pitch: 0.0,
-                    min_pitch: fp.min_pitch,
-                    max_pitch: fp.max_pitch,
-                }),
+                ActiveCameraMode::FirstPerson(crate::capabilities::camera::FirstPersonState::from_def(&fp)),
                 crate::capabilities::camera::FirstPersonCameraMode,
             ));
             fp.fov
@@ -1608,19 +1606,24 @@ fn spawn_active_camera_for_player(
             entity
         }
         CameraModeDef::FirstPerson(fp) => {
+            // The body is hidden when the first-person camera is the one that really spawns (not from
+            // the prefab's authored `camera_mode`): two such prefabs in one scene fall back to one shared
+            // Orbit camera, and a flycam scene suppresses the camera, and in both the player must stay
+            // visible. The camera and the player are spawned in the same system, so the body is never
+            // rendered for a frame before it is hidden.
+            if fp.hide_own_body {
+                commands.entity(player_entity).insert((
+                    Visibility::Hidden,
+                    crate::capabilities::camera::OwnBodyHidden,
+                ));
+            }
             let entity = commands.spawn((
                 Name::new("First Person Camera"),
                 Camera3d::default(),
                 tonemapping,
                 Transform::from_translation(initial_pos + Vec3::from(fp.eye_offset)),
                 LevelEntity,
-                ActiveCameraMode::FirstPerson(crate::capabilities::camera::FirstPersonState {
-                    eye_offset: Vec3::from(fp.eye_offset),
-                    sensitivity: fp.sensitivity,
-                    pitch: 0.0,
-                    min_pitch: fp.min_pitch,
-                    max_pitch: fp.max_pitch,
-                }),
+                ActiveCameraMode::FirstPerson(crate::capabilities::camera::FirstPersonState::from_def(&fp)),
                 crate::capabilities::camera::FirstPersonCameraMode,
                 CameraTargets(vec![player_entity]),
             )).id();
@@ -1780,6 +1783,11 @@ pub(crate) fn assemble_player_config(
         .or_else(|| prefab.components.camera.as_ref().and_then(|c| c.split.clone()));
     let party = prefab.components.party.clone()
         .or_else(|| prefab.components.camera.as_ref().and_then(|c| c.party.clone()));
+    // A hidden body must not carry floating widgets: they would hover over nothing.
+    let hide_own_body = matches!(
+        &prefab.components.camera_mode,
+        Some(crate::schema::camera::CameraModeDef::FirstPerson(fp)) if fp.hide_own_body
+    );
     PlayerConfig {
         model_source,
         initial_position,
@@ -1794,7 +1802,8 @@ pub(crate) fn assemble_player_config(
         prefab_key: prefab_key.to_string(),
         player_index: prefab.player_index,
         bound_gamepad: None,
-        nameplate_display_name: if should_insert_nameplate(prefab.nameplate, player_nameplate_enabled) {
+        hide_own_body,
+        nameplate_display_name: if !hide_own_body && should_insert_nameplate(prefab.nameplate, player_nameplate_enabled) {
             Some(prefab.display_name.clone().unwrap_or_else(|| prefab_key.to_string()))
         } else {
             None
@@ -1802,7 +1811,7 @@ pub(crate) fn assemble_player_config(
         nameplate_override: prefab.nameplate,
         material: prefab.material.clone(),
         stat_templates: prefab.stat_templates.clone(),
-        stat_label: prefab.stat_label.clone(),
-        world_stat_bar: prefab.world_stat_bar.clone(),
+        stat_label: if hide_own_body { None } else { prefab.stat_label.clone() },
+        world_stat_bar: if hide_own_body { None } else { prefab.world_stat_bar.clone() },
     }
 }
