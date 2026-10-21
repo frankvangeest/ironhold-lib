@@ -2525,3 +2525,38 @@ fn query_bindings_json_has_one_entry_per_player_prefab() {
         .iter()
         .any(|b| b["field"] == "strafe_left" && b["source"] == "scheme:FirstPerson"));
 }
+
+// ── first_person_starter.md v2: mouse_button slots and aim_target ────────────────────────────
+
+#[test]
+fn unrecognised_mouse_button_exits_1() {
+    let (code, stdout) = validate("bad_mouse_button");
+    assert_eq!(code, 1, "expected exit 1, got {code}:\n{stdout}");
+    assert!(stdout.contains("Primary") && stdout.contains("mouse_button"), "{stdout}");
+}
+
+#[test]
+fn two_slots_on_one_mouse_button_exit_1() {
+    let (code, stdout) = validate("duplicate_mouse_button");
+    assert_eq!(code, 1, "expected exit 1, got {code}:\n{stdout}");
+    assert!(stdout.contains("2+ ActionBar slots on mouse button"), "{stdout}");
+}
+
+/// A mouse slot without a capturing first-person player never fires; the default `strafe_mouse_button: "Left"`
+/// would also strafe on the click; an `aim_target` with nothing targetable has nothing to aim at.
+#[test]
+fn strict_aim_and_mouse_wiring_warnings() {
+    let (code, stdout) = validate_strict("strict_aim_mouse_wiring");
+    assert_eq!(code, 1, "expected exit 1 (strict warnings), got {code}:\n{stdout}");
+    assert!(stdout.contains("only fires while the cursor is captured"), "{stdout}");
+    assert!(stdout.contains("is also a player's `strafe_mouse_button`"), "{stdout}");
+    assert!(stdout.contains("has nothing to aim at"), "{stdout}");
+    let (plain, plain_out) = validate("strict_aim_mouse_wiring");
+    assert_eq!(plain, 0, "the plain run stays clean, got {plain}:\n{plain_out}");
+}
+
+#[test]
+fn clean_aim_and_mouse_wiring_pass_strict() {
+    let (code, stdout) = validate_strict("clean_aim_mouse_wiring");
+    assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
+}

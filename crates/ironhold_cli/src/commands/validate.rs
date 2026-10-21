@@ -1941,6 +1941,43 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
             }
         }
 
+        // `mouse_button` on a slot (`"Left"`/`"Right"`/`"Middle"`): an unrecognised name never fires, and two
+        // slots of one player on the same button would both fire on a single click. Keyed by the owning
+        // player like the gamepad pass below (the mouse is one shared device, but each bar's slots belong to
+        // their own `owner_player`, and the same button on two different players' bars is the one-mouse
+        // split-screen limitation, not something this check can resolve).
+        let mut seen_mouse: std::collections::HashMap<(u32, String), (&str, &str)> = std::collections::HashMap::new();
+        for node in walk_ui_nodes(&scene.ui) {
+            let ironhold_core::schema::scene_v2::UiNodeDef::ActionBar(bar) = node else { continue };
+            let owner_player = bar.owner_player.unwrap_or(0);
+            for slot in &bar.slots {
+                let Some(mb) = &slot.mouse_button else { continue };
+                if ironhold_core::schema::player::InputMap::parse_mouse_button(mb).is_none() {
+                    errors.push(CrossFileError {
+                        source_file: scene_path.clone(),
+                        message: format!(
+                            "ActionBar {:?}: slot {:?} has an unrecognised mouse_button {:?} (expected \"Left\", \"Right\" or \"Middle\") \
+                             — it will never fire from the mouse",
+                            bar.id, slot.key, mb
+                        ),
+                        error_type: "invalid_mouse_button",
+                    });
+                    continue;
+                }
+                if let Some((prev_bar, prev_key)) = first_seen(&mut seen_mouse, (owner_player, mb.clone()), (&bar.id, &slot.key)) {
+                    errors.push(CrossFileError {
+                        source_file: scene_path.clone(),
+                        message: format!(
+                            "Player {} has 2+ ActionBar slots on mouse button {:?}: ActionBar {:?} slot {:?} and ActionBar {:?} \
+                             slot {:?} -- one click would fire both",
+                            owner_player, mb, prev_bar, prev_key, bar.id, slot.key
+                        ),
+                        error_type: "duplicate_mouse_button",
+                    });
+                }
+            }
+        }
+
         // Same-player gamepad-slot collision — a different failure mode than the keyboard check
         // above, so a separate pass: the intent/cooldown pipeline is never keyed by `gamepad_key`,
         // so there's no cross-bar pipeline entanglement risk here. The risk is a same-player
@@ -3511,6 +3548,89 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
                         kind: "duplicate_input_key",
                     });
                 }
+            }
+        }
+    }
+
+    // First-person shooter wiring, per scene (the scene's instantiated players, like the checks around it):
+    //  * `mouse_button_without_capture`: a slot on a mouse button fires only while the cursor is captured
+    //    (`capture_cursor: true` on a first-person camera), so with no such player it never fires.
+    //  * `mouse_button_shared_binding`: the same button also strafes (`strafe_mouse_button`) or orbits
+    //    (`orbit_button`) a player of the scene, so a click would do both.
+    //  * `aim_target_without_targetable`: `aim_target` needs `targetable: true` entities to aim at; none is
+    //    placed in the scene (a target created later by `Action::Spawn` is not seen by validate).
+    if let Some(catalog) = prefab_catalog {
+        for (scene_path, scene) in scenes {
+            let mut instantiated: Vec<&str> = scene.entities.iter().map(|e| e.prefab.as_str()).collect();
+            instantiated.extend(scene.join_prefab_keys.iter().flatten().map(|k| k.as_str()));
+            let players: Vec<&PrefabDef> = instantiated
+                .iter()
+                .filter_map(|k| catalog.prefabs.get(*k))
+                .filter(|p| p.is_player())
+                .collect();
+            let captures = players.iter().any(|p| {
+                matches!(&p.components.camera_mode, Some(CameraModeDef::FirstPerson(fp)) if fp.capture_cursor)
+            });
+            for node in walk_ui_nodes(&scene.ui) {
+                let UiNodeDef::ActionBar(bar) = node else { continue };
+                for slot in &bar.slots {
+                    let Some(mb) = &slot.mouse_button else { continue };
+                    if InputMap::parse_mouse_button(mb).is_none() { continue } // reported as an error above
+                    if !captures {
+                        warnings.push(StrictWarning {
+                            source_file: scene_path.clone(),
+                            message: format!(
+                                "ActionBar {:?} slot {:?}: mouse_button {:?} only fires while the cursor is captured, but no \
+                                 player in this scene has a `FirstPerson` camera with `capture_cursor: true`, so it never fires",
+                                bar.id, slot.key, mb
+                            ),
+                            kind: "mouse_button_without_capture",
+                        });
+                    }
+                    for p in &players {
+                        let strafes = p.components.inputs.as_ref().map_or(
+                            InputMap::default().strafe_mouse_button, |i| i.strafe_mouse_button.clone(),
+                        );
+                        let orbits = match &p.components.camera_mode {
+                            Some(CameraModeDef::Orbit(c)) => Some(c.orbit_button.clone()),
+                            _ => None,
+                        };
+                        if strafes.as_deref() == Some(mb.as_str()) {
+                            warnings.push(StrictWarning {
+                                source_file: scene_path.clone(),
+                                message: format!(
+                                    "ActionBar {:?} slot {:?}: mouse_button {:?} is also a player's `strafe_mouse_button` -- a click \
+                                     fires the slot and strafes. Set `strafe_mouse_button: None` (the `FirstPerson` scheme does)",
+                                    bar.id, slot.key, mb
+                                ),
+                                kind: "mouse_button_shared_binding",
+                            });
+                        }
+                        if orbits.as_deref().is_some_and(|o| o == mb || o == "Either") {
+                            warnings.push(StrictWarning {
+                                source_file: scene_path.clone(),
+                                message: format!(
+                                    "ActionBar {:?} slot {:?}: mouse_button {:?} is also the orbit button of a player's Orbit \
+                                     camera -- a click fires the slot and orbits",
+                                    bar.id, slot.key, mb
+                                ),
+                                kind: "mouse_button_shared_binding",
+                            });
+                        }
+                    }
+                }
+            }
+            let aims = players.iter().any(|p| {
+                matches!(&p.components.camera_mode, Some(CameraModeDef::FirstPerson(fp)) if fp.aim_target.is_some())
+            });
+            if aims && !scene.entities.iter().any(|e| catalog.prefabs.get(&e.prefab).is_some_and(|p| p.targetable)) {
+                warnings.push(StrictWarning {
+                    source_file: scene_path.clone(),
+                    message: "a player's first-person camera has `aim_target`, but no entity placed in this scene has a \
+                              prefab with `targetable: true`, so the crosshair has nothing to aim at (targets created later by \
+                              `Action::Spawn` are not seen by validate)".to_string(),
+                    kind: "aim_target_without_targetable",
+                });
             }
         }
     }

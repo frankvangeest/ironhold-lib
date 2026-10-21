@@ -1,0 +1,20 @@
+(
+    schema_version: 2,
+    prefabs: {
+        "test_player": (
+            kind: Primitive,
+            shape: Capsule3d,
+            components: (
+                tags: ["player"],
+                camera_mode: FirstPerson((eye_offset: (0.0, 1.6, 0.0), capture_cursor: true, aim_target: (range: 30.0))),
+                inputs: (controls: FirstPerson),
+            ),
+        ),
+        "dummy": (
+            kind: Primitive,
+            shape: Capsule3d,
+            targetable: true,
+            components: (),
+        ),
+    },
+)
