@@ -48,6 +48,11 @@
                     controls: FirstPerson,
                     // A gamepad only works for a player that names one. 0 = the first controller.
                     gamepad_index: 0,
+                    // Sprint on the left trigger (LT / L2). The engine default is the B button, but B and the A
+                    // jump button are both worked by the right thumb, which makes running jumps awkward; the
+                    // left trigger is free (the left thumb moves, the right stick looks). Any button name
+                    // works here, e.g. "LeftTrigger" (the bumper) or "LeftThumb" (click the left stick).
+                    gamepad_run: "LeftTrigger2",
                 ),
             ),
         ),

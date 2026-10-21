@@ -91,7 +91,7 @@
         // Hints, one short line each so they fit a narrow window (ASCII only: the built-in UI font has no glyph
         // for dashes). They are plain text: update them if you change a key, `run_mode` or a pause binding.
         Label(( id: "hint_keys", text: "WASD move, mouse look, Space jump, Shift sprint", position: (16.0, 16.0), size: (560.0, 26.0), align: Left, font_size: 18.0 )),
-        Label(( id: "hint_pad", text: "Gamepad: sticks move and look, A jump, B sprint", position: (16.0, 44.0), size: (560.0, 26.0), align: Left, font_size: 18.0 )),
+        Label(( id: "hint_pad", text: "Gamepad: sticks move and look, A jump, LT sprint", position: (16.0, 44.0), size: (560.0, 26.0), align: Left, font_size: 18.0 )),
         Label(( id: "hint_pause", text: "P or Start pauses. Esc pauses and frees the mouse.", position: (16.0, 72.0), size: (560.0, 26.0), align: Left, font_size: 18.0 )),
         Label(( id: "hint_capture", text: "Click the game to capture the mouse.", position: (16.0, 100.0), size: (560.0, 26.0), align: Left, font_size: 18.0 )),
     ],

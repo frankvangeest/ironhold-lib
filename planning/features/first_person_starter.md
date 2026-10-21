@@ -61,9 +61,9 @@ The "Decisions made 2026-10-16" section at the end of this file records why each
 | Move | WASD (A/D strafe) | Left stick |
 | Look | Mouse (keyboard look keys as a fallback) | Right stick (X yaw, Y pitch) |
 | Jump | Space | South (A) |
-| Sprint (hold) | Shift | East (B) |
+| Sprint (hold) | Shift | Left trigger (`LeftTrigger2`; B and the A jump button are both right-thumb buttons, which made a running jump awkward, found in the v1 play-test) |
 | Fire (v2) | Left mouse | Right trigger (`RightTrigger2`) |
-| Aim down sights (later) | Right mouse | Left trigger |
+| Aim down sights (later) | Right mouse | Left bumper (`LeftTrigger`; the left trigger is the sprint) |
 | Pause | Escape (releases the cursor) / P | Start |
 
 ### v2: aim targeting and fire
