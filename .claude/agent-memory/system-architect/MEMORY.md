@@ -74,5 +74,5 @@
 - [UiScale & overlay-slot facts](ui_scale_and_overlay_slot_facts.md) — UiScale folds into per-root scale; camera.rs hand Val::Px sites break; overlays are one global slot; UiEvent is single-variant (button prefix)
 - [UI Display::None & UiNodeId facts](ui_display_none_and_ui_id_facts.md) — SetUiVisible review: Display::None hit-test via zero rect; overlay id collision; no Ready for overlays; validate skips ActionBar slot actions
 - [Runtime validate() is advisory](runtime_validate_is_advisory.md) — load-time validate only error!s, config still used; per-frame consumers must not panic (f32::clamp min>max)
-- [InputMap layering & FPS facts](inputmap_layering_and_fps_facts.md) — authored>scheme>default needs raw def + serde(from); strafe is char-relative; aim/camera-chain cycle trap
+- [InputMap layering & FPS facts](inputmap_layering_and_fps_facts.md) — authored>scheme>default needs raw def + serde(from); strafe is char-relative; aim/camera-chain cycle trap; aim_target is last PlayerTarget writer
 - [Web canvas host contract](web_canvas_host_contract.md) — start_app hardcodes canvas "#ironhold-canvas"; bevy_winit 0.18 panics if a host page lacks it; native unaffected

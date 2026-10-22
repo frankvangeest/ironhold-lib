@@ -89,3 +89,5 @@
 - [Schedule tests: position != edge](project_schedule_test_positional_vs_edge.md) — toposort-index asserts pass without the edge; only conflicting_systems() is edge-sensitive; cross-chain by-name edge drags camera tail
 - [InputMap key fallback asymmetry](project_inputmap_key_fallback_asymmetry.md) — unknown key = unbound except target_next->Tab; validate skips players with no inputs: block
 - [Root Visibility::Hidden is not a durable hide](project_visibility_hide_overridden_by_reveal_and_unparented_widgets.md) — animation_policy reveal re-inserts Inherited; nameplate/WorldLabel anchors are unparented
+- [Action::Spawn rejects Primitive prefabs](project_action_spawn_rejects_primitive_prefabs.md) — model "" lookup fails, spawn skipped with warn; only scene-load builds primitives; validate silent
+- [SelectAimHeight only with ClickSelectable](project_selectaimheight_only_with_clickselectable.md) — targetable-only prefab's select_aim_height ignored (1.0 used); hand-spawned tests mask it
