@@ -213,7 +213,7 @@ pub struct FirstPersonCameraDef {
     pub invert_y: bool,
     /// Grab and hide the mouse cursor while playing (browser pointer lock on the web), release it
     /// while the game is paused. Default: `false`, so a first-person room that does not ask for it
-    /// is unchanged. See `planning/features/first_person_starter.md`.
+    /// is unchanged. See `planning/features/done/first_person_starter.md`.
     #[serde(default)]
     pub capture_cursor: bool,
     /// Hide the player's own body so the camera does not look at the inside of the head.

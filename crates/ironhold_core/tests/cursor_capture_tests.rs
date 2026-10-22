@@ -1,5 +1,5 @@
 //! `FirstPersonCameraDef.capture_cursor`: `cursor_capture_system` and the mouse-look gate in
-//! `first_person_camera_system` (`planning/features/first_person_starter.md`, Spike A).
+//! `first_person_camera_system` (`planning/features/done/first_person_starter.md`, Spike A).
 //!
 //! **Every test takes `GUARD` first**: the runner -> core report channel
 //! (`report_pointer_lock` / `runner_reports_pointer_lock`) is a process-wide atomic, because the

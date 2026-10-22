@@ -1,6 +1,6 @@
 //! Cursor capture for first-person cameras (`FirstPersonCameraDef.capture_cursor`).
 //!
-//! `planning/features/first_person_starter.md`, "Spike A result": on the web, winit implements the
+//! `planning/features/done/first_person_starter.md`, "Spike A result": on the web, winit implements the
 //! grab as a fire-and-forget `canvas.request_pointer_lock()` that always reports success and has
 //! no `pointerlockchange` listener, so Bevy's `CursorOptions.grab_mode` cannot tell the engine
 //! whether the browser really granted the lock, nor that the user released it with Escape. The

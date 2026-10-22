@@ -12,7 +12,7 @@ pub fn start() {
 /// Tells `ironhold_core` the real pointer-lock state. winit's web backend requests the lock
 /// fire-and-forget and never listens for `pointerlockchange`, so the engine cannot otherwise know
 /// whether the browser granted the lock or the user released it with Escape (see
-/// `ironhold_core::capabilities::cursor_capture` and `planning/features/first_person_starter.md`,
+/// `ironhold_core::capabilities::cursor_capture` and `planning/features/done/first_person_starter.md`,
 /// "Spike A result"). Core stays free of the DOM: the runner only pushes the boolean.
 fn install_pointer_lock_reporting() {
     let Some(document) = web_sys::window().and_then(|w| w.document()) else {

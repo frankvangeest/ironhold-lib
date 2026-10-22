@@ -1,4 +1,4 @@
-//! `FirstPersonCameraDef.aim_target` (`planning/features/first_person_starter.md`, v2): the crosshair, not the
+//! `FirstPersonCameraDef.aim_target` (`planning/features/done/first_person_starter.md`, v2): the crosshair, not the
 //! mouse cursor, decides the player's `PlayerTarget`.
 //!
 //! The test app has a primary `Window` (the aim system falls back to its size when a camera has no viewport yet),

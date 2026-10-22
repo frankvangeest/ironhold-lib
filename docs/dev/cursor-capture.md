@@ -2,7 +2,7 @@
 
 Long-form notes for `FirstPersonCameraDef.capture_cursor` / `hide_own_body` and the right-stick ownership rule. The hard rules are
 in `crates/ironhold_core/src/capabilities/CLAUDE.md` ("Cursor capture and the right stick"). Design history and the
-decisions behind this: `planning/features/first_person_starter.md` ("Spike A result" and "Decisions made").
+decisions behind this: `planning/features/done/first_person_starter.md` ("Spike A result" and "Decisions made").
 
 ## Why the runner reports the lock state
 
