@@ -1,0 +1,70 @@
+when:
+  branch: [main, integration]
+
+steps:
+  build-wasm:
+    image: rust:1-bookworm
+    commands:
+      - rustup target add wasm32-unknown-unknown
+      - curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - RUSTFLAGS=--cfg=web_sys_unstable_apis wasm-pack build crates/ironhold_web --target web --out-dir ../../pkg --jobs 1
+    when:
+      branch: integration
+      path:
+        include: ["crates/**", "tools/**", "Cargo.toml", "Cargo.lock"]
+
+  deploy-assets-main:
+    image: alpine:3
+    environment:
+      DEMO_DEPLOY_KEY:
+        from_secret: demo_deploy_key
+    commands:
+      - apk add --no-cache rsync openssh-client
+      - mkdir -p ~/.ssh && echo "$DEMO_DEPLOY_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+      - ssh-keyscan -H 192.168.178.105 >> ~/.ssh/known_hosts 2>/dev/null
+      - rsync -avz index.html play.html assets.html favicon.ico assets/ root@192.168.178.105:/var/www/pages/ironhold-lib/
+    when:
+      branch: main
+
+  deploy-wasm-main:
+    image: alpine:3
+    environment:
+      DEMO_DEPLOY_KEY:
+        from_secret: demo_deploy_key
+    commands:
+      - apk add --no-cache rsync openssh-client
+      - mkdir -p ~/.ssh && echo "$DEMO_DEPLOY_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+      - ssh-keyscan -H 192.168.178.105 >> ~/.ssh/known_hosts 2>/dev/null
+      - rsync -avz pkg/ root@192.168.178.105:/var/www/pages/ironhold-lib/pkg/
+    when:
+      branch: main
+
+  deploy-assets-integration:
+    image: alpine:3
+    environment:
+      DEMO_DEPLOY_KEY:
+        from_secret: demo_deploy_key
+    commands:
+      - apk add --no-cache rsync openssh-client
+      - mkdir -p ~/.ssh && echo "$DEMO_DEPLOY_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+      - ssh-keyscan -H 192.168.178.105 >> ~/.ssh/known_hosts 2>/dev/null
+      - rsync -avz index.html play.html assets.html favicon.ico assets/ root@192.168.178.105:/var/www/pages/ironhold-lib/integration/
+    when:
+      branch: integration
+
+  deploy-wasm-integration:
+    image: alpine:3
+    environment:
+      DEMO_DEPLOY_KEY:
+        from_secret: demo_deploy_key
+    commands:
+      - apk add --no-cache rsync openssh-client
+      - mkdir -p ~/.ssh && echo "$DEMO_DEPLOY_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+      - ssh-keyscan -H 192.168.178.105 >> ~/.ssh/known_hosts 2>/dev/null
+      - rsync -avz pkg/ root@192.168.178.105:/var/www/pages/ironhold-lib/integration/pkg/
+    when:
+      branch: integration
+      path:
+        include: ["crates/**", "tools/**", "Cargo.toml", "Cargo.lock"]
+
+concurrency: 1
