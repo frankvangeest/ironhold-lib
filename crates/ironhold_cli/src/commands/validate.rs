@@ -906,9 +906,8 @@ fn unhideable_kind(node: &UiNodeDef) -> Option<(&'static str, &str)> {
 }
 
 /// `SetUiVisible` checks: non-empty id, id exists in some scene/overlay `ui:` tree (nested
-/// Groups included), and no occurrence is or contains a panel/ActionBar. Uses its own action
-/// scan because `collect_actions` skips ActionBar slot `do_actions` (backlog item); `actions`
-/// is already the shared collection, so only the slot actions are added here.
+/// Groups included), and no occurrence is or contains a panel/ActionBar. `actions` is the shared
+/// collection, which includes ActionBar slot `do_actions` (added in `do_validate`).
 fn set_ui_visible_checks(
     scenes: &[(String, GameSceneV2)],
     actions: &[(String, Action)],
@@ -922,19 +921,6 @@ fn set_ui_visible_checks(
             _ => None,
         })
         .collect();
-    for (scene_path, scene) in scenes {
-        for node in walk_ui_nodes(&scene.ui) {
-            if let UiNodeDef::ActionBar(bar) = node {
-                for slot in &bar.slots {
-                    for a in &slot.do_actions {
-                        if let Action::SetUiVisible { id, .. } = a {
-                            found.push((scene_path.as_str(), id.as_str()));
-                        }
-                    }
-                }
-            }
-        }
-    }
 
     let mut reported: HashSet<(String, String, String)> = HashSet::new(); // det: lookup-only
     for (source, id) in found {
@@ -1100,12 +1086,32 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
             // checks rather than here, since it needs `scenes`, not a catalog).
             Action::Spawn { prefab, .. } => {
                 if let Some(c) = prefab_catalog {
-                    if !c.prefabs.contains_key(prefab) {
-                        errors.push(CrossFileError {
+                    match c.prefabs.get(prefab) {
+                        None => errors.push(CrossFileError {
                             source_file: source.clone(),
                             message: format!("prefab key {:?} not found in prefabs.ron", prefab),
                             error_type: "missing_reference",
-                        });
+                        }),
+                        // `Action::Spawn` builds its entity through the model path (`asset_catalog.models[prefab.model]`);
+                        // primitive meshes and colliders are only built when a scene loads, so this would log a
+                        // warning at runtime and spawn nothing.
+                        Some(def)
+                            if def.kind == ironhold_core::schema::catalog::PrefabKind::Primitive
+                                && !asset_catalog.is_some_and(|a| a.models.contains_key(&def.model)) =>
+                        {
+                            errors.push(CrossFileError {
+                                source_file: source.clone(),
+                                message: format!(
+                                    "Action::Spawn of prefab {:?}, which is `kind: Primitive` with no model in assets.ron: Spawn \
+                                     cannot create a primitive-shaped prefab at runtime (it builds the entity from a `model`), so nothing would appear. \
+                                     Place it in the scene's `entities:` instead (to bring one back, hide it with \
+                                     `SetEntityVisible` and reset its stats), or give the prefab a model",
+                                    prefab
+                                ),
+                                error_type: "spawn_primitive_prefab",
+                            });
+                        }
+                        Some(_) => {}
                     }
                 }
             }
@@ -2145,6 +2151,33 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                     prefab_key,
                     &mut errors,
                 );
+            }
+        }
+    }
+
+    // `aim_target` numbers: `radius_deg` is an angle from the view axis and must be inside (0, 90) or the
+    // catch-circle maths (tan) breaks and nothing is ever targeted; `range` must be positive.
+    if let Some(catalog) = prefab_catalog {
+        for (key, def) in &catalog.prefabs {
+            let Some(CameraModeDef::FirstPerson(fp)) = &def.components.camera_mode else { continue };
+            let Some(aim) = &fp.aim_target else { continue };
+            if !(aim.radius_deg.is_finite() && aim.radius_deg > 0.0 && aim.radius_deg < 90.0) {
+                errors.push(CrossFileError {
+                    source_file: "prefabs/prefabs.ron".to_string(),
+                    message: format!(
+                        "prefab {key:?}: aim_target.radius_deg {} must be greater than 0 and less than 90 degrees -- \
+                         otherwise the crosshair never targets anything",
+                        aim.radius_deg
+                    ),
+                    error_type: "invalid_aim_target",
+                });
+            }
+            if !(aim.range.is_finite() && aim.range > 0.0) {
+                errors.push(CrossFileError {
+                    source_file: "prefabs/prefabs.ron".to_string(),
+                    message: format!("prefab {key:?}: aim_target.range {} must be greater than 0 metres", aim.range),
+                    error_type: "invalid_aim_target",
+                });
             }
         }
     }
@@ -3232,10 +3265,9 @@ fn has_delayed_event(actions: &[Action]) -> bool {
 /// `claimed_gamepad_collision`, `overlay_scene_bindings_ignored`). All are `--strict` warnings,
 /// never errors: the runtime's auto-resume on a Replace-mode `LoadScene` is the safety net.
 ///
-/// Known limitation: `LoadedProject.actions` (`collect_actions`) does not scan ActionBar slot
-/// `do_actions` (backlog item), so a pause/resume/overlay load wired only through a slot is
-/// invisible here -- `pause_without_resume` and `overlay_scene_bindings_ignored` can therefore
-/// false-positive for a project that wires its only `ResumeGame`/base `LoadScene` via a slot.
+/// `LoadedProject.actions` includes ActionBar slot `do_actions` (added in `do_validate`), so a pause/resume/
+/// overlay load wired through a slot is seen here. `discover_extra_scenes` still does not follow a slot's
+/// `LoadScene` (deliberately: that would make scene discovery a fixpoint loop).
 fn pause_checks(project: LoadedProject) -> Vec<StrictWarning> {
     let LoadedProject {
         project_dir, project_config, prefab_catalog, scenes, actions, state_machine, behaviors,
@@ -3563,14 +3595,22 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
         for (scene_path, scene) in scenes {
             let mut instantiated: Vec<&str> = scene.entities.iter().map(|e| e.prefab.as_str()).collect();
             instantiated.extend(scene.join_prefab_keys.iter().flatten().map(|k| k.as_str()));
+            // Players created at runtime by `Action::Spawn` anywhere in the project count too (a spawn is not tied
+            // to one scene), so a runtime-spawned first-person player does not make these warnings false.
+            instantiated.extend(actions.iter().filter_map(|(_, a)| match a {
+                Action::Spawn { prefab, .. } => Some(prefab.as_str()),
+                _ => None,
+            }));
             let players: Vec<&PrefabDef> = instantiated
                 .iter()
                 .filter_map(|k| catalog.prefabs.get(*k))
                 .filter(|p| p.is_player())
                 .collect();
+            // A capturing first-person camera can also come from the scene's `camera_modes:` registry (reached with
+            // `SetCameraMode`).
             let captures = players.iter().any(|p| {
                 matches!(&p.components.camera_mode, Some(CameraModeDef::FirstPerson(fp)) if fp.capture_cursor)
-            });
+            }) || scene.camera_modes.values().any(|m| matches!(m, CameraModeDef::FirstPerson(fp) if fp.capture_cursor));
             for node in walk_ui_nodes(&scene.ui) {
                 let UiNodeDef::ActionBar(bar) = node else { continue };
                 for slot in &bar.slots {
@@ -3580,7 +3620,7 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
                         warnings.push(StrictWarning {
                             source_file: scene_path.clone(),
                             message: format!(
-                                "ActionBar {:?} slot {:?}: mouse_button {:?} only fires while the cursor is captured, but no \
+                                "ActionBar {:?} slot {:?}: mouse_button {:?} only fires while the mouse is captured, but no \
                                  player in this scene has a `FirstPerson` camera with `capture_cursor: true`, so it never fires",
                                 bar.id, slot.key, mb
                             ),

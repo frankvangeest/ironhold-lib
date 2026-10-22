@@ -408,6 +408,10 @@ pub fn aim_target_system(
     mut game_vars: ResMut<GameVariables>,
     rapier_context: Option<ReadRapierContext>,
 ) {
+    // Most scenes have no aiming camera: do no setup (physics context, player count) for them.
+    if !cameras.iter().any(|(_, _, mode, ..)| matches!(mode, ActiveCameraMode::FirstPerson(fp) if fp.aim_target.is_some())) {
+        return;
+    }
     let rapier = rapier_context.as_ref().and_then(|rc| rc.single().ok());
     let is_multiplayer = player_targets.iter().count() >= 2;
 
@@ -429,6 +433,7 @@ pub fn aim_target_system(
         let radius_px = aim.radius_deg.to_radians().tan() / (fov * 0.5).tan().max(f32::EPSILON) * (size.y * 0.5);
         let center = size * 0.5;
         let cam_pos = cam_tf.translation();
+        let projector = ViewProjector::new(cam_tf, fov, size); // one matrix inverse per camera, not per target
 
         // Candidates inside the catch circle and range, nearest the centre first (ties by SpawnId).
         let mut candidates: Vec<(f32, &str, Entity, Vec3, Option<&str>)> = Vec::new();
@@ -441,7 +446,7 @@ pub fn aim_target_system(
             if world.distance(cam_pos) > aim.range {
                 continue;
             }
-            let Some(screen) = project_to_viewport(cam_tf, fov, size, world) else { continue };
+            let Some(screen) = projector.project(world) else { continue };
             let d = screen.distance(center);
             if d <= radius_px {
                 candidates.push((d, spawn_id.0.as_str(), entity, world, prefab.map(|p| p.0.as_str())));
@@ -497,15 +502,38 @@ pub fn aim_target_system(
 /// as `Camera::world_to_viewport` for a camera whose aspect ratio follows its viewport, but needs no render target,
 /// so the aim system also works in a headless test app.
 pub fn project_to_viewport(view: &GlobalTransform, vertical_fov: f32, size: Vec2, world: Vec3) -> Option<Vec2> {
-    let local = view.affine().inverse().transform_point3(world);
-    if local.z >= -f32::EPSILON {
-        return None;
+    ViewProjector::new(view, vertical_fov, size).project(world)
+}
+
+/// [`project_to_viewport`] with the camera's inverse transform computed once, for projecting many points through
+/// the same camera in one frame (the aim system projects every targetable).
+pub struct ViewProjector {
+    inverse: bevy::math::Affine3A,
+    tan_half: f32,
+    aspect: f32,
+    size: Vec2,
+}
+
+impl ViewProjector {
+    pub fn new(view: &GlobalTransform, vertical_fov: f32, size: Vec2) -> Self {
+        Self {
+            inverse: view.affine().inverse(),
+            tan_half: (vertical_fov * 0.5).tan(),
+            aspect: size.x / size.y.max(f32::EPSILON),
+            size,
+        }
     }
-    let tan_half = (vertical_fov * 0.5).tan();
-    let aspect = size.x / size.y.max(f32::EPSILON);
-    let ndc_x = local.x / (-local.z * tan_half * aspect);
-    let ndc_y = local.y / (-local.z * tan_half);
-    Some(Vec2::new((ndc_x + 1.0) * 0.5 * size.x, (1.0 - ndc_y) * 0.5 * size.y))
+
+    /// Pixels from the top-left of the viewport, `None` when the point is behind the camera.
+    pub fn project(&self, world: Vec3) -> Option<Vec2> {
+        let local = self.inverse.transform_point3(world);
+        if local.z >= -f32::EPSILON {
+            return None;
+        }
+        let ndc_x = local.x / (-local.z * self.tan_half * self.aspect);
+        let ndc_y = local.y / (-local.z * self.tan_half);
+        Some(Vec2::new((ndc_x + 1.0) * 0.5 * self.size.x, (1.0 - ndc_y) * 0.5 * self.size.y))
+    }
 }
 
 /// `entity` is `target` itself or one of its descendants (a collider may sit on a child of the targetable entity).

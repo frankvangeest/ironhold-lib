@@ -1,0 +1,17 @@
+(
+    schema_version: 2,
+    prefabs: {
+        "test_player": (
+            kind: Primitive,
+            shape: Capsule3d,
+            components: (
+                tags: ["player"],
+            ),
+        ),
+        "crate": (
+            kind: Primitive,
+            shape: Capsule3d,
+            components: (),
+        ),
+    },
+)

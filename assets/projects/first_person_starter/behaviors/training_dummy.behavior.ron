@@ -1,13 +1,20 @@
-// A target dummy: it stands there until its health reaches 0, then goes down.
+// A target dummy: it stands there until its health reaches 0, goes down, and stands up again 3 seconds later.
 //
 // How it works:
 //  - the prefab's `stat_templates` give every dummy its own `{self}.health`, and a threshold there emits
 //    `stat.{self}.health.depleted` when it hits 0;
 //  - a shot (see the fire slot in scenes/main.scene.ron) does `ModifyStat(key: "{target}.health", ...)`;
-//  - this file reacts to the depleted event: poof, sound, and the dummy removes itself a moment later.
-//  - A dummy never revives in place. `logic/state_machine.ron` has one rule per dummy that listens for
-//    `dummy.respawn:<id>` (armed below, 3 seconds after it goes down) and spawns a fresh one at the same spot.
-//    That event is armed BEFORE this entity despawns itself, so it can only be caught by a global rule.
+//  - this file reacts to that event: poof, sound, and the dummy hides itself (a hidden entity cannot be aimed at or
+//    shot, and its health bar hides with it). `SetEntityVisible` is what makes it "down";
+//  - 3 seconds later this same file brings it back: full health, visible again.
+//
+// Why it hides instead of despawning and respawning: `Action::Spawn` cannot create a primitive-shaped prefab at
+// runtime (it needs a `model`), so a despawned capsule could never come back. (`ironhold validate` reports a Spawn
+// of such a prefab.) A prefab with a `model` can despawn and be re-created with `Spawn` instead, the way
+// 3rd_person_game_demo's monsters do.
+//
+// Known limit of this approach: a hidden dummy still has its collider, so for those 3 seconds it blocks walking
+// and shots at whatever stands behind it, though it cannot be aimed at.
 (
     schema_version: 1,
     initial_state: "up",
@@ -17,7 +24,11 @@
     states: [
         (
             name: "up",
-            entry_actions: [],
+            // Also runs when the dummy first spawns: starts at full health, visible.
+            entry_actions: [
+                SetStat(key: "{self}.health", value: 100.0),
+                SetEntityVisible(entity: "{self}", visible: true),
+            ],
             exit_actions: [],
             on: [],
         ),
@@ -26,10 +37,10 @@
             entry_actions: [
                 PlaySound(key: "hit"),
                 SpawnEffect(key: "death_poof", entity: "{self}"),
-                EmitEventAfterDelay(event: "dummy.respawn:{self}", delay_secs: 3.0),
-                // A timer on the entity itself (not a delayed event + Despawn): it can never hit a different
-                // entity that later reuses this id.
-                SetDespawnTimer(entity: "{self}", delay_secs: 0.3),
+                SetEntityVisible(entity: "{self}", visible: false),
+                // An event addressed to this one dummy (`{self}` is its scene id); this behavior's own transition below
+                // catches it. If you move on to another scene before it fires, the event just finds no dummy.
+                EmitEventAfterDelay(event: "dummy.rise:{self}", delay_secs: 3.0),
             ],
             exit_actions: [],
             on: [],
@@ -37,6 +48,7 @@
     ],
 
     transitions: [
-        ( from: "up", on: "stat.{self}.health.depleted", to: "down" ),
+        ( from: "up",   on: "stat.{self}.health.depleted", to: "down" ),
+        ( from: "down", on: "dummy.rise:{self}",           to: "up"   ),
     ],
 )

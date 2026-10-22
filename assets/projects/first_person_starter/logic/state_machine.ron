@@ -3,7 +3,13 @@
     // A flat project: every rule lives in `global_on`. See "Pausing the game" in
     // docs/30_runtime_events_and_logic.md for the state-based alternative.
     global_on: [
-        ( event: "scene.ready:main", do_actions: [ Log("First person starter ready") ] ),
+        // Warm the particle pipelines off-screen once, or the first hit stalls the web build for a moment while the
+        // GPU pipeline compiles (see "Warming up particle pipelines" in docs/20_data_formats.md). Both effects are the
+        // same kind (alpha blended sprites), so one call warms both; use one per kind your project adds (additive...).
+        ( event: "scene.ready:main", do_actions: [
+            Log("First person starter ready"),
+            SpawnEffect(key: "hit_spark", position: (0.0, -100.0, 0.0)),
+        ] ),
 
         // Three ways to ask for a pause. They only change the clock; the menu is shown by the
         // `game.paused` / `game.resumed` rules below, which fire once per REAL change, so asking
@@ -20,13 +26,6 @@
         // raises this event instead. A dry click is the whole "miss" feedback. (The event name carries the
         // slot's `key`, "1".) Note a miss neither starts the cooldown nor costs anything.
         ( event: "action_bar.no_target:1", do_actions: [ PlaySound(key: "click") ] ),
-
-        // Targets come back. Each dummy arms `dummy.respawn:<id>` (see behaviors/training_dummy.behavior.ron)
-        // just before it removes itself, so the rule has to live here, matched by the dummy's literal id.
-        // Positions are copied from scenes/main.scene.ron: keep them in step if you move a dummy.
-        ( event: "dummy.respawn:dummy_near", do_actions: [ Spawn(prefab: "training_dummy", id: "dummy_near", position: (-3.0, 0.9, 6.0)) ] ),
-        ( event: "dummy.respawn:dummy_mid",  do_actions: [ Spawn(prefab: "training_dummy", id: "dummy_mid",  position: (4.0, 0.9, -13.0)) ] ),
-        ( event: "dummy.respawn:dummy_far",  do_actions: [ Spawn(prefab: "training_dummy", id: "dummy_far",  position: (-8.0, 0.9, -17.0)) ] ),
 
         // The menu button resumes.
         ( event: "ui.button_pressed:resume", do_actions: [ ResumeGame ] ),

@@ -23,7 +23,14 @@ impl Plugin for TargetIndicatorPlugin {
         // `TargetingPlugin`/`capabilities/targeting.rs`) so a ring never renders for one extra
         // frame against a target that was already cleared this same frame — both already
         // conflict (both touch `PlayerTarget`-derived state), so this costs zero parallelism.
-        app.add_systems(Update, target_indicator_system.after(target_auto_clear_system));
+        // ... and after `aim_target_system`, the chain's last `PlayerTarget` writer (a crosshair target changes
+        // here too), or the ring would lag the crosshair by a frame depending on the scheduler.
+        app.add_systems(
+            Update,
+            target_indicator_system
+                .after(target_auto_clear_system)
+                .after(crate::capabilities::targeting::aim_target_system),
+        );
     }
 }
 

@@ -147,9 +147,10 @@
         ),
 
         // A target to shoot: a red capsule with its own health (`{self}.health`). It goes down at 0 health,
-        // plays a poof, and `logic/state_machine.ron` puts a fresh one back at the same spot a few seconds later.
+        // plays a poof and stands up again 3 seconds later (all in its behavior file).
         // The pieces that make it shootable: `targetable: true` (the crosshair can aim at it), a `health` stat
-        // template, and a behavior file that reacts when that stat reaches 0.
+        // template, and a behavior file that reacts when that stat reaches 0. To add another one, place another
+        // entity of this prefab in scenes/main.scene.ron: nothing else needs editing.
         "training_dummy": (
             kind: Primitive,
             model: "",

@@ -207,7 +207,11 @@ pub fn action_bar_input_system(
         // had, preserved byte-for-byte). Distinct from the gamepad, which needs its owning
         // player's own controller and is therefore resolved after the player lookup.
         let key_pressed = slot.resolved_key.is_some_and(|kc| keys.just_pressed(kc));
+        // A slot with a `mouse_button` is fired by that button while the mouse is captured; a click on its own
+        // on-screen box must not fire it as well (the click that captures the mouse could land on the box, and
+        // with a free cursor a click on the HUD would shoot), so such a slot ignores UI clicks entirely.
         let click_fired = clicks_enabled
+            && slot.resolved_mouse_button.is_none()
             && interaction.is_some_and(|i| i.is_changed() && *i == Interaction::Pressed);
         // A mouse-button slot fires only while the cursor is captured: with a free cursor a click is aimed at
         // the page or an in-game panel, and the click that captures the cursor must not also shoot (the

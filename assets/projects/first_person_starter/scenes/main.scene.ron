@@ -59,7 +59,8 @@
         ( id: "step_02", prefab: "step", transform: ( translation: (-12.0, 0.6, -5.2), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
         ( id: "step_03", prefab: "step", transform: ( translation: (-12.0, 1.0, -6.4), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
 
-        // Targets at three ranges.
+        // Targets at three ranges. Each is shot, goes down and stands up again by itself (see
+        // behaviors/training_dummy.behavior.ron); to add one, copy a line and give it a new id.
         ( id: "dummy_near", prefab: "training_dummy", transform: ( translation: (-3.0, 0.9, 6.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
         ( id: "dummy_mid", prefab: "training_dummy", transform: ( translation: (4.0, 0.9, -13.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
         ( id: "dummy_far", prefab: "training_dummy", transform: ( translation: (-8.0, 0.9, -17.0), rotation_euler_deg: (0.0, 0.0, 0.0), scale: (1.0, 1.0, 1.0) ) ),
@@ -88,8 +89,9 @@
             ],
         )),
 
-        // The name of what the crosshair is on (empty when nothing is). `target_name` is a variable the engine keeps
-        // up to date; any Label can show it with `bind`. The layer centres it at the top of the screen.
+        // The prefab name of what the crosshair is on (empty when nothing is). `target_name` is a variable the engine
+        // keeps up to date (`target_id` is the entity's id instead); any Label can show it with `bind`. The layer
+        // centres it at the top of the screen.
         Group((
             id: "target_layer",
             width: Percent(100.0),
@@ -102,7 +104,9 @@
             ],
         )),
 
-        // The weapon: one slot. `key` is the slot's name and a keyboard fallback, `mouse_button` fires it from the
+        // The weapon: one slot. (To add a second weapon, copy the slot with `key: "2"` and e.g. `mouse_button: "Right"`
+        // and its own `do_actions`, and add a rule for `action_bar.no_target:2` next to the one for slot 1 in
+        // logic/state_machine.ron. Range and catch radius are set per camera in the player prefab, not per weapon.) `key` is the slot's name and a keyboard fallback, `mouse_button` fires it from the
         // left mouse button (only while the mouse is captured), `gamepad_key` from the right trigger. The slot
         // acts on `{target}`, the thing under the crosshair; with nothing there the shot is skipped and the engine
         // raises `action_bar.no_target:1` (logic/state_machine.ron plays a dry click). `cooldown_secs` makes it
@@ -120,10 +124,14 @@
                     label: "Fire",
                     cooldown_secs: 0.25,
                     do_actions: [
+                        // "shot" is a placeholder sound (a grunt); swap the file in assets.ron for a real one.
                         PlaySound(key: "shot"),
+                        // The damage is written twice: change BOTH. The dummies have 100 health, so 25 is four shots.
                         ModifyStat(key: "{target}.health", delta: -25.0),
                         ShowDamagePopup(entity: "{target}", amount: -25.0),
                         SpawnEffect(key: "hit_spark", entity: "{target}"),
+                        // A hook for your own rules (an enemy that notices it was shot, a score): nothing in this
+                        // project listens for it.
                         EmitEvent("entity.attacked:{target}"),
                     ],
                 ),
@@ -135,7 +143,7 @@
         Label(( id: "hint_keys", text: "WASD move, mouse look, Space jump, Shift sprint", position: (16.0, 16.0), size: (560.0, 26.0), align: Left, font_size: 18.0 )),
         Label(( id: "hint_pad", text: "Gamepad: sticks move and look, A jump, LT sprint", position: (16.0, 44.0), size: (560.0, 26.0), align: Left, font_size: 18.0 )),
         Label(( id: "hint_pause", text: "P or Start pauses. Esc pauses and frees the mouse.", position: (16.0, 72.0), size: (560.0, 26.0), align: Left, font_size: 18.0 )),
-        Label(( id: "hint_capture", text: "Click the game to capture the mouse, then:", position: (16.0, 100.0), size: (560.0, 26.0), align: Left, font_size: 18.0 )),
-        Label(( id: "hint_fire", text: "left mouse or RT fires at the crosshair.", position: (16.0, 122.0), size: (560.0, 26.0), align: Left, font_size: 18.0 )),
+        Label(( id: "hint_capture", text: "Click the game once to capture the mouse.", position: (16.0, 100.0), size: (560.0, 26.0), align: Left, font_size: 18.0 )),
+        Label(( id: "hint_fire", text: "Fire: left mouse (after that click) or RT.", position: (16.0, 122.0), size: (560.0, 26.0), align: Left, font_size: 18.0 )),
     ],
 )
