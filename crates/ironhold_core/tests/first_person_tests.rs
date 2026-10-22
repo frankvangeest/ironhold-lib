@@ -1,4 +1,4 @@
-//! `planning/features/first_person_starter.md` v1: the `controls: FirstPerson` scheme as seen by
+//! `planning/features/done/first_person_starter.md` v1: the `controls: FirstPerson` scheme as seen by
 //! `input_translator_system`, the run-key hold mode, and stick + keyboard look in
 //! `first_person_camera_system` (including who owns the right stick, and the pause gate).
 //!
@@ -60,6 +60,7 @@ fn fp_state(invert_y: bool) -> FirstPersonState {
         invert_y,
         capture_cursor: false,
         hide_own_body: false,
+        aim_target: None,
     }
 }
 

@@ -906,9 +906,8 @@ fn unhideable_kind(node: &UiNodeDef) -> Option<(&'static str, &str)> {
 }
 
 /// `SetUiVisible` checks: non-empty id, id exists in some scene/overlay `ui:` tree (nested
-/// Groups included), and no occurrence is or contains a panel/ActionBar. Uses its own action
-/// scan because `collect_actions` skips ActionBar slot `do_actions` (backlog item); `actions`
-/// is already the shared collection, so only the slot actions are added here.
+/// Groups included), and no occurrence is or contains a panel/ActionBar. `actions` is the shared
+/// collection, which includes ActionBar slot `do_actions` (added in `do_validate`).
 fn set_ui_visible_checks(
     scenes: &[(String, GameSceneV2)],
     actions: &[(String, Action)],
@@ -922,19 +921,6 @@ fn set_ui_visible_checks(
             _ => None,
         })
         .collect();
-    for (scene_path, scene) in scenes {
-        for node in walk_ui_nodes(&scene.ui) {
-            if let UiNodeDef::ActionBar(bar) = node {
-                for slot in &bar.slots {
-                    for a in &slot.do_actions {
-                        if let Action::SetUiVisible { id, .. } = a {
-                            found.push((scene_path.as_str(), id.as_str()));
-                        }
-                    }
-                }
-            }
-        }
-    }
 
     let mut reported: HashSet<(String, String, String)> = HashSet::new(); // det: lookup-only
     for (source, id) in found {
@@ -1100,12 +1086,32 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
             // checks rather than here, since it needs `scenes`, not a catalog).
             Action::Spawn { prefab, .. } => {
                 if let Some(c) = prefab_catalog {
-                    if !c.prefabs.contains_key(prefab) {
-                        errors.push(CrossFileError {
+                    match c.prefabs.get(prefab) {
+                        None => errors.push(CrossFileError {
                             source_file: source.clone(),
                             message: format!("prefab key {:?} not found in prefabs.ron", prefab),
                             error_type: "missing_reference",
-                        });
+                        }),
+                        // `Action::Spawn` builds its entity through the model path (`asset_catalog.models[prefab.model]`);
+                        // primitive meshes and colliders are only built when a scene loads, so this would log a
+                        // warning at runtime and spawn nothing.
+                        Some(def)
+                            if def.kind == ironhold_core::schema::catalog::PrefabKind::Primitive
+                                && !asset_catalog.is_some_and(|a| a.models.contains_key(&def.model)) =>
+                        {
+                            errors.push(CrossFileError {
+                                source_file: source.clone(),
+                                message: format!(
+                                    "Action::Spawn of prefab {:?}, which is `kind: Primitive` with no model in assets.ron: Spawn \
+                                     cannot create a primitive-shaped prefab at runtime (it builds the entity from a `model`), so nothing would appear. \
+                                     Place it in the scene's `entities:` instead (to bring one back, hide it with \
+                                     `SetEntityVisible` and reset its stats), or give the prefab a model",
+                                    prefab
+                                ),
+                                error_type: "spawn_primitive_prefab",
+                            });
+                        }
+                        Some(_) => {}
                     }
                 }
             }
@@ -1941,6 +1947,43 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
             }
         }
 
+        // `mouse_button` on a slot (`"Left"`/`"Right"`/`"Middle"`): an unrecognised name never fires, and two
+        // slots of one player on the same button would both fire on a single click. Keyed by the owning
+        // player like the gamepad pass below (the mouse is one shared device, but each bar's slots belong to
+        // their own `owner_player`, and the same button on two different players' bars is the one-mouse
+        // split-screen limitation, not something this check can resolve).
+        let mut seen_mouse: std::collections::HashMap<(u32, String), (&str, &str)> = std::collections::HashMap::new();
+        for node in walk_ui_nodes(&scene.ui) {
+            let ironhold_core::schema::scene_v2::UiNodeDef::ActionBar(bar) = node else { continue };
+            let owner_player = bar.owner_player.unwrap_or(0);
+            for slot in &bar.slots {
+                let Some(mb) = &slot.mouse_button else { continue };
+                if ironhold_core::schema::player::InputMap::parse_mouse_button(mb).is_none() {
+                    errors.push(CrossFileError {
+                        source_file: scene_path.clone(),
+                        message: format!(
+                            "ActionBar {:?}: slot {:?} has an unrecognised mouse_button {:?} (expected \"Left\", \"Right\" or \"Middle\") \
+                             — it will never fire from the mouse",
+                            bar.id, slot.key, mb
+                        ),
+                        error_type: "invalid_mouse_button",
+                    });
+                    continue;
+                }
+                if let Some((prev_bar, prev_key)) = first_seen(&mut seen_mouse, (owner_player, mb.clone()), (&bar.id, &slot.key)) {
+                    errors.push(CrossFileError {
+                        source_file: scene_path.clone(),
+                        message: format!(
+                            "Player {} has 2+ ActionBar slots on mouse button {:?}: ActionBar {:?} slot {:?} and ActionBar {:?} \
+                             slot {:?} -- one click would fire both",
+                            owner_player, mb, prev_bar, prev_key, bar.id, slot.key
+                        ),
+                        error_type: "duplicate_mouse_button",
+                    });
+                }
+            }
+        }
+
         // Same-player gamepad-slot collision — a different failure mode than the keyboard check
         // above, so a separate pass: the intent/cooldown pipeline is never keyed by `gamepad_key`,
         // so there's no cross-bar pipeline entanglement risk here. The risk is a same-player
@@ -2108,6 +2151,33 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                     prefab_key,
                     &mut errors,
                 );
+            }
+        }
+    }
+
+    // `aim_target` numbers: `radius_deg` is an angle from the view axis and must be inside (0, 90) or the
+    // catch-circle maths (tan) breaks and nothing is ever targeted; `range` must be positive.
+    if let Some(catalog) = prefab_catalog {
+        for (key, def) in &catalog.prefabs {
+            let Some(CameraModeDef::FirstPerson(fp)) = &def.components.camera_mode else { continue };
+            let Some(aim) = &fp.aim_target else { continue };
+            if !(aim.radius_deg.is_finite() && aim.radius_deg > 0.0 && aim.radius_deg < 90.0) {
+                errors.push(CrossFileError {
+                    source_file: "prefabs/prefabs.ron".to_string(),
+                    message: format!(
+                        "prefab {key:?}: aim_target.radius_deg {} must be greater than 0 and less than 90 degrees -- \
+                         otherwise the crosshair never targets anything",
+                        aim.radius_deg
+                    ),
+                    error_type: "invalid_aim_target",
+                });
+            }
+            if !(aim.range.is_finite() && aim.range > 0.0) {
+                errors.push(CrossFileError {
+                    source_file: "prefabs/prefabs.ron".to_string(),
+                    message: format!("prefab {key:?}: aim_target.range {} must be greater than 0 metres", aim.range),
+                    error_type: "invalid_aim_target",
+                });
             }
         }
     }
@@ -3195,10 +3265,9 @@ fn has_delayed_event(actions: &[Action]) -> bool {
 /// `claimed_gamepad_collision`, `overlay_scene_bindings_ignored`). All are `--strict` warnings,
 /// never errors: the runtime's auto-resume on a Replace-mode `LoadScene` is the safety net.
 ///
-/// Known limitation: `LoadedProject.actions` (`collect_actions`) does not scan ActionBar slot
-/// `do_actions` (backlog item), so a pause/resume/overlay load wired only through a slot is
-/// invisible here -- `pause_without_resume` and `overlay_scene_bindings_ignored` can therefore
-/// false-positive for a project that wires its only `ResumeGame`/base `LoadScene` via a slot.
+/// `LoadedProject.actions` includes ActionBar slot `do_actions` (added in `do_validate`), so a pause/resume/
+/// overlay load wired through a slot is seen here. `discover_extra_scenes` still does not follow a slot's
+/// `LoadScene` (deliberately: that would make scene discovery a fixpoint loop).
 fn pause_checks(project: LoadedProject) -> Vec<StrictWarning> {
     let LoadedProject {
         project_dir, project_config, prefab_catalog, scenes, actions, state_machine, behaviors,
@@ -3511,6 +3580,97 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
                         kind: "duplicate_input_key",
                     });
                 }
+            }
+        }
+    }
+
+    // First-person shooter wiring, per scene (the scene's instantiated players, like the checks around it):
+    //  * `mouse_button_without_capture`: a slot on a mouse button fires only while the cursor is captured
+    //    (`capture_cursor: true` on a first-person camera), so with no such player it never fires.
+    //  * `mouse_button_shared_binding`: the same button also strafes (`strafe_mouse_button`) or orbits
+    //    (`orbit_button`) a player of the scene, so a click would do both.
+    //  * `aim_target_without_targetable`: `aim_target` needs `targetable: true` entities to aim at; none is
+    //    placed in the scene (a target created later by `Action::Spawn` is not seen by validate).
+    if let Some(catalog) = prefab_catalog {
+        for (scene_path, scene) in scenes {
+            let mut instantiated: Vec<&str> = scene.entities.iter().map(|e| e.prefab.as_str()).collect();
+            instantiated.extend(scene.join_prefab_keys.iter().flatten().map(|k| k.as_str()));
+            // Players created at runtime by `Action::Spawn` anywhere in the project count too (a spawn is not tied
+            // to one scene), so a runtime-spawned first-person player does not make these warnings false.
+            instantiated.extend(actions.iter().filter_map(|(_, a)| match a {
+                Action::Spawn { prefab, .. } => Some(prefab.as_str()),
+                _ => None,
+            }));
+            let players: Vec<&PrefabDef> = instantiated
+                .iter()
+                .filter_map(|k| catalog.prefabs.get(*k))
+                .filter(|p| p.is_player())
+                .collect();
+            // A capturing first-person camera can also come from the scene's `camera_modes:` registry (reached with
+            // `SetCameraMode`).
+            let captures = players.iter().any(|p| {
+                matches!(&p.components.camera_mode, Some(CameraModeDef::FirstPerson(fp)) if fp.capture_cursor)
+            }) || scene.camera_modes.values().any(|m| matches!(m, CameraModeDef::FirstPerson(fp) if fp.capture_cursor));
+            for node in walk_ui_nodes(&scene.ui) {
+                let UiNodeDef::ActionBar(bar) = node else { continue };
+                for slot in &bar.slots {
+                    let Some(mb) = &slot.mouse_button else { continue };
+                    if InputMap::parse_mouse_button(mb).is_none() { continue } // reported as an error above
+                    if !captures {
+                        warnings.push(StrictWarning {
+                            source_file: scene_path.clone(),
+                            message: format!(
+                                "ActionBar {:?} slot {:?}: mouse_button {:?} only fires while the mouse is captured, but no \
+                                 player in this scene has a `FirstPerson` camera with `capture_cursor: true`, so it never fires",
+                                bar.id, slot.key, mb
+                            ),
+                            kind: "mouse_button_without_capture",
+                        });
+                    }
+                    for p in &players {
+                        let strafes = p.components.inputs.as_ref().map_or(
+                            InputMap::default().strafe_mouse_button, |i| i.strafe_mouse_button.clone(),
+                        );
+                        let orbits = match &p.components.camera_mode {
+                            Some(CameraModeDef::Orbit(c)) => Some(c.orbit_button.clone()),
+                            _ => None,
+                        };
+                        if strafes.as_deref() == Some(mb.as_str()) {
+                            warnings.push(StrictWarning {
+                                source_file: scene_path.clone(),
+                                message: format!(
+                                    "ActionBar {:?} slot {:?}: mouse_button {:?} is also a player's `strafe_mouse_button` -- a click \
+                                     fires the slot and strafes. Set `strafe_mouse_button: None` (the `FirstPerson` scheme does)",
+                                    bar.id, slot.key, mb
+                                ),
+                                kind: "mouse_button_shared_binding",
+                            });
+                        }
+                        if orbits.as_deref().is_some_and(|o| o == mb || o == "Either") {
+                            warnings.push(StrictWarning {
+                                source_file: scene_path.clone(),
+                                message: format!(
+                                    "ActionBar {:?} slot {:?}: mouse_button {:?} is also the orbit button of a player's Orbit \
+                                     camera -- a click fires the slot and orbits",
+                                    bar.id, slot.key, mb
+                                ),
+                                kind: "mouse_button_shared_binding",
+                            });
+                        }
+                    }
+                }
+            }
+            let aims = players.iter().any(|p| {
+                matches!(&p.components.camera_mode, Some(CameraModeDef::FirstPerson(fp)) if fp.aim_target.is_some())
+            });
+            if aims && !scene.entities.iter().any(|e| catalog.prefabs.get(&e.prefab).is_some_and(|p| p.targetable)) {
+                warnings.push(StrictWarning {
+                    source_file: scene_path.clone(),
+                    message: "a player's first-person camera has `aim_target`, but no entity placed in this scene has a \
+                              prefab with `targetable: true`, so the crosshair has nothing to aim at (targets created later by \
+                              `Action::Spawn` are not seen by validate)".to_string(),
+                    kind: "aim_target_without_targetable",
+                });
             }
         }
     }
@@ -4307,7 +4467,7 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
         &mut file_results,
     );
 
-    let all_actions = collect_actions(
+    let mut all_actions = collect_actions(
         state_machine.as_ref().map(|s| (state_machine_source.as_str(), s)),
         &behaviors,
         &dialogues,
@@ -4320,6 +4480,21 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
         &mut scenes,
         &mut file_results,
     );
+
+    // An action-bar slot's `do_actions` are real actions (they run through the same executor), so the checks that
+    // ask "is this effect / sound / scene used anywhere?" must see them too; without this a fire slot's
+    // `PlaySound`/`SpawnEffect` looks unused. Added after scene discovery so it cannot change which scenes are
+    // loaded, and before the checks run.
+    for (scene_path, scene) in &scenes {
+        for node in walk_ui_nodes(&scene.ui) {
+            let UiNodeDef::ActionBar(bar) = node else { continue };
+            for slot in &bar.slots {
+                for action in &slot.do_actions {
+                    all_actions.push((scene_path.clone(), action.clone()));
+                }
+            }
+        }
+    }
 
     let logic_files_parsed_cleanly = file_results
         .iter()

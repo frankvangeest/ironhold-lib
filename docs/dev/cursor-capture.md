@@ -1,8 +1,8 @@
 # Cursor capture, the pointer-lock report and `hide_own_body`
 
 Long-form notes for `FirstPersonCameraDef.capture_cursor` / `hide_own_body` and the right-stick ownership rule. The hard rules are
-in `crates/ironhold_core/src/capabilities/CLAUDE.md` ("Cursor capture and the right stick (first person)"). Design history and the
-decisions behind this: `planning/features/first_person_starter.md` ("Spike A result" and "Decisions made").
+in `crates/ironhold_core/src/capabilities/CLAUDE.md` ("Cursor capture and the right stick"). Design history and the
+decisions behind this: `planning/features/done/first_person_starter.md` ("Spike A result" and "Decisions made").
 
 ## Why the runner reports the lock state
 
@@ -37,6 +37,14 @@ grab: native winit grabs synchronously.
   releases the `Menu` hold, so a designer could never release it.
 - The test hook `reset_pointer_lock_report` and the mutex in `tests/cursor_capture_tests.rs` exist because the report channel is
   process-wide.
+
+## Mouse-button slots and the capturing click
+
+`ActionSlotUi.resolved_mouse_button` is read by `action_bar_input_system` (`GameStreamSet::ActionBar`) as one more "direct" (shared-hardware) fire source, **gated on `CursorLockState.locked`**. `cursor_capture_system` runs later in the same frame (`GameStreamSet::Interact`), so the click that captures the cursor still sees `locked == false` when the action bar looks at it: that is how the capturing click is swallowed, and it needs no extra state. On the web the lock arrives a frame or more later (the runner reports it), so the same holds. A consequence worth knowing: the Resume button's click while paused is seen with the game still paused, so the player needs a second click to capture (logged in the backlog).
+
+## Aim targeting
+
+`aim_target_system` (`capabilities/targeting.rs`, `GameStreamSet::Targeting`, the last system of the targeting chain, `.before(first_person_camera_system)`, `run_if(sim_running)`) sets `PlayerTarget` from the crosshair; it goes through the same `apply_player_target` / `clear_player_target` as click and Tab selection and writes nothing on a frame where the target is unchanged. It projects with `project_to_viewport` (a pure pinhole projection, the same result as `Camera::world_to_viewport` for a camera whose aspect follows its viewport) so it needs no render target: the viewport size is the camera's own, falling back to the primary window. The camera pose it reads is last frame's final `GlobalTransform`, exactly what the player saw. Line of sight is one `cast_ray` per aiming camera and candidate in nearest-first order (`exclude_rigid_body(owner)`, `exclude_sensors()`), accepting a hit on the target or one of its descendants, and no hit at all (a target without a collider is not blocked). `click_select_system` and `tab_targeting_system` skip a player that `is_aim_driven` (the first target of a `FirstPersonCameraMode` camera whose state has `aim_target`).
 
 ## Right-stick ownership
 

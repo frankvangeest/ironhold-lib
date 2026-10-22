@@ -85,6 +85,7 @@ fn slot(key: &str, keycode: KeyCode, delta: f32) -> ActionSlotUi {
         slot_key: key.to_string(),
         resolved_key: Some(keycode),
         resolved_gamepad_button: None,
+        resolved_mouse_button: None,
         do_actions: vec![Action::ModifyStat { key: "health".to_string(), delta }],
         cooldown_secs: None,
         cost: None,

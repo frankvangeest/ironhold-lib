@@ -580,6 +580,8 @@ pub struct FirstPersonState {
     pub invert_y: bool,
     pub capture_cursor: bool,
     pub hide_own_body: bool,
+    /// Crosshair targeting (`FirstPersonCameraDef.aim_target`), read by `aim_target_system`.
+    pub aim_target: Option<crate::schema::camera::AimTargetDef>,
 }
 
 impl FirstPersonState {
@@ -596,6 +598,7 @@ impl FirstPersonState {
             invert_y: fp.invert_y,
             capture_cursor: fp.capture_cursor,
             hide_own_body: fp.hide_own_body,
+            aim_target: fp.aim_target.clone(),
         }
     }
 }

@@ -8,7 +8,7 @@ _Planned at: `eb56cf3` (2026-10-16)_
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
 | v1 | FPS control scheme (strafe movement, gamepad look yaw+pitch, hold-to-sprint, cursor capture) + `first_person_starter` project with the male character, arena and crosshair: move and look on keyboard + mouse and gamepad | Done | `ed09dd5` (2026-10-22) |
-| v2 | Crosshair aim targeting + fire input (mouse button / trigger) + hit feedback: the shooting starting point | Queued | — |
+| v2 | Crosshair aim targeting + fire input (mouse button / trigger) + hit feedback: the shooting starting point | Done | `87dfe4d` (2026-10-22) |
 
 v2 depends on v1 (same project, same camera mode). Each phase ships and is play-tested on its own branch before the next starts.
 

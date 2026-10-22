@@ -837,10 +837,12 @@ pub struct PrefabDef {
     /// `target_indicator.color` when the key is absent from the map.
     #[serde(default)]
     pub indicator_category: Option<String>,
-    /// Vertical offset (metres) from the entity world origin used when projecting to screen
-    /// space for click-selection. Defaults to 1.0 (body centre for human-scale characters).
-    /// Set lower for ground-hugging creatures (e.g. 0.4 for a snake, 0.6 for a spider).
-    /// Only meaningful when `click_selectable: true`.
+    /// Vertical offset (metres) from the entity world origin used as the aim point when projecting
+    /// to screen space, for click-selection and for crosshair aiming (`aim_target`). Defaults to 1.0
+    /// (body centre for human-scale characters whose origin is at their feet).
+    /// Set lower for ground-hugging creatures (e.g. 0.4 for a snake, 0.6 for a spider), or 0.0 for a
+    /// prefab whose origin is its centre (a primitive capsule).
+    /// Only meaningful when `click_selectable: true` or `targetable: true`.
     #[serde(default = "default_select_aim_height")]
     pub select_aim_height: f32,
     /// Project-relative path to a `.dialogue.ron` file that drives conversation with this entity.

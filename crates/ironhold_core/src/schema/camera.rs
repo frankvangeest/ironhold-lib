@@ -156,6 +156,41 @@ fn default_first_person_min_pitch() -> f32 { -1.4 }
 fn default_first_person_max_pitch() -> f32 { 1.4 }
 fn default_first_person_fov() -> f32 { 90.0 }
 fn default_first_person_look_speed() -> f32 { 2.5 }
+fn default_aim_range() -> f32 { 40.0 }
+fn default_aim_radius_deg() -> f32 { 3.0 }
+fn default_aim_line_of_sight() -> bool { true }
+
+/// `FirstPersonCameraDef.aim_target`: drive the player's `PlayerTarget` from the **crosshair**
+/// instead of the mouse cursor (a first-person game has no cursor). Every frame the engine picks the
+/// `targetable: true` entity nearest the centre of the player's viewport within `radius_deg` of the
+/// view axis and `range` metres of the camera, and (with `require_line_of_sight`) only if a ray from
+/// the camera reaches it. Everything downstream is unchanged: `{target}`, the `target.changed` events,
+/// the `target_name` variable and the action-bar slots' `{target}` gating all follow that target.
+/// While a camera has `aim_target`, mouse-click and Tab selection are off for its player.
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct AimTargetDef {
+    /// Furthest target, in metres from the camera. Default: 40.0.
+    #[serde(default = "default_aim_range")]
+    pub range: f32,
+    /// Radius of the crosshair's catch circle as an **angle** from the view axis, in degrees (so it
+    /// covers the same share of the view on a phone and on a 4K screen). Default: 3.0.
+    #[serde(default = "default_aim_radius_deg")]
+    pub radius_deg: f32,
+    /// Only target something a ray from the camera reaches: a wall in between hides it. Default: `true`.
+    #[serde(default = "default_aim_line_of_sight")]
+    pub require_line_of_sight: bool,
+}
+
+impl Default for AimTargetDef {
+    fn default() -> Self {
+        Self {
+            range: default_aim_range(),
+            radius_deg: default_aim_radius_deg(),
+            require_line_of_sight: default_aim_line_of_sight(),
+        }
+    }
+}
 
 /// `camera_mode: FirstPerson(...)` payload.
 #[derive(Deserialize, Debug, Clone)]
@@ -178,7 +213,7 @@ pub struct FirstPersonCameraDef {
     pub invert_y: bool,
     /// Grab and hide the mouse cursor while playing (browser pointer lock on the web), release it
     /// while the game is paused. Default: `false`, so a first-person room that does not ask for it
-    /// is unchanged. See `planning/features/first_person_starter.md`.
+    /// is unchanged. See `planning/features/done/first_person_starter.md`.
     #[serde(default)]
     pub capture_cursor: bool,
     /// Hide the player's own body so the camera does not look at the inside of the head.
@@ -190,6 +225,10 @@ pub struct FirstPersonCameraDef {
     /// overrides the hiding (last writer wins).
     #[serde(default)]
     pub hide_own_body: bool,
+    /// Aim with the crosshair: when set, the player's target follows what the centre of the screen
+    /// points at (see [`AimTargetDef`]). Default: `None` (click and Tab targeting as before).
+    #[serde(default)]
+    pub aim_target: Option<AimTargetDef>,
     /// Blend behavior when `SetCameraMode` switches onto this mode (**v2**). Absent = instant cut.
     #[serde(default)]
     pub transition: Option<CameraTransition>,

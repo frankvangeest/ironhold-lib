@@ -64,7 +64,7 @@ fn the_documented_systems_are_in_the_documented_sets() {
         ("EmitSet::Ui", &["global_input_system", "unclaimed_gamepad_trigger_system", "button_system", "icon_button_click_system"]),
         ("EmitSet::DirectActions", &["resolve_pending_behaviors_system", "despawn_timer_system"]),
         ("EmitSet::Dialogue", &["dialogue_tick_system"]),
-        ("GameStreamSet::Targeting", &["click_select_system", "tab_targeting_system", "target_auto_clear_system"]),
+        ("GameStreamSet::Targeting", &["click_select_system", "tab_targeting_system", "target_auto_clear_system", "aim_target_system"]),
         ("GameStreamSet::ActionBar", &["cooldown_tick_system", "action_bar_input_system", "action_bar_visual_system"]),
         ("GameStreamSet::Interact", &["interactable_system", "cursor_capture_system"]),
         ("GameStreamSet::DelayedEvents", &["tick_delayed_events_system"]),
@@ -294,7 +294,7 @@ fn every_edge_triggered_input_system_reads_the_pause_clock() {
     let r = report();
     let gated = [
         "interactable_system", "click_select_system", "tab_targeting_system", "action_bar_input_system",
-        "cursor_capture_system", "first_person_camera_system", "fly_camera_system", "dialogue_tick_system",
+        "cursor_capture_system", "aim_target_system", "first_person_camera_system", "fly_camera_system", "dialogue_tick_system",
     ];
     for name in gated {
         let s = r.system(name);

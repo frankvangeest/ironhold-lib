@@ -123,6 +123,7 @@ Sample `watch` output (each save prints the changed file and a result):
 | one player with two or more slots on the same gamepad button | `same_player_gamepad_duplicate_key` | the slots collide | give each slot its own button |
 | a slot with a `gamepad_key` whose owning player's prefab has no `inputs.gamepad_index` | `gamepad_key_without_gamepad_index` | the gamepad binding never fires (the keyboard key still works) | set `gamepad_index` on the player |
 | a slot `cost` stat the owning player's prefab does not declare in `stat_templates` | `missing_player_stat_template` | the cost silently uses the shared global stat pool instead of that player's own | add the stat to the prefab's `stat_templates` |
+| an action-bar slot's `mouse_button` that is not `"Left"`, `"Right"` or `"Middle"`, or two slots of one player on the same mouse button | `invalid_mouse_button` / `duplicate_mouse_button` | the slot never fires from the mouse / one click fires both slots | fix the name; give each slot its own button |
 
 ### Flycam and spawning
 | What you see | Code | What breaks if ignored | Fix |
@@ -133,6 +134,8 @@ Sample `watch` output (each save prints the changed file and a result):
 | a `join_prefab_keys` prefab with no `"player"` tag, or a primitive-shaped prefab | `unsupported_join_prefab` | hot-join refuses the prefab at runtime | use a GLB (Actor-kind) player prefab |
 | a primitive-shaped player prefab in a scene that has `terrain` | `unsupported_primitive_player_on_terrain` | primitive players are not supported on terrain yet | use a GLB (Actor-kind) player prefab, or remove the terrain |
 | `{new_id}` used anywhere except a `Spawn` action's `id` | `misplaced_new_id_token` | it is not substituted and appears as literal text at runtime | move it into the `Spawn` `id` |
+| a `FirstPerson` camera's `aim_target` with `radius_deg` outside 0 to 90, or `range` of 0 or less | `invalid_aim_target` | the crosshair never targets anything | use a radius between 0 and 90 (default 3) and a positive range |
+| `Spawn` of a prefab that is `kind: Primitive` | `spawn_primitive_prefab` | `Spawn` builds the entity from a `model`, so a primitive-shaped prefab is skipped at runtime and nothing appears | place it in the scene's `entities:` (to bring one back, hide it with `SetEntityVisible` and reset its stats), or give the prefab a model |
 | a `PlayAnimationOn` `start_at_fraction` outside `[0.0, 1.0]` | `animation_start_at_fraction_out_of_range` | it is a fraction of the clip, not seconds | use a value between 0 and 1 |
 | a prefab `stat_label`/`world_stat_bar` keyed `{self}.<stat>` with no matching `stat_templates` entry | `missing_stat_widget_template` | the widget renders empty with no further warning | add the stat to the prefab's `stat_templates` |
 
@@ -150,6 +153,8 @@ Every row here, including the pause checks (`unrecoverable_pause`, `toggle_pause
 
 | What you see | Code | Meaning |
 |---|---|---|
+| a slot with `mouse_button` in a scene where no player has a `FirstPerson` camera with `capture_cursor: true`; or whose button is also a player's `strafe_mouse_button` or Orbit `orbit_button` | `mouse_button_without_capture` / `mouse_button_shared_binding` | the slot never fires (it fires only while the mouse is captured; add `capture_cursor: true` to the player's camera) / one click also strafes or orbits (set `strafe_mouse_button: None`; the `FirstPerson` scheme does) |
+| a player's first-person camera has `aim_target` but no placed entity has a `targetable: true` prefab | `aim_target_without_targetable` | the crosshair has nothing to aim at; place a targetable entity, or ignore if the targets are created by `Action::Spawn` (not seen by `validate`) |
 | a prefab, effect, audio or decal key defined but never used | `unused_prefab` / `unused_effect` / `unused_audio` / `unused_decal` | dead data; delete or use it |
 | text containing a non-ASCII character in a `Label`/`Button`/entity `label:`/`world_labels:`/dialogue text | `non_ascii_char_in_text` | renders as a box (the built-in font is ASCII-only); use plain ASCII (hyphen, straight quotes) |
 | a `ui.button_pressed:<trigger>` binding that no button, key or gamepad binding can ever fire | `orphan_binding` | dead code left over from a scene rewrite |

@@ -495,10 +495,14 @@ pub fn tag_spawned_entity(
     ec.insert((SpawnId(id.to_string()), PrefabKey(prefab_key.to_string()), LevelEntity));
     if click_selectable {
         ec.insert(crate::capabilities::targeting::ClickSelectable);
-        ec.insert(crate::capabilities::targeting::SelectAimHeight(select_aim_height));
     }
     if targetable {
         ec.insert(crate::capabilities::targeting::Targetable);
+    }
+    // The aim point is read by click selection AND by crosshair aiming (`aim_target`), which needs only
+    // `targetable`: inserting it for a targetable-only prefab is what makes `select_aim_height` work there.
+    if click_selectable || targetable {
+        ec.insert(crate::capabilities::targeting::SelectAimHeight(select_aim_height));
     }
     registry.entities.insert(id.to_string(), entity);
 }

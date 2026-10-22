@@ -1,5 +1,5 @@
 //! `FirstPersonCameraDef.capture_cursor`: `cursor_capture_system` and the mouse-look gate in
-//! `first_person_camera_system` (`planning/features/first_person_starter.md`, Spike A).
+//! `first_person_camera_system` (`planning/features/done/first_person_starter.md`, Spike A).
 //!
 //! **Every test takes `GUARD` first**: the runner -> core report channel
 //! (`report_pointer_lock` / `runner_reports_pointer_lock`) is a process-wide atomic, because the
@@ -17,7 +17,9 @@ use ironhold_core::capabilities::camera::{
 use ironhold_core::capabilities::cursor_capture::{
     report_pointer_lock, reset_pointer_lock_report, runner_reports_pointer_lock, CursorLockState,
 };
-use ironhold_core::capabilities::player::CharacterController;
+use ironhold_core::capabilities::action_bar::ActionSlotUi;
+use ironhold_core::capabilities::player::{CharacterController, PlayerTarget};
+use ironhold_core::runtime::SpawnId;
 use ironhold_core::runtime::{ActionQueue, GameEvent};
 use ironhold_core::schema::player::InputMap;
 use ironhold_core::schema::Action;
@@ -50,6 +52,7 @@ fn fp_state(capture_cursor: bool) -> FirstPersonState {
         invert_y: false,
         capture_cursor,
         hide_own_body: false,
+        aim_target: None,
     }
 }
 
@@ -287,3 +290,122 @@ fn a_refused_request_is_retried_on_the_next_click_without_a_lost_event() {
     assert_eq!(app.world().resource::<OptionsWrites>().0, after_first + 1, "the next click asks again");
     reset_pointer_lock_report();
 }
+
+// ── a mouse-button action-bar slot fires only while the cursor is captured ────────────────
+
+/// Like `capture_app` plus an action-bar slot `"1"` (also on the `1` key) with `mouse_button: Left` whose action
+/// bumps the `shots` variable, and a player the slot can resolve (`SpawnId` + `PlayerTarget`). Returns `(app, window)`.
+fn slot_app(capture_cursor: bool, do_actions: Vec<Action>) -> (App, Entity) {
+    let (mut app, window, player) = capture_app(capture_cursor);
+    app.world_mut().entity_mut(player).insert((SpawnId("player_01".to_string()), PlayerTarget::default()));
+    app.world_mut().spawn(ActionSlotUi {
+        slot_key: "1".to_string(),
+        resolved_key: Some(KeyCode::Digit1),
+        resolved_gamepad_button: None,
+        resolved_mouse_button: Some(MouseButton::Left),
+        do_actions,
+        cooldown_secs: None,
+        cost: None,
+        owner_player: None,
+    });
+    app.update();
+    (app, window)
+}
+
+fn shots(app: &App) -> i32 {
+    app.world()
+        .resource::<ironhold_core::GameVariables>()
+        .0
+        .get("shots")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0)
+}
+
+fn count_shots() -> Vec<Action> {
+    vec![Action::IncrementVariable("shots".to_string(), 1)]
+}
+
+#[test]
+fn the_click_that_captures_the_cursor_does_not_fire_a_mouse_slot_but_the_next_one_does() {
+    let _g = GUARD.lock().unwrap_or_else(|e| e.into_inner());
+    reset_pointer_lock_report();
+    let (mut app, _window) = slot_app(true, count_shots());
+    click(&mut app);
+    app.update();
+    assert!(locked(&app), "precondition: the first click captured the cursor");
+    assert_eq!(shots(&app), 0, "the capturing click is swallowed: it must not also shoot");
+    click(&mut app);
+    app.update();
+    assert_eq!(shots(&app), 1, "with the cursor captured a click fires the slot");
+}
+
+#[test]
+fn a_mouse_slot_never_fires_without_capture() {
+    let _g = GUARD.lock().unwrap_or_else(|e| e.into_inner());
+    reset_pointer_lock_report();
+    let (mut app, _window) = slot_app(false, count_shots());
+    click(&mut app);
+    click(&mut app);
+    app.update();
+    assert_eq!(shots(&app), 0, "no capture_cursor camera: the cursor is never captured, so a click never shoots");
+}
+
+#[test]
+fn a_mouse_slot_does_not_fire_while_paused_or_after_the_cursor_is_released() {
+    let _g = GUARD.lock().unwrap_or_else(|e| e.into_inner());
+    reset_pointer_lock_report();
+    let (mut app, _window) = slot_app(true, count_shots());
+    click(&mut app);
+    app.update();
+    click(&mut app);
+    app.update();
+    assert_eq!(shots(&app), 1, "precondition: it fires while captured");
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::PauseGame);
+    app.update();
+    app.update();
+    click(&mut app);
+    app.update();
+    assert_eq!(shots(&app), 1, "paused: the cursor is released and the slot is gated");
+}
+
+#[test]
+fn a_key_press_and_a_mouse_click_on_one_frame_activate_the_slot_once() {
+    let _g = GUARD.lock().unwrap_or_else(|e| e.into_inner());
+    reset_pointer_lock_report();
+    let (mut app, _window) = slot_app(true, count_shots());
+    click(&mut app);
+    app.update(); // captured
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit1);
+    app.world_mut().resource_mut::<ButtonInput<MouseButton>>().press(MouseButton::Left);
+    app.update();
+    // The test app has no input plugin, so `just_pressed` would stay true on later frames: clear it by hand.
+    app.world_mut().resource_mut::<ButtonInput<KeyCode>>().clear();
+    app.world_mut().resource_mut::<ButtonInput<MouseButton>>().clear();
+    app.update();
+    app.update();
+    assert_eq!(shots(&app), 1, "key and mouse collapse into one activation");
+}
+
+#[test]
+fn a_mouse_slot_with_no_target_emits_no_target_and_does_not_run_its_actions() {
+    let _g = GUARD.lock().unwrap_or_else(|e| e.into_inner());
+    reset_pointer_lock_report();
+    let needs_target = vec![
+        Action::ModifyStat { key: "{target}.health".to_string(), delta: -25.0 },
+        Action::IncrementVariable("shots".to_string(), 1),
+    ];
+    let (mut app, _window) = slot_app(true, needs_target);
+    click(&mut app);
+    app.update();
+    click(&mut app);
+    let no_target = app
+        .world()
+        .resource::<Messages<GameEvent>>()
+        .iter_current_update_messages()
+        .filter(|e| matches!(e, GameEvent::Trigger(name) if name == "action_bar.no_target:1"))
+        .count();
+    assert_eq!(no_target, 1, "firing with nothing under the crosshair raises action_bar.no_target:{{key}} (a project plays a miss sound from it)");
+    app.update();
+    assert_eq!(shots(&app), 0, "the slot's actions did not run without a target");
+}
+

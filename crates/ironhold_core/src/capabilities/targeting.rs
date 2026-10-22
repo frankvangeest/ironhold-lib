@@ -9,7 +9,11 @@ use crate::capabilities::player::{BoundGamepad, CharacterController, PlayerIndex
 use crate::schema::player::InputMap;
 use crate::GameVariables;
 use crate::capabilities::inventory::LoadedInventoryUi;
-use crate::capabilities::camera::{camera_priority_key, CameraTargets, SplitViewportSlot};
+use crate::capabilities::camera::{
+    camera_priority_key, first_person_camera_system, ActiveCameraMode, CameraTargets, FirstPersonCameraMode,
+    SplitViewportSlot,
+};
+use bevy_rapier3d::prelude::{QueryFilter, ReadRapierContext};
 
 /// Pixel radius around the cursor within which a left-click selects an entity.
 const SELECT_PIXEL_RADIUS: f32 = 70.0;
@@ -61,6 +65,13 @@ impl Plugin for TargetingPlugin {
                 click_select_system.run_if(crate::runtime::sim_clock::sim_running),
                 tab_targeting_system.run_if(crate::runtime::sim_clock::sim_running),
                 target_auto_clear_system,
+                // Crosshair targeting: the last writer of `PlayerTarget` in the chain, and ordered before the
+                // first-person camera system, so it reads the pose the player actually saw last frame (one frame of
+                // deterministic latency; `.after` it would form a cycle once the planned `CameraChainSet` is
+                // moved after `GameplaySet::Execute`).
+                aim_target_system
+                    .run_if(crate::runtime::sim_clock::sim_running)
+                    .before(first_person_camera_system),
             )
                 .chain()
                 // GameStreamSet::Targeting comes before GameStreamSet::ActionBar (the explicit replacement of the old
@@ -202,6 +213,7 @@ fn click_select_system(
     mut game_events: MessageWriter<GameEvent>,
     mut game_vars: ResMut<GameVariables>,
     ui_interactions: Query<&Interaction>,
+    aim_cameras: Query<(&ActiveCameraMode, &CameraTargets), With<FirstPersonCameraMode>>,
 ) {
     if !mouse.just_pressed(MouseButton::Left) {
         return;
@@ -229,6 +241,11 @@ fn click_select_system(
         player_targets.iter().find(|(_, _, idx)| is_primary_player(*idx)).map(|(e, _, _)| e)
     });
     let Some(acting_player) = acting_player else { return };
+    // A player whose first-person camera has `aim_target` is targeted by the crosshair: a click is a shot,
+    // not a selection (and a stray click-to-clear would fight the crosshair).
+    if is_aim_driven(acting_player, &aim_cameras) {
+        return;
+    }
     let Ok((_, mut player_target, player_index)) = player_targets.get_mut(acting_player) else { return };
     let is_primary = is_primary_player(player_index);
     let is_multiplayer = player_count >= 2;
@@ -277,9 +294,10 @@ fn click_select_system(
 /// engine (movement, jump, etc.) already behaves when two players share a keyboard.
 pub fn tab_targeting_system(
     keys: Res<ButtonInput<KeyCode>>,
-    mut controllers: Query<(&CharacterController, &GlobalTransform, &mut PlayerTarget, Option<&PlayerIndex>, Option<&BoundGamepad>)>,
+    mut controllers: Query<(Entity, &CharacterController, &GlobalTransform, &mut PlayerTarget, Option<&PlayerIndex>, Option<&BoundGamepad>)>,
     gamepad_query: Query<&Gamepad>,
     targetable: Query<(Entity, &SpawnId, &GlobalTransform), With<Targetable>>,
+    aim_cameras: Query<(&ActiveCameraMode, &CameraTargets), With<FirstPersonCameraMode>>,
     prefab_keys: Query<&PrefabKey>,
     visibility_q: Query<&Visibility>,
     mut current_target: ResMut<CurrentTarget>,
@@ -290,7 +308,11 @@ pub fn tab_targeting_system(
     if inventory_ui.panels_open > 0 { return; }
     let is_multiplayer = controllers.iter().count() >= 2;
 
-    for (controller, player_gt, mut player_target, player_index, bound) in &mut controllers {
+    for (player_entity, controller, player_gt, mut player_target, player_index, bound) in &mut controllers {
+        // Crosshair-targeted players do not cycle (see `aim_target_system`).
+        if is_aim_driven(player_entity, &aim_cameras) {
+            continue;
+        }
         // `None` = unbound (keyboard cycling off, gamepad unaffected); an authored but
         // unrecognised name keeps the historical fallback to Tab.
         let tab_key = controller.inputs.target_next.as_deref()
@@ -344,6 +366,189 @@ pub fn tab_targeting_system(
             &mut player_target, &mut current_target, &mut game_vars, &mut game_events,
         );
     }
+}
+
+/// Whether `player` is the first target of a first-person camera that has `aim_target`: the crosshair, not the
+/// mouse cursor or the Tab key, then decides its `PlayerTarget`.
+fn is_aim_driven(
+    player: Entity,
+    cameras: &Query<(&ActiveCameraMode, &CameraTargets), With<FirstPersonCameraMode>>,
+) -> bool {
+    cameras.iter().any(|(mode, targets)| {
+        matches!(mode, ActiveCameraMode::FirstPerson(fp) if fp.aim_target.is_some())
+            && targets.0.first() == Some(&player)
+    })
+}
+
+/// `FirstPersonCameraDef.aim_target`: sets each aiming player's `PlayerTarget` from the **centre of the screen**.
+///
+/// Per aiming camera: among the `Targetable` entities within `range` metres of the camera and `radius_deg` of the
+/// view axis, take the one nearest the screen centre (the same screen-space projection and `SelectAimHeight` aim
+/// point `click_select_system` uses, pose-independent so it works on animated GLBs); then, with
+/// `require_line_of_sight`, only accept it if a single Rapier ray from the camera reaches it (sensors and the
+/// player's own body are ignored), falling back to the next nearest. Ties are broken by `SpawnId`, never by
+/// `Entity` order. The result goes through the same `apply_player_target`/`clear_player_target` as click and Tab
+/// selection, so `{target}`, `target.changed`, the `target_*` variables and the action bar's `{target}` gating
+/// need no change, and a frame that changes nothing writes nothing.
+///
+/// The camera pose is the previous frame's final `GlobalTransform` (this system runs before
+/// `first_person_camera_system`), which is exactly the picture the player is looking at.
+pub fn aim_target_system(
+    cameras: Query<
+        (&Camera, &GlobalTransform, &ActiveCameraMode, &CameraTargets, Option<&Projection>),
+        (With<FirstPersonCameraMode>, With<Camera3d>),
+    >,
+    targetables: Query<(Entity, &SpawnId, &GlobalTransform, Option<&PrefabKey>, Option<&SelectAimHeight>), With<Targetable>>,
+    visibility_q: Query<&Visibility>,
+    parents: Query<&ChildOf>,
+    windows: Query<&Window, With<PrimaryWindow>>,
+    mut player_targets: Query<(&mut PlayerTarget, Option<&PlayerIndex>)>,
+    mut current_target: ResMut<CurrentTarget>,
+    mut game_events: MessageWriter<GameEvent>,
+    mut game_vars: ResMut<GameVariables>,
+    rapier_context: Option<ReadRapierContext>,
+) {
+    // Most scenes have no aiming camera: do no setup (physics context, player count) for them.
+    if !cameras.iter().any(|(_, _, mode, ..)| matches!(mode, ActiveCameraMode::FirstPerson(fp) if fp.aim_target.is_some())) {
+        return;
+    }
+    let rapier = rapier_context.as_ref().and_then(|rc| rc.single().ok());
+    let is_multiplayer = player_targets.iter().count() >= 2;
+
+    for (camera, cam_tf, mode, targets, projection) in &cameras {
+        let ActiveCameraMode::FirstPerson(fp) = mode else { continue };
+        let Some(aim) = fp.aim_target.as_ref() else { continue };
+        let Some(&owner) = targets.0.first() else { continue };
+        // The camera's own logical viewport; before the camera has one (the first frame, a headless test app)
+        // a full-window first-person camera falls back to the window size.
+        let Some(size) = camera
+            .logical_viewport_size()
+            .or_else(|| windows.single().ok().map(|w| Vec2::new(w.width(), w.height())))
+        else { continue };
+        let fov = match projection {
+            Some(Projection::Perspective(p)) => p.fov,
+            _ => 90.0_f32.to_radians(),
+        };
+        // Angular catch radius -> pixels on this viewport: tan(r) / tan(fov / 2) of the half height.
+        let radius_px = aim.radius_deg.to_radians().tan() / (fov * 0.5).tan().max(f32::EPSILON) * (size.y * 0.5);
+        let center = size * 0.5;
+        let cam_pos = cam_tf.translation();
+        let projector = ViewProjector::new(cam_tf, fov, size); // one matrix inverse per camera, not per target
+
+        // Candidates inside the catch circle and range, nearest the centre first (ties by SpawnId).
+        let mut candidates: Vec<(f32, &str, Entity, Vec3, Option<&str>)> = Vec::new();
+        for (entity, spawn_id, gt, prefab, aim_height) in &targetables {
+            if entity == owner || visibility_q.get(entity).is_ok_and(|v| *v == Visibility::Hidden) {
+                continue;
+            }
+            let height = aim_height.map_or(SELECT_AIM_HEIGHT, |h| h.0);
+            let world = gt.translation() + Vec3::Y * height;
+            if world.distance(cam_pos) > aim.range {
+                continue;
+            }
+            let Some(screen) = projector.project(world) else { continue };
+            let d = screen.distance(center);
+            if d <= radius_px {
+                candidates.push((d, spawn_id.0.as_str(), entity, world, prefab.map(|p| p.0.as_str())));
+            }
+        }
+        candidates.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal).then_with(|| a.1.cmp(b.1)));
+
+        let chosen = candidates.iter().find(|(_, _, entity, world, _)| {
+            if !aim.require_line_of_sight {
+                return true;
+            }
+            let Some(ctx) = rapier.as_ref() else { return true }; // no physics (headless): nothing to block
+            let to = *world - cam_pos;
+            let dist = to.length();
+            if dist < 0.01 {
+                return true;
+            }
+            let hit = ctx.cast_ray(
+                cam_pos,
+                (to / dist).into(),
+                dist,
+                true,
+                QueryFilter::new().exclude_rigid_body(owner).exclude_sensors(),
+            );
+            match hit {
+                None => true, // the target has no collider on the way: nothing in front of it
+                Some((hit_entity, _)) => is_self_or_descendant(hit_entity, *entity, &parents),
+            }
+        });
+
+        let Ok((mut player_target, player_index)) = player_targets.get_mut(owner) else { continue };
+        let is_primary = is_primary_player(player_index);
+        match chosen {
+            Some((_, id, _, _, prefab)) => {
+                if player_target.0.as_deref() != Some(*id) {
+                    apply_player_target(
+                        id, *prefab, is_primary, is_multiplayer,
+                        &mut player_target, &mut current_target, &mut game_vars, &mut game_events,
+                    );
+                }
+            }
+            None => {
+                if player_target.0.is_some() {
+                    clear_player_target(is_primary, &mut player_target, &mut current_target, &mut game_vars, &mut game_events);
+                }
+            }
+        }
+    }
+}
+
+/// Pinhole projection of a world point onto a `size`-pixel viewport seen through a perspective camera with the
+/// given vertical field of view: pixels from the top-left, `None` when the point is behind the camera. Same result
+/// as `Camera::world_to_viewport` for a camera whose aspect ratio follows its viewport, but needs no render target,
+/// so the aim system also works in a headless test app.
+pub fn project_to_viewport(view: &GlobalTransform, vertical_fov: f32, size: Vec2, world: Vec3) -> Option<Vec2> {
+    ViewProjector::new(view, vertical_fov, size).project(world)
+}
+
+/// [`project_to_viewport`] with the camera's inverse transform computed once, for projecting many points through
+/// the same camera in one frame (the aim system projects every targetable).
+pub struct ViewProjector {
+    inverse: bevy::math::Affine3A,
+    tan_half: f32,
+    aspect: f32,
+    size: Vec2,
+}
+
+impl ViewProjector {
+    pub fn new(view: &GlobalTransform, vertical_fov: f32, size: Vec2) -> Self {
+        Self {
+            inverse: view.affine().inverse(),
+            tan_half: (vertical_fov * 0.5).tan(),
+            aspect: size.x / size.y.max(f32::EPSILON),
+            size,
+        }
+    }
+
+    /// Pixels from the top-left of the viewport, `None` when the point is behind the camera.
+    pub fn project(&self, world: Vec3) -> Option<Vec2> {
+        let local = self.inverse.transform_point3(world);
+        if local.z >= -f32::EPSILON {
+            return None;
+        }
+        let ndc_x = local.x / (-local.z * self.tan_half * self.aspect);
+        let ndc_y = local.y / (-local.z * self.tan_half);
+        Some(Vec2::new((ndc_x + 1.0) * 0.5 * self.size.x, (1.0 - ndc_y) * 0.5 * self.size.y))
+    }
+}
+
+/// `entity` is `target` itself or one of its descendants (a collider may sit on a child of the targetable entity).
+fn is_self_or_descendant(entity: Entity, target: Entity, parents: &Query<&ChildOf>) -> bool {
+    let mut current = entity;
+    for _ in 0..16 {
+        if current == target {
+            return true;
+        }
+        match parents.get(current) {
+            Ok(child_of) => current = child_of.parent(),
+            Err(_) => return false,
+        }
+    }
+    false
 }
 
 /// Draws a yellow wireframe sphere at each `ClickSelectable` entity's aim point

@@ -2356,6 +2356,16 @@ fn spawn_ui_element_node(
                             }
                             parsed
                         });
+                        let resolved_mouse_button = slot.mouse_button.as_ref().and_then(|mb| {
+                            let parsed = InputMap::parse_mouse_button(mb);
+                            if parsed.is_none() {
+                                warn!(
+                                    "ActionBar '{}': slot '{}' has an unrecognised mouse_button {:?} (expected \"Left\", \"Right\" or \"Middle\") — it will never fire from the mouse",
+                                    bar.id, key, mb
+                                );
+                            }
+                            parsed
+                        });
                         let hint_text = slot.key_hint.clone().unwrap_or_else(|| {
                             key.strip_prefix("Key").map(str::to_string).unwrap_or_else(|| key.clone())
                         });
@@ -2379,6 +2389,7 @@ fn spawn_ui_element_node(
                                     slot_key: key.clone(),
                                     resolved_key,
                                     resolved_gamepad_button,
+                                    resolved_mouse_button,
                                     do_actions: slot.do_actions.clone(),
                                     cooldown_secs: slot.cooldown_secs,
                                     cost: slot.cost.clone(),

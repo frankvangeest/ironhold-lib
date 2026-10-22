@@ -269,7 +269,7 @@ fn default_look_speed() -> f32 { 2.0 }
 ///
 /// `FirstPerson` defaults: `left`/`right` (turn) unbound, `strafe_left: "KeyA"`,
 /// `strafe_right: "KeyD"`, `strafe_mouse_button: None` (the left mouse button is the fire
-/// button), `run_mode: Hold`. See `planning/features/first_person_starter.md`.
+/// button), `run_mode: Hold`. See `planning/features/done/first_person_starter.md`.
 #[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ControlScheme {
     #[default]

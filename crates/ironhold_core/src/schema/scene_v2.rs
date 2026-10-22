@@ -1453,6 +1453,17 @@ pub struct ActionSlotDef {
     /// all existing behavior).
     #[serde(default)]
     pub gamepad_key: Option<String>,
+    /// Optional mouse button that also activates this slot: `"Left"`, `"Right"` or `"Middle"`.
+    /// Mirrors `gamepad_key`: `key` stays required and stays the slot's identity (events are
+    /// `action_bar.*:{key}`), so a fire slot is e.g. `key: "1", mouse_button: "Left"` and the key is
+    /// also a keyboard fallback. The mouse is shared hardware, so the press acts for the slot's own
+    /// `owner_player`; it fires **only while the cursor is captured** (`CursorLockState.locked`, i.e.
+    /// a first-person camera with `capture_cursor: true`), so a click on an in-game panel never also
+    /// shoots and the click that captures the cursor is swallowed. One shot per press (semi-auto),
+    /// bounded by `cooldown_secs`. An unrecognised name logs a `warn!` at scene load and `ironhold
+    /// validate` reports it; the slot then never fires from the mouse.
+    #[serde(default)]
+    pub mouse_button: Option<String>,
     /// Per-slot texture catalog key override. When non-empty, overrides the bar's `icon_sheet`
     /// for this slot. Leave empty to use the bar-level `icon_sheet`.
     #[serde(default)]
