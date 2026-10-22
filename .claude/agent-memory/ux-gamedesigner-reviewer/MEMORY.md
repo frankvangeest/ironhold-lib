@@ -1,5 +1,7 @@
 # Memory Index
 
+- [static_scene_mode plan-review](project_static_scene_mode_plan_review.md) — game.paused must track Menu hold only; scope ?static=1 to single-scene shots; motion projects opt out
+
 - [Ambient light contract](project_ambient_light_contract.md) — ambient now real; linearised colour; 80 vs 150 defaults; most shipped scenes still ~5% of default
 
 - [Docs audience split](project_docs_audience_split.md) — Phase A shipped; code-span cross-refs dead on GitHub; Getting-started assumes repo clone; no prebuilt CLI

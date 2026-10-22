@@ -17,9 +17,12 @@ metadata:
 
 **How to apply:** For a freeze/static mode, pause the virtual clock as the primary mechanism; only add per-system run-condition guards for the few systems that move per-frame regardless of dt or that do discrete one-shot logic. Don't build a global system-set just for this — the clock pause covers ~90% globally.
 
-## Freeze must happen AFTER async load completes
+## Freeze point: SUPERSEDED (2026-10-23) — see [[static_scene_mode_facts]]
 
-Terrain gen (AsyncComputeTaskPool), GLB decode, pipeline warmup (`PipelineWarmup` counts down to 0), and audio preload happen post-boot and some key off elapsed time. Pausing the clock at boot risks a half-loaded state / deadlock. Freeze on `SceneEvent::Ready` (+ warmup complete) instead. `Time::pause()`/`unpause()` and `AnimationPlayer.seek_to(0.0)` are cleanly reversible — not a hard-to-resume hazard.
+The old claim here ("pausing at boot risks a half-loaded state, freeze at Ready") was speculation and is
+withdrawn: no loading-path system reads virtual time or needs a FixedUpdate tick (terrain/spawn/warmup
+are Update + frame-counted; message buffers keep flowing via `keep_messages_flowing_while_held`), and
+freezing at Ready leaves `globals.time` = load duration (variable), which breaks shader-animated baselines.
 
 ## `Time<Virtual>::max_delta` is a whole-clock knob, not a FixedUpdate-only one
 
