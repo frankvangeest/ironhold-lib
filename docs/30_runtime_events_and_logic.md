@@ -120,9 +120,9 @@ The name is used as-is in the rules pipeline — the caller is responsible for n
 - The targeting capability also writes the `target_display` / `target_name` / `target_id` `GameVariables` on every change — bind a `Label` to one of these for a HUD target frame (no rule wiring needed; they go blank whenever 2+ players are present, so use the per-viewport `target_hud:` block described in [20_data_formats.md](20_data_formats.md) instead). ✅
 - `"audio.muted"` — emitted by `ToggleMute` when transitioning to muted ✅
 - `"audio.unmuted"` — emitted by `ToggleMute` when transitioning to unmuted ✅
-- `"game.paused"` — emitted when the simulation actually stops (`PauseGame`/`TogglePause` took effect); only on a real change, so a second `PauseGame` emits nothing ✅
+- `"game.paused"` — emitted when the game becomes paused (`PauseGame`/`TogglePause` took effect); only on a real change, so a second `PauseGame` emits nothing ✅
 - `"cursor.lock_lost"` — a first-person camera with `capture_cursor: true` had the mouse captured and the browser took it back (the player pressed Escape, which the page cannot see as a key press). Web only (a native build never loses the grab this way). Emitted once per loss, and the engine shows the cursor again; with no rule bound to it the game keeps running with mouse look off until the next click. Typical rule: `( event: "cursor.lock_lost", do_actions: [ PauseGame ] )`, with the menu itself opened by a `game.paused` rule so that two pause requests in one frame cannot open it twice. See `docs/20_data_formats.md`, "Control schemes" ✅
-- `"game.resumed"` — emitted when the simulation actually restarts (`ResumeGame`/`TogglePause`, or the automatic resume on a Replace-mode `LoadScene`) ✅
+- `"game.resumed"` — emitted when the game stops being paused (`ResumeGame`/`TogglePause`, or the automatic resume on a Replace-mode `LoadScene`) ✅
 - `"audio.volume_changed"` — emitted by `SetVolume` after the active fraction changes ✅ (the audio system also keeps the `audio_volume_percent` `GameVariables` entry in sync — bind a `Label` to it, no rule needed; mute is not auto-written)
 - `"dialogue.started:{npc_id}"` — dialogue panel opened for the NPC with the given spawn ID; emitted by `Action::StartDialogue` ✅
 - `"dialogue.ended:{dialogue_path}"` — dialogue panel closed; payload is the project-relative `.dialogue.ron` path; emitted by `Action::EndDialogue` and cleared on `LoadScene` ✅
@@ -278,7 +278,7 @@ button — resumes the game, so the pair can never get out of step.
 
 | Action | Effect |
 |---|---|
-| `PauseGame` | Hold the simulation. A **request**: the engine emits `game.paused` only when the clock really stops. A no-op if already paused (there is no counting: one `ResumeGame` always undoes it). |
+| `PauseGame` | Hold the simulation. A **request**: the engine emits `game.paused` only when your pause takes effect. A no-op if already paused (there is no counting: one `ResumeGame` always undoes it). |
 | `ResumeGame` | Release the pause. A no-op if not paused. |
 | `TogglePause` | Flip it. For flat projects that only use `global_on`; inside `entry_actions`/`exit_actions` use the pair above instead, because entering a state while already paused would *un*pause. |
 

@@ -198,6 +198,46 @@ fn only_the_menu_hold_is_released_by_resume_and_by_a_replace_load() {
     assert!(!app.world().resource::<SimClock>().is_held(PauseHold::Menu));
 }
 
+/// `game.paused`/`game.resumed` mean "the player's pause took effect", not "the clock stopped": the browser-test
+/// `Static` hold (`?static=1`) holds the clock from boot without ever announcing, so a project that opens its pause
+/// menu from a `game.paused` rule never opens it in a static screenshot (`static_scene_mode.md`).
+#[test]
+fn a_static_hold_from_boot_never_emits_game_paused() {
+    let mut app = setup_test_app();
+    app.world_mut().insert_resource(SimClock::with_hold(PauseHold::Static));
+    app.update();
+    app.update();
+    assert!(paused(&app), "the Static hold must pause Time<Virtual>");
+    assert!(game_events(&mut app, "game.").is_empty(), "Static must not announce a pause");
+}
+
+#[test]
+fn pause_game_under_a_static_hold_still_announces_and_resume_keeps_the_clock_held() {
+    let mut app = setup_test_app();
+    app.world_mut().insert_resource(SimClock::with_hold(PauseHold::Static));
+    app.update();
+
+    run(&mut app, Action::PauseGame);
+    assert!(game_events(&mut app, "game.").contains(&"game.paused".to_string()), "a PauseGame must still announce");
+    assert!(paused(&app));
+
+    run(&mut app, Action::ResumeGame);
+    assert!(game_events(&mut app, "game.").contains(&"game.resumed".to_string()), "a ResumeGame must still announce");
+    assert!(paused(&app), "the clock stays held by Static");
+    assert!(app.world().resource::<SimClock>().is_held(PauseHold::Static));
+}
+
+#[test]
+fn a_replace_load_under_a_static_hold_emits_game_resumed_but_keeps_the_clock_held() {
+    let mut app = setup_test_app();
+    app.world_mut().insert_resource(SimClock::with_hold(PauseHold::Static));
+    app.update();
+    run(&mut app, Action::PauseGame);
+    drive_replace_load(&mut app);
+    assert!(game_events(&mut app, "game.").contains(&"game.resumed".to_string()));
+    assert!(paused(&app), "an auto-resume must not release a Static hold");
+}
+
 #[test]
 fn overlay_actions_never_resume() {
     let mut app = setup_test_app();

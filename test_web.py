@@ -68,6 +68,17 @@ NON_DETERMINISTIC_SCENES = {
     "dynamic_animation_control/scenes/continue.scene.ron",
 }
 
+# Projects whose single-scene baselines stay on LIVE capture instead of static mode (`?static=1&testing=1`, which
+# holds the simulation from the first frame so a screenshot is identical every run). A frozen frame would defeat the
+# point of these: their emitters would never emit (`particles_demo`, `effect_mayhem_demo`) or their subject is
+# seeking/freezing animation itself (`dynamic_animation_control`). A new project whose scenes only make sense while
+# moving belongs here too (see docs/dev/browser_tests.md, "Static baselines").
+STATIC_EXCLUDED_PROJECTS = {
+    "particles_demo",
+    "effect_mayhem_demo",
+    "dynamic_animation_control",
+}
+
 # Committed baseline screenshots.  Two sub-dirs:
 #   scenes/     — one PNG per scene (used by the gallery)
 #   pause_nav/  — one PNG per navigation step
@@ -218,12 +229,17 @@ async def open_project(
     project: str | None = None,
     scene: str | None = None,
     extra_query: str = "",
+    static_mode: bool = False,
 ) -> tuple[Page, list[str]]:
     """Open a new page for the given project (and optional scene), return (page, error_list).
 
     When *scene* is supplied it is passed as ``?scene=<path>`` which activates
     the engine's ``InitialSceneOverride``, bypassing the project's normal
     ``initial_scene``.
+
+    *static_mode* appends ``&static=1``: the engine holds the simulation from the first frame so a screenshot is
+    identical every run (honoured only together with ``testing=1``, which this function always sends). Use it only
+    for single-scene shots: navigation flows that load several scenes must stay live.
     """
     errors: list[str] = []
 
@@ -242,6 +258,8 @@ async def open_project(
     url = f"{BASE_URL}/play.html?project={project}&testing=1" if project else f"{BASE_URL}/play.html?testing=1"
     if scene:
         url += f"&scene={scene}"
+    if static_mode:
+        url += "&static=1"
     url += extra_query
     await page.goto(url, wait_until="networkidle")
 
@@ -395,9 +413,15 @@ async def test_screenshot_scene_baseline(
     update: bool,
 ) -> None:
     """Load *scene* directly inside *project* and diff against the stored baseline."""
-    page, errors = await open_project(context, project, scene=scene)
+    static_mode = project not in STATIC_EXCLUDED_PROJECTS
+    page, errors = await open_project(context, project, scene=scene, static_mode=static_mode)
     try:
         await wait_for_scene_ready(page)
+        # A typo'd or ignored `?static=1` must fail loudly instead of silently producing unfrozen baselines.
+        expected_mode = "static" if static_mode else "live"
+        state = await wait_for_debug_state(page, lambda s: "run_mode" in s, timeout_s=CANVAS_TIMEOUT)
+        if state.get("run_mode") != expected_mode:
+            raise TestFailure(f"Expected run_mode {expected_mode!r} for {project}, engine reports {state.get('run_mode')!r}")
 
         key = scene_baseline_key(project, scene)
         baselines_dir = BASELINE_DIR / "scenes"

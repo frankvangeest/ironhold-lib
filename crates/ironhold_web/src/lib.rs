@@ -1,12 +1,12 @@
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use ironhold_core::start_app;
+use ironhold_core::{start_app_with, AppOptions, RunMode};
 
 #[wasm_bindgen(start)]
 pub fn start() {
-    let (project, scene) = read_url_params();
+    let options = read_url_params();
     install_pointer_lock_reporting();
-    start_app(project, scene);
+    start_app_with(options);
 }
 
 /// Tells `ironhold_core` the real pointer-lock state. winit's web backend requests the lock
@@ -38,28 +38,29 @@ fn install_pointer_lock_reporting() {
     on_error.forget();
 }
 
-/// Reads `?project=<name>` and `?scene=<path>` from the page URL.
+/// Reads `?project=<name>`, `?scene=<path>` and `?static=1` from the page URL.
 /// - `project` is converted to a project-config asset path.
 /// - `scene`   is passed through as-is and used as an `InitialSceneOverride`.
-fn read_url_params() -> (Option<String>, Option<String>) {
-    let window = match web_sys::window() {
-        Some(w) => w,
-        None => return (None, None),
-    };
-    let search = match window.location().search() {
-        Ok(s) => s,
-        Err(_) => return (None, None),
-    };
+/// - `static=1` holds the simulation from the first frame (browser-test harness) and is honoured **only together with
+///   `testing=1`**, so a shared link can never leave a player in a frozen-looking game.
+fn read_url_params() -> AppOptions {
+    let mut options = AppOptions::default();
+    let Some(window) = web_sys::window() else { return options };
+    let Ok(search) = window.location().search() else { return options };
     if search.is_empty() || search == "?" {
-        return (None, None);
+        return options;
     }
-    let params = match web_sys::UrlSearchParams::new_with_str(&search) {
-        Ok(p) => p,
-        Err(_) => return (None, None),
-    };
-    let project = params
+    let Ok(params) = web_sys::UrlSearchParams::new_with_str(&search) else { return options };
+    options.project_path = params
         .get("project")
         .map(|name| format!("projects/{}/{}.project.ron", name, name));
-    let scene = params.get("scene");
-    (project, scene)
+    options.scene_override = params.get("scene");
+    if params.get("static").as_deref() == Some("1") {
+        if params.get("testing").as_deref() == Some("1") {
+            options.run_mode = RunMode::Static;
+        } else {
+            web_sys::console::warn_1(&"ignoring ?static=1: it is only honoured together with ?testing=1".into());
+        }
+    }
+    options
 }

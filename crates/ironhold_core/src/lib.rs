@@ -56,6 +56,36 @@ pub struct PipelineWarmup(pub u8);
 #[derive(Component)]
 pub struct WarmupNoCull;
 
+/// How the app runs. `Live` is normal play; `Static` is the browser-test harness (`?static=1` with `testing=1`): the
+/// simulation is held from the first frame (`PauseHold::Static`) so a screenshot is the same every run. Replay and
+/// lockstep modes can be added later without another `start_app` signature change.
+#[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RunMode {
+    #[default]
+    Live,
+    Static,
+}
+
+impl RunMode {
+    /// The name reported in the debug-state JSON (`"run_mode"`), asserted by `test_web.py`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            RunMode::Live => "live",
+            RunMode::Static => "static",
+        }
+    }
+}
+
+/// Everything a runner (`ironhold_native`, `ironhold_web`) passes to the engine.
+#[derive(Clone, Debug, Default)]
+pub struct AppOptions {
+    /// Project config asset path (`projects/<name>/<name>.project.ron`); `None` = the default project.
+    pub project_path: Option<String>,
+    /// Initial scene override (`?scene=`), relative to the project root.
+    pub scene_override: Option<String>,
+    pub run_mode: RunMode,
+}
+
 /// Live game state exposed to the DOM (WASM) and available to tests.
 /// Updated every frame by `update_debug_state`.
 #[derive(Resource, Default)]
@@ -76,6 +106,8 @@ pub struct DebugState {
     /// (`(0.0, 0.0)` for a minimized window or before a window exists, e.g. in headless tests).
     /// Lets the browser harness wait for a resize to land instead of guessing from pixels.
     pub window_size: (f32, f32),
+    /// `"live"` or `"static"` (see [`RunMode`]).
+    pub run_mode: String,
     /// Current `UiScale` multiplier (`1.0` unless a project sets one; `0.0` when the resource
     /// does not exist, e.g. a headless test app without `UiPlugin`).
     pub ui_scale: f32,
@@ -864,8 +896,10 @@ fn update_debug_state(
     game_vars: Res<GameVariables>,
     windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
     ui_scale: Option<Res<bevy::ui::UiScale>>,
+    run_mode: Option<Res<RunMode>>,
 ) {
     debug.frame += 1;
+    debug.run_mode = run_mode.map(|m| m.as_str()).unwrap_or("live").to_string();
     debug.app_state = format!("{:?}", state.get());
     debug.logic_state = logic_state.0.clone();
     debug.score = game_vars.0.get("score").and_then(|s| s.parse().ok()).unwrap_or(0);
@@ -894,7 +928,7 @@ fn sync_debug_state_to_dom(debug: Res<DebugState>) {
     let Some(document) = window.document() else { return };
     let Some(el) = document.get_element_by_id("debug-state") else { return };
     let json = format!(
-        r#"{{"frame":{},"app_state":"{}","last_action":"{}","scene":"{}","logic_state":"{}","score":{},"window_size":[{},{}],"ui_scale":{}}}"#,
+        r#"{{"frame":{},"app_state":"{}","last_action":"{}","scene":"{}","logic_state":"{}","score":{},"window_size":[{},{}],"ui_scale":{},"run_mode":"{}"}}"#,
         debug.frame,
         debug.app_state,
         debug.last_action.replace('"', "\\\""),
@@ -904,11 +938,17 @@ fn sync_debug_state_to_dom(debug: Res<DebugState>) {
         json_f32(debug.window_size.0),
         json_f32(debug.window_size.1),
         json_f32(debug.ui_scale),
+        debug.run_mode,
     );
     el.set_inner_html(&json);
 }
 
 pub fn start_app(project_path: Option<String>, scene_override: Option<String>) {
+    start_app_with(AppOptions { project_path, scene_override, run_mode: RunMode::Live });
+}
+
+pub fn start_app_with(options: AppOptions) {
+    let AppOptions { project_path, scene_override, run_mode } = options;
     let asset_path = if cfg!(target_arch = "wasm32") {
         "assets".to_string()
     } else {
@@ -968,6 +1008,17 @@ pub fn start_app(project_path: Option<String>, scene_override: Option<String>) {
     if let Some(scene) = scene_override {
         app.insert_resource(InitialSceneOverride(scene));
     }
+
+    // Static mode holds the simulation from the very first frame (see `RunMode`): Bevy's first real-time update has
+    // zero delta, so virtual time stays exactly 0 (shader `globals.time` included) and no fixed tick ever runs.
+    // `GamePlugin` only `init_resource`s `SimClock`, which does not replace this one.
+    if run_mode == RunMode::Static {
+        info!("Run mode: static (simulation held from the first frame)");
+        app.insert_resource(crate::runtime::sim_clock::SimClock::with_hold(
+            crate::runtime::sim_clock::PauseHold::Static,
+        ));
+    }
+    app.insert_resource(run_mode);
 
     // Matches `FIXED_TICK_RATE` (`capabilities::physics`), not an independent 60.0 literal — a
     // native framepace that doesn't evenly divide the physics tick rate beats against it (a
