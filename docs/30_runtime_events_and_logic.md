@@ -528,7 +528,7 @@ Applies actions to the world. Key design points:
 - `ToggleInventory` — checks current `InventoryPanel` visibility and flips it: shows if hidden, hides if visible. Use this for a single key/button that both opens and closes the panel.
 - `OpenShop(merchant_id)` — resolves the merchant's `MerchantDef` via the `SpawnRegistry` + `PrefabKey`, makes the `ShopPanel` visible, and repopulates its stock list. Targets by node **type** — at most one `ShopPanel` per scene. `{self}` and `{target}` substituted in the merchant ID. Warns if no merchant entity or no `ShopPanel` UI node is present.
 - `CloseShop` — hides the `ShopPanel` (equality-guarded; no-op if already hidden)
-- `PauseGame` / `ResumeGame` / `TogglePause` — hold / release / flip the simulation (see [Pausing the game](#pausing-the-game)). `PauseGame` is a request: `game.paused` is emitted only when the clock really stops, and `game.resumed` when it restarts (including the automatic resume on a Replace-mode `LoadScene`). No-ops if already in that state.
+- `PauseGame` / `ResumeGame` / `TogglePause` — hold / release / flip the simulation (see [Pausing the game](#pausing-the-game)). `PauseGame` is a request: `game.paused` is emitted only when the game becomes paused, and `game.resumed` when it stops being paused (including the automatic resume on a Replace-mode `LoadScene`). No-ops if already in that state.
 
 ### Infrastructure ✅
 - `ActionQueue` — FIFO queue processed each frame by `action_executor_system` (push order equals execution order)
