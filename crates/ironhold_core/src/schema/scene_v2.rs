@@ -212,15 +212,106 @@ pub struct SceneLightingV2 {
     pub point_lights: Vec<PointLightDefV2>,
     /// Resolution of the directional-light shadow map texture (width = height).
     /// Applies globally to all directional lights in the scene.
-    /// Must be a power of two. Bevy default: 2048. Use 1024 or 512 for better
+    /// Must be a power of two from 64 to 4096 (`MIN_SHADOW_MAP_SIZE`..=`MAX_SHADOW_MAP_SIZE`); anything else is an
+    /// `ironhold validate` error and falls back to 2048 at runtime. Bevy default: 2048. Use 1024 or 512 for better
     /// performance on small scenes; use 4096 for crisp shadows on large terrain.
     #[serde(default)]
     pub shadow_map_size: Option<u32>,
     /// Resolution of each cube-face of point-light shadow maps.
     /// Applies globally to all shadow-casting point lights in the scene.
-    /// Must be a power of two. Bevy default: 1024. Use 512 or 256 for cheaper point shadows.
+    /// Must be a power of two from 64 to 4096; anything else is an `ironhold validate` error and falls back to 1024 at
+    /// runtime. Bevy default: 1024. Use 512 or 256 for cheaper point shadows.
     #[serde(default)]
     pub point_shadow_map_size: Option<u32>,
+}
+
+/// Smallest and largest shadow-map texel size accepted (a power of two in between). The cap is about GPU memory, not a
+/// hard limit: a `Depth32Float` map costs 64 MiB per layer at 4096 and 256 MiB at 8192, so a directional light with
+/// Bevy's default 4 cascades would take 1 GiB and a shadow-casting point light (6 faces) 1.5 GiB at 8192, which loses the
+/// device in a browser. (WebGL2 only guarantees 2048-texel textures and WebGPU 8192, so a very low-end device can still
+/// fall short of 4096; see the backlog item on clamping to the device limit.)
+pub const MIN_SHADOW_MAP_SIZE: u32 = 64;
+pub const MAX_SHADOW_MAP_SIZE: u32 = 4096;
+
+/// Bevy's `CascadeShadowConfigBuilder::build` asserts `maximum_distance > minimum_distance`, with `minimum_distance`
+/// fixed at its default 0.1 by the scene loader.
+pub const CASCADE_MIN_DISTANCE: f32 = 0.1;
+
+impl SceneLightingV2 {
+    /// Why the authored `ambient` / `ambient_brightness` cannot be used, if they cannot. RON numbers are unclamped: a
+    /// non-finite value (NaN poisons the whole scene's lighting) or a negative one (darkens it) is rejected. Shared by
+    /// `ironhold validate` (a hard error) and the scene loader (a warning, then the default ambient).
+    pub fn ambient_problem(&self) -> Option<String> {
+        self.ambient_problems().into_iter().next()
+    }
+
+    /// Every ambient problem (colour and brightness are checked independently), so validate reports both at once.
+    pub fn ambient_problems(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        if let Some((r, g, b)) = self.ambient {
+            if ![r, g, b].iter().all(|c| c.is_finite() && *c >= 0.0) {
+                out.push(format!("lighting.ambient {:?} must have finite components >= 0", (r, g, b)));
+            }
+        }
+        if let Some(b) = self.ambient_brightness {
+            if !(b.is_finite() && b >= 0.0) {
+                out.push(format!("lighting.ambient_brightness {b} must be finite and >= 0"));
+            }
+        }
+        out
+    }
+
+    /// Why a shadow-map size cannot be used (`field` names it in the message), if it cannot: it must be a power of two
+    /// from [`MIN_SHADOW_MAP_SIZE`] to [`MAX_SHADOW_MAP_SIZE`].
+    pub fn shadow_map_size_problem(size: Option<u32>, field: &str) -> Option<String> {
+        let size = size?;
+        if size.is_power_of_two() && (MIN_SHADOW_MAP_SIZE..=MAX_SHADOW_MAP_SIZE).contains(&size) {
+            None
+        } else {
+            Some(format!(
+                "lighting.{field} {size} must be a power of two between {MIN_SHADOW_MAP_SIZE} and {MAX_SHADOW_MAP_SIZE}"
+            ))
+        }
+    }
+
+    /// Every problem in this block, for `ironhold validate`.
+    pub fn problems(&self) -> Vec<String> {
+        let mut out = self.ambient_problems();
+        out.extend(Self::shadow_map_size_problem(self.shadow_map_size, "shadow_map_size"));
+        out.extend(Self::shadow_map_size_problem(self.point_shadow_map_size, "point_shadow_map_size"));
+        if let Some(dl) = &self.directional {
+            out.extend(dl.cascade_problems());
+        }
+        out
+    }
+}
+
+impl DirectionalLightDefV2 {
+    /// Why the authored cascade settings cannot be used, if they cannot. Bevy's `CascadeShadowConfigBuilder::build`
+    /// `assert!`s `num_cascades > 0`, `maximum_distance > minimum_distance` and `overlap_proportion` in `[0, 1)`, so any
+    /// of these values panics at scene load (a release build too). Shared by `ironhold validate` (a hard error) and the
+    /// scene loader (a warning, then Bevy's default cascades).
+    pub fn cascade_problems(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        if self.num_cascades == Some(0) {
+            out.push("lighting.directional.num_cascades 0 must be at least 1".to_string());
+        }
+        if let Some(d) = self.shadow_distance {
+            if !(d.is_finite() && d > CASCADE_MIN_DISTANCE) {
+                out.push(format!(
+                    "lighting.directional.shadow_distance {d} must be finite and greater than {CASCADE_MIN_DISTANCE}"
+                ));
+            }
+        }
+        if let Some(o) = self.cascade_overlap {
+            if !(o.is_finite() && (0.0..1.0).contains(&o)) {
+                out.push(format!(
+                    "lighting.directional.cascade_overlap {o} must be at least 0.0 and less than 1.0"
+                ));
+            }
+        }
+        out
+    }
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -238,17 +329,17 @@ pub struct DirectionalLightDefV2 {
     #[serde(default = "default_true")]
     pub shadows_enabled: bool,
     /// Maximum distance in world units at which shadow cascades are rendered.
-    /// Omit to use Bevy's default (~1000 units native, ~100 units WebGL).
+    /// Must be finite and greater than 0.1. Omit to use Bevy's default (150 units).
     /// Tune downward for sharper cascades on a smaller scene.
     #[serde(default)]
     pub shadow_distance: Option<f32>,
     /// Fraction of each cascade's range that overlaps with the next cascade,
     /// used to blend the transition zone so the seam is invisible.
-    /// Range 0.0–1.0. Bevy's built-in default is 0.2; 0.5 eliminates most
+    /// Range 0.0 up to but not including 1.0 (1.0 panics in Bevy). Bevy's built-in default is 0.2; 0.5 eliminates most
     /// visible seams on large flat surfaces. Omit to use Bevy's default.
     #[serde(default)]
     pub cascade_overlap: Option<f32>,
-    /// Number of shadow cascade levels. Bevy default: 4.
+    /// Number of shadow cascade levels, at least 1. Bevy default: 4.
     /// Fewer cascades mean fewer depth passes per frame — 2 is usually enough for
     /// small or medium scenes. Only meaningful when `shadows_enabled: true`.
     #[serde(default)]

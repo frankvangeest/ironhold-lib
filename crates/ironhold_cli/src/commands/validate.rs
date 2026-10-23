@@ -2182,6 +2182,23 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
         }
     }
 
+    // A scene's `lighting:` block holds unclamped RON numbers. A non-finite ambient value poisons the whole scene's
+    // lighting and a negative one darkens it; a shadow-map size that is not a power of two within the 4096 cap exhausts
+    // GPU memory or fails texture creation, and a cascade count / distance / overlap outside Bevy's asserts (`num_cascades` 0,
+    // `shadow_distance` <= 0.1, `cascade_overlap` outside [0, 1)) panics the app. The scene loader warns and falls back to
+    // the default for the same cases
+    // (`SceneLightingV2::problems`), so this is the design-time signal for what would otherwise only be a log line.
+    for (scene_path, scene) in scenes {
+        let Some(lighting) = &scene.lighting else { continue };
+        for message in lighting.problems() {
+            errors.push(CrossFileError {
+                source_file: scene_path.clone(),
+                message,
+                error_type: "invalid_lighting",
+            });
+        }
+    }
+
     // `InputMap` key fields: an unrecognised key name is silently ignored at runtime
     // (`InputMap::key` returns `None`, same as `None`/unbound), so a typo like `"KeyWW"` or a
     // Windows-only spelling never fires and never says why. Catalog-wide (a prefab is wrong by
