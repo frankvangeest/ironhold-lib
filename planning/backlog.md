@@ -188,6 +188,7 @@ Goal: a fully designer-controllable ocean scene where every environmental variab
 
 ### Beta 0.6 — Multiplayer Form 1: LAN Co-op
 See `planning/features/networking_multiplayer.md`. Gate: Beta 0.5 (deterministic tick) must ship first.
+- [ ] **Backend spike: Nakama in the homelab** _(2026-10-23, Frank)_ — 1-2 day throwaway spike before any networking plan commits to a backend: run Nakama + Postgres behind `wss://`, a standalone Rust (native + wasm32) test binary doing device-id auth, a storage read/write, a leaderboard score and a relayed match between a native and a browser instance; measure latency and bandwidth at 20-30 Hz and the client size. Go/no-go criteria and the build-vs-adopt analysis (recommendation: both, layered; do not use Nakama authoritative matches for simulation, do not build our own account/storage service) are in `planning/investigations/nakama_backend_viability.md`. Open items there: which Rust sync library supports our Bevy version (and 0.19), Nakama benchmark numbers, Enterprise/Cloud pricing.
 - [ ] Library spike (Bevy Lightyear vs alternatives — see feature file pre-checks)
 - [ ] `HostGame` / `JoinGame` / `DisconnectGame` actions
 - [ ] Input replication: client sends `InputActionMessage` per tick; host authorises

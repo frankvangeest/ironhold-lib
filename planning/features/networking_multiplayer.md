@@ -19,7 +19,7 @@ _Planned at: `6905b71` (2026-05-31)_
 >
 > - [ ] **`ironhold_core` must stay platform-agnostic.** All server-side simulation code goes in a new `ironhold_server` crate (Form 3 only). `ironhold_core` may gain networking traits/types but must never contain server-only or client-only platform assumptions. Review any new code in `ironhold_core` against this rule.
 >
-> - [ ] **Relay / signaling service decision (Form 2).** For internet play, a connection broker is needed for NAT traversal. Two options: (a) self-hosted lightweight relay (Matchbox server, ~100 lines of Go/Rust); (b) managed service (Agones, Unity Relay equivalent). Decide before designing Form 2 — it affects the project's operational dependencies.
+> - [ ] **Relay / signaling service decision (Form 2).** _(See also `planning/investigations/nakama_backend_viability.md`: Nakama as the meta backend (accounts, saves, lobbies, matchmaking, optional relay) next to the Rust-native sync layer; recommendation there is "both, layered", pending a 1-2 day spike.)_ For internet play, a connection broker is needed for NAT traversal. Two options: (a) self-hosted lightweight relay (Matchbox server, ~100 lines of Go/Rust); (b) managed service (Agones, Unity Relay equivalent). Decide before designing Form 2 — it affects the project's operational dependencies.
 
 ---
 
