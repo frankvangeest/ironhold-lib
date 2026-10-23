@@ -6,5 +6,10 @@
         ambient_brightness: -5.0,
         shadow_map_size: 3000,
         point_shadow_map_size: 16384,
+        directional: (
+            num_cascades: 0,
+            shadow_distance: 0.05,
+            cascade_overlap: 1.0,
+        ),
     ),
 )

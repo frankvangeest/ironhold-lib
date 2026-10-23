@@ -1529,16 +1529,21 @@ fn unset_state_machine_path_with_convention_file_strict_exits_1() {
     );
 }
 
-/// A scene's `lighting:` numbers are unclamped RON: a negative or non-finite ambient value, or a shadow-map size that is
-/// not a power of two between 64 and 8192, is a hard error (the runtime would only warn and fall back).
+/// A scene's `lighting:` numbers are unclamped RON: a negative or non-finite ambient value, a shadow-map size that is
+/// not a power of two between 64 and 4096, or a cascade count, distance or overlap Bevy `assert!`s on is a hard error
+/// (the runtime would only warn and fall back).
 #[test]
 fn invalid_lighting_values_exit_1() {
     let (code, stdout) = validate("bad_lighting");
-    assert_eq!(code, 1, "expected exit 1, got {code}:
-{stdout}");
+    assert_eq!(code, 1, "expected exit 1, got {code}:\n{stdout}");
     assert!(stdout.contains("lighting.ambient (0.5, -0.5, 0.5)"), "{stdout}");
     assert!(stdout.contains("lighting.shadow_map_size 3000"), "{stdout}");
     assert!(stdout.contains("lighting.point_shadow_map_size 16384"), "{stdout}");
+    // Both ambient fields are reported in one run, and the cascade values Bevy `assert!`s on.
+    assert!(stdout.contains("lighting.ambient_brightness -5"), "{stdout}");
+    assert!(stdout.contains("lighting.directional.num_cascades 0"), "{stdout}");
+    assert!(stdout.contains("lighting.directional.shadow_distance 0.05"), "{stdout}");
+    assert!(stdout.contains("lighting.directional.cascade_overlap 1"), "{stdout}");
 }
 
 #[test]

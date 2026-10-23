@@ -870,13 +870,13 @@ fn test_scene_ambient_with_invalid_values_falls_back_to_default() {
     }
 }
 
-/// A shadow-map size that is zero, not a power of two or beyond what a GPU texture can be (WebGL2 guarantees 8192)
-/// would fail at texture creation, so it warns and the default size is used.
+/// A shadow-map size that is zero, not a power of two, or above the 4096 memory cap warns and the default size is
+/// used (a point map of 0 or above the device limit is a GPU error; Bevy rounds or clamps a directional one).
 #[test]
 fn test_scene_shadow_map_sizes_invalid_fall_back_to_default() {
     let dir_default = bevy::light::DirectionalLightShadowMap::default().size;
     let point_default = bevy::light::PointLightShadowMap::default().size;
-    for bad in [0u32, 3, 3000, 16384, 1 << 30] {
+    for bad in [0u32, 3, 3000, 8192, 16384, 1 << 30] {
         let mut app = setup_test_app();
         app.update();
         let scene = format!(
@@ -895,6 +895,44 @@ fn test_scene_shadow_map_sizes_invalid_fall_back_to_default() {
     );
     assert_eq!(app.world().resource::<bevy::light::DirectionalLightShadowMap>().size, 1024);
     assert_eq!(app.world().resource::<bevy::light::PointLightShadowMap>().size, 512);
+}
+
+/// Bevy's `CascadeShadowConfigBuilder::build` `assert!`s `num_cascades > 0`, `maximum_distance > minimum_distance` and
+/// `overlap_proportion` in `[0, 1)`, so these authored values used to panic the whole app at scene load. Now they warn and
+/// the light keeps Bevy's default cascades; a valid override still applies.
+#[test]
+fn test_scene_invalid_cascade_settings_keep_default_cascades() {
+    use bevy::light::CascadeShadowConfig;
+    let default_cascades = CascadeShadowConfig::default().bounds.len();
+    for bad in [
+        "num_cascades: Some(0)",
+        "shadow_distance: Some(0.05)",
+        "shadow_distance: Some(NaN)",
+        "cascade_overlap: Some(1.0)",
+        "cascade_overlap: Some(-0.1)",
+    ] {
+        let mut app = setup_test_app();
+        app.update();
+        let scene = format!(
+            "(schema_version: 2, entities: [], ui: [], lighting: Some((directional: Some(({bad})))))"
+        );
+        drive_replace_load_with(&mut app, &scene);
+        let cascades: Vec<usize> = app
+            .world_mut()
+            .query::<&CascadeShadowConfig>()
+            .iter(app.world())
+            .map(|c| c.bounds.len())
+            .collect();
+        assert_eq!(cascades, vec![default_cascades], "invalid cascade setting must keep the default ({bad})");
+    }
+    let mut app = setup_test_app();
+    app.update();
+    drive_replace_load_with(
+        &mut app,
+        "(schema_version: 2, entities: [], ui: [], lighting: Some((directional: Some((num_cascades: Some(2), shadow_distance: Some(60.0), cascade_overlap: Some(0.5))))))",
+    );
+    let cascades: Vec<usize> = app.world_mut().query::<&CascadeShadowConfig>().iter(app.world()).map(|c| c.bounds.len()).collect();
+    assert_eq!(cascades, vec![2], "a valid cascade override must still apply");
 }
 
 #[test]

@@ -3023,7 +3023,7 @@ fn scene_ambient_light(lighting: Option<&crate::schema::scene_v2::SceneLightingV
         return bevy::light::GlobalAmbientLight::default();
     };
     if let Some(problem) = l.ambient_problem() {
-        warn!("{problem}: using the default ambient light instead");
+        warn!("{problem}: ignoring both ambient fields and using the default ambient light (white, brightness 80)");
         return bevy::light::GlobalAmbientLight::default();
     }
     let (r, g, b) = l.ambient.unwrap_or((1.0, 1.0, 1.0));
@@ -3045,7 +3045,9 @@ fn apply_lighting_v2(
     // always write them (default when unauthored) or a 4096 shadow map / a dark ambient leaks into the next scene.
     commands.insert_resource(scene_ambient_light(scene.lighting.as_ref()));
     use crate::schema::scene_v2::SceneLightingV2;
-    // An invalid size (zero, not a power of two, beyond a GPU texture) warns and falls back to the default.
+    // An invalid size (zero, not a power of two, or above the 4096 memory cap) warns and falls back to the default.
+    // Directional maps are silently rounded or clamped by Bevy anyway; a point map of 0 or above the device limit is a
+    // GPU error, which is why the check is enforced here rather than left to Bevy.
     let shadow_size = |size: Option<u32>, field: &str, default: usize| -> usize {
         if let Some(problem) = SceneLightingV2::shadow_map_size_problem(size, field) {
             warn!("{problem}: using the default size instead");
@@ -3104,7 +3106,15 @@ fn apply_lighting_v2(
                 Transform::from_rotation(rot),
                 LevelEntity,
             ));
-            if dl.shadow_distance.is_some() || dl.cascade_overlap.is_some() || dl.num_cascades.is_some() {
+            // `CascadeShadowConfigBuilder::build` `assert!`s on these three values, which would panic the whole app, so an
+            // invalid combination warns and keeps Bevy's default cascades.
+            let cascade_problems = dl.cascade_problems();
+            for problem in &cascade_problems {
+                warn!("{problem}: using Bevy's default shadow cascades instead");
+            }
+            if cascade_problems.is_empty()
+                && (dl.shadow_distance.is_some() || dl.cascade_overlap.is_some() || dl.num_cascades.is_some())
+            {
                 let mut builder = bevy::light::CascadeShadowConfigBuilder::default();
                 if let Some(dist) = dl.shadow_distance {
                     builder.maximum_distance = dist;
