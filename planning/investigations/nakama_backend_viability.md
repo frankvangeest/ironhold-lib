@@ -184,6 +184,9 @@ writing designer-facing server code in Go/TS.
 
 ## 8. Proposed spike (1-2 days, throwaway, no engine changes)
 
+_Now planned in `planning/features/nakama_backend_spike.md` (experiments, measurement protocol, go/no-go). Hosting the server is
+tracked in the homelab repo (`planning/features/nakama-deployment.md`), not here._
+
 Goal: replace opinions with evidence before any plan or backlog commitment.
 
 1. Run Nakama + Postgres in the homelab container; put `wss://` in front of it; change default credentials and server key.
