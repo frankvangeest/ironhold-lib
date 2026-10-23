@@ -109,6 +109,70 @@ fn test_npc_aggro_on_hit_idle_to_investigating() {
     );
 }
 
+/// Runs `entity.attacked:{id}` through `npc_hit_relay_system` with the given players and one NPC at `npc_pos`, and
+/// returns what ended up in `NpcHitQueue` for that id. Players carry only `Transform` (`GlobalTransform` is left at its
+/// default), exactly like the other tests here, so a relay that reads `GlobalTransform` sees every player at the origin.
+fn relay_hit(players: &[(&str, Vec3)], npc_pos: Vec3, hit_id: &str) -> Option<Vec3> {
+    use ironhold_core::capabilities::npc::{npc_hit_relay_system, NpcHitQueue};
+    use ironhold_core::capabilities::NpcAgent;
+    use ironhold_core::runtime::GameEvent;
+    use ironhold_core::schema::catalog::NpcOnPlayerNear;
+
+    let mut app = setup_test_app();
+    app.update();
+    for (spawn_id, pos) in players {
+        app.world_mut().spawn((
+            SpawnId(spawn_id.to_string()),
+            Transform::from_translation(*pos),
+            GlobalTransform::default(),
+            npc_aggro_test_player_controller(),
+        ));
+    }
+    app.world_mut().spawn((
+        SpawnId("enemy_01".to_string()),
+        Transform::from_translation(npc_pos),
+        GlobalTransform::default(),
+        npc_aggro_test_npc_agent("enemy_01", NpcOnPlayerNear::Chase, npc_pos),
+    ));
+    let event = format!("entity.attacked:{hit_id}");
+    let _ = app.world_mut().run_system_once(move |mut w: MessageWriter<GameEvent>| {
+        w.write(GameEvent::Trigger(event.clone()));
+    });
+    let _ = app.world_mut().run_system_once(npc_hit_relay_system);
+    let queue = app.world().resource::<NpcHitQueue>();
+    queue.0.get(hit_id).copied()
+}
+
+/// In co-op the hit NPC must investigate the player nearest to it, not whichever player the query yields first. The
+/// attacker's identity is not carried by the event yet, so "nearest player" is the shipped heuristic
+/// (`planning/backlog.md`, "Attacker identity on hit events" is the proper fix).
+#[test]
+fn test_npc_hit_relay_picks_the_player_nearest_the_npc_not_the_first_in_query_order() {
+    let near = Vec3::new(48.0, 0.0, 0.0);
+    let far = Vec3::new(-100.0, 0.0, 0.0);
+    // P1 (far) is spawned first, so it is first in query order.
+    let got = relay_hit(&[("player_01", far), ("player_02", near)], Vec3::new(50.0, 0.0, 0.0), "enemy_01");
+    assert_eq!(got, Some(near), "the NPC must investigate the player nearest to it");
+}
+
+/// Two players the same distance from the NPC: the lowest `SpawnId` wins, whatever order they were spawned in.
+#[test]
+fn test_npc_hit_relay_breaks_distance_ties_by_spawn_id() {
+    let p1 = Vec3::new(52.0, 0.0, 0.0);
+    let p2 = Vec3::new(48.0, 0.0, 0.0);
+    let npc = Vec3::new(50.0, 0.0, 0.0);
+    // player_02 is spawned first, player_01 second: query order must not decide.
+    assert_eq!(relay_hit(&[("player_02", p2), ("player_01", p1)], npc, "enemy_01"), Some(p1));
+    assert_eq!(relay_hit(&[("player_01", p1), ("player_02", p2)], npc, "enemy_01"), Some(p1));
+}
+
+/// A hit for an NPC that does not exist (already despawned, wrong id) has nobody to tell: nothing is queued.
+#[test]
+fn test_npc_hit_relay_ignores_a_hit_for_an_unknown_npc() {
+    let got = relay_hit(&[("player_01", Vec3::ZERO)], Vec3::new(50.0, 0.0, 0.0), "ghost_99");
+    assert_eq!(got, None);
+}
+
 /// Flee NPC hit outside detection radius must stay Idle — gated by `on_player_near`.
 #[test]
 fn test_npc_flee_does_not_aggro_on_hit() {

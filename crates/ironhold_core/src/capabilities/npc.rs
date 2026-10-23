@@ -164,20 +164,50 @@ fn find_nearest_visible_player<'r>(
 
 // ── Hit relay (Update) ────────────────────────────────────────────────────────
 
+/// The player an `entity.attacked:{id}` is attributed to: the one nearest the hit NPC at `npc_pos`, a distance tie
+/// broken by the lowest `SpawnId` (a player without one sorts last), so the result never depends on query order.
+/// The event does not carry the attacker's identity yet (the proper fix is an attacker token on the event, see
+/// `planning/backlog.md`), so "nearest player" is the shipped heuristic. Positions are `Transform` translations: players
+/// and NPCs are root entities, and `Transform` is current in `Update` where `GlobalTransform` is a tick stale.
+fn nearest_player_pos<'a>(
+    npc_pos: Vec3,
+    players: impl Iterator<Item = (Vec3, Option<&'a str>)>,
+) -> Option<Vec3> {
+    use std::cmp::Ordering;
+    players
+        .min_by(|(pos_a, id_a), (pos_b, id_b)| {
+            npc_pos
+                .distance_squared(*pos_a)
+                .total_cmp(&npc_pos.distance_squared(*pos_b))
+                .then_with(|| match (id_a, id_b) {
+                    (Some(a), Some(b)) => a.cmp(b),
+                    (Some(_), None) => Ordering::Less,
+                    (None, Some(_)) => Ordering::Greater,
+                    (None, None) => Ordering::Equal,
+                })
+        })
+        .map(|(pos, _)| pos)
+}
+
 /// Runs in Update, after `action_executor_system`.
 /// Reads GameEvent messages written in the same Update tick and populates the three NPC queues
 /// so `npc_behavior_system` (FixedUpdate) can react next tick.
 pub fn npc_hit_relay_system(
     mut reader: MessageReader<GameEvent>,
-    player_query: Query<&GlobalTransform, With<CharacterController>>,
+    player_query: Query<(&Transform, Option<&crate::runtime::SpawnId>), With<CharacterController>>,
+    npc_query: Query<(&NpcAgent, &Transform)>,
     mut hit_queue: ResMut<NpcHitQueue>,
     mut dead_queue: ResMut<NpcDeadQueue>,
     mut revive_queue: ResMut<NpcReviveQueue>,
 ) {
-    let attacker_pos = player_query.iter().next().map(|gt| gt.translation());
     for GameEvent::Trigger(name) in reader.read() {
         if let Some(id) = name.strip_prefix("entity.attacked:") {
-            if let Some(pos) = attacker_pos {
+            // A hit for an NPC that no longer exists has nobody to tell.
+            let Some(npc_pos) = npc_query.iter().find(|(npc, _)| npc.npc_id == id).map(|(_, t)| t.translation) else {
+                continue;
+            };
+            let players = player_query.iter().map(|(t, spawn_id)| (t.translation, spawn_id.map(|s| s.0.as_str())));
+            if let Some(pos) = nearest_player_pos(npc_pos, players) {
                 hit_queue.0.insert(id.to_string(), pos);
             }
         } else if let Some(id) = name.strip_prefix("npc.dead:") {
