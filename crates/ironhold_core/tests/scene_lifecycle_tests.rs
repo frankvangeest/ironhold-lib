@@ -848,6 +848,55 @@ fn test_scene_ambient_defaults_and_either_field_rule() {
     assert_eq!(color, Color::srgba(1.0, 1.0, 1.0, 1.0));
 }
 
+/// RON numbers are unclamped: a negative or non-finite ambient value used to reach `GlobalAmbientLight` as authored
+/// (NaN poisons the whole scene's lighting, a negative value darkens it). An invalid value now warns and the scene
+/// gets Bevy's default ambient instead, the same as an unauthored one.
+#[test]
+fn test_scene_ambient_with_invalid_values_falls_back_to_default() {
+    let default = bevy::light::GlobalAmbientLight::default();
+    for bad in [
+        "ambient: Some((0.5, 0.5, 0.5)), ambient_brightness: Some(-5.0)",
+        "ambient: Some((0.5, 0.5, 0.5)), ambient_brightness: Some(inf)",
+        "ambient: Some((-0.5, 0.5, 0.5))",
+        "ambient: Some((0.5, inf, 0.5))",
+    ] {
+        let mut app = setup_test_app();
+        app.update();
+        let scene = format!("(schema_version: 2, entities: [], ui: [], lighting: Some(({bad})))");
+        drive_replace_load_with(&mut app, &scene);
+        let (color, brightness) = ambient(&app);
+        assert_eq!(brightness, default.brightness, "invalid ambient must fall back to the default ({bad})");
+        assert_eq!(color, default.color, "invalid ambient must fall back to the default colour ({bad})");
+    }
+}
+
+/// A shadow-map size that is zero, not a power of two or beyond what a GPU texture can be (WebGL2 guarantees 8192)
+/// would fail at texture creation, so it warns and the default size is used.
+#[test]
+fn test_scene_shadow_map_sizes_invalid_fall_back_to_default() {
+    let dir_default = bevy::light::DirectionalLightShadowMap::default().size;
+    let point_default = bevy::light::PointLightShadowMap::default().size;
+    for bad in [0u32, 3, 3000, 16384, 1 << 30] {
+        let mut app = setup_test_app();
+        app.update();
+        let scene = format!(
+            "(schema_version: 2, entities: [], ui: [], lighting: Some((shadow_map_size: Some({bad}), point_shadow_map_size: Some({bad}))))"
+        );
+        drive_replace_load_with(&mut app, &scene);
+        assert_eq!(app.world().resource::<bevy::light::DirectionalLightShadowMap>().size, dir_default, "size {bad}");
+        assert_eq!(app.world().resource::<bevy::light::PointLightShadowMap>().size, point_default, "size {bad}");
+    }
+    // A valid power of two still applies.
+    let mut app = setup_test_app();
+    app.update();
+    drive_replace_load_with(
+        &mut app,
+        "(schema_version: 2, entities: [], ui: [], lighting: Some((shadow_map_size: Some(1024), point_shadow_map_size: Some(512))))",
+    );
+    assert_eq!(app.world().resource::<bevy::light::DirectionalLightShadowMap>().size, 1024);
+    assert_eq!(app.world().resource::<bevy::light::PointLightShadowMap>().size, 512);
+}
+
 #[test]
 fn test_scene_ambient_resets_to_default_on_next_scene() {
     // The resource outlives the scene (the old entity was LevelEntity and was torn down), so the next Replace load must

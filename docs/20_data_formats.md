@@ -285,12 +285,12 @@ Applied to **all cameras** spawned for the scene (flycam, orbit camera, and fall
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `ambient` | `Option<(f32,f32,f32)>` | engine default | Scene-wide ambient light colour as sRGB. Omit both `ambient` and `ambient_brightness` to get the engine default (white at brightness `80`). |
+| `ambient` | `Option<(f32,f32,f32)>` | engine default | Scene-wide ambient light colour as sRGB. Omit both `ambient` and `ambient_brightness` to get the engine default (white at brightness `80`). Components must be finite and `>= 0`; an invalid value is an `ironhold validate` error, and at runtime it logs a warning and uses the default ambient. |
 | `ambient_brightness` | `Option<f32>` | `150.0` (when `ambient` is set) | How strong the ambient fill is (a multiplier on the colour; the unit is cd/m²). Setting only this keeps a white colour. **Darker colours count for much less than they look**: the engine treats colour values non-linearly (1.0 counts as 1.0, 0.7 as about 0.45, 0.5 as about 0.21, 0.35 as about 0.10, 0.25 as about 0.05), so the brightness you need is roughly `80 ÷` that number to match the default: a mid-grey `(0.5, 0.5, 0.5)` needs about `380`, a dark `(0.25, 0.25, 0.25)` about `1600`. `ambient: (1.0, 1.0, 1.0), ambient_brightness: 80.0` reproduces the default exactly. **Careful:** adding only `ambient:` uses brightness `150`, not `80`, so set `ambient_brightness` explicitly whenever you set a colour. |
 | `directional` | `Option<DirectionalLightDefV2>` | none | A single directional (sun) light |
 | `point_lights` | `Vec<PointLightDefV2>` | `[]` | Point (omnidirectional) lights |
-| `shadow_map_size` | `Option<u32>` | `2048` | Texel resolution of the directional-light shadow atlas. Must be a power of two. Lower values (`512`, `1024`) improve GPU performance; higher values (`4096`) give sharper shadows on large scenes. |
-| `point_shadow_map_size` | `Option<u32>` | `1024` | Texel resolution of each point-light shadow cube face. Same power-of-two rule applies. Only relevant when a point light has `shadows_enabled: true`. |
+| `shadow_map_size` | `Option<u32>` | `2048` | Texel resolution of the directional-light shadow atlas. Must be a power of two from `64` to `8192` (anything else is an `ironhold validate` error; at runtime it logs a warning and uses `2048`). Lower values (`512`, `1024`) improve GPU performance; higher values (`4096`) give sharper shadows on large scenes. |
+| `point_shadow_map_size` | `Option<u32>` | `1024` | Texel resolution of each point-light shadow cube face. Same rule applies (a power of two from `64` to `8192`; the runtime fallback is `1024`). Only relevant when a point light has `shadows_enabled: true`. |
 
 Ambient light and both shadow-map sizes are written on **every** base-scene load: a scene that does not set them goes back to the engine default instead of inheriting the previous scene's value. An overlay's `lighting:` block is ignored (only the base scene lights the world).
 

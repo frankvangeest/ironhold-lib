@@ -223,6 +223,55 @@ pub struct SceneLightingV2 {
     pub point_shadow_map_size: Option<u32>,
 }
 
+/// Smallest and largest shadow-map texel size accepted (a power of two in between). 8192 is what WebGL2 guarantees for a
+/// texture dimension; bigger would fail at texture creation on the web build.
+pub const MIN_SHADOW_MAP_SIZE: u32 = 64;
+pub const MAX_SHADOW_MAP_SIZE: u32 = 8192;
+
+impl SceneLightingV2 {
+    /// Why the authored `ambient` / `ambient_brightness` cannot be used, if they cannot. RON numbers are unclamped: a
+    /// non-finite value (NaN poisons the whole scene's lighting) or a negative one (darkens it) is rejected. Shared by
+    /// `ironhold validate` (a hard error) and the scene loader (a warning, then the default ambient).
+    pub fn ambient_problem(&self) -> Option<String> {
+        if let Some((r, g, b)) = self.ambient {
+            if ![r, g, b].iter().all(|c| c.is_finite() && *c >= 0.0) {
+                return Some(format!("lighting.ambient {:?} must have finite components >= 0", (r, g, b)));
+            }
+        }
+        match self.ambient_brightness {
+            Some(b) if !(b.is_finite() && b >= 0.0) => {
+                Some(format!("lighting.ambient_brightness {b} must be finite and >= 0"))
+            }
+            _ => None,
+        }
+    }
+
+    /// Why a shadow-map size cannot be used (`field` names it in the message), if it cannot: it must be a power of two
+    /// from [`MIN_SHADOW_MAP_SIZE`] to [`MAX_SHADOW_MAP_SIZE`].
+    pub fn shadow_map_size_problem(size: Option<u32>, field: &str) -> Option<String> {
+        let size = size?;
+        if size.is_power_of_two() && (MIN_SHADOW_MAP_SIZE..=MAX_SHADOW_MAP_SIZE).contains(&size) {
+            None
+        } else {
+            Some(format!(
+                "lighting.{field} {size} must be a power of two between {MIN_SHADOW_MAP_SIZE} and {MAX_SHADOW_MAP_SIZE}"
+            ))
+        }
+    }
+
+    /// Every problem in this block, for `ironhold validate`.
+    pub fn problems(&self) -> Vec<String> {
+        [
+            self.ambient_problem(),
+            Self::shadow_map_size_problem(self.shadow_map_size, "shadow_map_size"),
+            Self::shadow_map_size_problem(self.point_shadow_map_size, "point_shadow_map_size"),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
+    }
+}
+
 #[derive(Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct DirectionalLightDefV2 {

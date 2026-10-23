@@ -3022,6 +3022,10 @@ fn scene_ambient_light(lighting: Option<&crate::schema::scene_v2::SceneLightingV
     let Some(l) = lighting.filter(|l| l.ambient.is_some() || l.ambient_brightness.is_some()) else {
         return bevy::light::GlobalAmbientLight::default();
     };
+    if let Some(problem) = l.ambient_problem() {
+        warn!("{problem}: using the default ambient light instead");
+        return bevy::light::GlobalAmbientLight::default();
+    }
     let (r, g, b) = l.ambient.unwrap_or((1.0, 1.0, 1.0));
     bevy::light::GlobalAmbientLight {
         color: Color::srgba(r, g, b, 1.0),
@@ -3040,16 +3044,28 @@ fn apply_lighting_v2(
     // These three are resources, not LevelEntity-tagged entities, so nothing tears them down on a scene change:
     // always write them (default when unauthored) or a 4096 shadow map / a dark ambient leaks into the next scene.
     commands.insert_resource(scene_ambient_light(scene.lighting.as_ref()));
+    use crate::schema::scene_v2::SceneLightingV2;
+    // An invalid size (zero, not a power of two, beyond a GPU texture) warns and falls back to the default.
+    let shadow_size = |size: Option<u32>, field: &str, default: usize| -> usize {
+        if let Some(problem) = SceneLightingV2::shadow_map_size_problem(size, field) {
+            warn!("{problem}: using the default size instead");
+            return default;
+        }
+        size.map_or(default, |s| s as usize)
+    };
+    let lighting = scene.lighting.as_ref();
     commands.insert_resource(bevy::light::DirectionalLightShadowMap {
-        size: scene.lighting.as_ref().and_then(|l| l.shadow_map_size).map_or_else(
-            || bevy::light::DirectionalLightShadowMap::default().size,
-            |s| s as usize,
+        size: shadow_size(
+            lighting.and_then(|l| l.shadow_map_size),
+            "shadow_map_size",
+            bevy::light::DirectionalLightShadowMap::default().size,
         ),
     });
     commands.insert_resource(bevy::light::PointLightShadowMap {
-        size: scene.lighting.as_ref().and_then(|l| l.point_shadow_map_size).map_or_else(
-            || bevy::light::PointLightShadowMap::default().size,
-            |s| s as usize,
+        size: shadow_size(
+            lighting.and_then(|l| l.point_shadow_map_size),
+            "point_shadow_map_size",
+            bevy::light::PointLightShadowMap::default().size,
         ),
     });
 

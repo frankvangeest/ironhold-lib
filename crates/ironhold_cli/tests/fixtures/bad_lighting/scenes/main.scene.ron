@@ -1,0 +1,10 @@
+(
+    schema_version: 2,
+    name: "main",
+    lighting: (
+        ambient: (0.5, -0.5, 0.5),
+        ambient_brightness: -5.0,
+        shadow_map_size: 3000,
+        point_shadow_map_size: 16384,
+    ),
+)

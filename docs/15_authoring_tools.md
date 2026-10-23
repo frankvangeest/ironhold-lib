@@ -102,6 +102,7 @@ Sample `watch` output (each save prints the changed file and a result):
 | a `SetUiVisible` whose target is, or contains, a dialogue/inventory/shop/container panel or an `ActionBar` | `set_ui_visible_unhideable_target` | panels open and close with their own actions, and an `ActionBar`'s keys would keep firing while hidden (an `ActionBar` itself cannot be hidden yet) | target a `Group` that does not contain them; move the bar/panel outside it |
 | a `Label`/`Button` with `font_size` <= 0 | `invalid_font_size` | renders nothing | use a positive size |
 | a `label_depth_scale.min_scale` outside `[0.0, 1.0]` | `label_depth_scale_min_scale_out_of_range` | labels scale incorrectly | use a value in range |
+| a scene `lighting.ambient` with a negative or non-finite component, an `ambient_brightness` that is negative or non-finite, or a `shadow_map_size` / `point_shadow_map_size` that is not a power of two between 64 and 8192 | `invalid_lighting` | a NaN poisons the whole scene's lighting and a negative value darkens it; a bad shadow size fails at texture creation (the runtime warns and uses the default ambient / size) | use finite values >= 0 and a size such as 512, 1024, 2048 or 4096 |
 
 ### Cameras and input
 | What you see | Code | What breaks if ignored | Fix |
