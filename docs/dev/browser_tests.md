@@ -61,7 +61,7 @@ The test harness reads a hidden `<div id="debug-state">` updated every frame by 
 {"frame": 42, "app_state": "InGame", "last_action": "PlayAnimation(\"dance\")", "scene": "projects/quick_scene/scenes/main.scene.ron", "logic_state": "", "score": 0, "window_size": [1280, 720], "ui_scale": 1, "run_mode": "live"}
 ```
 `window_size` is the engine's logical window size and `ui_scale` its `UiScale`; the responsive tests wait on them to know a resize has landed. `run_mode` is `"live"` or `"static"` (see "Static baselines"); `test_screenshot_scene_baseline` asserts it so an ignored `?static=1` cannot silently produce unfrozen baselines.
-Written by `sync_debug_state_to_dom` (WASM-only, `PostUpdate`) in `ironhold_core/src/lib.rs`.
+Written by `sync_debug_state_to_dom` (WASM-only, `PostUpdate`) in `ironhold_core/src/lib.rs`, which builds the JSON with the pure `debug_state_json`: every string field is JSON-escaped, so a `Log("say \"hi\"")` or a `<`/`&` in an authored string cannot break the parse (`test_debug_state_json_is_valid_for_hostile_strings` round-trips hostile strings through `serde_json`). It is written as the element's text content, not as HTML.
 
 ## Responsive matrix (`--responsive`)
 
