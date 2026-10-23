@@ -18,7 +18,7 @@ See `tests/support/mod.rs` for the `setup_test_app()` helper. Each test file dec
 | `entity_logic_tests.rs` | Per-entity FSM (`.behavior.ron`), `{self}` substitution, intent event layer | 8 |
 | `scene_lifecycle_tests.rs` | Scene load/unload, overlays, model fixes, pipeline warmup, key bindings, animation graph | 18 |
 | `spawn_tests.rs` | `Action::Spawn`/`Despawn`, spawn queue rate limiting, preload, composite prefab spawn | 15 |
-| `action_tests.rs` | Misc `Action` executor behaviors: variables, delayed events, floating text, target indicator | 13 |
+| `action_tests.rs` | Misc `Action` executor behaviors: variables, delayed events, floating text, target indicator, the `#debug-state` JSON (`debug_state_json` round-trips hostile strings through `serde_json`) | 25 |
 | `npc_tests.rs` | NPC aggro/investigating states, camera shake | 8 |
 | `nameplate_tests.rs` | Nameplate anchor spawn, visibility filtering, cleanup, `should_insert_nameplate` tri-state contract, `Player`-vs-NPC gating (`player_enabled`, faction_filter bypass), `ToggleOwnNameplate`/`PlayerNameplatePreference` | 18 |
 | `ui_tests.rs` | Button click-to-action wiring, `IconButton` icon/color/shadow sync | 9 |

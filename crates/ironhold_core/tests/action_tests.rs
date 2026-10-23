@@ -24,8 +24,6 @@ fn test_log_action_updates_debug_last_action() {
     assert_eq!(debug.last_action, "Log(\"hello_world\")");
 }
 
-/// `DebugState.window_size` / `ui_scale` are what the browser harness (`test_web.py --responsive`)
-/// asserts on, so a resize or a `UiScale` change must reach them within a frame.
 /// `#debug-state` is read with a real JSON parser by `test_web.py`; one unparseable frame makes every
 /// `wait_for_debug_state` poll time out with no hint. The strings in it come from authored content (a `Log`/`SetVariable`
 /// argument becomes `last_action` through `{:?}`, scene paths and state names are authored), so quotes, backslashes,
@@ -38,6 +36,7 @@ fn test_debug_state_json_is_valid_for_hostile_strings() {
         r"back\slash \ and \\ double",
         "line one\\nline two (literal backslash-n)",
         "a real\nnewline, tab\tand carriage\rreturn, bell \u{7}",
+        "range edges: nul \u{0} backspace \u{8} formfeed \u{c} unit-sep \u{1f} del \u{7f}",
         "markup <b>bold</b> & &amp; entities",
         "unicode: caf\u{e9} \u{2028} \u{1F600}",
         r#"all of it: " \ <>&"#,
@@ -60,6 +59,26 @@ fn test_debug_state_json_is_valid_for_hostile_strings() {
     }
 }
 
+/// `json_f32` is the other way the JSON can break: a NaN or infinity prints as `NaN` / `inf`, which is not JSON.
+#[test]
+fn test_debug_state_json_survives_non_finite_numbers() {
+    use ironhold_core::{debug_state_json, DebugState};
+    let mut debug = DebugState::default();
+    debug.run_mode = "static";
+    debug.window_size = (f32::NAN, f32::INFINITY);
+    debug.ui_scale = f32::NEG_INFINITY;
+    debug.score = -3;
+    let parsed: serde_json::Value = serde_json::from_str(&debug_state_json(&debug)).expect("must parse");
+    // Compared as numbers: Rust prints a whole f32 as `0`, which serde_json holds as an integer.
+    assert_eq!(parsed["window_size"][0].as_f64(), Some(0.0));
+    assert_eq!(parsed["window_size"][1].as_f64(), Some(0.0));
+    assert_eq!(parsed["ui_scale"].as_f64(), Some(0.0));
+    assert_eq!(parsed["score"], -3);
+    assert_eq!(parsed["run_mode"], "static");
+}
+
+/// `DebugState.window_size` / `ui_scale` are what the browser harness (`test_web.py --responsive`)
+/// asserts on, so a resize or a `UiScale` change must reach them within a frame.
 #[test]
 fn test_debug_state_reports_window_size_and_ui_scale() {
     let mut app = setup_test_app();

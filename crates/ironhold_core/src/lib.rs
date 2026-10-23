@@ -957,7 +957,7 @@ pub fn debug_state_json(debug: &DebugState) -> String {
         json_f32(debug.window_size.0),
         json_f32(debug.window_size.1),
         json_f32(debug.ui_scale),
-        json_escape(debug.run_mode),
+        debug.run_mode, // always "live" or "static": nothing to escape
     )
 }
 
