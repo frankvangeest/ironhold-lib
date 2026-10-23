@@ -33,8 +33,12 @@ shared `CARGO_TARGET_DIR`. It is not shipped, not documented in `docs/`, and is 
 new plan) when the decision is made.
 
 ## Prerequisites
-1. A reachable Nakama endpoint from the homelab plan. For LAN-only native work the endpoint can be plain `http://` /
-   `ws://` on the LAN. For the browser tests with an HTTPS page it must be the public `wss://` hostname.
+1. A reachable Nakama endpoint from the homelab plan, in two stages (decided 2026-10-23: the homelab starts **LAN-only**):
+   - **Stage 1 (LAN-only, plain `http://` / `ws://` on the LAN):** enough for E1-E6 natively and in a browser page served
+     from `http://localhost` (a non-HTTPS page may open plain `ws://`). The spike starts here.
+   - **Stage 2 (public hostname with a real certificate):** needed only for the HTTPS-origin runs: the `wss://` and CORS
+     check, E7 (idle socket through the tunnel), and the "via the public hostname" latency column. Those runs wait for the
+     homelab's stage 2; they do not block the rest.
 2. Until the homelab stack is up, the native parts can run against a throwaway local container from the vendor's
    documented Docker Compose (Nakama + Postgres) on this machine, if Docker is available. Do not put that compose file in
    this repo.
@@ -42,7 +46,7 @@ new plan) when the decision is made.
 
 ## Experiments
 
-Everything below is measured **native vs browser** and **LAN vs via the public hostname** where both exist.
+Everything below is measured **native vs browser** and, once the homelab's stage 2 exists, **LAN vs via the public hostname**.
 
 | ID | Experiment | What we learn |
 |---|---|---|
@@ -70,7 +74,7 @@ Everything below is measured **native vs browser** and **LAN vs via the public h
 - [ ] S3 E1-E3 (REST) in native, then wasm; choose an HTTP client that works on both targets
 - [ ] S4 E4: realtime socket envelope (JSON first); pick a WebSocket crate that works on both targets; create/join/list/leave
 - [ ] S5 E5 measurement harness with the protocol above; keep raw numbers in a CSV next to the report
-- [ ] S6 E6 matchmaker; E7 idle and reconnect
+- [ ] S6 E6 matchmaker; E7 idle and reconnect (E7 and the HTTPS/`wss` runs wait for the homelab stage 2)
 - [ ] S7 Repeat E5 with the protobuf envelope (generate types from the vendor's published `realtime.proto`)
 - [ ] S8 Write the result: append "Spike result" to `planning/investigations/nakama_backend_viability.md`, state go/no-go
       against the criteria below, estimate the effort of a maintained client crate, update the backlog items, then delete or
