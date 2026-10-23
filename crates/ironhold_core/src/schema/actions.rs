@@ -445,8 +445,8 @@ pub enum Action {
     /// Hold the simulation (`planning/features/real_pause.md`): freezes `Time<Virtual>` (so physics, NPCs,
     /// the player, motion, particles, timers and animations stop) and gates edge-triggered input
     /// (interact, loot, targeting, action bar, first-person/flycam look). The UI, the interpreters and
-    /// audio keep running. A **request**: the engine emits `game.paused` only when the clock really
-    /// stops, so build pause UI around that event. A no-op if the menu hold is already set (no nesting:
+    /// audio keep running. A **request**: the engine emits `game.paused` only when your pause
+    /// takes effect, so build pause UI around that event. A no-op if the menu hold is already set (no nesting:
     /// one `ResumeGame` always undoes it). Put it in a paused state's `entry_actions` and `ResumeGame` in
     /// the **same state's** `exit_actions`. Example: `PauseGame`.
     PauseGame,

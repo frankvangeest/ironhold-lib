@@ -209,6 +209,7 @@ fn a_static_hold_from_boot_never_emits_game_paused() {
     app.update();
     assert!(paused(&app), "the Static hold must pause Time<Virtual>");
     assert!(game_events(&mut app, "game.").is_empty(), "Static must not announce a pause");
+    assert_eq!(app.world().resource::<Time<Virtual>>().elapsed(), Duration::ZERO, "no virtual time may pass");
 }
 
 #[test]
@@ -218,11 +219,15 @@ fn pause_game_under_a_static_hold_still_announces_and_resume_keeps_the_clock_hel
     app.update();
 
     run(&mut app, Action::PauseGame);
-    assert!(game_events(&mut app, "game.").contains(&"game.paused".to_string()), "a PauseGame must still announce");
+    assert_eq!(game_events(&mut app, "game."), vec!["game.paused".to_string()], "a PauseGame must announce exactly once");
     assert!(paused(&app));
 
     run(&mut app, Action::ResumeGame);
-    assert!(game_events(&mut app, "game.").contains(&"game.resumed".to_string()), "a ResumeGame must still announce");
+    assert_eq!(
+        game_events(&mut app, "game."),
+        vec!["game.paused".to_string(), "game.resumed".to_string()],
+        "a ResumeGame must announce exactly once (the earlier pause is still buffered)"
+    );
     assert!(paused(&app), "the clock stays held by Static");
     assert!(app.world().resource::<SimClock>().is_held(PauseHold::Static));
 }

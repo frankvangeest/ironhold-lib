@@ -107,7 +107,7 @@ pub struct DebugState {
     /// Lets the browser harness wait for a resize to land instead of guessing from pixels.
     pub window_size: (f32, f32),
     /// `"live"` or `"static"` (see [`RunMode`]).
-    pub run_mode: String,
+    pub run_mode: &'static str,
     /// Current `UiScale` multiplier (`1.0` unless a project sets one; `0.0` when the resource
     /// does not exist, e.g. a headless test app without `UiPlugin`).
     pub ui_scale: f32,
@@ -899,7 +899,7 @@ fn update_debug_state(
     run_mode: Option<Res<RunMode>>,
 ) {
     debug.frame += 1;
-    debug.run_mode = run_mode.map(|m| m.as_str()).unwrap_or("live").to_string();
+    debug.run_mode = run_mode.map(|m| m.as_str()).unwrap_or("live");
     debug.app_state = format!("{:?}", state.get());
     debug.logic_state = logic_state.0.clone();
     debug.score = game_vars.0.get("score").and_then(|s| s.parse().ok()).unwrap_or(0);

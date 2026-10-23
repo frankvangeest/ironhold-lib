@@ -70,13 +70,17 @@ NON_DETERMINISTIC_SCENES = {
 
 # Projects whose single-scene baselines stay on LIVE capture instead of static mode (`?static=1&testing=1`, which
 # holds the simulation from the first frame so a screenshot is identical every run). A frozen frame would defeat the
-# point of these: their emitters would never emit (`particles_demo`, `effect_mayhem_demo`) or their subject is
-# seeking/freezing animation itself (`dynamic_animation_control`). A new project whose scenes only make sense while
-# moving belongs here too (see docs/dev/browser_tests.md, "Static baselines").
+# point of these: their emitters would never emit (`particles_demo`, `effect_mayhem_demo`, and `primitive_world`, whose
+# campfire starts on a delayed event), their subject is seeking/freezing animation itself (`dynamic_animation_control`),
+# or they rely on physics to settle what the scene authored mid-air (`quick_scene`: its giant and anvil spawn about 20 m
+# above the ground and would hang there in a frozen frame, and its baseline is a public gallery image). A new project
+# whose scenes only make sense while moving belongs here too (see docs/dev/browser_tests.md, "Static baselines").
 STATIC_EXCLUDED_PROJECTS = {
     "particles_demo",
     "effect_mayhem_demo",
     "dynamic_animation_control",
+    "primitive_world",
+    "quick_scene",
 }
 
 # Committed baseline screenshots.  Two sub-dirs:
@@ -181,8 +185,8 @@ async def wait_for_debug_state(page: Page, predicate, timeout_s: int = ACTION_TI
 async def wait_for_scene_ready(
     page: Page,
     settle_frames: int = SCREENSHOT_SETTLE_FRAMES,
-) -> None:
-    """Wait for InGame state, then wait for settle_frames more frames to render.
+) -> dict:
+    """Wait for InGame state, then wait for settle_frames more frames to render. Returns the last debug state.
 
     Using frame count rather than wall-clock time ensures async scene work
     (terrain mesh generation, texture uploads) has actually completed before
@@ -194,7 +198,7 @@ async def wait_for_scene_ready(
         timeout_s=CANVAS_TIMEOUT,
     )
     entry_frame = state.get("frame", 0)
-    await wait_for_debug_state(
+    return await wait_for_debug_state(
         page,
         lambda s: s.get("frame", 0) >= entry_frame + settle_frames,
         timeout_s=CANVAS_TIMEOUT,
@@ -416,10 +420,10 @@ async def test_screenshot_scene_baseline(
     static_mode = project not in STATIC_EXCLUDED_PROJECTS
     page, errors = await open_project(context, project, scene=scene, static_mode=static_mode)
     try:
-        await wait_for_scene_ready(page)
-        # A typo'd or ignored `?static=1` must fail loudly instead of silently producing unfrozen baselines.
+        state = await wait_for_scene_ready(page)
+        # A typo'd or ignored `?static=1` must fail loudly instead of silently producing unfrozen baselines (and a
+        # stale pkg/ without the field fails at once instead of timing out).
         expected_mode = "static" if static_mode else "live"
-        state = await wait_for_debug_state(page, lambda s: "run_mode" in s, timeout_s=CANVAS_TIMEOUT)
         if state.get("run_mode") != expected_mode:
             raise TestFailure(f"Expected run_mode {expected_mode!r} for {project}, engine reports {state.get('run_mode')!r}")
 

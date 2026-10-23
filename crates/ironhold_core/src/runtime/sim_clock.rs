@@ -117,8 +117,9 @@ pub fn keep_messages_flowing_while_held(clock: Res<SimClock>, registry: Option<R
 /// The **only** caller of `Time<Virtual>::pause()`/`unpause()` and the only emitter of `game.paused`
 /// / `game.resumed`. It compares the clock to the real `Time<Virtual>` state instead of trusting the
 /// change flag (an executor arm taking `ResMut<SimClock>` can mark it changed without changing it),
-/// so the events fire only on an actual running <-> held transition, including the auto-resume on a
-/// Replace-mode scene load.
+/// so the clock is paused/unpaused only on an actual running <-> held transition. `game.paused`/`game.resumed` follow
+/// the *announcing* holds (`PauseHold::announces`) instead, so the events fire when a designer's pause starts or ends
+/// (including the auto-resume on a Replace-mode scene load), never for the harness `Static` hold.
 pub fn apply_sim_clock_system(
     clock: Res<SimClock>,
     mut time: ResMut<Time<Virtual>>,

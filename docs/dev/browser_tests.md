@@ -83,7 +83,7 @@ Written by `sync_debug_state_to_dom` (WASM-only, `PostUpdate`) in `ironhold_core
 
 ## URL project selection
 
-The WASM build reads `?project=<name>` from the URL (e.g. `?project=terrain_demo`) and passes it to `start_app`. Implemented in `ironhold_web/src/lib.rs`.
+The WASM build reads `?project=<name>` from the URL (e.g. `?project=terrain_demo`) and passes it to `start_app_with` (an `AppOptions`). Implemented in `ironhold_web/src/lib.rs`.
 
 ## Static baselines (`?static=1`)
 
@@ -95,7 +95,7 @@ A static hold never emits `game.paused` / `game.resumed` (`PauseHold::announces`
 
 Rules for the suite:
 - Only the single-scene baseline path (`test_screenshot_scene_baseline`) uses `static_mode=True`. `pause_nav` and every other multi-scene navigation flow stays **live**: a hold from boot would freeze the player at spawn and change those baselines for reasons unrelated to what they test.
-- `STATIC_EXCLUDED_PROJECTS` in `test_web.py` is per project (there is no per-scene opt-out) and differs from `NON_DETERMINISTIC_SCENES`, which skips the diff for one scene; an excluded project is still captured, live. It keeps projects whose point is motion on live capture: `particles_demo`, `effect_mayhem_demo` and `dynamic_animation_control`. When `/new-project` adds a project whose scenes only make sense while moving (particles, seek/freeze demos), add it to that set.
+- `STATIC_EXCLUDED_PROJECTS` in `test_web.py` is per project (there is no per-scene opt-out) and differs from `NON_DETERMINISTIC_SCENES`, which skips the diff for one scene; an excluded project is still captured, live. It keeps projects whose point is motion on live capture: `particles_demo`, `effect_mayhem_demo`, `dynamic_animation_control`, `primitive_world` (its campfire starts on a delayed event, which never fires) and `quick_scene` (its giant and anvil spawn about 20 m above the ground and would hang there; its baseline is also a public gallery image). Rapier never steps in a static run, so **anything authored above its resting height stays at spawn height**: static baselines cannot catch a spawn-placement regression (falling through the floor, spawning under terrain), and the gallery images (`index.html`) taken from them show authored poses. Keep a project live when that matters. When `/new-project` adds a project whose scenes only make sense while moving (particles, seek/freeze demos), add it to that set.
 - `SCREENSHOT_SETTLE_FRAMES` stays: freezing the simulation does not make GLB and texture loading finish sooner.
 - Re-capture after a change (`--real-gpu`): `python test_web.py --project <name> --real-gpu --skip-build --update-baseline <name>_<scene>`, in its own commit, as for every baseline.
 

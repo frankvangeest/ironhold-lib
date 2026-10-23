@@ -17,7 +17,7 @@ wasm-bindgen = { workspace = true }
 
 # For the DebugState in the DOM and browser tests
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { version = "0.3", features = ["Window", "Location", "UrlSearchParams", "Document", "Element", "EventTarget", "Event"] }
+web-sys = { version = "0.3", features = ["console", "Window", "Location", "UrlSearchParams", "Document", "Element", "EventTarget", "Event"] }
 
 # `wasm-opt` was previously disabled here (`wasm-opt = false`) -- re-enabling it with `-Oz`
 # (2026-08-31) cut the release ironhold_web_bg.wasm from 93.2 MiB to 30.6 MiB, a 67% reduction,
