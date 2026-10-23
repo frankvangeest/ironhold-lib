@@ -29,6 +29,16 @@ pub enum PauseHold {
     Session,
 }
 
+impl PauseHold {
+    /// Whether this hold is "the game is paused" as a designer sees it: it is what `game.paused` /
+    /// `game.resumed` follow. `Menu` is the designer's own pause. `Static` is the browser-test harness
+    /// (`?static=1`) and must never open a project's pause menu, so it stays silent. `FocusLoss` and
+    /// `Session` are reserved and choose explicitly when they land.
+    pub fn announces(self) -> bool {
+        matches!(self, PauseHold::Menu)
+    }
+}
+
 /// The set of active simulation holds. Empty = running. Ordered (`BTreeSet`) for determinism.
 #[derive(Resource, Default, Debug)]
 pub struct SimClock {
@@ -36,6 +46,18 @@ pub struct SimClock {
 }
 
 impl SimClock {
+    /// A clock that starts with `hold` already taken (the harness `Static` hold, from the first frame).
+    pub fn with_hold(hold: PauseHold) -> Self {
+        let mut clock = Self::default();
+        clock.hold(hold);
+        clock
+    }
+
+    /// True while any announcing hold is set (see [`PauseHold::announces`]).
+    pub fn announces_pause(&self) -> bool {
+        self.holds.iter().any(|h| h.announces())
+    }
+
     pub fn is_running(&self) -> bool {
         self.holds.is_empty()
     }
@@ -95,25 +117,32 @@ pub fn keep_messages_flowing_while_held(clock: Res<SimClock>, registry: Option<R
 /// The **only** caller of `Time<Virtual>::pause()`/`unpause()` and the only emitter of `game.paused`
 /// / `game.resumed`. It compares the clock to the real `Time<Virtual>` state instead of trusting the
 /// change flag (an executor arm taking `ResMut<SimClock>` can mark it changed without changing it),
-/// so the events fire only on an actual running <-> held transition, including the auto-resume on a
-/// Replace-mode scene load.
+/// so the clock is paused/unpaused only on an actual running <-> held transition. `game.paused`/`game.resumed` follow
+/// the *announcing* holds (`PauseHold::announces`) instead, so the events fire when a designer's pause starts or ends
+/// (including the auto-resume on a Replace-mode scene load), never for the harness `Static` hold.
 pub fn apply_sim_clock_system(
     clock: Res<SimClock>,
     mut time: ResMut<Time<Virtual>>,
     mut game_events: MessageWriter<GameEvent>,
+    mut announced: Local<bool>,
 ) {
     let want_paused = !clock.is_running();
-    if want_paused == time.is_paused() {
-        return;
+    if want_paused != time.is_paused() {
+        if want_paused {
+            time.pause();
+            info!("Simulation held ({:?}): Time<Virtual> paused", clock.holds);
+        } else {
+            time.unpause();
+            info!("Simulation resumed: Time<Virtual> unpaused");
+        }
     }
-    if want_paused {
-        time.pause();
-        info!("Simulation held ({:?}): Time<Virtual> paused", clock.holds);
-        game_events.write(GameEvent::Trigger("game.paused".to_string()));
-    } else {
-        time.unpause();
-        info!("Simulation resumed: Time<Virtual> unpaused");
-        game_events.write(GameEvent::Trigger("game.resumed".to_string()));
+    // `game.paused`/`game.resumed` follow the announcing holds only, not the clock: a `Static` hold
+    // (harness) never opens a pause menu, and a `PauseGame` while it is held still announces.
+    let want_announced = clock.announces_pause();
+    if want_announced != *announced {
+        *announced = want_announced;
+        let event = if want_announced { "game.paused" } else { "game.resumed" };
+        game_events.write(GameEvent::Trigger(event.to_string()));
     }
 }
 

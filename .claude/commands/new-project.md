@@ -38,6 +38,7 @@ Steps:
    - **Use `--real-gpu` (WebGPU, visible Chromium).** Headless `--webgpu` finds no GPU adapter on this machine, and the default headless GL mode needs a *WebGL2* build, not the dev build above. Both are fallback only.
    - The suite runs its own server on port **8001** (`--port` to change), so a manual `python serve.py` on 8000 never collides. If a run times out with an empty `#debug-state`, check `netstat -ano | grep :800`.
    - Only update this project's baselines (`--project <name>`), never a blanket `--update-baselines` across all projects — older baselines were captured on headless GL and would show unrelated diffs.
+   - Baselines are captured in static mode (`?static=1`, simulation held from frame 0). If the project's scenes only make sense while moving (particles, seek/freeze animation demos), add `"<name>"` to `STATIC_EXCLUDED_PROJECTS` in `test_web.py` first so it stays on live capture (see `docs/dev/browser_tests.md`, "Static baselines").
    - After the run: `git checkout -- pkg` (the dev build leaves tracked `pkg/` modified; never commit it on a feature branch) — but only once any play-test is finished.
 
 7. **Report** — List every file created or edited, and whether the baseline step (6) is still pending.

@@ -80,7 +80,7 @@ belong in the top-level `global_on:`, never in a state-scoped `on:` list.
 
 **Pause goes through `SimClock` (`runtime/sim_clock.rs`) and nowhere else.** Its holds (`Menu`/`Static`/`FocusLoss`/`Session`) are
 an idempotent `BTreeSet`, never a counter; `apply_sim_clock_system` is the **only** caller of `Time<Virtual>::pause()`/`unpause()`
-and the only emitter of `game.paused`/`game.resumed`. Gameplay reads `sim_running`/`SimClock::is_running`, never
+and the only emitter of `game.paused`/`game.resumed`, which follow the *announcing* holds only (`PauseHold::announces`: `Menu`; the harness `Static` hold, taken from boot by `start_app_with` for `RunMode::Static`, never announces, so a project that opens its pause menu from `game.paused` never opens it in a static screenshot). Gameplay reads `sim_running`/`SimClock::is_running`, never
 `Time<Virtual>::is_paused()`. A paused clock runs zero `FixedUpdate` ticks and freezes every `Res<Time>` system, but an
 *edge-triggered input* system (interact, targeting, the action bar, first-person/flycam mouse look, dialogue choices) does not
 follow the clock and needs its own gate. Keep the `panels_open` check a **separate** condition (merging it would stop the action

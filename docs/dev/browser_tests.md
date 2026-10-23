@@ -58,9 +58,9 @@ By default the test suite runs headless Chromium with GL/ANGLE (WebGL2). Two fla
 
 The test harness reads a hidden `<div id="debug-state">` updated every frame by the WASM runtime:
 ```json
-{"frame": 42, "app_state": "InGame", "last_action": "PlayAnimation(\"dance\")", "scene": "projects/quick_scene/scenes/main.scene.ron", "logic_state": "", "score": 0, "window_size": [1280, 720], "ui_scale": 1}
+{"frame": 42, "app_state": "InGame", "last_action": "PlayAnimation(\"dance\")", "scene": "projects/quick_scene/scenes/main.scene.ron", "logic_state": "", "score": 0, "window_size": [1280, 720], "ui_scale": 1, "run_mode": "live"}
 ```
-`window_size` is the engine's logical window size and `ui_scale` its `UiScale`; the responsive tests wait on them to know a resize has landed.
+`window_size` is the engine's logical window size and `ui_scale` its `UiScale`; the responsive tests wait on them to know a resize has landed. `run_mode` is `"live"` or `"static"` (see "Static baselines"); `test_screenshot_scene_baseline` asserts it so an ignored `?static=1` cannot silently produce unfrozen baselines.
 Written by `sync_debug_state_to_dom` (WASM-only, `PostUpdate`) in `ironhold_core/src/lib.rs`.
 
 ## Responsive matrix (`--responsive`)
@@ -83,7 +83,21 @@ Written by `sync_debug_state_to_dom` (WASM-only, `PostUpdate`) in `ironhold_core
 
 ## URL project selection
 
-The WASM build reads `?project=<name>` from the URL (e.g. `?project=terrain_demo`) and passes it to `start_app`. Implemented in `ironhold_web/src/lib.rs`.
+The WASM build reads `?project=<name>` from the URL (e.g. `?project=terrain_demo`) and passes it to `start_app_with` (an `AppOptions`). Implemented in `ironhold_web/src/lib.rs`.
+
+## Static baselines (`?static=1`)
+
+Single-scene baseline shots are captured in **static mode**: `play.html?project=..&scene=..&testing=1&static=1`. The engine holds the simulation from the very first frame (`PauseHold::Static` on `SimClock`, seeded by `start_app_with` for `RunMode::Static`), so virtual time stays exactly 0 and a screenshot is pixel-identical across runs (verified: two consecutive `--real-gpu` runs diff 0.00%). Shader `globals.time` is virtual time, so animated shaders (`custom_pulse`, water) are frozen at 0 too. `?static=1` is honoured **only together with `testing=1`** (`open_project` always sends it); on its own it logs a console warning and is ignored, so a shared link can never leave a player in a frozen-looking game. Native builds always run `Live`.
+
+What keeps running: rendering, asset and scene loading (they count frames, not time), the UI, your rules and the executor, audio, button clicks (so `LoadScene` works), and the debug frame counter. What stays frozen: every `FixedUpdate` system (physics, player, NPC AI, `motion`, trigger zones), particles (nothing emits, so a scene whose point is a particle effect shows none), delayed events and timers (a splash scene's `EmitEventAfterDelay` never fires, so its baseline is its first frame), animation transitions (frozen mid-fade, and animation stays at frame 0 of the initial clip), camera shake and blend, camera follow smoothing (a `Follow` camera with `smoothing > 0` stays at its spawn position), and the 5 s reveal failsafe (a model with a broken animation policy stays invisible). Bodies sit at their authored transforms (Rapier never steps).
+
+A static hold never emits `game.paused` / `game.resumed` (`PauseHold::announces`), so a project that opens its pause menu from `game.paused` does not open it in a screenshot. `PauseGame` while the static hold is held still announces, and `ResumeGame` then emits `game.resumed` while the simulation stays held (only the `Menu` hold is released).
+
+Rules for the suite:
+- Only the single-scene baseline path (`test_screenshot_scene_baseline`) uses `static_mode=True`. `pause_nav` and every other multi-scene navigation flow stays **live**: a hold from boot would freeze the player at spawn and change those baselines for reasons unrelated to what they test.
+- `STATIC_EXCLUDED_PROJECTS` in `test_web.py` is per project (there is no per-scene opt-out) and differs from `NON_DETERMINISTIC_SCENES`, which skips the diff for one scene; an excluded project is still captured, live. It keeps projects whose point is motion on live capture: `particles_demo`, `effect_mayhem_demo`, `dynamic_animation_control`, `primitive_world` (its campfire starts on a delayed event, which never fires) and `quick_scene` (its giant and anvil spawn about 20 m above the ground and would hang there; its baseline is also a public gallery image). Rapier never steps in a static run, so **anything authored above its resting height stays at spawn height**: static baselines cannot catch a spawn-placement regression (falling through the floor, spawning under terrain), and the gallery images (`index.html`) taken from them show authored poses. Keep a project live when that matters. When `/new-project` adds a project whose scenes only make sense while moving (particles, seek/freeze demos), add it to that set.
+- `SCREENSHOT_SETTLE_FRAMES` stays: freezing the simulation does not make GLB and texture loading finish sooner.
+- Re-capture after a change (`--real-gpu`): `python test_web.py --project <name> --real-gpu --skip-build --update-baseline <name>_<scene>`, in its own commit, as for every baseline.
 
 ## Canvas coordinate clicks
 

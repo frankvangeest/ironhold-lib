@@ -852,6 +852,11 @@ pub fn spawn_scene_v2(
             // Extract initial yaw/pitch from the spawn transform so the camera
             // starts oriented correctly and the first mouse move causes no jump.
             let (yaw, pitch, _) = fc_transform.rotation.to_euler(EulerRot::YXZ);
+            // Spawn with yaw and pitch only. The authored rotation is built with `EulerRot::XYZ`, so a combined
+            // yaw + pitch (e.g. `(-30, 45, 0)`) carries a roll that `FlycamState` cannot represent. In live play
+            // `fly_camera_system` rewrites the rotation from yaw/pitch on the first frame and the roll vanishes,
+            // but a held clock (`?static=1`, a pause) skips that write and the camera would stay tilted.
+            let fc_transform = Transform { rotation: Quat::from_euler(EulerRot::YXZ, yaw, pitch, 0.0), ..fc_transform };
             let fc_def = match mode {
                 crate::schema::camera::CameraModeDef::Flycam(fc) => fc,
                 other => {
