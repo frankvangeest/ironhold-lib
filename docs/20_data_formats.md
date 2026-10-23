@@ -3415,6 +3415,10 @@ Events emitted:
 - `npc.player_spotted:{id}` — player entered detection range and the alerted pause has elapsed
 - `npc.player_reached:{id}` — NPC is within `approach_distance` of the player
 - `npc.player_lost:{id}` — player left `chase_radius`; NPC enters the Return state
+- `npc.investigating:{id}` — the NPC was hit from outside its detection range and starts walking toward the attacker (it fires again if it is hit again from out of sight)
+- `npc.investigation_failed:{id}` — the investigation ended without the NPC spotting a player: `investigate_timeout_secs` ran out, or it reached the attacker's last-known position
+
+**Reacting to hits.** Emit `EmitEvent("entity.attacked:{target}")` from a skill slot's `do_actions`, next to the `ModifyStat` (see `3rd_person_game_demo`). An NPC with `on_player_near: Chase` or `Interact` that is hit while outside its detection range goes to the Investigating state; `Flee` and `Alert` NPCs ignore it. The event does not say who hit the NPC, so in co-op the NPC walks toward the player standing nearest to it when the hit lands, which is not necessarily the shooter. See [Runtime events](30_runtime_events_and_logic.md) for the tie-break rule.
 
 **`NpcDef` fields** (`components.npc`):
 
@@ -3440,7 +3444,7 @@ Events emitted:
 | `angular_damping` | `f32` | `0.5` | Rapier `angular_damping` on the NPC capsule rigid body |
 | `collider_radius` | `Option<f32>` | `None` (0.35 m) | Radius of the NPC's physics capsule; tune up for large creatures (e.g. dragon) or down for small ones (e.g. imp). Omit to keep the humanoid default. |
 | `collider_height` | `Option<f32>` | `None` (1.6 m) | Total height of the NPC's physics capsule; tune for creatures significantly taller or shorter than a humanoid. Omit to keep the humanoid default. |
-| `investigate_timeout_secs` | `f32` | `5.0` | Seconds the NPC walks toward the attacker's last-known position before giving up and returning to spawn. Resets on each subsequent hit — enabling kiting. See `npc.investigating` / `npc.investigation_failed` events. |
+| `investigate_timeout_secs` | `f32` | `5.0` | Seconds the NPC walks toward the player chosen as the attacker (see *Reacting to hits* above) before giving up and returning to spawn. Resets on each subsequent hit — enabling kiting. See `npc.investigating` / `npc.investigation_failed` events. |
 
 ```ron
 // Hostile patrol guard — full configuration

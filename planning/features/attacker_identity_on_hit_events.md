@@ -23,18 +23,19 @@ EmitEvent("entity.hit:{target}:{attacker}"),
 nearest-player heuristic), so no existing binding or project breaks.
 
 ## Why
-- Today `entity.attacked:{victim}` carries only the victim; `npc_hit_relay_system` (`npc.rs:170-193`) guesses
-  with `player_query.iter().next()` (`:177`) - the first player in query order, and a one-tick-stale
-  `GlobalTransform` read in `Update`. In co-op the NPC investigates the wrong player (Bug entry; audit finding E in
-  `planning/investigations/hashmap_iteration_order_audit.md`). Frank decided 2026-10-01 to ship a nearest-player
-  heuristic first; this is the proper fix.
+- Today `entity.attacked:{victim}` carries only the victim, so `npc_hit_relay_system` (`npc.rs`) has to guess who hit
+  the NPC. It used to take `player_query.iter().next()` (the first player in query order, via a one-tick-stale
+  `GlobalTransform`); since 2026-10-23 (`feature/npc_hit_nearest_player`) it attributes the hit to the player nearest the
+  NPC by `Transform`, a distance tie broken by the lowest `SpawnId` (string order). Frank decided that heuristic on
+  2026-10-01 (audit finding E in `planning/investigations/hashmap_iteration_order_audit.md`); it misattributes a ranged
+  hit while another player stands next to the NPC, and this is the proper fix.
 - It is the only way to attribute anything per player downstream (kill credit, loot/XP, threat) without more
   guessing, and it is a data-driven authoring surface (RON), consistent with the "designer needs no Rust" rule.
 
 ## Findings (verified against code at `09467a2`)
-- **Only one emitter and one consumer exist.** `entity.attacked` appears in `crates/` only at `npc.rs:11,179`
-  (consumer); in assets only at `3rd_person_game_demo/scenes/main.scene.ron:443,458,472,487,520` (five action-bar
-  slots: Attack, Heavy Strike, Poke, Mana Blast, Taunt); docs at `docs/30_runtime_events_and_logic.md:109` and
+- **Only one consumer exists, and two projects emit it.** `entity.attacked` appears in `crates/` only in `npc.rs`
+  (consumer); in assets at `3rd_person_game_demo/scenes/main.scene.ron:443,458,472,487,520` (five action-bar
+  slots: Attack, Heavy Strike, Poke, Mana Blast, Taunt) and `first_person_starter/scenes/main.scene.ron:135` (the fire slot); docs at `docs/30_runtime_events_and_logic.md:109` and
   `assets/projects/CLAUDE.md:140`. **No `state_machine.ron` or behavior file binds it** and no test emits it
   (the backlog's "`state_machine.ron` bindings" worry does not apply today). `npc_tests.rs` seeds `NpcHitQueue`
   directly (`:97,141,180,267`).
