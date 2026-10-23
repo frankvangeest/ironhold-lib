@@ -668,6 +668,94 @@ fn test_composite_prefab_with_trigger_zone_spawns_trigger_zone_component() {
         "composite prefab with trigger_zone must produce exactly one entity with a TriggerZone component");
 }
 
+/// A `trigger_zone` sensor only detects: it must never add mass to the rigid body it hangs on. Rapier sums every
+/// enabled attached collider's mass, sensors included (`rigid_body_components.rs`
+/// `recompute_mass_properties_from_colliders` has no sensor check), so a sensor with the default density turned a
+/// `radius: 2.5` zone into ~65 kg on a Dynamic NPC body (about 146x its capsule) and made it unpushable.
+#[test]
+fn test_trigger_zone_sensor_contributes_no_mass() {
+    use bevy_rapier3d::prelude::ColliderMassProperties;
+    use ironhold_core::schema::catalog::{AssetCatalog, PrefabCatalog};
+    use ironhold_core::capabilities::trigger_zone::TriggerZone;
+
+    let mut app = setup_test_app();
+    app.update();
+
+    let prefab_ron = r#"
+        (
+            schema_version: 2,
+            prefabs: {
+                "danger_zone": (
+                    kind: Primitive,
+                    model: "",
+                    trigger_zone: (radius: 2.5),
+                    children: [
+                        (
+                            shape: Cuboid,
+                            primitive: (size: (4.0, 0.1, 4.0)),
+                        ),
+                    ],
+                ),
+            },
+        )
+    "#;
+    let catalog: PrefabCatalog = ron::Options::default()
+        .with_default_extension(ron::extensions::Extensions::IMPLICIT_SOME)
+        .from_str(prefab_ron)
+        .expect("inline prefab catalog must parse");
+    app.world_mut().insert_resource(LoadedAssetCatalog(AssetCatalog::default()));
+    app.world_mut().insert_resource(LoadedPrefabCatalog(catalog));
+
+    let config_handle = app
+        .world_mut()
+        .resource_mut::<Assets<ProjectConfig>>()
+        .add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/t.ron".to_string(),
+            ..Default::default()
+        });
+    app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+
+    let scene: GameSceneV2 = ron::Options::default()
+        .with_default_extension(ron::extensions::Extensions::IMPLICIT_SOME)
+        .from_str(r#"
+            (
+                schema_version: 2,
+                entities: [
+                    ( id: "pad_01", prefab: "danger_zone", transform: () ),
+                ],
+                ui: [],
+            )
+        "#)
+        .expect("test scene must parse");
+    let scene_handle = app
+        .world_mut()
+        .resource_mut::<Assets<GameSceneV2>>()
+        .add(scene);
+    app.world_mut().insert_resource(SceneHandleV2(scene_handle));
+
+    app.world_mut()
+        .resource_mut::<NextState<AppState>>()
+        .set(AppState::LoadingScene);
+    app.update();
+    app.update();
+    app.update();
+
+    // The sensor is the child carrying `TriggerZone`; its collider must be explicitly massless.
+    let mass_props: Vec<Option<ColliderMassProperties>> = app
+        .world_mut()
+        .query_filtered::<Option<&ColliderMassProperties>, With<TriggerZone>>()
+        .iter(app.world())
+        .map(|m| m.copied())
+        .collect();
+    assert_eq!(mass_props.len(), 1, "exactly one trigger zone sensor expected");
+    match mass_props[0] {
+        Some(ColliderMassProperties::Density(d)) => assert_eq!(d, 0.0, "sensor density must be 0"),
+        Some(ColliderMassProperties::Mass(m)) => assert_eq!(m, 0.0, "sensor mass must be 0"),
+        other => panic!("trigger_zone sensor must carry an explicit zero ColliderMassProperties, got {other:?}"),
+    }
+}
+
 /// Regression guard for the GLB Actor NPC spawn path added in df8c94b.
 /// A prefab with `kind: Actor` + `components.npc` must receive `NpcAgent` on
 /// the spawned entity. With `animation_policy` set, `LocomotionState` must also

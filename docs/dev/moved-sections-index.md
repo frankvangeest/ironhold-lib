@@ -90,7 +90,7 @@ On 2026-10-08 the 1,752-line `crates/ironhold_core/src/CLAUDE.md` was split by d
 | `b:563` | 563-573 | A dying entity can't catch its own respawn timer; global rule needed | [`docs/dev/lootable-corpse.md`](lootable-corpse.md) |
 | `b:575` | 575-585 | Respawn rules must be in `global_on`, not state-scoped `on:` | [`docs/dev/lootable-corpse.md`](lootable-corpse.md); parent `src/CLAUDE.md` |
 | `b:587` | 587-596 | `OpenContainer` must not double-count `panels_open` | `runtime/scene_manager/CLAUDE.md` |
-| `b:598` | 598-606 | No `trigger_zone` on a Dynamic rigid-body prefab | `runtime/scene_manager/CLAUDE.md` |
+| `b:598` | 598-606 | A `trigger_zone` sensor is massless | `runtime/scene_manager/CLAUDE.md` |
 | `b:608` | 608-620 | Superseded same-entity corpse design (cautionary) | cut (derivable or duplicate; text archived in the owning plan) |
 | `b:622` | 622-637 | Animation resolver/playback pipeline, field-ownership table | [`docs/dev/animation-pipeline.md`](animation-pipeline.md) |
 | `b:638` | 638-646 | `pending_seek` purpose | [`docs/dev/animation-pipeline.md`](animation-pipeline.md) |

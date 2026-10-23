@@ -104,6 +104,10 @@ pub(super) fn attach_prefab_features(
             crate::capabilities::trigger_zone::TriggerZoneId(entity_id.to_string()),
             Collider::ball(zone_def.radius),
             Sensor,
+            // A sensor only detects. Rapier still sums every enabled attached collider's mass, sensors
+            // included, so without this a `radius: 2.5` zone added ~65 kg to a Dynamic NPC body. Relies on the
+            // parent having its own solid collider: a Dynamic body whose only collider is this sensor would be massless.
+            ColliderMassProperties::Density(0.0),
             ActiveEvents::COLLISION_EVENTS,
             Transform::default(),
         )).id();
