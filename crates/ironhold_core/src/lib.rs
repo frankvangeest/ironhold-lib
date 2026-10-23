@@ -917,9 +917,48 @@ fn update_debug_state(
 
 /// A finite `f32` for the hand-built debug JSON (a NaN/inf would make the whole object invalid
 /// JSON and silently break every `wait_for_debug_state` poll).
-#[cfg(target_arch = "wasm32")]
 fn json_f32(v: f32) -> f32 {
     if v.is_finite() { v } else { 0.0 }
+}
+
+/// Escapes `s` for use inside a JSON string literal: `"` and `\`, the named control characters, and any other control
+/// character below U+0020 as `\u00XX` (JSON forbids them raw). Everything else, including non-ASCII, is valid as is.
+fn json_escape(s: &str) -> String {
+    use std::fmt::Write;
+    let mut out = String::with_capacity(s.len() + 2);
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => {
+                let _ = write!(out, "\\u{:04x}", c as u32);
+            }
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// The `#debug-state` JSON the browser harness reads (`test_web.py` `wait_for_debug_state` runs `json.loads` on it).
+/// Pure (no DOM) so it can be tested natively; `sync_debug_state_to_dom` writes it into the page. Every string field
+/// is escaped: `last_action` is a `{:?}` of an authored `Action`, so a `Log("say \"hi\"")` already contains `\"`.
+pub fn debug_state_json(debug: &DebugState) -> String {
+    format!(
+        r#"{{"frame":{},"app_state":"{}","last_action":"{}","scene":"{}","logic_state":"{}","score":{},"window_size":[{},{}],"ui_scale":{},"run_mode":"{}"}}"#,
+        debug.frame,
+        json_escape(&debug.app_state),
+        json_escape(&debug.last_action),
+        json_escape(&debug.scene),
+        json_escape(&debug.logic_state),
+        debug.score,
+        json_f32(debug.window_size.0),
+        json_f32(debug.window_size.1),
+        json_f32(debug.ui_scale),
+        debug.run_mode, // always "live" or "static": nothing to escape
+    )
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -927,20 +966,9 @@ fn sync_debug_state_to_dom(debug: Res<DebugState>) {
     let Some(window) = web_sys::window() else { return };
     let Some(document) = window.document() else { return };
     let Some(el) = document.get_element_by_id("debug-state") else { return };
-    let json = format!(
-        r#"{{"frame":{},"app_state":"{}","last_action":"{}","scene":"{}","logic_state":"{}","score":{},"window_size":[{},{}],"ui_scale":{},"run_mode":"{}"}}"#,
-        debug.frame,
-        debug.app_state,
-        debug.last_action.replace('"', "\\\""),
-        debug.scene.replace('"', "\\\""),
-        debug.logic_state.replace('"', "\\\""),
-        debug.score,
-        json_f32(debug.window_size.0),
-        json_f32(debug.window_size.1),
-        json_f32(debug.ui_scale),
-        debug.run_mode,
-    );
-    el.set_inner_html(&json);
+    // Text content, not inner HTML: a `<` or `&` in an authored string would otherwise be parsed as markup and the
+    // harness would read back different text.
+    el.set_text_content(Some(&debug_state_json(&debug)));
 }
 
 pub fn start_app(project_path: Option<String>, scene_override: Option<String>) {

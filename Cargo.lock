@@ -3453,6 +3453,7 @@ dependencies = [
  "libm",
  "ron 0.11.0",
  "serde",
+ "serde_json",
  "web-sys",
 ]
 

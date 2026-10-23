@@ -31,7 +31,7 @@ The runtime expects an `assets/` directory relative to the executable's working 
 | `window_size` | Logical `(width, height)` of the primary window this frame; `(0, 0)` for a minimized window or when no window exists (headless tests). Serialised as `"window_size":[w,h]` |
 | `ui_scale` | Current `UiScale` multiplier (`1.0` unless a project sets one; `0.0` if the resource does not exist, e.g. a headless test app without `UiPlugin`) |
 
-On WASM, a second system (`sync_debug_state_to_dom`, compiled only for `wasm32`) serialises this to JSON and writes it into `<div id="debug-state">` in the page, making it readable by browser automation (see `test_web.py`).
+The JSON is built by the pure `debug_state_json` (every string field escaped, testable natively). On WASM, a second system (`sync_debug_state_to_dom`, compiled only for `wasm32`) writes it as the text content of `<div id="debug-state">` in the page, making it readable by browser automation (see `test_web.py`).
 
 Assets are organized per-project under `assets/projects/{name}/`. See root `CLAUDE.md` for the full layout.
 
