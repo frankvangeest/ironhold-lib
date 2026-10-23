@@ -1,6 +1,6 @@
 # Feature: Static Scene Mode
 
-_Status: Ready (plan review 2026-10-23: system-architect + ux-gamedesigner-reviewer; the spike in Task 1 gates the rest)_
+_Status: Done (shipped 2026-10-23 on `feature/static_scene_mode`, `4d4983e`, review fixes `50b5213`)_
 _Planned at: `9ff431b` (2026-06-18); re-planned at `e2a5578` (2026-10-23)_
 
 ## What
@@ -73,15 +73,23 @@ mid-fade), shader time. A `Follow` camera with `smoothing > 0` stays at its spaw
 colliders for queries; the spike must confirm this logs no `error!`, because `open_project` fails on console errors). Still
 running: UI, interpreter/executor, rendering, audio, button clicks (so `LoadScene` works), the debug frame counter.
 
+## Result (2026-10-23)
+
+Spike and implementation outcomes (the plan's open questions):
+- Holding `Static` from boot gives pixel-identical screenshots: two consecutive `--real-gpu` runs over all 38 included baselines diff at 0.00%.
+- An empty (never-stepped) Rapier world logs no console errors; nothing stayed invisible; scenes finish loading while the clock is held.
+- Review finding fixed: a flycam spawned with a combined yaw and pitch kept a roll that live play rewrites on the first frame but a held clock never does (static `terrain_demo` was tilted 22 degrees). The flycam now spawns with yaw/pitch only.
+- Scope decision (Frank, 2026-10-23): static baselines freeze objects at authored heights because Rapier never steps, so `quick_scene` (giant/anvil 20 m up, public gallery image) and `primitive_world` (campfire on a delayed event) join `particles_demo`, `effect_mayhem_demo` and `dynamic_animation_control` in `STATIC_EXCLUDED_PROJECTS`. The "settle first, then freeze" fallback (step N ticks with `Time<Fixed>::accumulate_overstep`) was not needed and stays a backlog idea.
+
 ## Tasks
 
-- [ ] **Spike first** (about 30 min, `3rd_person_game_demo` + `custom_materials`): hold `Static` from boot (a temporary `start_app` tweak), screenshot twice. Record: pixel identity between runs (target 0.00%), console errors from the empty Rapier world, where the Follow camera and players sit, that nothing stays invisible (`awaiting_reveal`), and the particle scenes. If authored poses look wrong for some scene, the deterministic fallback is to step N ticks with `Time<Fixed>::accumulate_overstep` while held (one tick per frame), then re-freeze; defer until needed
-- [ ] `PauseHold::announces` + announcement tracking in `apply_sim_clock_system`; `pause_tests` cases: Static from boot emits no `game.paused`; Static held then `PauseGame` emits `game.paused`; `ResumeGame` emits `game.resumed` and the clock stays paused; update `only_the_menu_hold_is_released_by_resume_and_by_a_replace_load` as needed
-- [ ] `AppOptions` + `RunMode`; `start_app` seeds `SimClock` with `Static` when `RunMode::Static`; web parse (`static=1` requires `testing=1`); native passes `Live`
-- [ ] `run_mode` in the debug-state JSON; `test_web.py`: `open_project(static_mode=...)`, `&static=1` for single-scene baselines only, assert `run_mode`, `STATIC_EXCLUDED`
-- [ ] Re-capture the affected baselines in their own commit (`--real-gpu`, only the changed ones); gallery images show spawn-height poses
-- [ ] Docs: `docs/dev/browser_tests.md` (flag, scope, exclusions, what stays frozen), the `game.paused` wording in `docs/30` and `docs/20`, a pause paragraph in `crates/ironhold_core/src/CLAUDE.md` ("`Static` does not announce"); `/new-project` mentions the exclusion set
-- [ ] Verify: two consecutive `--real-gpu` runs diff 0.00% for each static baseline; all baselines pass the existing threshold
+- [x] **Spike first** (about 30 min, `3rd_person_game_demo` + `custom_materials`): hold `Static` from boot (a temporary `start_app` tweak), screenshot twice. Record: pixel identity between runs (target 0.00%), console errors from the empty Rapier world, where the Follow camera and players sit, that nothing stays invisible (`awaiting_reveal`), and the particle scenes. If authored poses look wrong for some scene, the deterministic fallback is to step N ticks with `Time<Fixed>::accumulate_overstep` while held (one tick per frame), then re-freeze; defer until needed
+- [x] `PauseHold::announces` + announcement tracking in `apply_sim_clock_system`; `pause_tests` cases: Static from boot emits no `game.paused`; Static held then `PauseGame` emits `game.paused`; `ResumeGame` emits `game.resumed` and the clock stays paused; update `only_the_menu_hold_is_released_by_resume_and_by_a_replace_load` as needed
+- [x] `AppOptions` + `RunMode`; `start_app` seeds `SimClock` with `Static` when `RunMode::Static`; web parse (`static=1` requires `testing=1`); native passes `Live`
+- [x] `run_mode` in the debug-state JSON; `test_web.py`: `open_project(static_mode=...)`, `&static=1` for single-scene baselines only, assert `run_mode`, `STATIC_EXCLUDED`
+- [x] Re-capture the affected baselines in their own commit (`--real-gpu`, only the changed ones); gallery images show spawn-height poses
+- [x] Docs: `docs/dev/browser_tests.md` (flag, scope, exclusions, what stays frozen), the `game.paused` wording in `docs/30` and `docs/20`, a pause paragraph in `crates/ironhold_core/src/CLAUDE.md` ("`Static` does not announce"); `/new-project` mentions the exclusion set
+- [x] Verify: two consecutive `--real-gpu` runs diff 0.00% for each static baseline; all baselines pass the existing threshold
 
 ## Acceptance criteria
 
