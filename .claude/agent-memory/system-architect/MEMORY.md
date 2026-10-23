@@ -67,7 +67,7 @@
 - [Claude hooks contract](claude_hooks_contract_bug.md) — hooks were no-ops (exit 1 / plain stdout); fixed via `_hook_common.py` block()/emit_context(); new hooks must use it
 - [Asset fetch failure handling](asset_fetch_failure_handling.md) — no retry anywhere; failed .scene.ron = permanent LoadingScene hang; cheap Bevy retry primitives; serve.py HTTP/1.0+backlog-5 vs GH Pages HTTP/2
 - [Material sharing & Blend facts](material_sharing_and_blend_facts.md) — GLB/catalog materials shared (clone per instance); deferred override overwrites clones; Blend = 2 pipelines + late shadow pop; rapier rescales colliders
-- [Rapier query & sync facts](rapier_query_and_sync_facts.md) — stop_at_penetration default true; Writeback writes Transform only (GT stale 2nd tick); move_shape is a pure query; raw_grounded ≠ contact
+- [Rapier query & sync facts](rapier_query_and_sync_facts.md) — stop_at_penetration default true; Writeback writes Transform only; sensors sum into body mass (Density(0) safe)
 - [Render & collider facts (ocean review)](render_and_collider_facts_ocean_review.md) — AmbientLight require(Camera) latent bug; warmup strips ALL NoFrustumCulling; WGSL sin range; colliders GLB-only; GlobalAmbientLight defaults; winit offsetX
 - [Core CLAUDE.md split review](core_claude_md_split_review.md) — final 2026-10-08: nothing lost, risk is load scope (topic-only musts, rules placed by subject not implementing file, exact-file stub globs)
 - [rules.ron vs FSM consolidation](rules_vs_fsm_consolidation.md) — SHIPPED 2026-09-28; batch review: doc commits made directly on integration can bring removed concepts back with no merge conflict, so grep docs

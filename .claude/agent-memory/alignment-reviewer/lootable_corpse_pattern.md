@@ -90,5 +90,8 @@ Known limits of `at_entity` (all confirmed, all non-blocking, all worth re-flagg
 - `TakeAllFromContainer` early-returns on an empty container, so `container.looted` never fires for
   a loot-less corpse → it can only ever hit the ambient decay path.
 - `CloseContainer` takes no id (singleton panel) — any handler closes whatever is open.
-- `trigger_zone` on a Dynamic-body NPC has no `ColliderMassProperties` override (~146× mass, real
-  engine bug in backlog) — both v1 and v2 avoid `trigger_zone` on monsters/corpses for this reason.
+- (RESOLVED 2026-10-23, feature/fix_trigger_zone_mass) `trigger_zone` sensor now spawns with
+  `ColliderMassProperties::Density(0.0)`, so it is safe on Dynamic-body NPCs. Corpses still have no
+  trigger_zone, but now only because they have no need for one. When reviewing, watch for leftover
+  "don't combine trigger_zone with npc" text (docs/20 PrefabDef row, prefabs.ron corpse comment,
+  ocean_simulation_demo plan's proposed buoyant+trigger_zone validate error).

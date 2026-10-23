@@ -21,5 +21,13 @@ Verified 2026-10-02 during plan-review of `step_offset_auto_step.md` (source-rea
   from `last_body_transform_set`. Same path every player turn tick already uses (no new glam-backend exposure).
 - **`RapierContextSimulation::move_shape` (`plugin/context/mod.rs:874`) runs the KCC incl. autostep as a pure query on
   any shape** — "Rapier autostep needs a kinematic body" is false; it needs `&mut` simulation ctx + `RapierQueryPipelineMut`.
+- **Sensor mass (verified 2026-10-23, fix_trigger_zone_mass review):** `recompute_mass_properties_from_colliders`
+  (rapier3d-0.31 `rigid_body_components.rs:441`) sums every *enabled* attached collider, no sensor check.
+  `ColliderMassProps::Density(0.0)` returns `MassProperties::default()` (`collider_components.rs:148`), and parry's
+  `Add` short-circuits on zero, so no NaN. bevy_rapier passes `ColliderMassProperties` through `builder.density()` for
+  child colliders too (parent found via `collider_offset` / ChildOf). Rapier gravity is `gravity * mass`
+  (`rigid_body_components.rs:935`), so a Dynamic body whose ONLY collider is massless gets no gravity and infinite
+  contact mass: unreachable today (all Dynamic spawns carry a capsule). Parent `ReadMassProperties` is only refreshed
+  by writeback after a step: collider init writes it on the *collider* entity, not the parent.
 - `raw_grounded` is a 0.7 m proximity sensor (see [[airborne_ground_reacquisition]]); any feature that needs "standing
   on the ground" must add a contact-gap check on the retained ground hit, not reuse `raw_grounded && jumps_used == 0`.

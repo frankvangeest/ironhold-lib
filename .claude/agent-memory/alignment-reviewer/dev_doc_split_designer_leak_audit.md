@@ -25,8 +25,7 @@ Known gaps found then (re-verify before citing):
   flame from `uv_distort`/`uv_scroll_speed`. docs/20 still says "no sprite → AlphaMode::Add" / "additive has no
   effect without a sprite" / `FlameParticleMaterial` (the pool uses `PoolFlameMaterial`). The warmup recipe
   inherited this.
-- Caveats only in the corpse walkthrough, not the field rows: `trigger_zone` mass on Dynamic bodies,
-  `interactable` fires for every in-range entity, `EmitEventAfterDelay` ticks while paused (catch in `global_on`).
+- Caveats only in the corpse walkthrough, not the field rows: `interactable` fires for every in-range entity, `EmitEventAfterDelay` ticks while paused (catch in `global_on`).
 - RON struct-vs-tuple action syntax rule now lives only in `schema/CLAUDE.md`.
 
 Related: [[new-id-token-pattern]], [[dialogue-system-pattern]], [[lootable-corpse-pattern]], [[particle-quality-budget-pattern]].
