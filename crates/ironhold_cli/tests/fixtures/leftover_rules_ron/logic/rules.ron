@@ -1,0 +1,7 @@
+// Left over from before rules.ron was folded into state_machine.ron: nothing loads this file.
+(
+    schema_version: 1,
+    rules: [
+        ( event: "scene.ready:main", do_actions: [ Log("never runs") ] ),
+    ],
+)

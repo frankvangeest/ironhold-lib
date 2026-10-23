@@ -1529,6 +1529,23 @@ fn unset_state_machine_path_with_convention_file_strict_exits_1() {
     );
 }
 
+/// `rules.ron` was folded into `state_machine.ron`'s `global_on`: nothing loads a `logic/rules.ron` any more, so a copy
+/// left on disk is silently inert. `--strict` says so (the same severity class as `unset_logic_path_with_convention_file`).
+#[test]
+fn leftover_rules_ron_strict_exits_1() {
+    let (code, stdout) = validate("leftover_rules_ron");
+    assert_eq!(code, 0, "expected exit 0 without --strict, got {code}:
+{stdout}");
+    let (code, stdout) = validate_strict("leftover_rules_ron");
+    assert_eq!(code, 1, "expected exit 1 with --strict, got {code}:
+{stdout}");
+    assert!(
+        stdout.contains("logic/rules.ron is no longer supported"),
+        "expected the leftover rules.ron warning in output:
+{stdout}"
+    );
+}
+
 #[test]
 fn orphan_ui_rule_strict_exits_1() {
     // A rule handling ui.button_pressed:truly_orphaned with no button/binding anywhere in the
