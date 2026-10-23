@@ -28,6 +28,14 @@ playing.entry/StopMusic in exit (the free-heal anti-pattern); docs/30 event cata
 new test file (pause_tests) not added to root CLAUDE.md test loop. No shipped project demos TogglePause or
 global_claimed_gamepad_bindings.
 
+**Static scene mode (feature/static_scene_mode, reviewed 2026-10-23, ALIGNED):** `PauseHold::announces` (Menu only)
+splits "clock held" from "game paused as designer sees it"; `apply_sim_clock_system` tracks a `Local<bool>` of last
+announced state. In Live (only Menu exists) this is behaviour-identical. `RunMode`/`AppOptions`/`start_app_with` are
+runner-only (no RON surface, correctly: designers never branch on the harness; `run_mode` only in debug JSON). Web
+`?static=1` needs `testing=1`. Stale-wording trap: "only when the clock really stops" survived in docs/30 action-list
+(~L531) and `schema/actions.rs` PauseGame doc comment after the plan's listed doc sites were fixed -- grep the phrase,
+don't trust line numbers. Any future hold (FocusLoss/Session) must decide `announces` explicitly.
+
 Older plan facts: first-person mouse yaw rotates the player Transform (needs gate); overlay `scene_key_bindings` are dead
 data (rebuilt only in Replace branch); `panels_open` must stay a separate condition from pause.
 

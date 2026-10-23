@@ -1,6 +1,6 @@
 # Memory Index
 
-- [static_scene_mode plan-review](project_static_scene_mode_plan_review.md) — game.paused must track Menu hold only; scope ?static=1 to single-scene shots; motion projects opt out
+- [static_scene_mode plan+impl review](project_static_scene_mode_plan_review.md) — Static never announces; keep ?static=1 out of designer docs; PauseGame contract lives in 5 doc spots
 
 - [Ambient light contract](project_ambient_light_contract.md) — ambient now real; linearised colour; 80 vs 150 defaults; most shipped scenes still ~5% of default
 

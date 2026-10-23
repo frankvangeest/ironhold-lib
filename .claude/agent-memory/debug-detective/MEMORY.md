@@ -1,5 +1,7 @@
 # Memory Index
 
+- [Flycam spawn roll until first write](project_flycam_spawn_roll_until_first_write.md) — XYZ spawn rotation keeps roll, FlycamState YXZ drops it; sim gate before the write shows a tilted horizon (terrain_demo -22 deg)
+
 - [Bevy auto-sync distance semantics](project_bevy_auto_sync_distance_semantics.md) — sync nodes shared per distance (hidden cross-chain order), ignore_deferred postpones, new chains add syncs
 
 - [run_if skip leaves change baseline stale](project_runif_skip_stale_change_baseline.md) — skipped system keeps last_run, so Ref/Changed/readers replay the skip window; gate in-body + drain

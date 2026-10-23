@@ -22,6 +22,10 @@ zombie's 10 s hide and 20 s respawn timers never fired, and under trap 2 they st
 which made the test *look* like it proved "corpse stays in `dead_full` forever". A test written
 this way silently asserts nothing about any timer-driven state change.
 
+3. **The very first `app.update()` always has a zero delta, `ManualDuration` included** (bevy_time 0.18 `real.rs`:
+   `update_with_instant` only records `first_update` when `last_update` is `None`). So a harness test that inserts a
+   hold before its first update genuinely reproduces "held from boot": virtual elapsed stays 0 and no fixed tick runs.
+
 **How to apply:** to advance N seconds, set
 `TimeUpdateStrategy::ManualDuration(Duration::from_millis(250))` once and run `ceil(N / 0.25)`
 updates. Always print `DelayedEventQueue.0` after the loop — if the remaining values didn't move
