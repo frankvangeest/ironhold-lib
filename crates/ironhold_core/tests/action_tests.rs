@@ -26,6 +26,40 @@ fn test_log_action_updates_debug_last_action() {
 
 /// `DebugState.window_size` / `ui_scale` are what the browser harness (`test_web.py --responsive`)
 /// asserts on, so a resize or a `UiScale` change must reach them within a frame.
+/// `#debug-state` is read with a real JSON parser by `test_web.py`; one unparseable frame makes every
+/// `wait_for_debug_state` poll time out with no hint. The strings in it come from authored content (a `Log`/`SetVariable`
+/// argument becomes `last_action` through `{:?}`, scene paths and state names are authored), so quotes, backslashes,
+/// control characters and `<`/`&` must all survive a round trip through a real parser.
+#[test]
+fn test_debug_state_json_is_valid_for_hostile_strings() {
+    use ironhold_core::{debug_state_json, DebugState};
+    for hostile in [
+        r#"say "hi""#,
+        r"back\slash \ and \\ double",
+        "line one\\nline two (literal backslash-n)",
+        "a real\nnewline, tab\tand carriage\rreturn, bell \u{7}",
+        "markup <b>bold</b> & &amp; entities",
+        "unicode: caf\u{e9} \u{2028} \u{1F600}",
+        r#"all of it: " \ <>&"#,
+    ] {
+        let mut debug = DebugState::default();
+        debug.frame = 7;
+        debug.run_mode = "live";
+        debug.app_state = "InGame".to_string();
+        debug.last_action = format!("{:?}", Action::Log(hostile.to_string()));
+        debug.scene = hostile.to_string();
+        debug.logic_state = hostile.to_string();
+        let json = debug_state_json(&debug);
+        let parsed: serde_json::Value = serde_json::from_str(&json)
+            .unwrap_or_else(|e| panic!("debug-state JSON must parse for {hostile:?}: {e}\n{json}"));
+        assert_eq!(parsed["scene"], hostile, "scene must round-trip");
+        assert_eq!(parsed["logic_state"], hostile, "logic_state must round-trip");
+        assert_eq!(parsed["last_action"], debug.last_action.as_str(), "last_action must round-trip");
+        assert_eq!(parsed["frame"], 7);
+        assert_eq!(parsed["run_mode"], "live");
+    }
+}
+
 #[test]
 fn test_debug_state_reports_window_size_and_ui_scale() {
     let mut app = setup_test_app();
