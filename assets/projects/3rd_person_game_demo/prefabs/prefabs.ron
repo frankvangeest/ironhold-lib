@@ -425,8 +425,7 @@
     // corpse a fresh, unique id, so repeated kills of the same slot let corpses coexist/decay
     // independently instead of an older one being sacrificed early. Reuse the live monster's own GLB model as a
     // placeholder fallen pose — no dedicated corpse art exists yet, an accepted v2 limitation
-    // (see the plan's "Open questions"). No `trigger_zone` (the Dynamic-body mass bug found
-    // during v1 doesn't apply here since these are Prop-kind/no rigid body, but there's also no
+    // (see the plan's "Open questions"). No `trigger_zone` (there's no
     // need for auto-close-on-exit — the panel's own close button covers it, same as the monsters
     // themselves in v1). No colliders — a corpse is a purely visual + lootable prop, not a
     // physical obstacle. `nameplate: false` matches chest_01/chest_02's convention.

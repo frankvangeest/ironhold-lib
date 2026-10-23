@@ -114,12 +114,12 @@ counter is decremented once per `CloseContainer`, and an over-increment permanen
 tab-targeting (all gated on `panels_open == 0`, see `capabilities/inventory.rs`) until the next `LoadScene`.
 
 <!-- b:598 -->
-## Do not add `trigger_zone` to a prefab with a Dynamic rigid body
+## A `trigger_zone` sensor is massless
 
-A `trigger_zone` sensor gets no `ColliderMassProperties` override at spawn (`entity_spawner.rs`,
-`attach_prefab_features`), so its volume-derived mass folds into the whole rigid body's mass on a Dynamic (NPC) body and
-makes it wildly heavy and effectively unpushable. Existing uses are safe only because they are `Fixed`-body Props
-(chests, merchants, corpses). A general engine bug, tracked in `planning/backlog.md`.
+`attach_prefab_features` spawns the `trigger_zone` sensor with `ColliderMassProperties::Density(0.0)`. Rapier sums every
+enabled attached collider's mass, sensors included, so without it a `radius: 2.5` zone added ~65 kg to a Dynamic (NPC)
+body and made it unpushable. `trigger_zone` is therefore safe on a Dynamic-body prefab; keep the zero density on any new
+sensor collider attached to a rigid body.
 
 <!-- b:1060 -->
 ## `audio_volume_var_system`

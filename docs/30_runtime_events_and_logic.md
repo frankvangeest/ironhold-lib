@@ -842,7 +842,7 @@ own animation policy (see "Spawn-already-posed pattern" in `docs/20_data_formats
     ],
   ),
   behavior: "behaviors/lootable_corpse.behavior.ron",
-  // no trigger_zone, no colliders — see the mass-veto note below
+  // no trigger_zone, no colliders — see the note below
 ),
 ```
 
@@ -875,10 +875,8 @@ since nothing ever drives its skeleton.
 You do **not** need to touch `lootable_corpse.behavior.ron` itself — every field in it is
 `{self}`-relative, so it already covers any new monster type with zero changes.
 
-**Deliberately no `trigger_zone`.** A `trigger_zone` sensor gets no `ColliderMassProperties`
-override at spawn, so its own volume-derived mass would fold into the entity's total rigid-body
-mass. Corpse props have no collider at all, sidestepping this — a real engine bug independent of
-this feature, tracked in `planning/backlog.md`. The consequence is just that there's no
+**Deliberately no `trigger_zone`.** The corpse prop needs none: the loot panel is closed with its
+own close button. The consequence is just that there's no
 auto-close-on-walk-away — the player closes the loot panel with its own close button instead
 (already globally wired via `ui.button_pressed:close_container`, the same as `chest_01`'s panel).
 
