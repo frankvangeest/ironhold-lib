@@ -47,7 +47,7 @@ Sources are listed in section 10. "Verified" means read on the vendor's own page
   deployment, and that no CockroachDB Enterprise licence is needed.
 - **Database:** CockroachDB or any Postgres-wire-compatible database. The current Docker setup pins `postgres:16.8-alpine` and a
   Nakama 3.37 image. One database to operate.
-- **Activity:** latest release on the releases page is v3.41.0 (18 Sep; the page does not show the year), preceded by
+- **Activity:** latest release is v3.41.0 (18 Sep 2026; the year is confirmed by the Docker Hub tag date), preceded by
   3.40 (13 Jul), 3.39 (20 May), 3.38 (20 Mar), 3.37 (12 Feb): a release roughly every two months, actively maintained.
 - **Feature set (README):** authentication (device id, email, and social providers such as Facebook, Google, Steam and GameCenter per the vendor page; the full current list was not checked), user storage
   in collections, friends / groups / social graph, chat with persisted history, leaderboards (dynamic, seasonal),
