@@ -1,5 +1,7 @@
 # Memory Index
 
+- [entity.attacked co-op attribution](project_npc_attacked_coop_attribution.md) — nearest-player rule documented only in docs/30 ~109; docs/20 NPC section silent
+
 - [static_scene_mode plan+impl review](project_static_scene_mode_plan_review.md) — Static never announces; keep ?static=1 out of designer docs; PauseGame contract lives in 5 doc spots
 
 - [Ambient light contract](project_ambient_light_contract.md) — ambient now real; linearised colour; 80 vs 150 defaults; most shipped scenes still ~5% of default
