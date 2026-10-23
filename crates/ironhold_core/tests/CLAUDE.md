@@ -19,7 +19,7 @@ See `tests/support/mod.rs` for the `setup_test_app()` helper. Each test file dec
 | `scene_lifecycle_tests.rs` | Scene load/unload, overlays, model fixes, pipeline warmup, key bindings, animation graph | 18 |
 | `spawn_tests.rs` | `Action::Spawn`/`Despawn`, spawn queue rate limiting, preload, composite prefab spawn | 15 |
 | `action_tests.rs` | Misc `Action` executor behaviors: variables, delayed events, floating text, target indicator, the `#debug-state` JSON (`debug_state_json` round-trips hostile strings through `serde_json`) | 26 |
-| `npc_tests.rs` | NPC aggro/investigating states, camera shake, the hit relay (nearest player to the hit NPC, `SpawnId` tie-break, unknown NPC ignored) | 11 |
+| `npc_tests.rs` | NPC aggro/investigating states, camera shake, the hit relay (nearest player to the hit NPC, `SpawnId` tie-break, non-finite positions ignored, NPC not in the world yet) | 12 |
 | `nameplate_tests.rs` | Nameplate anchor spawn, visibility filtering, cleanup, `should_insert_nameplate` tri-state contract, `Player`-vs-NPC gating (`player_enabled`, faction_filter bypass), `ToggleOwnNameplate`/`PlayerNameplatePreference` | 18 |
 | `ui_tests.rs` | Button click-to-action wiring, `IconButton` icon/color/shadow sync | 9 |
 | `audio_tests.rs` | PlaySound, PlayMusicLoop, StopMusic, SetVolume | 16 |

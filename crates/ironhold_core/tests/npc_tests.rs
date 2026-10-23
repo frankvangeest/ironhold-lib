@@ -112,7 +112,7 @@ fn test_npc_aggro_on_hit_idle_to_investigating() {
 /// Runs `entity.attacked:{id}` through `npc_hit_relay_system` with the given players and one NPC at `npc_pos`, and
 /// returns what ended up in `NpcHitQueue` for that id. Players carry only `Transform` (`GlobalTransform` is left at its
 /// default), exactly like the other tests here, so a relay that reads `GlobalTransform` sees every player at the origin.
-fn relay_hit(players: &[(&str, Vec3)], npc_pos: Vec3, hit_id: &str) -> Option<Vec3> {
+fn relay_hit(players: &[(Option<&str>, Vec3)], npc_pos: Vec3, hit_id: &str) -> Option<Vec3> {
     use ironhold_core::capabilities::npc::{npc_hit_relay_system, NpcHitQueue};
     use ironhold_core::capabilities::NpcAgent;
     use ironhold_core::runtime::GameEvent;
@@ -121,12 +121,14 @@ fn relay_hit(players: &[(&str, Vec3)], npc_pos: Vec3, hit_id: &str) -> Option<Ve
     let mut app = setup_test_app();
     app.update();
     for (spawn_id, pos) in players {
-        app.world_mut().spawn((
-            SpawnId(spawn_id.to_string()),
+        let mut player = app.world_mut().spawn((
             Transform::from_translation(*pos),
             GlobalTransform::default(),
             npc_aggro_test_player_controller(),
         ));
+        if let Some(spawn_id) = spawn_id {
+            player.insert(SpawnId(spawn_id.to_string()));
+        }
     }
     app.world_mut().spawn((
         SpawnId("enemy_01".to_string()),
@@ -135,10 +137,13 @@ fn relay_hit(players: &[(&str, Vec3)], npc_pos: Vec3, hit_id: &str) -> Option<Ve
         npc_aggro_test_npc_agent("enemy_01", NpcOnPlayerNear::Chase, npc_pos),
     ));
     let event = format!("entity.attacked:{hit_id}");
-    let _ = app.world_mut().run_system_once(move |mut w: MessageWriter<GameEvent>| {
-        w.write(GameEvent::Trigger(event.clone()));
-    });
-    let _ = app.world_mut().run_system_once(npc_hit_relay_system);
+    // `.expect`: a relay that silently failed to run would make the "nothing queued" cases pass vacuously.
+    app.world_mut()
+        .run_system_once(move |mut w: MessageWriter<GameEvent>| {
+            w.write(GameEvent::Trigger(event.clone()));
+        })
+        .expect("event writer ran");
+    app.world_mut().run_system_once(npc_hit_relay_system).expect("relay ran");
     let queue = app.world().resource::<NpcHitQueue>();
     queue.0.get(hit_id).copied()
 }
@@ -151,8 +156,21 @@ fn test_npc_hit_relay_picks_the_player_nearest_the_npc_not_the_first_in_query_or
     let near = Vec3::new(48.0, 0.0, 0.0);
     let far = Vec3::new(-100.0, 0.0, 0.0);
     // P1 (far) is spawned first, so it is first in query order.
-    let got = relay_hit(&[("player_01", far), ("player_02", near)], Vec3::new(50.0, 0.0, 0.0), "enemy_01");
+    let got = relay_hit(&[(Some("player_01"), far), (Some("player_02"), near)], Vec3::new(50.0, 0.0, 0.0), "enemy_01");
     assert_eq!(got, Some(near), "the NPC must investigate the player nearest to it");
+}
+
+/// A player whose `Transform` went non-finite (broken physics) must never win: `total_cmp` would otherwise sort a
+/// negative-signed NaN below every real distance.
+#[test]
+fn test_npc_hit_relay_ignores_a_player_with_a_non_finite_position() {
+    let real = Vec3::new(10.0, 0.0, 0.0);
+    let got = relay_hit(
+        &[(Some("player_01"), Vec3::new(f32::NAN, 0.0, 0.0)), (Some("player_02"), real)],
+        Vec3::new(50.0, 0.0, 0.0),
+        "enemy_01",
+    );
+    assert_eq!(got, Some(real));
 }
 
 /// Two players the same distance from the NPC: the lowest `SpawnId` wins, whatever order they were spawned in.
@@ -162,15 +180,22 @@ fn test_npc_hit_relay_breaks_distance_ties_by_spawn_id() {
     let p2 = Vec3::new(48.0, 0.0, 0.0);
     let npc = Vec3::new(50.0, 0.0, 0.0);
     // player_02 is spawned first, player_01 second: query order must not decide.
-    assert_eq!(relay_hit(&[("player_02", p2), ("player_01", p1)], npc, "enemy_01"), Some(p1));
-    assert_eq!(relay_hit(&[("player_01", p1), ("player_02", p2)], npc, "enemy_01"), Some(p1));
+    assert_eq!(relay_hit(&[(Some("player_02"), p2), (Some("player_01"), p1)], npc, "enemy_01"), Some(p1));
+    assert_eq!(relay_hit(&[(Some("player_01"), p1), (Some("player_02"), p2)], npc, "enemy_01"), Some(p1));
+    // A player without a `SpawnId` loses the tie to one that has it, whatever the spawn order.
+    assert_eq!(relay_hit(&[(None, p2), (Some("player_09"), p1)], npc, "enemy_01"), Some(p1));
+    assert_eq!(relay_hit(&[(Some("player_09"), p1), (None, p2)], npc, "enemy_01"), Some(p1));
 }
 
-/// A hit for an NPC that does not exist (already despawned, wrong id) has nobody to tell: nothing is queued.
+/// A hit for an NPC that is not in the world (not spawned yet: `Spawn` and `entity.attacked` in one frame; or already
+/// despawned) still queues, as it always has: `npc_behavior_system` matches the queue by id on a later tick. With no
+/// NPC position there is no distance to compare, so the lowest `SpawnId` wins (deterministic, never query order).
 #[test]
-fn test_npc_hit_relay_ignores_a_hit_for_an_unknown_npc() {
-    let got = relay_hit(&[("player_01", Vec3::ZERO)], Vec3::new(50.0, 0.0, 0.0), "ghost_99");
-    assert_eq!(got, None);
+fn test_npc_hit_relay_for_an_npc_not_in_the_world_picks_the_lowest_spawn_id() {
+    let p1 = Vec3::new(5.0, 0.0, 0.0);
+    let p2 = Vec3::new(-5.0, 0.0, 0.0);
+    let got = relay_hit(&[(Some("player_02"), p2), (Some("player_01"), p1)], Vec3::new(50.0, 0.0, 0.0), "ghost_99");
+    assert_eq!(got, Some(p1));
 }
 
 /// Flee NPC hit outside detection radius must stay Idle — gated by `on_player_near`.
