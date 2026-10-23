@@ -28,6 +28,17 @@ lighting" and README "fallback environment" claim it works. Fix = put it on the 
 this for GlobalAmbientLight + both shadow maps). Stale doc: schema/scene_v2.rs says point shadow "Bevy default: 512";
 Bevy 0.18 is 1024 (docs/20 is right).
 
+**lighting_validate (2026-10-23):** `SceneLightingV2::ambient_problem`/`shadow_map_size_problem`/`problems` in
+schema/scene_v2.rs, shared by CLI `invalid_lighting` (hard error) and loader warn+fallback (diagnostic twin pattern,
+[[diagnostic-only-feature-pattern]]). Ambient 0 and large brightness accepted; shadow 64..=8192 pow2. Point-shadow
+"512" doc staleness is now fixed. **Still unchecked and a PANIC, not a cosmetic issue:** `CascadeShadowConfigBuilder::build`
+(bevy_light-0.18.0 cascade.rs ~L96-120) asserts `num_cascades > 0`, `maximum_distance > minimum_distance (0.1)`,
+`overlap_proportion in [0,1)` -- so RON `num_cascades: 0`, `shadow_distance: <=0.1/NaN`, `cascade_overlap: 1.0` crash the
+app, and docs/20 + schema doc say overlap range "0.0–1.0" (1.0 documented-valid but panics). Bevy default max distance is
+150 (schema doc's "~1000 native/~100 WebGL" is stale). Non-panicking unclamped: directional/point intensity, range, radius,
+global_environment.intensity. Overlay-only scenes: validate has an overlay-only scene detector
+(`overlay_scene_bindings_ignored`, validate.rs strict section) that lighting could reuse.
+
 **Unit wording:** Bevy ambient brightness is cd/m^2 (a colour multiplier), not lux.
 
 **How to apply:** any future lighting/day-night/EnvState change touches the same resource; check reset-on-Replace,

@@ -95,3 +95,4 @@
 - [Root Visibility::Hidden is not a durable hide](project_visibility_hide_overridden_by_reveal_and_unparented_widgets.md) — animation_policy reveal re-inserts Inherited; nameplate/WorldLabel anchors are unparented
 - [Action::Spawn rejects Primitive prefabs](project_action_spawn_rejects_primitive_prefabs.md) — model "" lookup fails, spawn skipped with warn; only scene-load builds primitives; validate silent
 - [SelectAimHeight only with ClickSelectable](project_selectaimheight_only_with_clickselectable.md) — targetable-only prefab's select_aim_height ignored (1.0 used); hand-spawned tests mask it
+- [Lighting: Bevy cascade asserts + shadow clamps](project_lighting_bevy_asserts_and_clamps.md) — num_cascades 0/overlap>=1 panic; directional size clamped, point not; WebGL2 max is 2048

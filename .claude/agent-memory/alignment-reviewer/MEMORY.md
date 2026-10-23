@@ -56,7 +56,7 @@
 - [SetUiVisible / UiNodeId pattern](ui_set_visible_pattern.md) — UI-id Display::None action; empty-id guard now in; overlay no-scene.ready + ActionBar-unhideable gaps; wildcard arms left
 - [Web host-page contract](web_host_page_contract.md) — canvas selector/fit/data-ready/DebugState test fields need no RON; flag missing-id embeds + designer note on non-fixed play area
 - [Real pause pattern](real_pause_pattern.md) — SimClock/auto-resume-in-spawn_scene_v2 ([LoadScene,PauseGame] is NOT paused); validate has no engine-event allowlist; stale "timers tick while paused" doc sites
-- [Scene ambient light](scene_ambient_light_pattern.md) — AmbientLight entity -> GlobalAmbientLight; per-scene luminance-ratio table; global_environment EnvironmentMapLight is ALSO a dead bare entity; cd/m^2
+- [Scene ambient light](scene_ambient_light_pattern.md) — AmbientLight entity -> GlobalAmbientLight; per-scene luminance-ratio table; global_environment EnvironmentMapLight is ALSO a dead bare entity; cd/m^2; invalid_lighting + cascade-builder PANIC fields
 - [FPS control scheme + cursor capture](fps_control_scheme_cursor_capture_pattern.md) — InputMapDef serde(from) layering, live-camera stick owner, web-only cursor.lock_lost; Escape double-bind + hide_own_body widget traps
 - [Aim target + mouse slot (FPS v2)](aim_target_mouse_slot_pattern.md) — SelectAimHeight only inserted with click_selectable (targetable-only aim height dead); target_name = prefab key; slot do_actions now in validate all_actions
 - [Restriction-lift doc sweep](restriction_lift_doc_sweep.md) — a fix that lifts a "don't combine X+Y" rule must purge every copy; docs/20 field row is the usual miss (trigger_zone mass)
