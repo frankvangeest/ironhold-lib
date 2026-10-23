@@ -36,5 +36,13 @@ Plan: `planning/features/rules_to_state_machine_consolidation.md`.
   `.claude/agents/ron-gameplay-scripter.md`, which still offers `logic/rules.ron` and fake
   `on_enter`/`on_exit`/`when` fields.
 
+- **Tripwire trap (2026-10-23, feature/leftover_rules_ron_check):** `ironhold_core` test
+  `assets_schema_version_regression::regression_no_rules_ron_files_remain` scans
+  `assets/projects/` AND `crates/ironhold_cli/tests/fixtures/` and fails on ANY `rules.ron`. Any
+  CLI fixture that needs a real `logic/rules.ron` (e.g. the `leftover_rules_ron` strict check)
+  must be allowlisted there or the file created at test time; CLI-only test runs won't catch it.
+- Migration hint: rules with a `when:` guard go into a state's `on:`, not `global_on`. A message
+  that says only "move into global_on" oversimplifies.
+
 **How to apply:** when a feature adds logic hooks, check only the `state_machine.ron`/behavior
 paths. Related: [[validate-cross-file-blind-spots]], [[intent-event-layer-pattern]].

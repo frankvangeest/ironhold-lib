@@ -1,5 +1,7 @@
 # Memory Index
 
+- [CLI fixture vs core tripwire](project_cli_fixture_vs_core_tripwire.md) — core's no-rules.ron tripwire scans CLI fixtures; a rules.ron fixture passes CLI tests, fails core suite
+
 - [Flycam spawn roll until first write](project_flycam_spawn_roll_until_first_write.md) — XYZ spawn rotation keeps roll, FlycamState YXZ drops it; sim gate before the write shows a tilted horizon (terrain_demo -22 deg)
 
 - [Bevy auto-sync distance semantics](project_bevy_auto_sync_distance_semantics.md) — sync nodes shared per distance (hidden cross-chain order), ignore_deferred postpones, new chains add syncs

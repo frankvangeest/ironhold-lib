@@ -424,3 +424,9 @@ they don't show up in test runs or in "all projects validate clean" verification
 is missing vs malformed (malformed is loud via `parse_file`; missing is silent), and (b) whether
 the path it resolves matches the runtime's resolution. When a change adds a check over a *set* of
 enum variants or config fields, enumerate the full set and confirm none were missed.
+
+**Convention-path "file is dead" warnings must exclude the configured path** (leftover_rules_ron
+review, 2026-10-23): a check of the form "`<convention file>` exists, so it's inert" is false if
+`.project.ron` points a live field at that same file (e.g. `state_machine_path:
+"logic/rules.ron"`). Also watch for literals mangled by an editing tool (a `\`-continuation turned
+into a run of spaces, `\n` into a raw newline) — substring-asserting tests don't catch it.
