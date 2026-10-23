@@ -3816,6 +3816,27 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
         }
     }
 
+    // `rules.ron` was folded into `state_machine.ron`'s `global_on` and the schema no longer has a `rules_path`, so a
+    // `logic/rules.ron` left on disk (an old project, or a copy of one not yet migrated) is silently inert: nothing
+    // loads it and nothing else warns about it. It is not broken, just dead, so this is `--strict` advisory like the
+    // `unset_logic_path_with_convention_file` check above. Checked even without a `.project.ron`, since a stale file
+    // is exactly what an unmigrated project looks like.
+    // A project that kept the old file name for its live state machine (`state_machine_path: "logic/rules.ron"`) is
+    // loading it, so the file is not leftover: skip it, or the advice below would have the author delete live logic.
+    let rules_ron_is_the_state_machine = project_config
+        .and_then(|c| c.state_machine_path.as_deref())
+        .is_some_and(|p| p.replace('\\', "/").trim_start_matches("./") == "logic/rules.ron");
+    if !rules_ron_is_the_state_machine && project_dir.join("logic/rules.ron").is_file() {
+        warnings.push(StrictWarning {
+            source_file: "logic/rules.ron".to_string(),
+            message: "logic/rules.ron is no longer supported: nothing loads it, so its rules never run. Move them \
+                      into logic/state_machine.ron (`global_on`, or a state's `on:` for rules with a `when:` guard) \
+                      and delete the file (see \"Removed: rules.ron\" in docs/20_data_formats.md)"
+                .to_string(),
+            kind: "leftover_rules_ron",
+        });
+    }
+
     // A `Fixed(...)` camera_mode with both look_at/look_at_entity set, or neither, is working
     // (not broken) either way -- see `camera_mode_fixed_look_at_problem`'s doc comment -- so this
     // is `--strict` advisory, unlike the always-on `camera_mode_nested_split_party` check in

@@ -1529,6 +1529,70 @@ fn unset_state_machine_path_with_convention_file_strict_exits_1() {
     );
 }
 
+/// Copies the `leftover_rules_ron` fixture into a temp dir and writes `logic/rules.ron` there. The file is created at
+/// test time because `ironhold_core`'s `regression_no_rules_ron_files_remain` tripwire forbids a checked-in
+/// `rules.ron` anywhere under the CLI fixtures. `project_ron` overrides the fixture's `.project.ron` when given.
+fn leftover_rules_ron_project(tag: &str, rules_ron: &str, project_ron: Option<&str>) -> std::path::PathBuf {
+    let src = fixture("leftover_rules_ron");
+    let dir = std::env::temp_dir().join(format!("ironhold_leftover_rules_ron_{}_{tag}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    for rel in [
+        "leftover_rules_ron.project.ron",
+        "scenes/main.scene.ron",
+        "logic/state_machine.ron",
+    ] {
+        let to = dir.join(rel);
+        std::fs::create_dir_all(to.parent().unwrap()).unwrap();
+        std::fs::copy(src.join(rel), &to).unwrap();
+    }
+    std::fs::write(dir.join("logic/rules.ron"), rules_ron).unwrap();
+    if let Some(project_ron) = project_ron {
+        std::fs::write(dir.join("leftover_rules_ron.project.ron"), project_ron).unwrap();
+    }
+    dir
+}
+
+fn run_validate_at(dir: &Path, strict: bool) -> (i32, String) {
+    let mut cmd = ironhold();
+    cmd.arg("validate");
+    if strict {
+        cmd.arg("--strict");
+    }
+    let out = cmd.arg(dir).output().unwrap_or_else(|e| panic!("failed to run ironhold: {e}"));
+    (out.status.code().unwrap_or(-1), String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// `rules.ron` was folded into `state_machine.ron`'s `global_on`: nothing loads a `logic/rules.ron` any more, so a copy
+/// left on disk is silently inert. `--strict` says so (the same severity class as `unset_logic_path_with_convention_file`).
+#[test]
+fn leftover_rules_ron_strict_exits_1() {
+    let old_format = "(\n    schema_version: 1,\n    rules: [ ( on: \"scene.ready:main\", do_actions: [ Log(\"never runs\") ] ) ],\n)\n";
+    let dir = leftover_rules_ron_project("leftover", old_format, None);
+    let (code, stdout) = run_validate_at(&dir, false);
+    assert_eq!(code, 0, "expected exit 0 without --strict, got {code}:\n{stdout}");
+    let (code, stdout) = run_validate_at(&dir, true);
+    assert_eq!(code, 1, "expected exit 1 with --strict, got {code}:\n{stdout}");
+    assert!(
+        stdout.contains("logic/rules.ron is no longer supported"),
+        "expected the leftover rules.ron warning in output:\n{stdout}"
+    );
+    assert!(!stdout.contains("  into"), "the message must not contain runs of spaces:\n{stdout}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A project that kept the old file name for its live state machine loads it, so it is not leftover and must not be
+/// flagged (the advice would have the author delete live logic).
+#[test]
+fn rules_ron_that_is_the_configured_state_machine_is_not_flagged() {
+    let live = "(\n    schema_version: 1,\n    global_on: [],\n)\n";
+    let project = "(\n    schema_version: 3,\n    initial_scene: \"scenes/main.scene.ron\",\n    state_machine_path: \"./logic/rules.ron\",\n)\n";
+    let dir = leftover_rules_ron_project("live", live, Some(project));
+    let (code, stdout) = run_validate_at(&dir, true);
+    assert_eq!(code, 0, "a configured logic/rules.ron is live, expected a clean strict run, got {code}:\n{stdout}");
+    assert!(!stdout.contains("no longer supported"), "must not warn about a live state machine:\n{stdout}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn orphan_ui_rule_strict_exits_1() {
     // A rule handling ui.button_pressed:truly_orphaned with no button/binding anywhere in the
