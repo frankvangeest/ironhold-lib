@@ -77,4 +77,5 @@
 - [InputMap layering & FPS facts](inputmap_layering_and_fps_facts.md) — authored>scheme>default needs raw def + serde(from); strafe is char-relative; aim/camera-chain cycle trap; aim_target is last PlayerTarget writer
 - [Static scene mode facts](static_scene_mode_facts.md) — Ready same-frame as spawn; globals.time=Virtual → hold from boot; announce edge (Menu) split from clock edge; shipped review
 - [Web canvas host contract](web_canvas_host_contract.md) — start_app hardcodes canvas "#ironhold-canvas"; bevy_winit 0.18 panics if a host page lacks it; native unaffected
+- [serde_json transitive dep](serde_json_transitive_dep.md) — already in core's wasm32 tree via bevy_gltf; web-sys Element implies Node
 - [Shadow-map size facts](shadow_map_size_facts.md) — Bevy fixes/clamps directional size but not point (0/oversize = wgpu error); WebGL2 guarantees 2048 not 8192; 8192 = 1-1.5 GiB
