@@ -95,9 +95,22 @@ pub fn parse_session(resp: &ehttp::Response) -> Result<Session, ApiError> {
 /// Write one object. `value` is a JSON *document as a string* (Nakama stores it as JSON text). `version` of `*` means
 /// "only if it does not exist yet"; a concrete version means "only if it is still that version" (optimistic locking).
 pub fn storage_write(base: &str, token: &str, collection: &str, key: &str, value: &str, version: Option<&str>) -> ehttp::Request {
+    storage_write_with(base, token, collection, key, value, version, 1)
+}
+
+/// `permission_read`: 0 = nobody (server only), 1 = the owner, 2 = any signed-in user (public read). Writes stay owner-only.
+pub fn storage_write_with(
+    base: &str,
+    token: &str,
+    collection: &str,
+    key: &str,
+    value: &str,
+    version: Option<&str>,
+    permission_read: i32,
+) -> ehttp::Request {
     let mut obj = json!({
         "collection": collection, "key": key, "value": value,
-        "permission_read": 1, "permission_write": 1
+        "permission_read": permission_read, "permission_write": 1
     });
     if let Some(v) = version {
         obj["version"] = json!(v);
@@ -130,4 +143,35 @@ pub fn parse_read(resp: &ehttp::Response) -> Result<Option<(String, String)>, Ap
         let s = |k: &str| o.get(k).and_then(Value::as_str).unwrap_or("").to_string();
         (s("value"), s("version"))
     }))
+}
+
+// ---- E4b / E4c: listings ----------------------------------------------------------------------------------------
+
+/// Public-read objects of one collection, across all users (no `user_id` filter): the "lobby list without server code" idea.
+pub fn storage_list_public(base: &str, token: &str, collection: &str, limit: u32) -> ehttp::Request {
+    let mut req = ehttp::Request::get(format!("{base}/v2/storage/{collection}?limit={limit}"));
+    req.headers.insert("Authorization", format!("Bearer {token}"));
+    req
+}
+
+/// `(user_id, key, value)` of every object in a storage listing.
+pub fn parse_storage_list(resp: &ehttp::Response) -> Result<Vec<(String, String, String)>, ApiError> {
+    let v = ok_json(resp)?;
+    let s = |o: &Value, k: &str| o.get(k).and_then(Value::as_str).unwrap_or("").to_string();
+    Ok(v.get("objects")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().map(|o| (s(o, "user_id"), s(o, "key"), s(o, "value"))).collect())
+        .unwrap_or_default())
+}
+
+/// `GET /v2/match`: what Nakama lists as joinable matches. `authoritative=false` asks for relayed ones.
+pub fn match_list(base: &str, token: &str, authoritative: bool, limit: u32) -> ehttp::Request {
+    let mut req = ehttp::Request::get(format!("{base}/v2/match?limit={limit}&authoritative={authoritative}"));
+    req.headers.insert("Authorization", format!("Bearer {token}"));
+    req
+}
+
+/// The raw status and body of any response, for experiments that record exactly what the server said.
+pub fn raw(resp: &ehttp::Response) -> (u16, String) {
+    (resp.status, resp.text().unwrap_or("").to_string())
 }

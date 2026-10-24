@@ -134,11 +134,12 @@ sizes only. `prost-build` needs `protoc`, which Windows lacks: use `protox` (pur
 ## Tasks
 - [x] S1 Prerequisites: endpoint reachable, version recorded (3.41.0), device-id sign-in works (checked with `curl` on the LXC)
 - [x] S2a Scaffold `spikes/nakama_spike/` outside the workspace; protocol/transport split; native probe works
-- [ ] S2b (`.gitignore` added) restructure into a protocol layer (no networking) and transport layer; wasm32 build
-      of the protocol layer
+- [x] S2b restructure into a protocol layer (`src/protocol/`, no networking) and transport layer (`src/native.rs`); the library
+      checks for `wasm32-unknown-unknown`, 3 unit tests on the socket envelope pass
 - [x] S3a E1 and E2 natively (2026-10-24, results in the Progress log)
 - [ ] S3b E1/E2 in a browser page served from `http://localhost` (CORS preflight with the Basic-auth header)
-- [ ] S4 E4a/E4b/E4c with `tokio-tungstenite` (native) and `ewebsock` (wasm); JSON envelope first
+- [x] S4a E4a/E4b/E4c natively with `tokio-tungstenite` (2026-10-24, JSON envelope; results in the Progress log)
+- [ ] S4b the same from a browser page with `ewebsock` (and S3b: E1/E2 from the page)
 - [ ] S5 E3 once the homelab mounts a modules directory (module source in `spikes/nakama_spike/server/`)
 - [ ] S6 E5: calibration runs C1-C4, then the main grid with deadline scheduling, probes and the Playwright script
 - [ ] S7 E6 matchmaker; E7 drop/reconnect (tunnel part waits for the homelab stage 2)
@@ -212,3 +213,19 @@ benchmark):**
   crate, with an effort estimate based on the measured protocol-layer size.
 - Given the spike is closed, when the repo is inspected, then `spikes/nakama_spike/` is gone or archived, no key or token is
   committed, no LAN IP appears in the report or the code (the endpoint comes from `NAKAMA_URL`), and no engine crate has changed.
+
+**2026-10-24, E4 results (native `tokio-tungstenite` with NODELAY, JSON envelope, two users; one-shot times, not a benchmark):**
+- Socket connect 6 ms; a socket ping/pong round trip (calibration C1) 11.5 ms on this first sample. Creating a relayed match 4.6 ms,
+  joining by id 2.3 ms, a broadcast reaching the other member 1.4 ms (a single sample, so the real distribution comes from E5).
+- E4a: broadcast and targeted (recipient list) sends both arrive intact; `op_code` arrives as a string and the data as base64, as
+  predicted; the sender does **not** get its own broadcast back (so a probe needs a second client or a targeted echo). The other
+  member sees join and leave through `match_presence_event`. **A relayed match is gone when its last member leaves**: joining its id
+  afterwards fails with `4: Match not found`. Creating a match with the same `name` twice returns the **same match id** (a name is a
+  stable room key; the second creator joins, size 2).
+- **E4b: ListMatches does list relayed matches** (`authoritative=false`): the entry has only `match_id` and `size`, no label. The
+  docs gave the opposite impression. A relayed match can therefore appear in a list, but with no title, mode or capacity, so it is
+  not enough for a lobby on its own. `authoritative=true` lists nothing here.
+- E4c: a public-read (`permission_read` 2) storage object in a `lobbies` collection is visible to another user through
+  `GET /v2/storage/lobbies` (list across owners, no server code). It lets a lobby carry host name, mode, player count and the match
+  id; the cost is that stale entries have to be removed by the owner or a server job (nothing expires them).
+- Protocol layer after E1-E4: about 400 lines (rest 177, socket 223, mod 5), counted again at S9.

@@ -3,17 +3,20 @@
 //!   nakama_spike probe   reachability + "the default server key is rejected" (needs no key)
 //!   nakama_spike e1      REST: device-id sign-in (create + re-login) and refresh
 //!   nakama_spike e2      REST: storage write / read / version conflict
-//!   nakama_spike all     probe, e1, e2
+//!   nakama_spike e4      realtime socket: relayed match (E4a), ListMatches (E4b), public-read lobby objects (E4c)
+//!   nakama_spike all     probe, e1, e2, e4
 //!
 //! Secrets: the endpoint is `NAKAMA_URL`; the server key is `NAKAMA_SERVER_KEY` or a file outside the repo (see config.rs).
 //! Nothing secret is ever printed: session tokens are reported by length and lifetime only.
 
-mod api;
-mod config;
+mod e4;
+
+use nakama_spike::config;
 
 use std::time::Instant;
 
 use api::ApiError;
+use nakama_spike::protocol::rest as api;
 
 fn send(req: &ehttp::Request) -> Result<(ehttp::Response, f64), String> {
     let t = Instant::now();
@@ -122,6 +125,7 @@ fn main() {
     let result = (|| -> Result<(), String> {
         match cmd.as_str() {
             "probe" => probe(&base),
+            "e4" => e4::run(&config::Config::load()?),
             "e1" | "e2" | "all" => {
                 if cmd == "all" {
                     probe(&base)?;
@@ -132,9 +136,12 @@ fn main() {
                 if cmd != "e1" {
                     e2(&cfg, &session)?;
                 }
+                if cmd == "all" {
+                    e4::run(&cfg)?;
+                }
                 Ok(())
             }
-            other => Err(format!("unknown experiment '{other}' (probe | e1 | e2 | all)")),
+            other => Err(format!("unknown experiment '{other}' (probe | e1 | e2 | e4 | all)")),
         }
     })();
     if let Err(e) = result {
