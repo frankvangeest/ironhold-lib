@@ -252,3 +252,21 @@ dev machine on Wi-Fi 6E to the homelab, Nakama 3.41.0):**
   **open socket survives its token's expiry** (answers the open E1 question for this case; reconnecting after expiry still needs a
   fresh token, that is E7).
 - Not yet checked: the Nakama server log for `queue full` / write-timeout lines for this run (needs `docker logs` on the LXC).
+
+**2026-10-24, E5 main grid, native (release build, 400 B, JSON envelope, 65 s per run with 5 s warm-up dropped, probes 10 Hz on top of
+the load, 3 repeats per cell; Wi-Fi 6E to the homelab, Nakama 3.41.0). Round trip A -> server -> B -> server -> A, ms:**
+
+| Clients | Load per client | p50 (range of 3) | p95 (range of 3) | p99 (range of 3, n=2400 per run) | Worst single sample | Longest receive gap |
+|---|---|---|---|---|---|---|
+| 2 | 20 Hz | 14.1-14.8 | 22.0-24.8 | n/a (n=1200) | 50.9 | 77 ms |
+| 2 | 30 Hz | 14.0-14.9 | 22.1-22.9 | n/a (n=1200) | 45.4 | 71 ms |
+| 4 | 20 Hz | 17.6-18.4 | 26.4-27.0 | 31.0-34.5 | 44.9 | 76 ms |
+| 4 | 30 Hz | 17.9-18.6 | 26.4-27.7 | 32.5-35.5 | 47.5 | 62 ms |
+
+- All 12 runs: send rate 100% of target (30 Hz runs 100.1%), writer queue drained, **zero disconnects or errors**.
+- Against the LAN criteria (p95 < 30, p99 < 50, gaps < 200 ms): **met in every cell**, but 4 clients leave only about 2.5-3.5 ms
+  of p95 headroom on Wi-Fi, so the margin there is thin. Going from 2 to 4 clients costs about 4 ms at p50 and 4-5 ms at p95; going
+  from 20 to 30 Hz changes nothing measurable. The relay's cost is dominated by the two server hops, not by the send rate.
+- Outliers: no single round trip above 51 ms in 15,600 probe samples.
+- Still to do for the verdict: the Nakama log for `queue full`/write-timeout lines (a check after the 90 s calibration run found none,
+  only startup lines), a wired run for the Wi-Fi caveat, and the browser-side numbers (C3/C4 plus the grid from a page).
