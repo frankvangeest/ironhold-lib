@@ -141,7 +141,7 @@ sizes only. `prost-build` needs `protoc`, which Windows lacks: use `protox` (pur
 - [x] S4a E4a/E4b/E4c natively with `tokio-tungstenite` (2026-10-24, JSON envelope; results in the Progress log)
 - [x] S4b socket open, ping and a relayed match from a browser page with `ewebsock` (first part of E4; two-client parts in E5)
 - [x] S5 E3 with a Lua module (`spikes/nakama_spike/server/spike_leaderboard.lua`): passes
-- [ ] S6 E5: calibration runs C1-C4, then the main grid with deadline scheduling, probes and the Playwright script
+- [ ] S6 E5 (C1 and C2 done natively, see the log; C3/C4 need the browser side): calibration runs C1-C4, then the main grid with deadline scheduling, probes and the Playwright script
 - [ ] S7 E6 matchmaker; E7 drop/reconnect (tunnel part waits for the homelab stage 2)
 - [ ] S8 Protobuf envelope on the main case (`protox`/`prost`); measure the protocol-layer line count and the wasm size with and
       without prost
@@ -241,3 +241,14 @@ benchmark):**
   open (17 ms), socket ping (11 ms), relayed match create (5 ms) and leave all work, with **no CORS workaround and no server
   setting changed**. That meets the first go criterion for stage 1 (`wss://` and mixed content wait for stage 2). The wasm module
   is the same protocol layer as the native driver; only the transport differs.
+
+**2026-10-24, E5 calibration C2 (native to native, release build, 2 clients, probes only at 30 Hz, 64 B, 90 s, 5 s warm-up dropped;
+dev machine on Wi-Fi 6E to the homelab, Nakama 3.41.0):**
+- Round trip A -> server -> B -> server -> A (probe out, echo back), timestamped from the scheduled send time: **n=5100, min 4.3,
+  p50 14.2, mean 14.4, p95 22.3, p99 32.1, max 46.4 ms.** The LAN budget (p95 < 30, p99 < 50) is met on Wi-Fi already; a wired run
+  should only tighten it. For scale: the socket's own ping/pong was 11.5 ms in the single E4 sample.
+- Longest gap between received messages 62 ms (probes arrive at 30 Hz, so the normal gap is 33 ms): no stall near the 200 ms limit.
+- Send rate 100% of target, writer queue fully drained, **zero disconnects over 90 s**, which is past the 60 s session token: an
+  **open socket survives its token's expiry** (answers the open E1 question for this case; reconnecting after expiry still needs a
+  fresh token, that is E7).
+- Not yet checked: the Nakama server log for `queue full` / write-timeout lines for this run (needs `docker logs` on the LXC).

@@ -111,4 +111,44 @@ impl Socket {
     pub async fn close(mut self) {
         let _ = self.sink.close().await;
     }
+
+    /// Hand the two halves to separate tasks (E5: a writer task on a deadline schedule, a reader task that timestamps each receive
+    /// the moment it arrives). Buffered `events` are dropped: split after setup is done.
+    pub fn split(self) -> (Writer, Reader) {
+        (Writer { sink: self.sink }, Reader { stream: self.stream })
+    }
+}
+
+pub struct Writer {
+    sink: SplitSink<Ws, Message>,
+}
+
+impl Writer {
+    pub async fn send_text(&mut self, text: String) -> Result<(), String> {
+        self.sink.send(Message::text(text)).await.map_err(|e| format!("send: {e}"))
+    }
+}
+
+pub struct Reader {
+    stream: SplitStream<Ws>,
+}
+
+impl Reader {
+    /// The next envelope with the instant it was taken off the socket. `Err` when the socket closes or breaks.
+    pub async fn next(&mut self) -> Result<(std::time::Instant, Envelope), String> {
+        loop {
+            match self.stream.next().await {
+                None => return Err("socket closed by the peer".into()),
+                Some(Err(e)) => return Err(format!("socket error: {e}")),
+                Some(Ok(Message::Text(t))) => {
+                    let at = std::time::Instant::now();
+                    return Envelope::parse(t.as_str()).map(|e| (at, e));
+                }
+                Some(Ok(Message::Close(frame))) => {
+                    return Err(format!("socket closed: {}", frame.map(|f| format!("{} {}", u16::from(f.code), f.reason)).unwrap_or_default()))
+                }
+                Some(Ok(_)) => continue,
+            }
+        }
+    }
 }

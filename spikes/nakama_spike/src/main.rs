@@ -5,13 +5,15 @@
 //!   nakama_spike e2      REST: storage write / read / version conflict
 //!   nakama_spike e3      leaderboard created by a server module, client submit and list (needs the module deployed)
 //!   nakama_spike e4     realtime socket: relayed match (E4a), ListMatches (E4b), public-read lobby objects (E4c)
-//!   nakama_spike all     probe, e1, e2, e4
+//!   nakama_spike e5 [clients] [load_hz] [probe_hz] [payload_bytes] [secs]   relay latency (default: calibration C2)
+//!   nakama_spike all    probe, e1, e2, e4
 //!
 //! Secrets: the endpoint is `NAKAMA_URL`; the server key is `NAKAMA_SERVER_KEY` or a file outside the repo (see config.rs).
 //! Nothing secret is ever printed: session tokens are reported by length and lifetime only.
 
 mod e3;
 mod e4;
+mod e5;
 
 use nakama_spike::config;
 
@@ -129,6 +131,7 @@ fn main() {
             "probe" => probe(&base),
             "e3" => e3::run(&config::Config::load()?),
             "e4" => e4::run(&config::Config::load()?),
+            "e5" => e5::run(&config::Config::load()?, &std::env::args().skip(2).collect::<Vec<_>>()),
             "e1" | "e2" | "all" => {
                 if cmd == "all" {
                     probe(&base)?;
@@ -144,7 +147,7 @@ fn main() {
                 }
                 Ok(())
             }
-            other => Err(format!("unknown experiment '{other}' (probe | e1 | e2 | e3 | e4 | all)")),
+            other => Err(format!("unknown experiment '{other}' (probe | e1 | e2 | e3 | e4 | e5 | all)")),
         }
     })();
     if let Err(e) = result {
