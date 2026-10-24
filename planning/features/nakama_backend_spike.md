@@ -137,10 +137,10 @@ sizes only. `prost-build` needs `protoc`, which Windows lacks: use `protox` (pur
 - [x] S2b restructure into a protocol layer (`src/protocol/`, no networking) and transport layer (`src/native.rs`); the library
       checks for `wasm32-unknown-unknown`, 3 unit tests on the socket envelope pass
 - [x] S3a E1 and E2 natively (2026-10-24, results in the Progress log)
-- [ ] S3b E1/E2 in a browser page served from `http://localhost` (CORS preflight with the Basic-auth header)
+- [x] S3b E1/E2 in a browser page served from `http://localhost:8002` (CORS preflight with the Basic-auth header): passes
 - [x] S4a E4a/E4b/E4c natively with `tokio-tungstenite` (2026-10-24, JSON envelope; results in the Progress log)
-- [ ] S4b the same from a browser page with `ewebsock` (and S3b: E1/E2 from the page)
-- [ ] S5 E3 once the homelab mounts a modules directory (module source in `spikes/nakama_spike/server/`)
+- [x] S4b socket open, ping and a relayed match from a browser page with `ewebsock` (first part of E4; two-client parts in E5)
+- [x] S5 E3 with a Lua module (`spikes/nakama_spike/server/spike_leaderboard.lua`): passes
 - [ ] S6 E5: calibration runs C1-C4, then the main grid with deadline scheduling, probes and the Playwright script
 - [ ] S7 E6 matchmaker; E7 drop/reconnect (tunnel part waits for the homelab stage 2)
 - [ ] S8 Protobuf envelope on the main case (`protox`/`prost`); measure the protocol-layer line count and the wasm size with and
@@ -229,3 +229,15 @@ benchmark):**
   `GET /v2/storage/lobbies` (list across owners, no server code). It lets a lobby carry host name, mode, player count and the match
   id; the cost is that stale entries have to be removed by the owner or a server job (nothing expires them).
 - Protocol layer after E1-E4: about 400 lines (rest 177, socket 223, mod 5), counted again at S9.
+
+**2026-10-24, E3 and the first browser run (homelab, Nakama 3.41.0, one-shot times):**
+- E3: the Lua module (6 lines of logic, no build step) creates the leaderboard `spike_best` at server start. Three clients submitted
+  scores (HTTP 200, 10-15 ms each) and the top-10 listing returned them best first (`450, 300, 120`). A client can submit any value
+  (999999999 was accepted with HTTP 200), so scores are trusted unless the leaderboard is made authoritative, which needs more
+  server code. The module reached the server by copying a file into the bind-mounted directory and restarting the container (one
+  restart, no rebuild).
+- Browser (headed Chromium, page on `http://localhost:8002`, Nakama on another origin over plain `http://` and `ws://`): sign-in
+  (cross-origin POST with an `Authorization` header, so a CORS preflight), refresh, storage write (PUT) and read, `ewebsock` socket
+  open (17 ms), socket ping (11 ms), relayed match create (5 ms) and leave all work, with **no CORS workaround and no server
+  setting changed**. That meets the first go criterion for stage 1 (`wss://` and mixed content wait for stage 2). The wasm module
+  is the same protocol layer as the native driver; only the transport differs.

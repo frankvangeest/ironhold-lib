@@ -1,0 +1,15 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Nakama spike</title>
+<body style="font: 14px monospace">
+<h3>Nakama spike (throwaway)</h3>
+<pre id="out">running...</pre>
+<script type="module">
+  // ?base=http://host:7350&key=<server key>  (supplied by run_browser.py, never committed)
+  import init, { run_checks } from "./pkg/nakama_spike.js";
+  const q = new URLSearchParams(location.search);
+  await init();
+  const report = await run_checks(q.get("base"), q.get("key"));
+  window.__report = report;
+  document.getElementById("out").textContent = report;
+</script>

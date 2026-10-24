@@ -218,6 +218,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "futures-channel"
+version = "0.3.34"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1f9e3d69d39e4862ffed03ed071a76f9a13ba1d9109d355b0f0aa6b15e393c4"
+dependencies = [
+ "futures-core",
+]
+
+[[package]]
 name = "futures-core"
 version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -291,6 +300,18 @@ dependencies = [
  "libc",
  "r-efi",
  "rand_core 0.10.1",
+]
+
+[[package]]
+name = "gloo-timers"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "482ce8a491a501da4cd806bd190275363d674f2845005c6ddbd5d3e1dd54495d"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "js-sys",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -387,11 +408,16 @@ dependencies = [
  "base64 0.22.1",
  "ehttp",
  "ewebsock",
+ "futures-channel",
  "futures-util",
+ "gloo-timers",
+ "js-sys",
  "serde",
  "serde_json",
  "tokio",
  "tokio-tungstenite",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]
