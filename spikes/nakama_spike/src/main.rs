@@ -3,12 +3,14 @@
 //!   nakama_spike probe   reachability + "the default server key is rejected" (needs no key)
 //!   nakama_spike e1      REST: device-id sign-in (create + re-login) and refresh
 //!   nakama_spike e2      REST: storage write / read / version conflict
-//!   nakama_spike e4      realtime socket: relayed match (E4a), ListMatches (E4b), public-read lobby objects (E4c)
+//!   nakama_spike e3      leaderboard created by a server module, client submit and list (needs the module deployed)
+//!   nakama_spike e4     realtime socket: relayed match (E4a), ListMatches (E4b), public-read lobby objects (E4c)
 //!   nakama_spike all     probe, e1, e2, e4
 //!
 //! Secrets: the endpoint is `NAKAMA_URL`; the server key is `NAKAMA_SERVER_KEY` or a file outside the repo (see config.rs).
 //! Nothing secret is ever printed: session tokens are reported by length and lifetime only.
 
+mod e3;
 mod e4;
 
 use nakama_spike::config;
@@ -125,6 +127,7 @@ fn main() {
     let result = (|| -> Result<(), String> {
         match cmd.as_str() {
             "probe" => probe(&base),
+            "e3" => e3::run(&config::Config::load()?),
             "e4" => e4::run(&config::Config::load()?),
             "e1" | "e2" | "all" => {
                 if cmd == "all" {
@@ -141,7 +144,7 @@ fn main() {
                 }
                 Ok(())
             }
-            other => Err(format!("unknown experiment '{other}' (probe | e1 | e2 | e4 | all)")),
+            other => Err(format!("unknown experiment '{other}' (probe | e1 | e2 | e3 | e4 | all)")),
         }
     })();
     if let Err(e) = result {

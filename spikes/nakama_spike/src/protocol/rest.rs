@@ -175,3 +175,30 @@ pub fn match_list(base: &str, token: &str, authoritative: bool, limit: u32) -> e
 pub fn raw(resp: &ehttp::Response) -> (u16, String) {
     (resp.status, resp.text().unwrap_or("").to_string())
 }
+
+// ---- E3: leaderboard (created by server code, used by clients) ---------------------------------------------------
+
+/// Submit a score. `score` is an int64, which the JSON API takes as a string.
+pub fn leaderboard_submit(base: &str, token: &str, leaderboard: &str, score: i64) -> ehttp::Request {
+    json_request("POST", format!("{base}/v2/leaderboard/{leaderboard}"), format!("Bearer {token}"), Some(json!({ "score": score.to_string() })))
+}
+
+pub fn leaderboard_top(base: &str, token: &str, leaderboard: &str, limit: u32) -> ehttp::Request {
+    let mut req = ehttp::Request::get(format!("{base}/v2/leaderboard/{leaderboard}?limit={limit}"));
+    req.headers.insert("Authorization", format!("Bearer {token}"));
+    req
+}
+
+/// `(owner_id, score, rank)` of every record; the JSON API writes `score` and `rank` as strings.
+pub fn parse_leaderboard(resp: &ehttp::Response) -> Result<Vec<(String, i64, i64)>, ApiError> {
+    let v = ok_json(resp)?;
+    let num = |o: &Value, k: &str| match o.get(k) {
+        Some(Value::String(s)) => s.parse().unwrap_or(0),
+        Some(n) => n.as_i64().unwrap_or(0),
+        None => 0,
+    };
+    Ok(v.get("records")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().map(|o| (o.get("owner_id").and_then(Value::as_str).unwrap_or("").to_string(), num(o, "score"), num(o, "rank"))).collect())
+        .unwrap_or_default())
+}
