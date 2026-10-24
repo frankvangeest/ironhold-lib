@@ -203,6 +203,15 @@ thin client under ~1000 lines for the features above; no licence or database sur
 meta), the realtime protocol is impractical from Rust/wasm, or ops burden on the homelab is too high (then Heroic Cloud
 or a small own service for just lobbies).
 
+## 8b. Spike log (findings as they come in)
+
+- **2026-10-24, leaderboards need server code.** Per Nakama's leaderboard docs, "a leaderboard can be created via server-side code at
+  startup or within a registered function"; a client can only submit scores to, and list records of, existing leaderboards.
+  Practical consequence: even the simplest meta feature on our list needs a server runtime module (JavaScript/TypeScript/Go/Lua)
+  deployed alongside Nakama. This strengthens the recommendation to ship **one generic, data-driven module** and keep designers
+  out of server code, and it adds a deployer step ("mount the modules directory") that the homelab stack did not have.
+- 2026-10-24, stage 1 endpoint verified: Nakama 3.41.0 healthy, placeholder server key rejected (401), device-id sign-in works.
+
 ## 9. What is not verified in this investigation
 
 - Whether **Lightyear, bevy_replicon/renet or matchbox** support our current Bevy version (and the 0.19 target), and their WASM

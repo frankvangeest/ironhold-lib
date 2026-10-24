@@ -1,6 +1,6 @@
 # Feature: Nakama backend spike (throwaway)
 
-_Status: Draft_
+_Status: In Progress (started 2026-10-24; S1 done, S2 and E1/E2 code written, waiting on the server key file; see "Progress log")_
 _Planned at: `98b23b7` (2026-10-23)_
 
 Decision being informed: `planning/investigations/nakama_backend_viability.md` (recommendation "both, layered";
@@ -52,7 +52,7 @@ Everything below is measured **native vs browser** and, once the homelab's stage
 |---|---|---|
 | E1 | REST: authenticate with a device id (create + re-login), store the session token and refresh it | Effort of the REST client; token handling in wasm |
 | E2 | REST: write and read a storage object (cloud-save shape: a few KB of JSON), including a version conflict | Storage semantics and error codes |
-| E3 | REST: submit a leaderboard score and list the top 10 | Leaderboard shape; whether score validation needs server code |
+| E3 | REST: submit a leaderboard score and list the top 10. **Needs a server runtime module** (see Progress log): a client cannot create a leaderboard | Leaderboard shape; the real cost of "meta features need server code" |
 | E4 | Realtime socket: connect, join/create a **relayed** match (with a label for lobby listing), list matches, leave | Effort of the socket protocol; lobby discovery fit for `ListLobbies` |
 | E5 | Two clients (one native, one browser tab) exchange match data; measure round-trip and one-way delay, loss, ordering | The number that decides whether a WebSocket relay is viable |
 | E6 | Matchmaker: two clients add a ticket with properties and get matched | Whether `FindMatch` can be built on it |
@@ -79,6 +79,21 @@ Everything below is measured **native vs browser** and, once the homelab's stage
 - [ ] S8 Write the result: append "Spike result" to `planning/investigations/nakama_backend_viability.md`, state go/no-go
       against the criteria below, estimate the effort of a maintained client crate, update the backlog items, then delete or
       archive `spikes/nakama_spike/`
+
+## Progress log
+
+**2026-10-24**
+- S1 done: endpoint `http://192.168.178.106:7350` reachable, Nakama **3.41.0**, device-id sign-in works (checked with `curl` on the
+  LXC itself, tokens redacted); wrong or default server key is rejected with HTTP 401.
+- S2 done (native): `spikes/nakama_spike/` standalone crate (`api.rs` protocol, `config.rs`, `main.rs` native driver). Probe from this
+  machine over the LAN: `GET /` 200, sign-in with the default key 401 in single-digit milliseconds after the first (cold) request.
+- E1 and E2 are written (`e1`, `e2`, `all` subcommands) and need the server key, which the spike reads from `NAKAMA_SERVER_KEY` or a
+  local file outside the repo (`~/.nakama_spike_server_key`, never committed, never printed).
+- **Finding (E3 blocker):** Nakama's own docs say a leaderboard "can be created via server-side code at startup or within a
+  registered function" (Go/TypeScript/Lua); clients can only submit to and list existing ones. So E3 needs a small server runtime
+  module (JavaScript, loaded from `/nakama/data/modules` in the container). That means a homelab change (bind-mount a modules
+  directory; tracked in `homelab/planning/features/nakama-deployment.md`) and is direct evidence for the investigation's point that
+  even basic meta features need server-side code unless we ship one generic module.
 
 ## Go / no-go criteria
 **Go** (write the `ironhold_backend` abstraction plan with a Nakama adapter) when all hold:
