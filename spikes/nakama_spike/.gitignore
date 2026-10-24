@@ -1,0 +1,4 @@
+# wasm-pack output and local-only files: never commit
+pkg/
+.env
+*.local

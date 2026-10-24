@@ -3,7 +3,8 @@
 
 use std::path::PathBuf;
 
-pub const DEFAULT_URL: &str = "http://192.168.178.106:7350";
+/// No LAN address in committed code: the homelab endpoint comes from `NAKAMA_URL`; the default is a local container.
+pub const DEFAULT_URL: &str = "http://localhost:7350";
 
 pub struct Config {
     pub base_url: String,
@@ -19,7 +20,7 @@ fn key_file_path() -> PathBuf {
 }
 
 impl Config {
-    /// `NAKAMA_URL` (default: the homelab stage 1 endpoint) and the server key from `NAKAMA_SERVER_KEY` or the key file.
+    /// `NAKAMA_URL` (default: a local container on localhost) and the server key from `NAKAMA_SERVER_KEY` or the key file.
     pub fn load() -> Result<Config, String> {
         let base_url = std::env::var("NAKAMA_URL").unwrap_or_else(|_| DEFAULT_URL.to_string());
         let server_key = match std::env::var("NAKAMA_SERVER_KEY") {
