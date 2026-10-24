@@ -78,4 +78,5 @@
 - [Static scene mode facts](static_scene_mode_facts.md) — Ready same-frame as spawn; globals.time=Virtual → hold from boot; announce edge (Menu) split from clock edge; shipped review
 - [Web canvas host contract](web_canvas_host_contract.md) — start_app hardcodes canvas "#ironhold-canvas"; bevy_winit 0.18 panics if a host page lacks it; native unaffected
 - [serde_json transitive dep](serde_json_transitive_dep.md) — already in core's wasm32 tree via bevy_gltf; web-sys Element implies Node
+- [Nakama spike facts](nakama_spike_facts.md) — outgoing_queue_size 16, token 60s, leaderboards need server code, relayed matches unlabeled, ewebsock native 10ms send-poll + no NODELAY
 - [Shadow-map size facts](shadow_map_size_facts.md) — Bevy fixes/clamps directional size but not point (0/oversize = wgpu error); WebGL2 guarantees 2048 not 8192; 8192 = 1-1.5 GiB
