@@ -210,6 +210,11 @@ or a small own service for just lobbies).
   Practical consequence: even the simplest meta feature on our list needs a server runtime module (JavaScript/TypeScript/Go/Lua)
   deployed alongside Nakama. This strengthens the recommendation to ship **one generic, data-driven module** and keep designers
   out of server code, and it adds a deployer step ("mount the modules directory") that the homelab stack did not have.
+- **2026-10-24, E1/E2 measured (native, Wi-Fi, LAN):** REST calls take roughly 8-22 ms (device sign-in, refresh, storage
+  read/write). The session token lasts **60 s** (refresh token 3600 s by default), so any long-lived client needs refresh logic. A
+  stale storage write returns HTTP 400 with `{"code":9,...,"message":"Storage write rejected - version check failed."}`. Stored JSON
+  is **normalized** (same content, different key order and spacing), so save data cannot depend on byte-exact text. The object
+  version appears to be derived from the content.
 - 2026-10-24, stage 1 endpoint verified: Nakama 3.41.0 healthy, placeholder server key rejected (401), device-id sign-in works.
 
 ## 9. What is not verified in this investigation

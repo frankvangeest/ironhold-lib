@@ -86,9 +86,13 @@ fn e2(cfg: &config::Config, session: &api::Session) -> Result<(), String> {
 
     let (r, ms) = send(&api::storage_read(&cfg.base_url, &session.token, "spike_saves", &key, &uid))?;
     let got = api::parse_read(&r).map_err(|e| e.to_string())?.ok_or("the object just written was not found")?;
-    show("read it back", ms, format!("{} bytes, version matches: {}", got.0.len(), got.1 == v1));
-    if got.0.replace(' ', "") != doc.replace(' ', "") {
-        return Err(format!("round trip changed the document: {}", got.0));
+    // Nakama stores the value as normalized JSON (Postgres jsonb): key order and whitespace are NOT preserved, so the
+    // comparison is on the parsed document and the exact-text difference is itself a finding.
+    let same_text = got.0 == doc;
+    let same_json = serde_json::from_str::<serde_json::Value>(&got.0).ok() == serde_json::from_str::<serde_json::Value>(doc).ok();
+    show("read it back", ms, format!("{} bytes, version matches: {}, same JSON: {}, byte-identical text: {}", got.0.len(), got.1 == v1, same_json, same_text));
+    if !same_json {
+        return Err(format!("round trip changed the document content: {}", got.0));
     }
 
     let (r, ms) = send(&api::storage_write(&cfg.base_url, &session.token, "spike_saves", &key, r#"{"level":4}"#, Some(&v1)))?;

@@ -136,7 +136,8 @@ sizes only. `prost-build` needs `protoc`, which Windows lacks: use `protox` (pur
 - [x] S2a Scaffold `spikes/nakama_spike/` outside the workspace; protocol/transport split; native probe works
 - [ ] S2b (`.gitignore` added) restructure into a protocol layer (no networking) and transport layer; wasm32 build
       of the protocol layer
-- [ ] S3 E1 and E2 natively (needs the server key); then E1/E2 in a browser page (CORS from `http://localhost`)
+- [x] S3a E1 and E2 natively (2026-10-24, results in the Progress log)
+- [ ] S3b E1/E2 in a browser page served from `http://localhost` (CORS preflight with the Basic-auth header)
 - [ ] S4 E4a/E4b/E4c with `tokio-tungstenite` (native) and `ewebsock` (wasm); JSON envelope first
 - [ ] S5 E3 once the homelab mounts a modules directory (module source in `spikes/nakama_spike/server/`)
 - [ ] S6 E5: calibration runs C1-C4, then the main grid with deadline scheduling, probes and the Playwright script
@@ -182,6 +183,21 @@ cut S8 if the JSON results are clearly good or clearly bad.
 - Plan review (system-architect, same day): verdict "needs more design work"; this revision applies it: E3 prerequisites, E4 split in
   three, native WebSocket via `tokio-tungstenite`, tighter latency budget plus stall/queue/reconnect criteria, calibration runs,
   probe/load separation, warm-up and repeats, trimmed matrix, stage-1 CORS correction, `.gitignore`, key/token handling, 3-4 day estimate.
+
+**2026-10-24, E1 and E2 results (native, dev machine on Wi-Fi to the homelab LXC, Nakama 3.41.0; times are one-shot REST calls, not a
+benchmark):**
+- E1 sessions: device-id sign-in create 9-22 ms; re-login of the same device returns the same account (`created=false`); refresh 8-9 ms;
+  a garbage refresh token is rejected with 401. **Session token lifetime is 60 s** (the default, as predicted): every REST call in a
+  longer run needs a refresh step. Still open: does an open socket survive its token's expiry; log in again after the 3600 s refresh
+  token expires (needs a long run).
+- E2 storage: write 13-14 ms, read 8-14 ms. The stale-version write is rejected with **HTTP 400** and body
+  `{"code":9, "message":"Storage write rejected - version check failed."}` (the 3.41 FAILED_PRECONDITION code, mapped to 400), and a
+  create-only write (`version=*`) on an existing key is also HTTP 400. Optimistic locking works as assumed.
+- **Finding: stored JSON is normalized.** The value read back has the same content but not the same text (key order and spacing
+  differ; Postgres `jsonb` semantics): a save file must not rely on byte-exact or key-ordered round trips.
+- **Observation: the object `version` looks content-derived.** Two different users writing the same document got the same
+  version prefix. So a version identifies content, not a write; two writers that happen to store identical content do not conflict.
+  (To confirm: compare the full version strings.)
 
 ## Open questions
 - Does a socket survive its token's expiry? (E1 answers it; the plan assumes nothing.)
