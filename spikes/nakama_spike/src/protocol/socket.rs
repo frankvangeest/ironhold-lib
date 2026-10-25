@@ -24,7 +24,43 @@ pub struct MatchCreate {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MatchJoin {
+    #[serde(skip_serializing_if = "String::is_empty")]
     pub match_id: String,
+    /// Joins the match a matchmaker result points at (instead of a known match id).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub token: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct MatchmakerAdd {
+    pub min_count: i32,
+    pub max_count: i32,
+    pub query: String,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct MatchmakerTicket {
+    #[serde(default)]
+    pub ticket: String,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct MatchmakerUser {
+    #[serde(default)]
+    pub presence: Presence,
+}
+
+/// Pushed when the matchmaker formed a match. A relayed match is joined with `token` (see [`Envelope::match_join_token`]).
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct MatchmakerMatched {
+    #[serde(default)]
+    pub ticket: String,
+    #[serde(default)]
+    pub token: String,
+    #[serde(default)]
+    pub match_id: String,
+    #[serde(default)]
+    pub users: Vec<MatchmakerUser>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -127,6 +163,8 @@ pub struct Envelope {
     pub ping: Option<Empty>,
     #[serde(skip_serializing_if = "Option::is_none", skip_deserializing)]
     pub match_data_send: Option<MatchDataSend>,
+    #[serde(skip_serializing_if = "Option::is_none", skip_deserializing)]
+    pub matchmaker_add: Option<MatchmakerAdd>,
 
     // server -> client
     #[serde(rename = "match", skip_serializing_if = "Option::is_none", default)]
@@ -138,6 +176,10 @@ pub struct Envelope {
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub pong: Option<Empty>,
     #[serde(skip_serializing, default)]
+    pub matchmaker_ticket: Option<MatchmakerTicket>,
+    #[serde(skip_serializing, default)]
+    pub matchmaker_matched: Option<MatchmakerMatched>,
+    #[serde(skip_serializing, default)]
     pub error: Option<SocketError>,
 }
 
@@ -146,7 +188,13 @@ impl Envelope {
         Envelope { cid: Some(cid.into()), match_create: Some(MatchCreate { name: name.map(str::to_string) }), ..Default::default() }
     }
     pub fn match_join(cid: &str, match_id: &str) -> Self {
-        Envelope { cid: Some(cid.into()), match_join: Some(MatchJoin { match_id: match_id.into() }), ..Default::default() }
+        Envelope { cid: Some(cid.into()), match_join: Some(MatchJoin { match_id: match_id.into(), token: String::new() }), ..Default::default() }
+    }
+    pub fn match_join_token(cid: &str, token: &str) -> Self {
+        Envelope { cid: Some(cid.into()), match_join: Some(MatchJoin { match_id: String::new(), token: token.into() }), ..Default::default() }
+    }
+    pub fn matchmaker_add(cid: &str, min_count: i32, max_count: i32, query: &str) -> Self {
+        Envelope { cid: Some(cid.into()), matchmaker_add: Some(MatchmakerAdd { min_count, max_count, query: query.into() }), ..Default::default() }
     }
     pub fn match_leave(cid: &str, match_id: &str) -> Self {
         Envelope { cid: Some(cid.into()), match_leave: Some(MatchLeave { match_id: match_id.into() }), ..Default::default() }
@@ -167,6 +215,10 @@ impl Envelope {
     pub fn kind(&self) -> &'static str {
         if self.error.is_some() {
             "error"
+        } else if self.matchmaker_matched.is_some() {
+            "matchmaker_matched"
+        } else if self.matchmaker_ticket.is_some() {
+            "matchmaker_ticket"
         } else if self.matched.is_some() {
             "match"
         } else if self.match_data.is_some() {

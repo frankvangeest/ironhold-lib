@@ -3,3 +3,5 @@
 
 pub mod rest;
 pub mod socket;
+#[cfg(feature = "proto")]
+pub mod proto;

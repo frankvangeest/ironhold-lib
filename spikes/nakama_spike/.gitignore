@@ -2,3 +2,4 @@
 pkg/
 .env
 *.local
+pkg_proto/

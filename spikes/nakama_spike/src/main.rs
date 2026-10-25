@@ -14,6 +14,9 @@
 mod e3;
 mod e4;
 mod e5;
+mod e6;
+#[cfg(feature = "proto")]
+mod e8;
 
 use nakama_spike::config;
 
@@ -131,6 +134,10 @@ fn main() {
             "probe" => probe(&base),
             "e3" => e3::run(&config::Config::load()?),
             "e4" => e4::run(&config::Config::load()?),
+            "e6" => e6::run_e6(&config::Config::load()?),
+            "e7" => e6::run_e7(&config::Config::load()?, &std::env::args().skip(2).collect::<Vec<_>>()),
+            #[cfg(feature = "proto")]
+            "e8" => e8::run(&config::Config::load()?, &std::env::args().skip(2).collect::<Vec<_>>()),
             "e5" => e5::run(&config::Config::load()?, &std::env::args().skip(2).collect::<Vec<_>>()),
             "e1" | "e2" | "all" => {
                 if cmd == "all" {
@@ -147,7 +154,7 @@ fn main() {
                 }
                 Ok(())
             }
-            other => Err(format!("unknown experiment '{other}' (probe | e1 | e2 | e3 | e4 | e5 | all)")),
+            other => Err(format!("unknown experiment '{other}' (probe | e1 | e2 | e3 | e4 | e5 | e6 | e7 | all)")),
         }
     })();
     if let Err(e) = result {

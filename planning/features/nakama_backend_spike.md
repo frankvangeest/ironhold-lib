@@ -142,8 +142,8 @@ sizes only. `prost-build` needs `protoc`, which Windows lacks: use `protox` (pur
 - [x] S4b socket open, ping and a relayed match from a browser page with `ewebsock` (first part of E4; two-client parts in E5)
 - [x] S5 E3 with a Lua module (`spikes/nakama_spike/server/spike_leaderboard.lua`): passes
 - [ ] S6 E5 (C1 and C2 done natively, see the log; C3/C4 need the browser side): calibration runs C1-C4, then the main grid with deadline scheduling, probes and the Playwright script
-- [ ] S7 E6 matchmaker; E7 drop/reconnect (tunnel part waits for the homelab stage 2)
-- [ ] S8 Protobuf envelope on the main case (`protox`/`prost`); measure the protocol-layer line count and the wasm size with and
+- [x] S7 E6 matchmaker; E7 drop/reconnect (done locally, see the log; the tunnel part waits for the homelab stage 2)
+- [x] S8 Protobuf envelope on the main case (`protox`/`prost`); measure the protocol-layer line count and the wasm size with and
       without prost
 - [ ] S9 Write the result: append "Spike result" to `planning/investigations/nakama_backend_viability.md`, state go / change-course
       against the criteria, estimate a maintained client crate, update the backlog items, delete or archive `spikes/nakama_spike/`
@@ -353,8 +353,9 @@ the pages (probe RTT from the scheduled send time, so the page's own `setTimeout
 | 2800 B | 13.9 | 22.7 | 32.1 | ok |
 | 4000 B | - | - | - | **both sockets closed with WebSocket 1009 (message too big) on the first send** |
 
-- RTT grows about 3 ms per KB of payload at the median (the Wi-Fi hop, base64 and JSON on both ends, and the relay copy), so the
-  400 B snapshot budget is cheap but a 2-3 KB state packet costs 10+ ms before any jitter.
+- Under a 2-client, 20 Hz load the median RTT grew with payload size (5 -> 9 -> 14 ms). **Corrected by E8 below:** with one
+  probe in flight and no load, the same sizes cost the same 5 ms, so the growth above was queueing/airtime under load (Wi-Fi), not
+  a per-byte cost of JSON or base64. Larger packets matter because they are sent at a rate, not because of their size alone.
 - **Effective payload ceiling is about 2.9 KB, not 4 KB:** Nakama's 4096 byte limit applies to the whole socket message and base64
   inflates the payload by a third, plus the envelope. A protobuf envelope (S8) has the same base64-free advantage only for the
   envelope itself, so S8 should also measure the ceiling. Anything larger needs splitting, delta compression or a storage/RPC path.
@@ -370,6 +371,48 @@ the pages (probe RTT from the scheduled send time, so the page's own `setTimeout
 | 10000 ms | same drop |
 
 - A 500 ms freeze (tab throttled, GC, a long frame) is absorbed by TCP and the server queue with no loss and no effect on others;
-  3 s is not, at this data rate. The exact threshold and the server's reason (outgoing queue full vs write timeout) are not
-  established: the Nakama log for those two runs has not been read yet. Clients must treat a drop as normal and reconnect (E7).
+  3 s is not, at this data rate. **Server log (read afterwards):** for the stalled session only, a burst of `Could not write message,
+  session outgoing queue full` and `Failed to route message ... session outgoing queue full`, then `Could not write message ... write
+  tcp ...: i/o timeout` and the close. So the mechanism is: the client stops reading, TCP backs up, the server's per-session outgoing
+  queue fills, messages to that session are dropped, and the write timeout closes it. Other sessions were not affected. The exact
+  threshold is not established (it depends on the data rate). Clients must treat a drop as normal and reconnect (E7).
+- **Log check for the "zero `queue full` / write-timeout lines" criterion:** over the last 3 hours the server log has 1177 such
+  lines, **all in the single minute 10:33 UTC, which is the 3 s stall run**. No other minute has one, so every native and browser
+  grid run met the criterion. The lines appear only for a client that stops reading.
 - A dropped member also removes its ring-probe target, so the client before it in the ring loses its RTT samples (harness effect).
+
+### 2026-10-25, E6 matchmaker, E7 drop/reconnect/soak, E8 protobuf (native, Wi-Fi)
+
+**E6 (`nakama_spike e6`):** two clients each add a ticket (min 2, max 2, query `*`) and both are told they matched **about 9.8 s
+later** (the interval is a server setting, default 15 s; the match formed on the next tick). The result carries a join `token` and no
+match id; both clients join the same relayed match with `match_join {token}` (4 ms) and data flows. `FindMatch` can be built on it.
+Time to match is bounded by the matchmaker interval, so a UI needs a "searching" state of at least that long unless the interval is
+lowered in the server config.
+
+**E7 (`nakama_spike e7`, `e7 soak`):**
+- After the socket is dropped the client refreshes its session, reconnects and rejoins **the same match in 13 ms** (criterion: 5 s);
+  the other member sees the leave and the rejoin; data flows. The server also noticed the drop within 2 ms, **but that is a clean TCP
+  close** from dropping the socket in-process. A half-open drop (pulled cable, lid closed) is detected only by the server's ping
+  timeout; not measured here.
+- A connect with an expired token (60 s lifetime, waited 65 s) is refused with **HTTP 401**; after a session refresh it works. A
+  client must refresh before reconnecting.
+- **Soak, 600 s:** two clients in a match, one targeted message per second, a socket ping every 15 s, a session refresh every 45 s
+  (13 refreshes): 600 of 600 messages delivered, slowest 76 ms, no disconnect, no manual step. Meets "no token failure in a
+  10-minute session". The tunnel and idle-socket behaviour (stage 2) is still open.
+
+**E8 / S8, protobuf envelope (`--features proto`, `nakama_spike e8`):** hand-written `prost` structs for the used subset with the
+field numbers of nakama-common `realtime.proto` (what `prost-build` would emit; no `protoc` needed). 300 sequential round trips per
+cell, one in flight, no load:
+
+| payload | JSON wire / RTT p50 p95 | protobuf wire / RTT p50 p95 |
+|---|---|---|
+| 400 B | 789 B / 4.8, 11.4 | 539 B / 4.7, 14.2 |
+| 2800 B | 3989 B / 5.2, 10.2 | 2939 B / 5.0, 14.6 |
+| 3900 B | **fails** (over the 4096 byte limit, socket closed) | 4039 B / 5.3, 15.4 |
+
+- Latency is the same for both formats (p95 differences are noise at n=300 on Wi-Fi). Protobuf saves bandwidth (about 30% at
+  400 B, the 400 B payload plus about 140 B of presence/ids) and raises the **payload ceiling from about 2.9 KB to about 4 KB**.
+- Cost: release wasm **369,298 B (JSON only) vs 403,172 B with prost** (+33.9 KB, +9%); protocol layer **486 lines** (JSON, incl. REST
+  and matchmaker) **+ 178 lines** for the protobuf subset = 664, under the 1000-line criterion. Unit tests included in the counts.
+- The binary socket works with `?format=protobuf` and the browser transport (`ewebsock`) already handles binary frames, but the
+  protobuf path was only exercised natively here.
