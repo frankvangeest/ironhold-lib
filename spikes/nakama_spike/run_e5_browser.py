@@ -52,8 +52,80 @@ def relay_url(match, peers, load, probe, size, secs):
     )
 
 
+def run_cell(browser, pages, load, probe, size, secs):
+    """One native host plus `pages` browser pages (each its own window). Returns (page results, host lines)."""
+    env = dict(os.environ, E5_EXTERNAL_PEERS=str(pages), NAKAMA_URL=BASE)
+    host = subprocess.Popen(
+        [str(NATIVE_EXE), "e5", str(pages + 1), str(load), str(probe), str(size), str(secs)],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env,
+    )
+    match = None
+    for line in host.stdout:
+        if line.startswith("MATCH_ID="):
+            match = line.strip().split("=", 1)[1]
+            break
+    if not match:
+        raise SystemExit("the native host did not print a match id")
+    ctxs = [browser.new_context() for _ in range(pages)]
+    ps = [c.new_page() for c in ctxs]
+    for pg in ps:
+        pg.goto(relay_url(match, pages, load, probe, size, secs))
+    timeout = (secs + 120) * 1000
+    results = []
+    for pg in ps:
+        pg.wait_for_function("window.__relay !== undefined", timeout=timeout)
+        results.append(json.loads(pg.evaluate("window.__relay")))
+    rest, _ = host.communicate(timeout=180)
+    for c in ctxs:
+        c.close()
+    return results, [l for l in rest.splitlines() if "RTT ms" in l or "disconnects" in l or "longest gap" in l]
+
+
+def grid(browser, secs, reps, size, probe):
+    """Browser grid: 1 native host + 1 or 3 pages (2 or 4 clients), load 20 and 30 Hz, `reps` repeats."""
+    print(f"browser grid: {size} B, probes {probe} Hz, {secs} s per run, {reps} repeats")
+    for pages in (1, 3):
+        for hz in (20, 30):
+            for rep in range(1, reps + 1):
+                print(f"cell {pages + 1} clients / {hz} Hz / rep {rep}")
+                results, host_lines = run_cell(browser, pages, hz, probe, size, secs)
+                pooled = {
+                    "rtts": [x for r in results for x in r.get("rtts", [])],
+                    "max_gap_ms": max(r.get("max_gap_ms", 0) for r in results),
+                    "late_mean_ms": sum(r.get("late_mean_ms", 0) for r in results) / len(results),
+                    "late_max_ms": max(r.get("late_max_ms", 0) for r in results),
+                    "sent_probes": sum(r.get("sent_probes", 0) for r in results),
+                    "sent_load": sum(r.get("sent_load", 0) for r in results),
+                    "error": "; ".join(str(r["error"]) for r in results if r.get("error")) or None,
+                }
+                if pooled["rtts"]:
+                    summarize("pages pooled", pooled)
+                else:
+                    print("  no samples:", pooled["error"])
+                for l in host_lines:
+                    print("  native host:" + l)
+
+
 def main() -> None:
     mode = sys.argv[1] if len(sys.argv) > 1 else "c3"
+    if mode == "grid":
+        # python run_e5_browser.py grid [secs=65] [reps=3] [size=400] [probe_hz=10]
+        a = sys.argv[2:]
+        httpd = http.server.ThreadingHTTPServer(("127.0.0.1", PORT), functools.partial(Quiet, directory=str(HERE)))
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        flags = [
+            "--disable-background-timer-throttling",
+            "--disable-renderer-backgrounding",
+            "--disable-backgrounding-occluded-windows",
+            "--disable-features=CalculateNativeWinOcclusion",
+        ]
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=False, args=flags)
+            grid(browser, int(a[0]) if a else 65, int(a[1]) if len(a) > 1 else 3, int(a[2]) if len(a) > 2 else 400,
+                 float(a[3]) if len(a) > 3 else 10)
+            browser.close()
+        httpd.shutdown()
+        return
     secs = int(sys.argv[2]) if len(sys.argv) > 2 else 90
     load = float(sys.argv[3]) if len(sys.argv) > 3 else 0
     probe = float(sys.argv[4]) if len(sys.argv) > 4 else 30

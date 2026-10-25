@@ -319,3 +319,25 @@ Native main grid (400 B, JSON envelope, 65 s per run, probes 10 Hz on top of the
   possible. A wired run and a server-side log/metrics look are needed before this counts for or against the relay. One stall in
   about 12 minutes of traffic is also the kind of event that decides whether snapshot-style state replication (tolerates a stall) or
   input-style (does not) is the right use of this relay.
+
+### 2026-10-25, E5 main grid from browser pages (Wi-Fi, no wired run available)
+
+1 native host + 1 or 3 Chromium pages (visible windows, throttling switches), 400 B, JSON envelope, 65 s per run (5 s warm-up
+dropped), probes 10 Hz per client on top of the load, 3 repeats per cell, host `192.168.178.106:7350`. Page figures are pooled over
+the pages (probe RTT from the scheduled send time, so the page's own `setTimeout` lateness is inside them; send lateness mean was
+0.6-5.6 ms). p99 is not reported: at most 1800 pooled samples, under the 2000 rule.
+
+| Clients / load | page p50 | page p95 | page worst | longest page receive gap | native host p95 |
+|---|---|---|---|---|---|
+| 2 / 20 Hz (3 reps) | 6.0-10.7 | 14.6-18.4 | 32.7-40.7 | 104-116 ms | 8.1-15.7 |
+| 2 / 30 Hz | 5.5-6.3 | 10.2-19.0 | 30.3-34.5 | 101-106 ms | 8.3-10.3 |
+| 4 / 20 Hz | 12.7-15.0 | 24.4-27.7 | 38.6-69.6 | 59-69 ms | 10.5-14.2 |
+| 4 / 30 Hz | 7.3-8.0 | 18.0-21.0 | 33.4-45.7 | 42-57 ms | 10.2-11.3 |
+
+- 12 of 12 runs: zero disconnects, zero socket errors, no sample or gap near 200 ms (largest gap 116 ms, worst RTT 69.6 ms).
+  **The 352 ms stall did not reappear**, which supports (does not prove) the Wi-Fi explanation for the native one.
+- Page p95 is inside the 30 ms budget in every run, but 4 clients / 20 Hz reached 27.7 ms: little headroom there. That cell is the
+  one with the highest page send lateness (mean about 5 ms), so part of it is the harness, not the relay.
+- The ~105 ms receive gap in every 2-client run is constant across runs, so it is probably a harness or schedule artefact, not
+  network jitter (not investigated; well under the 200 ms criterion).
+- Still open for E5: message sizes (64 B / 1400 B / ~4 KB), the backpressure test, a second device, a wired run (skipped, no cable).
