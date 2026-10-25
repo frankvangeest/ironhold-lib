@@ -242,6 +242,11 @@ benchmark):**
   setting changed**. That meets the first go criterion for stage 1 (`wss://` and mixed content wait for stage 2). The wasm module
   is the same protocol layer as the native driver; only the transport differs.
 
+**SUPERSEDED, DO NOT USE: these two E5 sections (C2 and the first native grid) were measured with a harness bug, corrected in the
+"E5 corrected" section below. tokio's timer on Windows fired sends up to ~15 ms late and the round trip is measured from the
+scheduled send time, so that lateness was counted as relay latency (about +9 ms at p50, +11 ms at p95). Kept only as the record of
+the mistake.**
+
 **2026-10-24, E5 calibration C2 (native to native, release build, 2 clients, probes only at 30 Hz, 64 B, 90 s, 5 s warm-up dropped;
 dev machine on Wi-Fi 6E to the homelab, Nakama 3.41.0):**
 - Round trip A -> server -> B -> server -> A (probe out, echo back), timestamped from the scheduled send time: **n=5100, min 4.3,
@@ -270,3 +275,47 @@ the load, 3 repeats per cell; Wi-Fi 6E to the homelab, Nakama 3.41.0). Round tri
 - Outliers: no single round trip above 51 ms in 15,600 probe samples.
 - Still to do for the verdict: the Nakama log for `queue full`/write-timeout lines (a check after the 90 s calibration run found none,
   only startup lines), a wired run for the Wi-Fi caveat, and the browser-side numbers (C3/C4 plus the grid from a page).
+
+**2026-10-25, E5 corrected (replaces the two superseded sections above).** Cause of the error: the native senders used tokio timers;
+on Windows these can fire up to ~15 ms late and, because a probe is timestamped from its scheduled time, the lateness was added to
+the round trip. It showed up when the first browser run (browser timers are 1 ms) came out far *faster* than native. Fix: the native
+senders are OS threads that sleep most of the interval and spin the last millisecond; the harness now prints the send lateness
+against the deadline (mean 0.01-0.04 ms, a few runs with a single late send up to 24 ms). The browser harness reports its own send
+lateness, which is Chromium's `setTimeout` (mean 1.6-3.8 ms) and therefore *is* included in browser round trips. Wi-Fi 6E to the
+homelab for all runs below; Nakama 3.41.0; release builds; 5 s warm-up dropped; round trip = A -> server -> B -> server -> A.
+
+Calibration (probes only, 30 Hz, 64 B, 90 s each, zero disconnects):
+
+| Run | n | p50 | p95 | p99 | max | longest receive gap | send lateness mean / max |
+|---|---|---|---|---|---|---|---|
+| C2 native <-> native | 5100 | 5.01 | 11.57 | 19.59 | 34.2 | 55 ms | 0.01 / 5.2 ms |
+| C3 browser A <-> browser B (page A) | 2550 | 6.20 | 15.87 | 22.57 | 34.9 | 50 ms | 1.57 / 13.1 ms |
+| C3 (page B) | 2550 | 8.23 | 20.50 | 26.57 | 40.2 | 55 ms | 3.83 / 16.7 ms |
+| C4 native host, probes to the page | 2550 | 4.80 | 11.28 | 18.90 | 31.9 | 49 ms | (native) |
+| C4 browser page, probes to the native host | 2550 | 6.47 | 15.50 | 25.17 | 42.6 | 70 ms | 2.68 / 10.6 ms |
+
+- The relay path itself is cheap: ~5 ms median for two server hops and two Wi-Fi hops each way. A browser adds about 1.5-3.5 ms (its
+  timer lateness plus the callback) and widens the tail a little; it does not change the picture. The wasm module is 355 KB
+  (release, protocol layer plus `ehttp`, `ewebsock`, `serde_json`, no protobuf yet).
+- All five runs fit the LAN budget (p95 < 30, p99 < 50, gaps < 200 ms).
+
+Native main grid (400 B, JSON envelope, 65 s per run, probes 10 Hz on top of the load, 3 repeats per cell; p99 only where n >= 2000):
+
+| Clients | Load per client | p50 | p95 | p99 | worst single sample | longest receive gap |
+|---|---|---|---|---|---|---|
+| 2 | 20 Hz | 5.1-5.2 | 11.2-17.0 | n/a (n=1200) | 26-336 | 64, 65, **352** ms |
+| 2 | 30 Hz | 4.8-5.1 | 9.9-12.5 | n/a | 29-35 | 50-52 ms |
+| 4 | 20 Hz | 9.5-9.6 | 15.0-18.3 | 26.1-32.0 | 35-77 | 68-98 ms |
+| 4 | 30 Hz | 9.5-9.7 | 14.9-22.0 | 23.0-36.0 | 37-143 | 54-113 ms |
+
+- Zero disconnects or errors in all 12 runs; send rate 100% of target; writer queue drained; the server log (checked after the
+  calibration and before the grid) shows only startup lines.
+- p50 and p95 are far inside the budget (p95 at most 22 ms against 30). Going from 2 to 4 clients adds about 4.5 ms at p50 (the
+  server forwards more messages); 20 vs 30 Hz makes no measurable difference.
+- **One stall breaks the "no gap above 200 ms on the LAN" criterion:** rep 3 of the 2-client / 20 Hz cell had a 352 ms gap and a
+  336 ms worst round trip; the other two 4-client cells of that repeat also had their worst samples (77 and 143 ms). Every run
+  before rep 3 stayed under 78 ms. The cause is **not attributed**: a Wi-Fi hiccup (more likely, the pattern appeared in the last
+  third of the 14-minute grid and nowhere else), a server GC pause or TCP head-of-line blocking after a retransmit are all
+  possible. A wired run and a server-side log/metrics look are needed before this counts for or against the relay. One stall in
+  about 12 minutes of traffic is also the kind of event that decides whether snapshot-style state replication (tolerates a stall) or
+  input-style (does not) is the right use of this relay.

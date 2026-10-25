@@ -18,18 +18,15 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use tokio::sync::mpsc;
-use tokio::time::sleep_until;
 
 use nakama_spike::config::Config;
 use nakama_spike::native::Socket;
 use nakama_spike::protocol::rest as api;
 use nakama_spike::protocol::socket::{Envelope, MatchDataSend, Presence};
+use nakama_spike::relay::{payload, percentile, sched_of, OP_ECHO, OP_LOAD, OP_PROBE};
 
 use crate::{run_id, send};
 
-const OP_LOAD: i64 = 1;
-const OP_PROBE: i64 = 2;
-const OP_ECHO: i64 = 3;
 const WARMUP: Duration = Duration::from_secs(5);
 
 #[derive(Clone, Copy)]
@@ -54,6 +51,29 @@ struct Stats {
 struct Counters {
     enqueued: AtomicU64,
     written: AtomicU64,
+    late_sum_us: AtomicU64,
+    late_max_us: AtomicU64,
+    late_n: AtomicU64,
+}
+
+/// Block until `due`: sleep most of the wait, spin the last millisecond, and record how late the wake-up was.
+fn wait_until(due: Instant, c: &Counters) {
+    loop {
+        let now = Instant::now();
+        if now >= due {
+            let late = (now - due).as_micros() as u64;
+            c.late_sum_us.fetch_add(late, Relaxed);
+            c.late_max_us.fetch_max(late, Relaxed);
+            c.late_n.fetch_add(1, Relaxed);
+            return;
+        }
+        let left = due - now;
+        if left > Duration::from_millis(2) {
+            std::thread::sleep(left - Duration::from_millis(1));
+        } else {
+            std::hint::spin_loop();
+        }
+    }
 }
 
 fn arg<T: std::str::FromStr>(args: &[String], i: usize, default: T) -> T {
@@ -69,23 +89,6 @@ pub fn run(cfg: &Config, args: &[String]) -> Result<(), String> {
         secs: arg(args, 4, 90u64),
     };
     tokio::runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().map_err(|e| e.to_string())?.block_on(e5(cfg, p))
-}
-
-/// 16-byte header (sequence, scheduled send time in microseconds since the run start) padded to `size` bytes.
-fn payload(seq: u64, sched_us: u64, size: usize) -> Vec<u8> {
-    let mut v = vec![0u8; size.max(16)];
-    v[..8].copy_from_slice(&seq.to_le_bytes());
-    v[8..16].copy_from_slice(&sched_us.to_le_bytes());
-    v
-}
-
-fn sched_of(bytes: &[u8]) -> Option<u64> {
-    Some(u64::from_le_bytes(bytes.get(8..16)?.try_into().ok()?))
-}
-
-fn percentile(sorted: &[f64], p: f64) -> f64 {
-    let rank = ((p * sorted.len() as f64).ceil() as usize).clamp(1, sorted.len());
-    sorted[rank - 1]
 }
 
 async fn e5(cfg: &Config, p: Params) -> Result<(), String> {
@@ -104,7 +107,11 @@ async fn e5(cfg: &Config, p: Params) -> Result<(), String> {
     let mut sockets = Vec::new();
     let mut presences: Vec<Presence> = Vec::new();
     let mut match_id = String::new();
-    for i in 0..p.clients {
+    // E5_EXTERNAL_PEERS=n: this process is ONE client (the host); n other clients (browser pages) join its match. The host prints
+    // `MATCH_ID=<id>` for the driver script, waits until they have joined and only then starts its schedules.
+    let external: usize = std::env::var("E5_EXTERNAL_PEERS").ok().and_then(|v| v.parse().ok()).unwrap_or(0);
+    let local = if external > 0 { 1 } else { p.clients };
+    for i in 0..local {
         let (r, _) = send(&api::authenticate_device(&cfg.base_url, &cfg.server_key, &format!("spike-e5-{run}-{i}"), true))?;
         let s = api::parse_session(&r).map_err(|e| e.to_string())?;
         let mut sock = Socket::connect(&cfg.base_url, &s.token).await?;
@@ -118,6 +125,23 @@ async fn e5(cfg: &Config, p: Params) -> Result<(), String> {
             match_id = m.match_id.clone();
         }
         presences.push(m.me.clone());
+        if i == 0 && external > 0 {
+            use std::io::Write;
+            println!("MATCH_ID={match_id}");
+            std::io::stdout().flush().ok();
+            let mut got = 0;
+            while got < external {
+                let joins = sock
+                    .wait_for(Duration::from_secs(120), |e| e.match_presence_event.as_ref().map(|p| p.joins.clone()))
+                    .await?
+                    .ok_or("no peer joined within 120 s")?;
+                for j in joins {
+                    presences.push(j);
+                    got += 1;
+                }
+            }
+            println!("{external} peer(s) joined; starting");
+        }
         sockets.push(sock);
     }
     let presences = Arc::new(presences);
@@ -126,7 +150,7 @@ async fn e5(cfg: &Config, p: Params) -> Result<(), String> {
     let start = Instant::now() + Duration::from_millis(500);
     let tstart = tokio::time::Instant::from_std(start);
     let warm_end = start + WARMUP;
-    let stats: Vec<Arc<Mutex<Stats>>> = (0..p.clients).map(|_| Arc::default()).collect();
+    let stats: Vec<Arc<Mutex<Stats>>> = (0..local).map(|_| Arc::default()).collect();
     let counters = Arc::new(Counters::default());
     let mut tasks = Vec::new();
     let sent_probes = Arc::new(AtomicU64::new(0));
@@ -199,26 +223,29 @@ async fn e5(cfg: &Config, p: Params) -> Result<(), String> {
         // load sender: broadcast to everyone, on a deadline schedule
         if p.load_hz > 0.0 {
             let (tx, c, sent, mid) = (tx.clone(), counters.clone(), sent_load.clone(), match_id.clone());
-            tasks.push(tokio::spawn(async move {
+            // An OS thread, not a tokio timer: tokio's timer on Windows can fire up to ~15 ms late, and that lateness would be
+            // counted inside the round trip (it is measured from the scheduled time). The thread sleeps most of the interval and
+            // spins the last millisecond; the lateness that is left is reported.
+            std::thread::spawn(move || {
                 let period = Duration::from_secs_f64(1.0 / p.load_hz);
                 for n in 0u64.. {
                     let due = period * n as u32;
                     if due.as_secs() >= p.secs {
                         break;
                     }
-                    sleep_until(tstart + due).await;
+                    wait_until(start + due, &c);
                     let m = MatchDataSend::new(&mid, OP_LOAD, &payload(n, due.as_micros() as u64, p.payload), vec![]);
                     c.enqueued.fetch_add(1, Relaxed);
                     sent.fetch_add(1, Relaxed);
                     let _ = tx.send(Envelope::data(m).to_json());
                 }
-            }));
+            });
         }
 
         // probe sender: to the next client in the ring only, timestamped from the SCHEDULED time
         if p.probe_hz > 0.0 {
             let (tx, c, sent, mid, pres) = (tx.clone(), counters.clone(), sent_probes.clone(), match_id.clone(), presences.clone());
-            tasks.push(tokio::spawn(async move {
+            std::thread::spawn(move || {
                 let target = pres[(i + 1) % pres.len()].clone();
                 let period = Duration::from_secs_f64(1.0 / p.probe_hz);
                 for n in 0u64.. {
@@ -226,13 +253,13 @@ async fn e5(cfg: &Config, p: Params) -> Result<(), String> {
                     if due.as_secs() >= p.secs {
                         break;
                     }
-                    sleep_until(tstart + due).await;
+                    wait_until(start + due, &c);
                     let m = MatchDataSend::new(&mid, OP_PROBE, &payload(n, due.as_micros() as u64, p.payload), vec![target.clone()]);
                     c.enqueued.fetch_add(1, Relaxed);
                     sent.fetch_add(1, Relaxed);
                     let _ = tx.send(Envelope::data(m).to_json());
                 }
-            }));
+            });
         }
         // `tx` (the original) is dropped here; the writer task ends when every sender has finished.
     }
@@ -259,8 +286,8 @@ async fn e5(cfg: &Config, p: Params) -> Result<(), String> {
     for t in &tasks {
         t.abort();
     }
-    let expected_probe = p.probe_hz * p.secs as f64 * p.clients as f64;
-    let expected_load = p.load_hz * p.secs as f64 * p.clients as f64;
+    let expected_probe = p.probe_hz * p.secs as f64 * local as f64;
+    let expected_load = p.load_hz * p.secs as f64 * local as f64;
     println!(
         "  achieved send rate: probes {:.1}% of {:.0}, load {:.1}% of {:.0}; enqueued {} written {} (a gap means the writer lagged)",
         if expected_probe > 0.0 { sent_probes.load(Relaxed) as f64 / expected_probe * 100.0 } else { 100.0 },
@@ -269,6 +296,12 @@ async fn e5(cfg: &Config, p: Params) -> Result<(), String> {
         expected_load,
         counters.enqueued.load(Relaxed),
         counters.written.load(Relaxed)
+    );
+    let late_n = counters.late_n.load(Relaxed).max(1);
+    println!(
+        "  send lateness against the deadline: mean {:.2} ms, max {:.1} ms",
+        counters.late_sum_us.load(Relaxed) as f64 / late_n as f64 / 1000.0,
+        counters.late_max_us.load(Relaxed) as f64 / 1000.0
     );
     if all.is_empty() {
         return Err("no round-trip samples were collected".into());

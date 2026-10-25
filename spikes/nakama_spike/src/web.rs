@@ -11,7 +11,7 @@ use wasm_bindgen::prelude::*;
 use crate::protocol::rest as api;
 use crate::protocol::socket::Envelope;
 
-async fn fetch(req: ehttp::Request) -> Result<ehttp::Response, String> {
+pub(crate) async fn fetch(req: ehttp::Request) -> Result<ehttp::Response, String> {
     let (tx, rx) = futures_channel::oneshot::channel();
     ehttp::fetch(req, move |r| {
         let _ = tx.send(r);
@@ -23,9 +23,9 @@ fn now() -> f64 {
     js_sys::Date::now()
 }
 
-struct Ws {
-    tx: WsSender,
-    rx: WsReceiver,
+pub(crate) struct Ws {
+    pub(crate) tx: WsSender,
+    pub(crate) rx: WsReceiver,
 }
 
 /// Wait until `pick` accepts an incoming envelope, or `wait_ms` passes. The browser delivers events to a queue; poll it every 2 ms.
@@ -67,7 +67,7 @@ async fn connect(base: &str, token: &str) -> Result<Ws, String> {
     Err("socket did not open within 5 s".into())
 }
 
-async fn request(ws: &mut Ws, mut env: Envelope, cid: &str) -> Result<Envelope, String> {
+pub(crate) async fn request(ws: &mut Ws, mut env: Envelope, cid: &str) -> Result<Envelope, String> {
     env.cid = Some(cid.to_string());
     ws.tx.send(WsMessage::Text(env.to_json()));
     let cid = cid.to_string();

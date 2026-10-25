@@ -5,11 +5,21 @@
 <h3>Nakama spike (throwaway)</h3>
 <pre id="out">running...</pre>
 <script type="module">
-  // ?base=http://host:7350&key=<server key>  (supplied by run_browser.py, never committed)
-  import init, { run_checks } from "./pkg/nakama_spike.js";
+  // ?base=http://host:7350&key=<server key>   (supplied by the driver scripts, never committed)
+  //   default             functional checks E1/E2/E4 (run_browser.py)
+  //   &mode=relay&match=<id or empty>&peers=1&load=0&probe=30&size=64&secs=90   one E5 relay client (run_e5_browser.py)
+  import init, { run_checks, run_relay } from "./pkg/nakama_spike.js";
   const q = new URLSearchParams(location.search);
+  const num = (k, d) => (q.has(k) ? Number(q.get(k)) : d);
   await init();
-  const report = await run_checks(q.get("base"), q.get("key"));
-  window.__report = report;
-  document.getElementById("out").textContent = report;
+  let report;
+  if (q.get("mode") === "relay") {
+    report = await run_relay(q.get("base"), q.get("key"), q.get("match") ?? "", num("peers", 1), num("load", 0), num("probe", 30), num("size", 64), num("secs", 90));
+    window.__relay = report;
+    document.getElementById("out").textContent = "relay run finished (" + report.length + " bytes of results)";
+  } else {
+    report = await run_checks(q.get("base"), q.get("key"));
+    window.__report = report;
+    document.getElementById("out").textContent = report;
+  }
 </script>
