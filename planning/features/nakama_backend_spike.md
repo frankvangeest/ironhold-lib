@@ -141,11 +141,11 @@ sizes only. `prost-build` needs `protoc`, which Windows lacks: use `protox` (pur
 - [x] S4a E4a/E4b/E4c natively with `tokio-tungstenite` (2026-10-24, JSON envelope; results in the Progress log)
 - [x] S4b socket open, ping and a relayed match from a browser page with `ewebsock` (first part of E4; two-client parts in E5)
 - [x] S5 E3 with a Lua module (`spikes/nakama_spike/server/spike_leaderboard.lua`): passes
-- [ ] S6 E5 (C1 and C2 done natively, see the log; C3/C4 need the browser side): calibration runs C1-C4, then the main grid with deadline scheduling, probes and the Playwright script
+- [x] S6 E5 (native and browser calibration and grids, sizes and backpressure done; wired run, second device and stage 2 skipped or open, see the log and the spike result): calibration runs C1-C4, then the main grid with deadline scheduling, probes and the Playwright script
 - [x] S7 E6 matchmaker; E7 drop/reconnect (done locally, see the log; the tunnel part waits for the homelab stage 2)
 - [x] S8 Protobuf envelope on the main case (`protox`/`prost`); measure the protocol-layer line count and the wasm size with and
       without prost
-- [ ] S9 Write the result: append "Spike result" to `planning/investigations/nakama_backend_viability.md`, state go / change-course
+- [x] S9 Write the result (section 8c of the investigation; the delete/archive of `spikes/nakama_spike/` waits for the decision): append "Spike result" to `planning/investigations/nakama_backend_viability.md`, state go / change-course
       against the criteria, estimate a maintained client crate, update the backlog items, delete or archive `spikes/nakama_spike/`
 
 **Effort:** 1-2 days was optimistic. With the Playwright harness, the protobuf build and the calibration runs, plan **3-4 days**;
