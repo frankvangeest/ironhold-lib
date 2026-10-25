@@ -2,7 +2,7 @@
 
 > **Code:** the spike crate (`spikes/nakama_spike/`) is deliberately not merged. It lives at git tag `spike/nakama_backend` (branch `feature/nakama_backend_spike`); check that tag out to rerun the stage 2 experiments.
 
-_Status: In Progress (started 2026-10-24; plan revised after a system-architect plan review the same day; see "Progress log")_
+_Status: Spike run, result written 2026-10-25 (investigation section 8c); stage 2 reruns open (started 2026-10-24; plan revised after a system-architect plan review the same day; see "Progress log")_
 _Planned at: `98b23b7` (2026-10-23); revised at `a6b0170` (2026-10-24)_
 
 Decision being informed: `planning/investigations/nakama_backend_viability.md` (recommendation "both, layered";
