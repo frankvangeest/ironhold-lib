@@ -1,151 +1,236 @@
-# Feature: Backend abstraction (`ironhold_backend`) with a Nakama adapter
+# Feature: Backend abstraction (core contract + Nakama adapter)
 
-_Status: Draft_
+_Status: Draft (plan-review round 1 done 2026-10-25: needs the decisions in "Decisions for Frank"; the proposed answers below are written in as defaults)_
 _Planned at: `cd90a12` (2026-10-25)_
 
 ## Phases
 
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
-| v1 | Backend contract in core (Actions, events, request/event types) + in-memory fake backend; nothing networked | Queued | — |
-| v2 | Nakama adapter, native: sign-in, cloud saves, leaderboards; generated server-module config | Queued | — |
-| v3 | Nakama adapter: lobby list (public-read storage), matchmaker, `FindMatch` | Queued | — |
-| v4 | Nakama relay as a `NetTransport` (match join, data, presence, reconnect) behind the same trait | Queued | — |
-| v5 | Browser (wasm) adapter on `https`/`wss` and the stage 2 verification | Queued | — |
+| v1 | Contract in core (Actions, events, engine-written variables, poll trait, glue system) + `FakeBackend`; sign-in and leaderboard only; nothing networked | Queued | — |
+| v2 | `ironhold_nakama` adapter, **native and wasm32 on the LAN**: sign-in, leaderboards, server module with `game_id` enforcement; cloud save once local save exists | Queued | — |
+| v3 | Lobby list (public-read storage), then matchmaker | Queued | — |
+| v4 | Stage 2: `wss://` from an `https` page, tunnel latency and idle sockets, half-open drop | Queued | — |
+| later | Relay transport: only after the sync library is chosen (see "Relay seam") | Icebox | — |
 
 ## What
 
-A game author gets online features without writing code: a project's RON declares which backend features it uses
-(`backend.ron`), and RON actions such as `SignIn`, `SaveToCloud`, `SubmitScore`, `ListLobbies`, `FindMatch` talk to whatever backend
-the engine was built with, answering with pipeline events (`backend.signed_in`, `backend.score_submitted`, `lobby.listed`, ...).
-The first and probably only real adapter is Nakama. With no backend configured or reachable, a project still starts and plays; the
-online actions answer `backend.unavailable` instead of failing.
+A game author gets online features without writing code: a project's `backend.ron` (found through `backend_path` in
+`.project.ron`) declares which online features the project uses, and RON actions (`SignIn`, `SubmitScore`, `ShowLeaderboard`, ...)
+talk to whatever backend the engine was built with. Results come back as pipeline events plus **engine-written variables** a
+designer can bind to Labels (`Label.bind`). With no backend configured or reachable the project starts and plays normally; online
+actions answer with a clear event instead of failing. The first and probably only real adapter is Nakama.
 
 ## Why
 
-The Nakama spike (`planning/investigations/nakama_backend_viability.md`, section 8c) concluded: **go for Nakama as the meta
-backend**, conditional go for its relay for snapshot-style gameplay. Building accounts, storage, leaderboards, lobbies and
-matchmaking ourselves is the larger and riskier job; the investigation also said to put them behind one engine-side abstraction so
-the adapter (and the relay transport) stay swappable and `ironhold_core` stays platform-agnostic. The spike already measured the
-parts that decide the design: the realtime protocol layer is about 660 lines, REST calls cost 8-22 ms, a slow reader is dropped
-after about 3 s, the usable message size is about 2.9 KB (JSON) or 4 KB (protobuf).
+The Nakama spike (`planning/investigations/nakama_backend_viability.md`, section 8c) concluded: go for Nakama as the meta backend.
+Building accounts, storage, leaderboards, lobbies and matchmaking ourselves is the larger, riskier job; the investigation also said
+to put them behind one abstraction so the adapter stays swappable and `ironhold_core` stays platform-agnostic. Spike facts that shape
+the design: REST 8-22 ms; session token 60 s (401 on expiry at connect); a slow reader is dropped after about 3 s; usable message
+size about 2.9 KB (JSON) or 4 KB (protobuf); matchmaker result about one server interval (default 15 s) after the ticket;
+leaderboards can only be created by server code.
 
-It unblocks: cloud saves (`planning/features/save_load_game_state.md` is local only today), Form 2 lobbies in
-`planning/features/networking_multiplayer.md`, and any shipped game wanting a leaderboard.
+## Plan-review round 1 (2026-10-25), what changed
+
+System-architect and UX review both returned "needs more design work"; no new pipeline primitive is needed. Changes made here:
+event payloads removed (the interpreter matches event names exactly, so JSON or error codes in an event name can never be bound);
+the poll-trait model chosen; two crates instead of three; `backend_path`/`schema_version` added; failure events per operation;
+async and determinism rules written down; wasm moved into v2; the relay trait dropped; server-side `game_id` enforcement added;
+dependencies on the unshipped local save plan made explicit.
 
 ## Approach
 
-### Layers (and where code lives)
+### Contract in core, adapter outside
 
 ```
-ironhold_core        Actions + events + BackendRequest/BackendEvent messages + a BackendPlugin hook (no sockets, no HTTP, no async runtime)
-ironhold_backend     the Backend trait, shared types, the in-memory FakeBackend (used by tests and as the "no network" dev backend)
-ironhold_nakama      Nakama adapter: REST + realtime socket (native: tokio-tungstenite, wasm: ewebsock/ehttp), protobuf envelope
-ironhold_native/web  runners add the adapter plugin (the only place that knows which backend is built in)
+ironhold_core     owns the contract: BackendRequest / BackendEvent, the `Backend` poll trait, the glue system, FakeBackend. No network, no
+                  async runtime, no platform code.
+ironhold_nakama   the Nakama adapter (REST + realtime socket, protobuf envelope; native and wasm32 transports). Depends on core types only.
+ironhold_native/web   runners insert the adapter (the only place that knows which backend is built in).
 ```
 
-- **Core never calls the network.** The action executor turns an online `Action` into a `BackendRequest` message and returns. The
-  adapter plugin's systems consume requests, run them on its own task pool/`fetch`, and send `BackendEvent` messages back, which a
-  core system turns into pipeline events (`GameEvent`) for the FSM, like any other capability. This keeps the Message → Interpreter
-  → Action → Executor pipeline unchanged and deterministic code free of I/O.
-- **Backend trait (async-free at the core boundary):** request/response pairs identified by a `request_id`; the trait is what the
-  adapter implements and what `FakeBackend` implements, so the whole RON-to-event path is testable without a server.
-- **The relay is a separate seam (`NetTransport`),** not part of the meta trait: gameplay sync (Lightyear, replicon, matchbox, ...)
-  is chosen elsewhere (`networking_multiplayer.md`) and only needs "send bytes to a member, receive bytes with presence events".
-  The Nakama relay implements it in v4; Matchbox can implement it too.
+(Proposed: two crates. A separate trait crate would have no consumer: core's executor already builds the requests.)
 
-### One Nakama, several games
+**One adapter model, a poll trait owned by core:**
 
-A single Nakama server has one user table, one server key and one set of config values; nothing separates games by itself. So the
-engine namespaces everything by a `game_id` from `backend.ron`:
+```rust
+trait Backend { fn submit(&mut self, req: BackendRequest); fn poll(&mut self, out: &mut Vec<BackendEvent>); }
+```
 
-- storage collections `"{game_id}.saves"`, leaderboard ids `"{game_id}.{name}"`, match labels and matchmaker properties
-  (`properties.game:{game_id}` in every query), lobby objects in `"{game_id}.lobbies"`;
-- device ids are `"{game_id}:{device_uuid}"` by default, so a device has a separate account per game (one login across games is a
-  deliberate opt-in later, not the default);
-- one Nakama instance is fine while every game is ours; a game from someone else gets its own Nakama + Postgres (cheap in the homelab).
-- The server key is shipped inside any web build; it is a client identifier, not a secret (the spike's key file stays outside the repo
-  only because the deployed server is our own).
+- The executor arm for an online `Action` pushes a `BackendRequest` (with a `request_id` from a core counter, issued in executor
+  order) onto a **resource outbox** (`VecDeque`), not a Bevy `Message` (message buffers drop after two flips if a reader is gated and
+  never flip while paused). The outbox joins `SceneStateParams` because `action_executor_system` is at Bevy's 16-parameter limit.
+- **One glue system in a new core-owned slot** (`GameStreamSet::Backend`, after `DelayedEvents`) drains the outbox into
+  `Backend::submit`, calls `poll`, sorts each frame's batch by `request_id`, and emits `GameEvent`s and variable writes. No
+  adapter-registered system orders itself against the unstable core sets (`schedule_order_tests` would fail).
+- The adapter keeps its I/O behind channels inside `poll()`. **I/O never uses Bevy's task pools** (single-threaded on wasm; blocking
+  sockets would starve compute tasks on native).
+- **wasm `!Send`:** the backend lives in a `NonSend` resource (the glue system takes `NonSendMut`); JS handles stay inside
+  `spawn_local` tasks and only `Send` channels cross into the adapter.
+- **Native I/O:** decided in the v2 spike-to-crate step (task below): a dedicated thread owning the socket (blocking tungstenite) or
+  a current-thread tokio runtime on its own thread; not `ewebsock` natively (10 ms poll, no `TCP_NODELAY`), and the Windows
+  tokio-timer lateness found by the spike must be addressed if timers are used.
+- `FakeBackend` is deterministic: its latency counts polls/frames, never wall-clock; it can inject failures and timeouts.
+  Selected by `endpoint: "fake://"` in `backend.ron` (and by tests).
 
-### Designer-facing RON (sketch, to refine in v1)
+### Determinism and async rules
+
+- Backend responses are **per-client external inputs**. They must never change replicated or lockstep state on one peer only
+  (e.g. a cloud load restoring variables mid-session); for replay they are recorded like input. A subsection goes into
+  `docs/dev/40_determinism_and_networking.md`.
+- Timeouts use `Time<Real>` (virtual time is frozen while paused; a sign-in started from the pause menu must still time out).
+- Responses arrive seconds later, possibly after a state change or `LoadScene`. **Online replies are not cleared by `LoadScene`
+  and arrive while paused**; bindings for them belong in `global_on` (same trap as `EmitEventAfterDelay`). Documented in
+  `docs/30_runtime_events_and_logic.md`, including same-frame order.
+- A duplicate request while one of the same kind is in flight is ignored with `backend.busy` (documented); retry = fire the action again.
+- If `gameplay_fixed_tick_pipeline.md` moves the interpreter into `FixedUpdate`, the glue system moves with it (dependency).
+
+### Events and variables (no payloads in event names)
+
+Event names follow the existing `<category>.<verb>:<id>` rule with ids the designer can write; **no JSON and no error codes in names**.
+Failure events exist **per operation** and carry that operation's id. Data goes to engine-written, reserved variables (like
+`audio_volume_percent`).
+
+| Area | Actions | Events | Engine-written variables (reserved `backend.` prefix, excluded from `SaveState`) |
+|---|---|---|---|
+| Account | `SignIn`, `SignOut` | `backend.signed_in`, `backend.signed_out`, `backend.sign_in_failed`, `backend.offline` (nothing configured), `backend.unreachable` (server down), `backend.busy`, `backend.connection_lost`, `backend.reconnected` | `backend.status` (`offline`/`connecting`/`online`), `backend.display_name`, `backend.last_error` (text, for a Label) |
+| Leaderboard | `SubmitScore(leaderboard:, score_var:)`, `ShowLeaderboard(leaderboard:, count:)` | `score.submitted:{leaderboard}`, `score.submit_failed:{leaderboard}`, `leaderboard.listed:{leaderboard}`, `leaderboard.list_failed:{leaderboard}` | `leaderboard.<name>.count`, `leaderboard.<name>.<n>.name`, `.<n>.score`, `.my_rank`, `.my_best` (n = 1..count, fixed max 10) |
+| Cloud save (after local save) | `SaveToCloud(slot:)`, `LoadFromCloud(slot:)`, `DeleteCloudSave(slot:)` | `cloud.written:{slot}`, `cloud.loaded:{slot}`, `cloud.empty:{slot}`, `cloud.save_failed:{slot}`, `cloud.load_failed:{slot}`, `cloud.conflict:{slot}` | — |
+| Lobbies (v3) | `ListLobbies`, `CreateLobby(name:, max_players:)`, `JoinLobby(row:)`, `LeaveLobby` | `lobby.listed`, `lobby.created`, `lobby.joined`, `lobby.left`, `lobby.list_failed`, `lobby.join_failed` | `lobby.count`, `lobby.<n>.name`, `lobby.<n>.players` ("2/4"), n = 1..10 |
+| Matchmaker (v3) | `FindMatch(min:, max:, timeout_secs:)`, `CancelMatch` | `matchmaker.searching`, `matchmaker.matched`, `matchmaker.cancelled`, `matchmaker.timed_out`, `matchmaker.failed` | `matchmaker.status` |
+
+- **Lists reach the UI as indexed variables plus row actions** (`JoinLobby(row: 3)`): a designer builds a list from N Labels and N
+  Buttons they already know; no list widget and no text-input widget is needed. (Proposed; alternative is engine-owned panels like
+  `ShopPanel`. Decision 1.)
+- Unit variants are fine (`SignIn`, `ListLobbies`, like `Quit`); everything with an argument uses named fields.
+- Cloud-save names mirror `save_load_game_state.md` (`SaveGame(slot:)`, `save.written:{slot}`): `cloud.written`/`cloud.loaded`/`cloud.load_failed`.
+- Lobby actions and events in `networking_multiplayer.md` Form 2 are **superseded by this plan** (that file gets a cross-reference; one
+  set of lobby actions in `actions.rs`).
+
+### `backend.ron` (found through `backend_path`)
 
 ```ron
-// assets/projects/<name>/backend.ron
+// assets/projects/<name>/backend.ron   (referenced by `backend_path: Some("backend.ron")` in .project.ron; no convention-path fallback)
 BackendConfig(
-    game_id: "ironhold_demo",
-    endpoint: "https://nakama.example.org",   // optional; absent = offline project
-    features: [CloudSave, Leaderboard(name: "best_time", order: Ascending, operator: Best), Lobbies, Matchmaker],
+    schema_version: 1,
+    game_id: "ironhold_demo",                    // [a-z0-9_]{1,32}; defaults to project_id when omitted
+    endpoint: Some("https://nakama.example.org"), // None = offline project; "fake://" = in-memory test backend
+    features: [CloudSave, Lobbies, Matchmaker],
+    leaderboards: [
+        Leaderboard(name: "best_time", ranking: LowerIsBetter, keep: Best),   // designer terms, mapped to Nakama's sort/operator
+    ],
 )
-// state_machine.ron: actions
-SignIn
-SaveToCloud(slot: "slot1")
-LoadFromCloud(slot: "slot1")
-SubmitScore(board: "best_time", score_var: "run_time_ms")
-ListLobbies, CreateLobby(name: "my game", max_players: 4), JoinLobby(id: "..."), FindMatch(min: 2, max: 4)
-// events: backend.signed_in, backend.unavailable, backend.error:{code}, cloud.saved:{slot}, cloud.loaded:{slot},
-//         score.submitted, lobby.listed:{json}, matchmaker.matched:{json}
 ```
 
-Leaderboards can only be created by **server code** (spike finding), so the engine ships **one generic, data-driven Nakama module**
-(Lua or TypeScript, decided in v2) and `ironhold backend config <project>` (a CLI command, validated like the rest of the CLI)
-generates its config from `backend.ron`, so designers only edit RON and a deployer copies one file. Leaderboard creation by an
-allow-list in that config, never by a client request.
+- `ProjectConfig` gains `backend_path: Option<String>`; a failed `backend.ron` load logs an `error!` and the project runs offline
+  (never a loading hang). `ProjectConfig` is `deny_unknown_fields`, so an older engine rejects a newer `.project.ron`; noted under schema evolution.
+- `score_var` is a `GameVariables` text that must parse as an integer; a failure gives `score.submit_failed:{leaderboard}` and a
+  warning, never a silent 0.
+- The shipped demo needs something to submit: it uses a `score` variable (the engine has no run timer; "best time" is not offered
+  until one exists).
 
-### Constraints carried over from the spike
+### Several games on one Nakama
 
-- Session tokens last 60 s: refresh before every reconnect (401 otherwise); an open socket survives expiry. The adapter owns refresh.
-- A slow reader is dropped (queue 16, write timeout): treat a disconnect as normal and reconnect; the relay seam must say so.
-- Default realtime envelope **protobuf**: latency identical to JSON, raises the payload ceiling from 2.9 to about 4 KB, costs about
-  34 KB of wasm (negligible next to the engine). JSON stays available for debugging.
-- Stored JSON is normalized by the server: saves must not depend on byte-exact text.
-- Matchmaker result arrives about one server interval (default 15 s) after the ticket; the UI needs a "searching" state.
-- The backend is optional: no endpoint, no network, or a failed sign-in must never block start-up or the offline game.
+- `game_id` prefixes storage collections (`{game_id}.saves`, `.lobbies`), leaderboard ids, match labels and the matchmaker query;
+  device ids are `{game_id}:{device_uuid}` (separate account per game by default).
+- **Separator safety:** `game_id`, leaderboard names and slots are limited to `[a-z0-9_]` (length caps); no `.`, `:` or spaces, so
+  `"a" + "b.c"` and `"a.b" + "c"` can never collide. Enforced in the loader and `ironhold validate`; `game_id` must also be unique
+  across the repo's projects (`--strict`). Nakama's device-id charset/length for the `:` is checked in v2.
+- **Client side, namespacing is structural:** newtypes (`NsCollection`, `NsLeaderboardId`, `NsMatchName`) only a `GameNs` can build,
+  and the adapter's REST functions accept nothing else, so a forgotten prefix is a compile error.
+- **Server side, it is enforced (v2):** the generic server module sets a `game_id` session variable at authentication and adds
+  before-hooks that reject storage, leaderboard and matchmaker calls whose prefix or `+properties.game:` term does not match it.
+  Client-side prefixing only stops honest bugs; anyone with the shared server key could otherwise read another game's public lobbies
+  or write to its leaderboard. (If this is deferred, the plan must say a single trusted-games server is accepted; Decision 6.)
+- Matchmaker `game` property is a required term; v3 tests that ids with underscores match exactly.
+- One instance is fine while every game is ours; a third party's game gets its own Nakama + Postgres.
+- The server key ships in a web build and is a client identifier, not a secret; the **http key (server-to-server) never appears in
+  `backend.ron` or generated config**.
+
+### Server module and deployer
+
+Leaderboards are created only by server code, so the engine ships **one generic Lua module** (no build step, used by the spike) whose
+config is generated from `backend.ron`: the generator is a pure function in `ironhold_nakama` behind a no-network feature, called by
+the CLI command `ironhold backend config <project>` (the CLI does not depend on network crates). Documented as a **server-admin
+step**: adding, renaming or removing a leaderboard needs a regenerated config and a redeploy; renaming orphans old scores. A submit
+to a leaderboard the server does not know maps to `score.submit_failed:{leaderboard}` with a log line naming the missing redeploy.
+Per-environment overrides of `endpoint` (web: URL parameter; native: env var/argument) are a v2 task.
+
+### Relay seam (deferred)
+
+No `NetTransport` trait now: the sync library (Lightyear / replicon / matchbox) is still undecided and brings its own IO model. Two
+things are kept instead: matchmaker and lobby results carry a **match handle** as data (match id/token, presences) toward the later
+transport; and the adapter's connection manager is designed to be **shared** (matchmaker and relay use the same realtime socket and session). The
+constraints for whoever builds it: payload ceiling about 4 KB (protobuf) or 2.9 KB (JSON), reliable-ordered over TCP, slow-reader
+drop after about 3 s, reconnect expected, session refresh before every reconnect. Realtime default is the protobuf envelope (same
+latency, higher ceiling, +34 KB wasm).
+
+### Dependencies on other plans
+
+- `save_load_game_state.md` (still Draft): cloud save reuses its `SaveState` (one save format); `backend.*` variables are excluded
+  from saves. Until it ships, v1/v2 cover sign-in and leaderboards only.
+- `gameplay_fixed_tick_pipeline.md`: glue-system placement (above). `networking_multiplayer.md`: lobby vocabulary (above).
+- Bevy 0.19 upgrade: only the glue/plugin code touches Bevy.
 
 ## Tasks
 
 ### v1 — contract and fake
-- [ ] `backend.ron` schema (`BackendConfig`, `BackendFeature`), validation in `ironhold validate`, docs in `docs/20_data_formats.md`
-- [ ] Online `Action` variants and `backend.*`/`cloud.*`/`score.*`/`lobby.*`/`matchmaker.*` events (schema + executor + query output)
-- [ ] `ironhold_backend` crate: trait, request/event types, `FakeBackend` (in-memory, deterministic, can inject latency and failures)
-- [ ] Core glue system (events back into the pipeline), `backend.unavailable` when no adapter is registered
-- [ ] Tests with `FakeBackend`: each action to its event, offline project, error and timeout paths
-- [ ] A demo project that uses cloud save and a leaderboard against the fake (via `/new-project`)
+- [ ] `backend_path` in `ProjectConfig`; `BackendConfig` schema with `schema_version`; load error handling; `ironhold validate` checks:
+      id charset/length (`game_id`, leaderboard, slot), no duplicates, undeclared leaderboard/feature used by an action (error),
+      online action without `backend.ron` (warning), `endpoint` scheme (https; http only for localhost/LAN with a warning),
+      `FindMatch` bounds, `--strict`: bindings on result events no action can produce, `score_var` never written, unique `game_id` repo-wide
+- [ ] Online `Action` variants and events/variables above (schema, executor arm, CLI `query`, `cargo check -p ironhold_cli`)
+- [ ] `Backend` poll trait, `BackendRequest`/`BackendEvent`, outbox resource in `SceneStateParams`, glue system + `GameStreamSet::Backend`
+      (`schedule_order_tests`), engine-written variable system (one writer, `GameplaySet::PostExecute`), `Time<Real>` timeouts
+- [ ] `FakeBackend` (frame-counted latency, injected failures, selected by `fake://`)
+- [ ] Tests: every action to its event and variables with the fake, offline project, failure per operation, busy, replies after `LoadScene` and
+      while paused, `global_on` binding, determinism (batch sorted by `request_id`)
+- [ ] Demo project via `/new-project` (one screen, no 3D): sign-in status, a `score` counter + Submit, a top-5 leaderboard of Labels;
+      labelled "offline test backend" when `fake://`; states which backend the hosted web build uses (the fake, labelled)
+- [ ] Docs: `docs/20_data_formats.md` (`backend.ron`, `backend_path`, file naming table, actions, engine-written variables),
+      `docs/30_runtime_events_and_logic.md` (online events, same-frame order, searching/timeout state-machine example, save/fail
+      pattern), `docs/15_authoring_tools.md` (validate rows, `ironhold backend config` as a server-admin step), `docs/STATUS.md`,
+      README line (online is optional), `docs/dev/40_determinism_and_networking.md` (backend responses are per-client inputs)
 
-### v2 — Nakama adapter, native
-- [ ] `ironhold_nakama`: REST client, session refresh, `game_id` namespacing; protocol layer reused from tag `spike/nakama_backend`
-- [ ] The generic server module and `ironhold backend config`
-- [ ] Contract tests against a real Nakama container (local script, not a hosted CI); pinned server version
-- [ ] Sign-in, cloud save/load (optimistic version, conflict event), leaderboard submit/list
+### v2 — Nakama adapter
+- [ ] `ironhold_nakama`: REST client + session refresh + `GameNs` newtypes; protocol layer from tag `spike/nakama_backend`; Nakama device-id charset check
+- [ ] Decide native I/O model (thread + blocking tungstenite vs current-thread tokio), written down; wasm transports (`ehttp`/`ewebsock`, `NonSend`)
+- [ ] Generic Lua module with `game_id` session variable and before-hooks; `ironhold backend config`; pinned server version; contract tests against
+      a local Nakama container (script, not hosted CI); adversarial test: a client for game A sending game B's ids is rejected
+- [ ] Endpoint override per environment; sign-in, `SignOut`, leaderboard submit/list; account deletion/export path (before any public deployment)
+- [ ] Cloud save/load with conflict event, once `save_load_game_state.md` has shipped
 
-### v3 — lobbies and matchmaking
-- [ ] Public-read lobby objects, matchmaker add/cancel/matched, token join
+### v3 — lobbies and matchmaker
+- [ ] Public-read lobby objects with `JoinLobby(row:)`; then matchmaker (`FindMatch`, `CancelMatch`, timeout). Docs mark these **"matching only, no shared
+      gameplay yet"** until a relay transport exists (designers get a match handle and nothing to play).
 
-### v4 — relay transport
-- [ ] `NetTransport` trait; Nakama relay implementation (protobuf), presence events, reconnect/rejoin, slow-reader handling
+### v4 — stage 2
+- [ ] `wss://` from an `https` page, mixed content/CORS, tunnel latency and idle behaviour, half-open drop (the open spike criteria)
 
-### v5 — browser and stage 2
-- [ ] wasm transports in the adapter, `wss://` from an `https` page, mixed-content and CORS checks, tunnel latency and idle behaviour
-      (the open criteria of the spike result)
+## Decisions for Frank
 
-## Open questions
+1. **Lists to the UI:** indexed engine-written variables + `JoinLobby(row:)` (proposed, no new widget), or engine-owned panels?
+2. **Lobby vocabulary:** this plan supersedes the lobby actions/events in `networking_multiplayer.md` Form 2 (`lobby.*`, `row:`)?
+3. **Cloud save:** wait for `save_load_game_state.md` and reuse its `SaveState` (proposed; v1/v2 = sign-in + leaderboards), or ship a separate format?
+4. **Crates:** two (contract + `FakeBackend` in core, `ironhold_nakama`) as proposed, or three?
+5. **Relay trait:** defer until the sync library is chosen (proposed)?
+6. **Server-side `game_id` enforcement** in v2 (proposed), or accept a single trusted-games server for now (then say so here)?
+7. **Native I/O model** (thread + blocking tungstenite vs tokio thread): decide in v2 (proposed) or now?
 
-- Crate layout: separate `ironhold_backend` + `ironhold_nakama`, or one crate with a Nakama feature? Separate is the proposal (the
-  trait crate has no network dependencies); confirm with the architecture review.
-- Where does the async/IO live in a Bevy app on both targets (tokio threads natively, `spawn_local`/`fetch` in wasm)? Proposal:
-  adapter-internal, with channels to Bevy systems, never in `ironhold_core`.
-- Account model beyond device ids (email, Steam, linking device accounts) and its privacy duties (GDPR deletion/export) before a
-  public deployment.
-- Lua or TypeScript for the generic server module (Lua is what the spike used and needs no build step).
-- How the engine finds the server key and endpoint for a shipped web build (RON is public; per-environment override for dev).
-- Are online state variables (best score, signed-in user) exposed as `GameVariables`, and which?
-- Does v4 wait for the sync-library decision in `networking_multiplayer.md`? Proposal: only the seam, no sync code.
-- Save conflicts: last-write-wins with a visible event, or a merge hook?
+Smaller defaults taken (say if you disagree): fake selected by `endpoint: "fake://"`; Lua server module; `game_id` defaults to `project_id`;
+last-write-wins plus `cloud.conflict:{slot}`; sign-in is an explicit `SignIn` action, online actions before sign-in finishes answer
+`backend.busy`/`backend.offline` instead of queueing; online replies survive `LoadScene` and arrive while paused.
 
 ## Acceptance criteria
 
-- Given a project without `backend.ron`, when it starts, then no backend code runs and online actions emit `backend.unavailable`.
-- Given the `FakeBackend`, when a state machine fires `SaveToCloud` then `LoadFromCloud`, then `cloud.saved` and `cloud.loaded` arrive and the data round-trips.
-- Given two projects with different `game_id` on one Nakama, when both store, list leaderboards and matchmake, then neither sees the other's data or tickets.
-- Given the Nakama server is stopped, when the player starts the game, then start-up is not delayed and gameplay works offline.
-- Given a dropped connection, when it recovers, then the adapter refreshes the session and rejoins without a designer-authored action.
-- `ironhold_core` gains no network, async-runtime or platform-specific dependency (checked in review).
+- Given a project without `backend.ron`, when it starts, then no backend code runs and online actions emit `backend.offline`.
+- Given `FakeBackend`, when a state machine fires `SubmitScore` then `ShowLeaderboard`, then `score.submitted:{leaderboard}` and
+  `leaderboard.listed:{leaderboard}` arrive and the `leaderboard.<name>.<n>.*` variables hold the rows.
+- A designer can show a top-5 leaderboard and (v3) a lobby list using only Labels and Buttons from RON.
+- A failed submit or save emits that operation's failure event (`score.submit_failed:{leaderboard}`, `cloud.save_failed:{slot}`), never one generic error.
+- `ironhold validate` rejects an undeclared leaderboard, an action whose feature is not declared, and an invalid or duplicate `game_id`.
+- Given two projects with different `game_id` on one Nakama, neither sees the other's data or tickets; **a client authenticated for game A that
+  sends game B's ids is rejected by the server**.
+- Given the server is stopped, start-up is not delayed and gameplay works offline; given a dropped connection, the adapter refreshes the
+  session and reconnects without a designer-authored action.
+- `ironhold_core` gains no network, async-runtime or platform-specific dependency; backend responses never alter replicated state on one peer only.

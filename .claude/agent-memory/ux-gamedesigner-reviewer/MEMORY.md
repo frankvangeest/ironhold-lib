@@ -1,5 +1,7 @@
 # Memory Index
 
+- [backend_abstraction plan-review](project_backend_abstraction_plan_review.md) — JSON event payloads unbindable; no leaderboard read; cloud save payload undefined; async-reply traps
+
 - [entity.attacked co-op attribution](project_npc_attacked_coop_attribution.md) — nearest-player rule documented only in docs/30 ~109; docs/20 NPC section silent
 
 - [static_scene_mode plan+impl review](project_static_scene_mode_plan_review.md) — Static never announces; keep ?static=1 out of designer docs; PauseGame contract lives in 5 doc spots

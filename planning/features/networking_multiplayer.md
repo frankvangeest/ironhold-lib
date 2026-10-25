@@ -111,6 +111,8 @@ Extends Form 1. The host still runs the simulation, but players connect over the
 
 The relay service is responsible only for handshaking — it does not simulate game logic. Once a connection is established, traffic flows directly between host and client (peer-to-peer if NAT allows, through relay if not).
 
+> **Lobby actions and events are superseded by `planning/features/backend_abstraction.md`** (`lobby.*` events, `JoinLobby(row:)`, results in engine-written variables, no JSON in event names). The block below is the original sketch and is not to be implemented as written.
+
 ### New RON actions / events
 
 ```ron
