@@ -178,8 +178,17 @@ async fn e5(cfg: &Config, p: Params) -> Result<(), String> {
         let echo_tx = tx.clone();
         let c = counters.clone();
         let mid = match_id.clone();
+        // E5_STALL_MS=n: the LAST local client stops reading for n ms once, 10 s after warm-up (backpressure test: does the server
+        // drop a slow consumer, what do the others see, and does the stalled client catch up?)
+        let stall_ms: u64 = if i + 1 == local && local > 1 { std::env::var("E5_STALL_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(0) } else { 0 };
+        let stall_at = warm_end + Duration::from_secs(10);
         tasks.push(tokio::spawn(async move {
+            let mut stalled = stall_ms == 0;
             loop {
+                if !stalled && Instant::now() >= stall_at {
+                    stalled = true;
+                    tokio::time::sleep(Duration::from_millis(stall_ms)).await;
+                }
                 match reader.next().await {
                     Err(e) => {
                         st.lock().unwrap().error.get_or_insert(format!("read: {e} (after {:.1} s)", start.elapsed().as_secs_f64()));

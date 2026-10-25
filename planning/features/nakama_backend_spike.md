@@ -341,3 +341,35 @@ the pages (probe RTT from the scheduled send time, so the page's own `setTimeout
 - The ~105 ms receive gap in every 2-client run is constant across runs, so it is probably a harness or schedule artefact, not
   network jitter (not investigated; well under the 200 ms criterion).
 - Still open for E5: message sizes (64 B / 1400 B / ~4 KB), the backpressure test, a second device, a wired run (skipped, no cable).
+
+### 2026-10-25, E5 message sizes and backpressure (native, Wi-Fi, host 192.168.178.106)
+
+**Message size** (2 clients, load 20 Hz, probes 10 Hz, 35 s, JSON envelope; payload is the raw bytes, sent as base64 inside JSON):
+
+| payload | RTT p50 | p95 | max | result |
+|---|---|---|---|---|
+| 64 B | 5.3 | 11.3 | 21.8 | ok |
+| 1400 B | 9.4 | 14.5 | 28.0 | ok |
+| 2800 B | 13.9 | 22.7 | 32.1 | ok |
+| 4000 B | - | - | - | **both sockets closed with WebSocket 1009 (message too big) on the first send** |
+
+- RTT grows about 3 ms per KB of payload at the median (the Wi-Fi hop, base64 and JSON on both ends, and the relay copy), so the
+  400 B snapshot budget is cheap but a 2-3 KB state packet costs 10+ ms before any jitter.
+- **Effective payload ceiling is about 2.9 KB, not 4 KB:** Nakama's 4096 byte limit applies to the whole socket message and base64
+  inflates the payload by a third, plus the envelope. A protobuf envelope (S8) has the same base64-free advantage only for the
+  envelope itself, so S8 should also measure the ceiling. Anything larger needs splitting, delta compression or a storage/RPC path.
+
+**Backpressure** (4 clients, load 30 Hz, 2800 B payload, probes 10 Hz, 45 s; `E5_STALL_MS` makes the last client stop reading once,
+10 s after the warm-up; about 340 KB/s flows towards it):
+
+| stall | outcome |
+|---|---|
+| 0 ms | baseline: p50 15.7, p95 25.7, max 39.2, 0 disconnects |
+| 500 ms | no loss (4403 of 4403 messages delivered after resume), the stalled client's longest gap 501 ms, worst RTT 517 ms (its own echoes), other clients unaffected apart from one 117 ms gap |
+| 3000 ms | **the server dropped the slow client** (connection forcibly closed by the remote host); the other clients kept receiving at full rate |
+| 10000 ms | same drop |
+
+- A 500 ms freeze (tab throttled, GC, a long frame) is absorbed by TCP and the server queue with no loss and no effect on others;
+  3 s is not, at this data rate. The exact threshold and the server's reason (outgoing queue full vs write timeout) are not
+  established: the Nakama log for those two runs has not been read yet. Clients must treat a drop as normal and reconnect (E7).
+- A dropped member also removes its ring-probe target, so the client before it in the ring loses its RTT samples (harness effect).
