@@ -1,6 +1,6 @@
 # Investigation: Nakama as the game backend (build our own vs adopt vs both)
 
-_Status: Draft for decision (nothing built)_
+_Status: Spike done 2026-10-25 (section 8c): go for Nakama as the meta backend, conditional go for the relay; the decision is Frank's_
 _Opened: 2026-10-23, `58a6187`_
 _Question from Frank:_ is Nakama (open-source game backend, runnable from a container in the homelab) viable for Ironhold;
 would it be easier to write our own; what can and can't Nakama do; start small on our own, adopt Nakama, or support both?
@@ -203,12 +203,90 @@ thin client under ~1000 lines for the features above; no licence or database sur
 meta), the realtime protocol is impractical from Rust/wasm, or ops burden on the homelab is too high (then Heroic Cloud
 or a small own service for just lobbies).
 
+## 8b. Spike log (findings as they come in)
+
+- **2026-10-24, leaderboards need server code.** Per Nakama's leaderboard docs, "a leaderboard can be created via server-side code at
+  startup or within a registered function"; a client can only submit scores to, and list records of, existing leaderboards.
+  Practical consequence: even the simplest meta feature on our list needs a server runtime module (JavaScript/TypeScript/Go/Lua)
+  deployed alongside Nakama. This strengthens the recommendation to ship **one generic, data-driven module** and keep designers
+  out of server code, and it adds a deployer step ("mount the modules directory") that the homelab stack did not have.
+- **2026-10-24, E1/E2 measured (native, Wi-Fi, LAN):** REST calls take roughly 8-22 ms (device sign-in, refresh, storage
+  read/write). The session token lasts **60 s** (refresh token 3600 s by default), so any long-lived client needs refresh logic. A
+  stale storage write returns HTTP 400 with `{"code":9,...,"message":"Storage write rejected - version check failed."}`. Stored JSON
+  is **normalized** (same content, different key order and spacing), so save data cannot depend on byte-exact text. The object
+  version appears to be derived from the content.
+- 2026-10-24, stage 1 endpoint verified: Nakama 3.41.0 healthy, placeholder server key rejected (401), device-id sign-in works.
+
+## 8c. Spike result (2026-10-25)
+
+Measured on the LAN-only homelab stage 1 (Nakama 3.41.0, Postgres in LXC 106 on pmve), from a Windows laptop **on Wi-Fi** (no cable
+was available for a wired run), native and in Chromium pages. Full numbers, methods and the harness corrections are in
+`planning/features/nakama_backend_spike.md` (Progress log); the code is `spikes/nakama_spike/` on branch
+`feature/nakama_backend_spike`. The first native latency numbers were wrong (tokio timers on Windows added up to 15 ms to every
+round trip) and were redone; only the corrected ones count.
+
+### Verdict against the go criteria
+
+| Criterion | Result | Status |
+|---|---|---|
+| Browser connects over `ws://` and completes E1-E4 with no CORS workaround | Yes, E1/E2/E4 start from a page on `http://localhost` | **Met** (over `wss://`: stage 2, not run) |
+| LAN round trip p95 under 30 ms, p99 under 50 ms (400 B, 20-30 Hz, 2-4 clients) | Native: p50 5-9.5, p95 10-22, p99 23-36 ms. Browser pages (pooled): p50 5.5-15, p95 10-27.7 ms; p99 not reported (under 2000 samples per run); calibration p99 at 2 clients 22-27 ms | **Met** natively; browser p95 met with little headroom (27.7 ms at 4 clients / 20 Hz, partly the page's own timer lateness); browser p99 at 4 clients **not measured** |
+| Public hostname p95 under 150 ms, p99 under 250 ms | Not run (stage 2: Cloudflare Tunnel) | **Open** |
+| No receive gap above 200 ms on the LAN | Browser grid: worst 116 ms. Native grid: **one 352 ms stall in 12 runs** (one 2-client / 20 Hz run), not reproduced in 12 browser runs or later runs; cause not attributed (Wi-Fi most likely) | **Not clean**; needs a wired run |
+| Zero disconnects and zero `queue full` / write-timeout lines in every grid run | 24 grid runs, 0 disconnects; server log shows 1177 such lines, all in the minute of the deliberate 3 s stall test | **Met** |
+| Reconnect within 5 s, rejoin the same match; no token failure in 10 minutes | 13 ms for refresh, socket and rejoin; 10-minute soak 600/600 messages, 13 refreshes, no disconnect | **Met** for a clean drop; half-open drops (ping timeout, 25 s default) not measured |
+| Protocol layer about 1000 lines or fewer; wasm size with/without prost | 486 lines JSON (REST, socket, matchmaker) + 178 for protobuf = 664; wasm 369 KB JSON-only, 403 KB with prost | **Met** |
+| Operations checklist | Versions recorded (Nakama 3.41.0, Postgres 16; exact tags in the homelab deployment doc), log clean except the stall test; the effective-configuration record is only the documented defaults (queue 16, ping 15 s, pong wait 25 s, matchmaker 15 s), not read from the running server | **Mostly met** |
+
+### What the spike established
+
+- **Meta services work as the investigation assumed:** device sign-in, storage with version conflicts, a leaderboard (needs a small
+  server module), a public-read lobby list built from storage objects (no server code), the matchmaker (about 10 s to match with
+  the 15 s interval, token join) and relayed matches all work from native Rust and from a wasm page. No CORS workaround needed.
+- **The relay is fast enough on a LAN for snapshot-style state at 20-30 Hz:** about 5 ms median for two clients, 10 ms for four,
+  p95 under 30 ms in every run; a page adds 1.5-3.5 ms (mostly browser timer lateness).
+- **A slow reader is dropped, not buffered.** A client that stops reading for about 0.5 s loses nothing; at about 3 s (at 340 KB/s
+  towards it) the per-session outgoing queue (16 messages by default) fills, its messages are dropped, and the write timeout closes
+  the socket. Others are unaffected. The game client must expect drops and reconnect (E7 is cheap).
+- **Message size:** the 4096-byte limit covers the whole socket message. With the JSON envelope the usable payload is about
+  **2.9 KB** (base64 plus envelope); with protobuf about **4 KB** and 30% fewer bytes at 400 B. Latency is the same for both
+  formats. Anything bigger (full world snapshots, big diffs) needs splitting or another path.
+- **Sessions:** the token lasts 60 s and an open socket survives its expiry, but a new connection needs a fresh token; the client
+  must refresh before reconnecting (401 otherwise).
+- **Operations:** the stack ran for the whole spike with no server errors apart from the deliberate stall test.
+
+### What is still open
+
+1. Stage 2: `wss://` from an `https` page, mixed-content behaviour, tunnel latency and idle behaviour (criteria above).
+2. A **wired** run (and ideally a second device) to separate Wi-Fi hiccups from relay behaviour; attribute the 352 ms stall.
+3. A half-open drop (disable the network adapter mid-run) to measure ping-timeout detection.
+4. Browser p99 at 4 clients (needs about 3000 samples: longer runs or a higher probe rate) and the protobuf path from a browser.
+5. Whether the **JSON envelope is good enough**: it has no latency penalty and lowers complexity, but the 2.9 KB ceiling argues for
+   protobuf if we ever send more than a snapshot or two per message.
+
+### Decision
+
+**Go for Nakama as the meta backend** (accounts, storage, leaderboards, lobbies, matchmaking): every criterion for it is met and the
+build-our-own alternative remains the larger job. **Conditional go for the relay as the gameplay transport for snapshot-style state:**
+it meets the LAN latency and queue criteria natively and from a page, but the public-hostname numbers and the 352 ms stall are open,
+and the investigation's change-course rule (keep Nakama for meta, use Matchbox/WebRTC for gameplay) stays the fallback. Because the
+recommendation was already layered, the next step is the same either way: write the `ironhold_backend` abstraction plan with Nakama as the
+first adapter and the relay behind a swappable transport. **Do not** treat the relay as proven for input-style or low-latency
+twitch gameplay until a wired and a stage 2 run exist.
+
+### Maintained client crate (estimate, not measured)
+
+The spike's protocol layer is about 660 lines and the native and browser transports about 300 more. A maintained crate would add
+matchmaker/party/status coverage as needed, reconnect and session-refresh handling, retries, tests against a recorded server, and a
+transport trait over `tokio-tungstenite` and `ewebsock`: roughly **1,500-2,500 lines**, a few weeks of work, plus following Nakama
+API changes (the project pins `3.41.0`; the archived `nakama-rs` client is not a base). This is an estimate from the spike, not a measurement.
+
 ## 9. What is not verified in this investigation
 
 - Whether **Lightyear, bevy_replicon/renet or matchbox** support our current Bevy version (and the 0.19 target), and their WASM
   transports. The searches did not return a clear answer; check each crate's release notes. Needed for the sync layer in every option.
-- Nakama **benchmark numbers** (the page could not be read) and real behaviour at our message sizes.
-- The exact **JSON vs protobuf** socket details and whether a hand-written Rust client is as small as estimated.
+- Nakama vendor **benchmark numbers** (the page could not be read). Behaviour at our message sizes is now measured (section 8c).
+- Whether a *maintained* hand-written Rust client stays as small as the spike's (the spike itself is measured, section 8c; the maintained-crate size is an estimate).
 - **Heroic Cloud / Enterprise / Hiro / Satori pricing and terms**.
 - Whether the **latest release's year/changes** affect Postgres requirements (the release list showed none for the last five).
 
