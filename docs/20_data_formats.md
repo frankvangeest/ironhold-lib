@@ -84,6 +84,7 @@ The engine identifies files by their path (as set in the project config) and by 
 | Model overrides | `.ron` | `overrides/model_fixes.ron` |
 | Stat catalog | `.ron` | `stats/stats.ron` |
 | Dialogue | `.dialogue.ron` | `dialogues/{name}.dialogue.ron` |
+| Online backend config | `.ron` | `backend.ron` |
 
 `.scene.ron`, `.project.ron`, `.behavior.ron`, and `.dialogue.ron` use a double extension so the engine can discover them by suffix. All other `.ron` files are found by their exact path, which is set in the project config — the filename itself is not significant to the runtime.
 
@@ -114,6 +115,7 @@ Entry point for a project. References all other files.
 | `items_path` | `Option<String>` | — | Path to an `items/items.ron` file. When absent, the inventory system is inactive for this project. `ironhold_cli validate` reads this field the same way — see `asset_catalog` above. |
 | `damage_popup_style` | `Option<DamagePopupStyle>` | — | Visual style for `Action::ShowDamagePopup` popups. Omit for built-in defaults. See [DamagePopupStyle](#damagepopupstyle) below. |
 | `audio` | `AudioConfig` | — | Project-level audio settings. Omit for defaults (`max_volume: 1.0, mute_on_start: false`). See [AudioConfig](#audioconfig) below. |
+| `backend_path` | `Option<String>` | — | Path to a `backend.ron` file (online sign-in and leaderboards). When absent, the project runs fully offline and the online actions answer `backend.offline` (no convention-path fallback). See [`backend.ron`](#backendron--backendconfig-). |
 | `max_frame_delta_secs` | `Option<f32>` | — | Caps the largest per-frame time delta the whole game clock reports, in seconds. Omit for Bevy's default (0.25s). See [max_frame_delta_secs](#max_frame_delta_secs) below. |
 | `ui_scale` | `Option<UiScaleConfig>` | — | Scale the whole UI against a reference resolution so one layout works on any window size. Omit to leave UI scale at exactly 1.0. See [Responsive UI: `ui_scale`](#responsive-ui-ui_scale) below. |
 | `model_fixes` | `Map<String, TransformFix>` | v1 only | Inline fixes (v1 only; use `model_fixes_path` in v2+) |
@@ -906,6 +908,8 @@ The `bind` variable is kept in sync by rules in `logic/state_machine.ron` that l
 | `target_name` | targeting | prefab catalog key of the current target (e.g. `"enemy_orc_melee"`) |
 | `target_id` | targeting | spawn id of the current target (e.g. `"orc_01"`) |
 | `audio_volume_percent` | audio | the chosen volume preset as an integer string (`"100"` by default, `"25"` after `SetVolume(25)`), present from the first frame. It is the preset the player picked, **not** the effective volume: unaffected by `max_volume` and by mute. Reserved: bind a `Label` to it but don't `SetVariable` it — if you do, your value shows only until the next `SetVolume`/`ToggleMute`/project load, then silently reverts. **Mute is NOT auto-written** — bridge `audio.muted`/`audio.unmuted` with `SetVariable` (see `SyncAudioState`). |
+
+`backend.*` and `leaderboard.<name>.*` (online backend: sign-in status, last error, leaderboard rows) are engine-written too: see [`backend.ron`](#backendron--backendconfig-) for the full list. Do not `SetVariable` them.
 
 The targeting variables update on every selection change (click, Tab, or `SetTarget`) and blank on clear/`LoadScene`; `audio_volume_percent` updates on every `SetVolume`, survives scene loads, and resets to `"100"` when a project loads. (`score` is **not** engine-written: your own `IncrementVariable("score", …)` rules write it and the engine only reads it, for the debug-state readout.) Example: `Label((id: "target_label", bind: "target_display", format: "Target: {}"))` — see `assets/projects/3rd_person_game_demo`.
 
@@ -4041,6 +4045,10 @@ column.
 | `AdvanceDialogue` | Advance the current dialogue to the next node. No-op when the current node has visible choices (player must click a choice button). |
 | `EndDialogue` | Close the dialogue panel immediately. Emits `dialogue.ended:{path}`. Cleared automatically on `LoadScene`. |
 | `JoinPlayer` | Hot-join a new player into an already `Grid`-split local co-op scene, growing the split-screen layout live (up to `MAX_SPLIT_PLAYERS`) with no scene reload. No-ops with a `warn!` outside a `Grid`-split scene, at the cap, or with no `join_prefab_keys` entry for the next slot. Emits `coop.lobby_full` on the join that reaches the cap. See [Local co-op hot join](#local-co-op-hot-join) above. |
+| `SignIn` | Start the online session defined in `backend.ron`. Answers `backend.signed_in`, `backend.sign_in_failed` or `backend.unreachable` later; `backend.status` and `backend.display_name` keep Labels up to date. With no backend it answers `backend.offline`. See [`backend.ron`](#backendron--backendconfig-). |
+| `SignOut` | End the online session. Answers `backend.signed_out`. |
+| `SubmitScore(leaderboard: "id", score_var: "var")` | Send the whole number held in the variable `score_var` to a leaderboard declared in `backend.ron`. Answers `score.submitted:{leaderboard}` or `score.submit_failed:{leaderboard}` (reason in `backend.last_error`). Fails rather than sending 0 if the variable is not a whole number or the leaderboard is not declared. Example: `SubmitScore(leaderboard: "best", score_var: "score")` |
+| `ShowLeaderboard(leaderboard: "id", count: u32)` | Fetch the top rows of a leaderboard into the `leaderboard.<name>.*` variables. `count` is optional, `1`-`10`, default `10` (larger values are capped at 10). Answers `leaderboard.listed:{leaderboard}` or `leaderboard.list_failed:{leaderboard}`. Example: `ShowLeaderboard(leaderboard: "best", count: 5)` |
 
 #### `SetUiVisible` <a id="setuivisible"></a>
 
@@ -5037,6 +5045,93 @@ only surfaced as a runtime no-op the first time a player opened the shop.
 | `inventory.transferred:{from}:{to}:{item_key}` | `TransferItem` completes a move between entities |
 
 > **v1 scope note (corrected — this previously said buy/sell were display-only in v1; that's out of date):** `Action::BuyItem` is fully implemented — it checks stock, deducts `buy_price` from the player's `currency_stat`, adds the item to the player's inventory, and emits `item.bought:{item_key}`. **Selling is still not implemented** — `sell_price` is stored on `ShopEntry` but nothing reads it; there is no `SellItem` action yet.
+
+---
+
+## `backend.ron` — BackendConfig ✅
+
+Online features for a project: sign-in and leaderboards (v1). Referenced via `backend_path` in `{name}.project.ron`. Optional — a project without one runs fully offline, and the online actions (`SignIn`, `SignOut`, `SubmitScore`, `ShowLeaderboard`) answer `backend.offline` instead of doing anything. There is no convention-path fallback: the file is only read when `backend_path` is set. A worked example is `assets/projects/backend_demo`.
+
+**Fields:**
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `schema_version` | `u32` | required | Must be `1`. |
+| `game_id` | `Option<String>` | `None` | Your game's name on a shared server (1-32 characters of `a-z`, `0-9`, `_` only). Omit to use the project's `project_id`, which must then match the same rule. |
+| `endpoint` | `Option<String>` | `None` | Where the server lives. Omit for an offline project. `"fake://"` is an in-memory test backend (needs no server; sign-in always works, four fixed rivals fill each leaderboard, nothing is saved between runs). To rehearse failure screens, add options: `"fake://?fail=sign_in"` (rejected), `unreachable`, `submit`, `list` (comma list), `silent` (never answers, so the request times out) and `latency=N` (frames before an answer, about 60 per second). Otherwise `"https://..."`; plain `"http://..."` is only meant for a server on your own machine or LAN. A real server needs a build that includes that server's adapter (none exists yet); without one the project runs offline and `backend.last_error` says so. |
+| `features` | `Vec<BackendFeature>` | `[]` | Extra capabilities you plan to use, so a server can be set up for them: `CloudSave`, `Lobbies`, `Matchmaker`. Declared only in v1 — **nothing reads them yet, and they do nothing**. |
+| `leaderboards` | `Vec<Leaderboard>` | `[]` | The leaderboards this game uses. Every `SubmitScore`/`ShowLeaderboard` must name one of these. On a real server, adding or renaming one will need a server-side step (a later version). |
+| `request_timeout_secs` | `Option<f32>` | `15` | How long a request may stay unanswered before the engine fails it (1-120). |
+
+**`Leaderboard(...)` fields:**
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `name` | `String` | required | Leaderboard id (1-32 characters of `a-z`, `0-9`, `_` only). Used in actions, event names and variable names. Must be unique. |
+| `ranking` | `Ranking` | `HigherIsBetter` | Which end of the score range is rank 1. `HigherIsBetter` (points) or `LowerIsBetter` (race times). |
+| `keep` | `Keep` | `Best` | What a player's next submission does to their earlier one. `Best` keeps only the best score (judged by `ranking`), `Latest` replaces it with the newest, `Total` adds submissions together. |
+
+**Example:**
+```ron
+BackendConfig(
+    schema_version: 1,
+    game_id: "my_game",
+    endpoint: "fake://",            // swap for "https://..." when a real server exists
+    features: [CloudSave],
+    leaderboards: [
+        Leaderboard(name: "best_time", ranking: LowerIsBetter, keep: Best),
+        Leaderboard(name: "total_coins", ranking: HigherIsBetter, keep: Total),
+    ],
+)
+```
+
+Wire it up in the project config with `backend_path: "backend.ron"`.
+
+**Validation rules** (`ironhold validate` reports each; at runtime an invalid file is logged and the project runs offline):
+- `schema_version` must be `1`.
+- `game_id` and every leaderboard `name` must be 1-32 characters of `a-z`, `0-9`, `_` (no capitals, dots, colons or spaces).
+- A leaderboard name may not be declared twice.
+- `endpoint` must start with `fake://`, `https://` or `http://`.
+- Unknown field names are errors, like everywhere else in RON.
+
+### Online events
+
+Replies arrive a moment after the action, while the game is paused, and survive `LoadScene` — bind them in the top-level `global_on:`, not inside a state's `on:` list. Every refused request still answers with an event (read by the rules one frame after the action), so a state machine never waits on silence. Retry-on-start-up: a sign-in fired before `backend.ron` finished loading answers `backend.busy`; bind `backend.ready` (or `backend.offline`) to know when it is safe.
+
+| Event | When |
+|-------|------|
+| `backend.signed_in` | Sign-in succeeded (also fired at once if you were already signed in) |
+| `backend.sign_in_failed` | The server rejected the sign-in |
+| `backend.unreachable` | The server could not be reached, or a `SignIn`/`SignOut` got no answer within 15 seconds (a `SubmitScore`/`ShowLeaderboard` that times out fires its own `score.submit_failed:{lb}` / `leaderboard.list_failed:{lb}` instead) |
+| `backend.signed_out` | `SignOut` finished (also fired at once if you were not signed in) |
+| `backend.ready` | `backend.ron` finished loading and the backend can be used (bind your automatic `SignIn` here) |
+| `backend.offline` | The project has no working backend: fired once when loading finishes without one (the reason is in `backend.last_error`), and again whenever an online action is used |
+| `backend.busy` | `backend.ron` is still loading, or the same request (or a sign-in against a sign-out) is already waiting for an answer |
+| `backend.connection_lost` | The live connection dropped (`backend.status` goes back to `connecting`) |
+| `backend.reconnected` | The connection came back (`backend.status` is `online` again) |
+| `score.submitted:{leaderboard}` | `SubmitScore` was accepted |
+| `score.submit_failed:{leaderboard}` | `SubmitScore` failed (not signed in or still signing in, undeclared leaderboard, variable not a whole number, server refused); the reason is in `backend.last_error` |
+| `leaderboard.listed:{leaderboard}` | `ShowLeaderboard` finished; the variables below are up to date |
+| `leaderboard.list_failed:{leaderboard}` | `ShowLeaderboard` failed (not signed in or still signing in, undeclared leaderboard, server refused) |
+
+### Engine-written variables
+
+These are written by the engine; bind a `Label` to them (`bind: "backend.status"`). Do not write them yourself: the engine overwrites them at the next backend reply (`ironhold validate --strict` reports a rule that does, as `reserved_variable_write`). They are not touched by `LoadScene`.
+
+| Variable | Value |
+|---|---|
+| `backend.status` | `offline` (no usable backend: nothing configured, a bad `backend.ron`, or no adapter in this build), `signed_out` (a working backend, nobody signed in), `connecting` or `online` |
+| `backend.display_name` | The signed-in player's name; empty when signed out |
+| `backend.last_error` | Short reason for the most recent failure or for why the project is offline; cleared on a new sign-in and after any success |
+| `leaderboard.<name>.count` | Rows in the last fetched list (0-10) |
+| `leaderboard.<name>.<n>.name` | Player name at rank `n` (`n` = 1 to 10); absent beyond `count` |
+| `leaderboard.<name>.<n>.score` | Score at rank `n`; absent beyond `count` |
+| `leaderboard.<name>.my_rank` | The signed-in player's rank; empty when they have no score |
+| `leaderboard.<name>.my_best` | The signed-in player's score on that board; empty when they have none |
+
+Signing out removes every `leaderboard.*` variable, so the next player never sees the previous player's board or rank. An unset variable renders as empty text (with a `format:`, the text around `{}` still shows).
+
+`assets/projects/backend_demo/ui/signin.ui.ron` and `ui/leaderboard.ui.ron` are copy-and-edit UI snippets (not loaded by the engine) showing sign-in status/buttons and a top-5 board; paste them into a scene's `ui:` list.
 
 ---
 

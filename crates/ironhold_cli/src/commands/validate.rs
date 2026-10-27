@@ -6,6 +6,7 @@ use ironhold_core::schema::camera::CameraModeDef;
 use ironhold_core::schema::catalog::{
     AssetCatalog, FlyCamDef, PrefabCatalog, PrefabDef, PrefabKind, WorldStatBarStyle,
 };
+use ironhold_core::schema::backend::BackendConfig;
 use ironhold_core::schema::items::ItemCatalog;
 use ironhold_core::schema::scene_v2::{ui_layout_diagnostics, walk_ui_nodes, GameSceneV2, UiDiagnosticSeverity, UiNodeDef};
 use ironhold_core::schema::player::{CameraConfig, InputMap};
@@ -93,6 +94,10 @@ struct LoadedProject<'a> {
     /// forward `unreachable_trigger` check has no equivalent exposure (a dropped scene just
     /// contributes no buttons to check, not a false positive), so it doesn't gate on this.
     scenes_parsed_cleanly: bool,
+    /// The project's `backend.ron` (resolved from `backend_path`, which has no convention-path fallback) and the path it
+    /// was read from, for diagnostics. `None` when the project runs offline or the file failed to parse.
+    backend: Option<&'a BackendConfig>,
+    backend_source: &'a str,
 }
 
 // ── Public result type (used by watch) ───────────────────────────────────────
@@ -4397,6 +4402,12 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
 
     warnings.extend(pause_checks(project));
 
+    warnings.extend(
+        super::backend_checks::strict_warnings(project_dir, project_config, project.backend_source, project.backend, actions)
+            .into_iter()
+            .map(|f| StrictWarning { source_file: f.source_file, message: f.message, kind: f.kind }),
+    );
+
     warnings
 }
 
@@ -4452,6 +4463,14 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
         "items_path",
         &mut file_results,
     );
+
+    // `backend_path` has no convention-path fallback (a project without it is an offline project), so only a configured path
+    // is read, and a configured-but-missing one is a hard error like every other configurable path.
+    let backend_source: String = project_config.as_ref().and_then(|c| c.backend_path.clone()).unwrap_or_default();
+    let backend_config: Option<BackendConfig> = project_config
+        .as_ref()
+        .and_then(|c| c.backend_path.as_deref())
+        .and_then(|p| parse_configured_path(project_dir, p, "backend_path", &mut file_results));
 
     let mut scenes: Vec<(String, GameSceneV2)> = Vec::new();
     for path in glob_dir(project_dir, "scenes", ".scene.ron") {
@@ -4561,9 +4580,21 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
         behaviors: &behaviors,
         logic_files_parsed_cleanly,
         scenes_parsed_cleanly,
+        backend: backend_config.as_ref(),
+        backend_source: backend_source.as_str(),
     };
 
     let mut cross_errors = cross_file_checks(project);
+    cross_errors.extend(
+        super::backend_checks::errors(
+            project.backend_source,
+            project.backend,
+            project.project_config.and_then(|c| c.project_id.as_deref()),
+            project.actions,
+        )
+            .into_iter()
+            .map(|f| CrossFileError { source_file: f.source_file, message: f.message, error_type: f.kind }),
+    );
     cross_errors.extend(check_ui_trigger_reachability(project));
     cross_errors.extend(check_asset_root_paths(project));
 

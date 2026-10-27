@@ -15,6 +15,7 @@ tests, architecture, determinism, profiling.
 | [05_art_style.md](05_art_style.md) | Designer / artist | Visual style, palette, texture and asset guidance |
 | [15_authoring_tools.md](15_authoring_tools.md) | Designer (the CLI is optional) | Check, watch and inspect your project with the `ironhold` tool; the canonical list of what `validate` catches |
 | [20_data_formats.md](20_data_formats.md) | Designer | The full RON reference: every file, field, action and event |
+| Online features (sign-in, leaderboards) | Designer | See "`backend.ron`" in [20_data_formats.md](20_data_formats.md), "Online events" in [30_runtime_events_and_logic.md](30_runtime_events_and_logic.md) and the `backend_demo` project |
 | [25_custom_shaders.md](25_custom_shaders.md) | Technical artist | Writing WGSL shaders (the alignment and uniform-packing sections are engine-level detail) |
 | [30_runtime_events_and_logic.md](30_runtime_events_and_logic.md) | Mixed | Designers: "Project logic: `state_machine.ron`" and "Entity FSM". The rest is design vision, planned features and the execution model. |
 | [STATUS.md](STATUS.md) | Mixed | What works today (designer). "Engine ABI" and the milestones are developer material. |

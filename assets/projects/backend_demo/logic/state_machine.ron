@@ -1,0 +1,22 @@
+(
+    schema_version: 1,
+    // Every Button in scenes/main.scene.ron needs a handler here (ironhold validate reports `unreachable_trigger` otherwise).
+    // Online answers arrive seconds later, while paused and across LoadScene, so they are bound in global_on.
+    global_on: [
+        ( event: "scene.ready:main", do_actions: [ SetVariable("score", "0") ] ),
+
+        ( event: "ui.button_pressed:sign_in",   do_actions: [ SignIn ] ),
+        ( event: "ui.button_pressed:sign_out",  do_actions: [ SignOut ] ),
+        ( event: "ui.button_pressed:add_score", do_actions: [ IncrementVariable("score", 10) ] ),
+        ( event: "ui.button_pressed:submit",    do_actions: [ SubmitScore(leaderboard: "best", score_var: "score") ] ),
+        ( event: "ui.button_pressed:refresh",   do_actions: [ ShowLeaderboard(leaderboard: "best", count: 5) ] ),
+
+        // Signing in automatically on start-up: bind `backend.ready` (the backend finished loading), not `scene.ready:main` -
+        // a SignIn fired before that answers `backend.busy`. `backend.offline` means there is no usable backend at all.
+        // ( event: "backend.ready", do_actions: [ SignIn ] ),
+
+        // Fill the board as soon as sign-in works, and again after every accepted score.
+        ( event: "backend.signed_in",    do_actions: [ ShowLeaderboard(leaderboard: "best", count: 5) ] ),
+        ( event: "score.submitted:best", do_actions: [ ShowLeaderboard(leaderboard: "best", count: 5) ] ),
+    ],
+)

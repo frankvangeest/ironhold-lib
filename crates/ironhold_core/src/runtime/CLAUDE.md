@@ -48,3 +48,14 @@ only against pads **not** claimed by a live player's `BoundGamepad`, by an undra
   `PlayerConfig.bound_gamepad`, with no round trip through `inputs.gamepad_index`: re-resolving an index to an
   `Entity` a frame later is a window in which pad churn binds the wrong device. A keyboard-triggered join sees
   `None` and is unaffected.
+
+## Online backend (`backend.rs`)
+
+- The contract lives here (`Backend` poll trait, `BackendRequest`/`BackendEvent`, `FakeBackend`); adapters live in their own crate and
+  are installed by the runner into the `NonSend` `BackendSlot`. No network, async runtime or platform code in core.
+- The online `Action`s only push onto `BackendHub`'s outbox (a resource, never a `Message`: a message buffer drops entries while a
+  reader is gated or paused). `backend_glue_system` (`GameStreamSet::Backend`) is the one place that submits, polls, sorts the
+  batch by `request_id`, times requests out on `Time<Real>` and writes events plus the `backend.*`/`leaderboard.*` variables.
+- Event names carry only designer-writable ids, never JSON or error text (the interpreter matches names exactly); reasons go to
+  `backend.last_error`. Every failure is per operation (`score.submit_failed:{lb}`), never one generic error.
+- Never use Bevy task pools for adapter I/O. `FakeBackend` latency counts polls, never wall-clock time.

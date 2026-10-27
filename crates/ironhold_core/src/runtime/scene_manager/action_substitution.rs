@@ -119,6 +119,9 @@ pub(crate) fn rewrite_self(action: Action, spawn_id: &str) -> Action {
         Action::BuyItem(item_key) => Action::BuyItem(item_key),
         // UI node ids are literal scene-authored ids, never entity spawn ids.
         Action::SetUiVisible { id, visible } => Action::SetUiVisible { id, visible },
+        // Backend leaderboard names and variable names are literal ids declared in `backend.ron`.
+        Action::SubmitScore { leaderboard, score_var } => Action::SubmitScore { leaderboard, score_var },
+        Action::ShowLeaderboard { leaderboard, count } => Action::ShowLeaderboard { leaderboard, count },
 
         // ── No string fields at all: identity, grouped ──────────────────────────────
         other @ (Action::Quit
@@ -140,7 +143,9 @@ pub(crate) fn rewrite_self(action: Action, spawn_id: &str) -> Action {
             | Action::CloseShop
             | Action::CloseContainer
             | Action::TakeAllFromContainer
-            | Action::JoinPlayer) => other,
+            | Action::JoinPlayer
+            | Action::SignIn
+            | Action::SignOut) => other,
     }
 }
 
@@ -243,6 +248,9 @@ pub(crate) fn rewrite_target(action: Action, target_id: &str) -> Action {
         Action::BuyItem(item_key) => Action::BuyItem(item_key),
         // UI node ids are literal scene-authored ids, never entity spawn ids.
         Action::SetUiVisible { id, visible } => Action::SetUiVisible { id, visible },
+        // Backend leaderboard names and variable names are literal ids declared in `backend.ron`.
+        Action::SubmitScore { leaderboard, score_var } => Action::SubmitScore { leaderboard, score_var },
+        Action::ShowLeaderboard { leaderboard, count } => Action::ShowLeaderboard { leaderboard, count },
 
         // ── No string fields at all: identity, grouped ──────────────────────────────
         other @ (Action::Quit
@@ -264,7 +272,9 @@ pub(crate) fn rewrite_target(action: Action, target_id: &str) -> Action {
             | Action::CloseShop
             | Action::CloseContainer
             | Action::TakeAllFromContainer
-            | Action::JoinPlayer) => other,
+            | Action::JoinPlayer
+            | Action::SignIn
+            | Action::SignOut) => other,
     }
 }
 

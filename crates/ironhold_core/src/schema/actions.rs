@@ -456,6 +456,26 @@ pub enum Action {
     /// Flip the menu hold. For flat (`global_on`-only) projects; inside `entry_actions`/`exit_actions` use
     /// the `PauseGame`/`ResumeGame` pair instead (entering a state while already paused would unpause).
     TogglePause,
+    /// Sign in to the project's online backend (`backend.ron`). A request: the answer arrives later as
+    /// `backend.signed_in`, `backend.sign_in_failed` or `backend.unreachable`, with `backend.status` and
+    /// `backend.display_name` kept up to date for Labels. With no backend configured it answers `backend.offline`; while one is
+    /// already signing in, `backend.busy`. Bind the answers in `global_on` (they arrive while paused and survive `LoadScene`).
+    /// See `planning/features/backend_abstraction.md`.
+    SignIn,
+    /// End the online session; answers `backend.signed_out`.
+    SignOut,
+    /// Submit the whole number held in the variable `score_var` to a leaderboard declared in `backend.ron`. Answers
+    /// `score.submitted:{leaderboard}` or `score.submit_failed:{leaderboard}` (the reason goes to `backend.last_error`).
+    /// Fails (never silently submits 0) when the variable is not a whole number or the leaderboard is not declared.
+    SubmitScore { leaderboard: String, score_var: String },
+    /// Fetch the top `count` (1-10, default 10) rows of a leaderboard. Answers `leaderboard.listed:{leaderboard}` after writing
+    /// `leaderboard.<name>.count`, `leaderboard.<name>.<n>.name`/`.score`, `.my_rank` and `.my_best`, or
+    /// `leaderboard.list_failed:{leaderboard}`.
+    ShowLeaderboard {
+        leaderboard: String,
+        #[serde(default = "default_leaderboard_count")]
+        count: u32,
+    },
 }
 
 impl Action {
@@ -487,7 +507,8 @@ impl Action {
             | Action::PauseGame | Action::ResumeGame | Action::TogglePause
             | Action::OpenShop(_) | Action::CloseShop | Action::BuyItem(_)
             | Action::OpenContainer(_) | Action::CloseContainer | Action::TakeAllFromContainer
-            | Action::ToggleOwnNameplate | Action::JoinPlayer => false,
+            | Action::ToggleOwnNameplate | Action::JoinPlayer
+            | Action::SignIn | Action::SignOut | Action::SubmitScore { .. } | Action::ShowLeaderboard { .. } => false,
         }
     }
 }
@@ -495,6 +516,7 @@ impl Action {
 fn default_action_volume() -> f32 { 1.0 }
 fn default_decal_color() -> (f32, f32, f32, f32) { (1.0, 1.0, 1.0, 1.0) }
 fn one_u32() -> u32 { 1 }
+fn default_leaderboard_count() -> u32 { crate::schema::backend::MAX_LEADERBOARD_ROWS }
 
 #[cfg(test)]
 mod tests {

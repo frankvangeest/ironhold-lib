@@ -412,6 +412,69 @@ not `SpawnEffect` in the same list as `LoadScene`: use the new scene's `scene.re
 See also: [Per-event evaluation order](#per-event-evaluation-order), [Pausing the game](#pausing-the-game), and in
 [20_data_formats.md](20_data_formats.md) the key bindings, the action bar's same-frame slot order and the `stats.ron` order notes.
 
+### Online events (backend)
+
+The online actions (`SignIn`, `SignOut`, `SubmitScore`, `ShowLeaderboard`; see `docs/20_data_formats.md`, `backend.ron`) are
+**requests**: the answer arrives later, as an event plus engine-written variables. A project without a `backend.ron` still
+runs; every online action then answers `backend.offline`.
+
+| Event | Meaning |
+|---|---|
+| `backend.signed_in` / `backend.signed_out` | `SignIn` / `SignOut` finished |
+| `backend.sign_in_failed` | the server rejected the sign-in (`backend.last_error` has the reason) |
+| `backend.unreachable` | the server could not be reached, or a `SignIn`/`SignOut` got no answer in 15 s |
+| `backend.ready` | `backend.ron` finished loading and the backend can be used: the place for an automatic `SignIn` (a sign-in fired earlier, e.g. on `scene.ready`, may answer `backend.busy`) |
+| `backend.offline` | the project has no usable backend (no `backend_path`, no endpoint, or a failed `backend.ron` load). Fired once when loading finishes without one (reason in `backend.last_error`) and again whenever an online action is used |
+| `backend.busy` | the same request is already in flight, a sign-in and a sign-out overlap, or `backend.ron` is still loading; fire the action again to retry |
+| `backend.connection_lost` / `backend.reconnected` | a live connection dropped / came back (only with a real server; `backend.status` follows) |
+| `score.submitted:{leaderboard}` / `score.submit_failed:{leaderboard}` | `SubmitScore` result; also the answer when you submit before signing in or while still signing in (the reason is in `backend.last_error`) |
+| `leaderboard.listed:{leaderboard}` / `leaderboard.list_failed:{leaderboard}` | `ShowLeaderboard` result (rows are in `leaderboard.<name>.*` variables first) |
+
+Rules that matter when you wire them:
+- **Bind the answers in `global_on`.** They arrive seconds later, while the game is paused and after a `LoadScene`, so a binding
+  scoped to one state would miss them (the same trap as `EmitEventAfterDelay`).
+- Event names carry only ids you wrote (`score.submitted:best`); the reason for a failure goes to the variable `backend.last_error`,
+  which a `Label` can show.
+- A real reply is visible the **same frame** it is produced: the backend runs after the delayed events and before the stat events in the
+  game stream (item 2.3 of the frame order above), so a rule on `leaderboard.listed:best` already sees the new `leaderboard.best.*`
+  variables. A **refusal** (`backend.offline`, `backend.busy`, `score.submit_failed:{lb}` for "not signed in") is emitted by the action
+  itself, so it counts as an event your actions emitted (item 2.1) and rules read it one frame later.
+- Replies are per-player input from outside the game. They never change shared game state by themselves; a rule that reacts to
+  one runs on that player's machine only.
+- Requests with the same kind (`SignIn` twice, two `SubmitScore` to one leaderboard) never run in parallel: the second answers
+  `backend.busy`.
+
+**Pattern: sign in, then show the board** (`assets/projects/backend_demo`):
+
+```ron
+global_on: [
+    ( event: "ui.button_pressed:sign_in", do_actions: [ SignIn ] ),
+    ( event: "backend.signed_in",         do_actions: [ ShowLeaderboard(leaderboard: "best", count: 5) ] ),
+    ( event: "score.submitted:best",      do_actions: [ ShowLeaderboard(leaderboard: "best", count: 5) ] ),
+    ( event: "score.submit_failed:best",  do_actions: [ SetVariable("toast", "Could not save your score") ] ),
+],
+```
+
+**Pattern: a "searching" state with a timeout** (works for any slow request):
+
+```ron
+initial_state: "idle",
+states: [ ( name: "idle", on: [ ( event: "ui.button_pressed:sign_in", do_actions: [ SignIn ] ) ] ),
+          ( name: "connecting", entry_actions: [ SetVariable("hint", "Connecting...") ] ) ],
+transitions: [
+    ( from: "idle",       on: "ui.button_pressed:sign_in", to: "connecting" ),
+    ( from: "connecting", on: "backend.signed_in",          to: "idle" ),
+    ( from: "connecting", on: "backend.sign_in_failed",    to: "idle" ),
+    ( from: "connecting", on: "backend.unreachable",       to: "idle" ),
+    ( from: "connecting", on: "backend.offline",           to: "idle" ),
+    ( from: "connecting", on: "backend.busy",              to: "idle" ),
+],
+```
+Give the waiting state an exit for **every** answer the action can produce (success, `sign_in_failed`, `unreachable`, and the
+immediate refusals `offline` and `busy`), and clear any hint on the way out. The engine fails every accepted request after
+`request_timeout_secs` (15 by default; `backend.unreachable` for sign-in, the operation's own failure event otherwise), so an accepted
+request never leaves the state machine waiting forever.
+
 ### The `initial_state` entry-actions gotcha
 **`entry_actions` on the `initial_state` do *not* run at boot.** Entry actions only run when a **transition** enters a state — the state you start in was never "entered" by a transition, so its `entry_actions` are silently skipped. If you follow "start flat, add states later" and move boot-time work (like `PlayMusicLoop` on scene-ready) into your first state's `entry_actions`, expecting it to fire immediately, it won't. Keep boot-time work in a `global_on` `scene.ready:<scene>` binding instead, or restructure so the initial state is only reached via an explicit transition from a dedicated boot state.
 
@@ -529,6 +592,9 @@ Applies actions to the world. Key design points:
 - `OpenShop(merchant_id)` — resolves the merchant's `MerchantDef` via the `SpawnRegistry` + `PrefabKey`, makes the `ShopPanel` visible, and repopulates its stock list. Targets by node **type** — at most one `ShopPanel` per scene. `{self}` and `{target}` substituted in the merchant ID. Warns if no merchant entity or no `ShopPanel` UI node is present.
 - `CloseShop` — hides the `ShopPanel` (equality-guarded; no-op if already hidden)
 - `PauseGame` / `ResumeGame` / `TogglePause` — hold / release / flip the simulation (see [Pausing the game](#pausing-the-game)). `PauseGame` is a request: `game.paused` is emitted only when the game becomes paused, and `game.resumed` when it stops being paused (including the automatic resume on a Replace-mode `LoadScene`). No-ops if already in that state.
+- `SignIn` / `SignOut` — start or end the online session (`backend.ron`); answers `backend.signed_in` / `backend.signed_out`, or `backend.sign_in_failed` / `backend.unreachable` / `backend.offline` / `backend.busy`. Keeps `backend.status`, `backend.display_name` and `backend.last_error` up to date (see [Online events](#online-events-backend))
+- `SubmitScore { leaderboard, score_var }` — submits the whole number held in the variable `score_var` to a leaderboard declared in `backend.ron`; answers `score.submitted:{leaderboard}` or `score.submit_failed:{leaderboard}`. A variable that is not a whole number fails instead of submitting 0
+- `ShowLeaderboard { leaderboard, count? }` — fetches the top `count` (1-10, default 10) rows into `leaderboard.<name>.count`, `.<n>.name`, `.<n>.score`, `.my_rank`, `.my_best`; answers `leaderboard.listed:{leaderboard}` or `leaderboard.list_failed:{leaderboard}`
 
 ### Infrastructure ✅
 - `ActionQueue` — FIFO queue processed each frame by `action_executor_system` (push order equals execution order)

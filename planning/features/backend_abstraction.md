@@ -1,13 +1,13 @@
 # Feature: Backend abstraction (core contract + Nakama adapter)
 
-_Status: Ready (plan-review round 1 done 2026-10-25; all seven decisions answered 2026-10-27, see "Decisions (answered)")_
+_Status: In Progress (v1 Done, v2-v4 Queued). Plan-review round 1 done 2026-10-25; all seven decisions answered 2026-10-27, see "Decisions (answered)"._
 _Planned at: `cd90a12` (2026-10-25)_
 
 ## Phases
 
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
-| v1 | Contract in core (Actions, events, engine-written variables, poll trait, glue system) + `FakeBackend`; sign-in and leaderboard only; nothing networked | Queued | — |
+| v1 | Contract in core (Actions, events, engine-written variables, poll trait, glue system) + `FakeBackend`; sign-in and leaderboard only; nothing networked | Done | 8745ef9 (2026-10-27) |
 | v2 | `ironhold_nakama` adapter, **native and wasm32 on the LAN**: sign-in, leaderboards, server module with `game_id` enforcement; cloud save once local save exists | Queued | — |
 | v3 | Lobby list (public-read storage), then matchmaker | Queued | — |
 | v4 | Stage 2: `wss://` from an `https` page, tunnel latency and idle sockets, half-open drop | Queued | — |
@@ -175,26 +175,44 @@ latency, higher ceiling, +34 KB wasm).
 ## Tasks
 
 ### v1 — contract and fake
-- [ ] `backend_path` in `ProjectConfig`; `BackendConfig` schema with `schema_version`; load error handling; `ironhold validate` checks:
+- [x] `backend_path` in `ProjectConfig`; `BackendConfig` schema with `schema_version`; load error handling; `ironhold validate` checks:
       id charset/length (`game_id`, leaderboard, slot), no duplicates, undeclared leaderboard/feature used by an action (error),
       online action without `backend.ron` (warning), `endpoint` scheme (https; http only for localhost/LAN with a warning),
-      `FindMatch` bounds, `--strict`: bindings on result events no action can produce, `score_var` never written, unique `game_id` repo-wide
-- [ ] Online `Action` variants and events/variables above (schema, executor arm, CLI `query`, `cargo check -p ironhold_cli`)
-- [ ] `Backend` poll trait, `BackendRequest`/`BackendEvent`, outbox resource in `SceneStateParams`, glue system + `GameStreamSet::Backend`
+      `FindMatch` bounds, `--strict`: (deferred, see notes) bindings on result events no action can produce, `score_var` never written, unique `game_id` repo-wide
+- [x] Online `Action` variants and events/variables above (schema, executor arm, CLI `query`, `cargo check -p ironhold_cli`)
+- [x] `Backend` poll trait, `BackendRequest`/`BackendEvent`, outbox resource in `SceneStateParams`, glue system + `GameStreamSet::Backend`
       (`schedule_order_tests`), engine-written variable system (one writer, `GameplaySet::PostExecute`), `Time<Real>` timeouts
-- [ ] `FakeBackend` (frame-counted latency, injected failures, selected by `fake://`)
-- [ ] Tests: every action to its event and variables with the fake, offline project, failure per operation, busy, replies after `LoadScene` and
+- [x] `FakeBackend` (frame-counted latency, injected failures, selected by `fake://`)
+- [x] Tests: every action to its event and variables with the fake, offline project, failure per operation, busy, replies after `LoadScene` and
       while paused, `global_on` binding, determinism (batch sorted by `request_id`)
-- [ ] Demo project via `/new-project` (one screen, no 3D): sign-in status, a `score` counter + Submit, a top-5 leaderboard of Labels;
+- [x] Demo project via `/new-project` (one screen, no 3D): sign-in status, a `score` counter + Submit, a top-5 leaderboard of Labels;
       labelled "offline test backend" when `fake://`; states which backend the hosted web build uses (the fake, labelled)
-- [ ] Default UI snippets (answered follow-up to decision 1, 2026-10-27): the demo project ships ready-made, copy-and-edit blocks as separate files
+- [x] Default UI snippets (answered follow-up to decision 1, 2026-10-27): the demo project ships ready-made, copy-and-edit blocks as separate files
       in a `ui/` folder (`leaderboard.ui.ron` top-5 rows, `signin.ui.ron` status + button), documented as paste-in RON. Plain files for now
       (the leaderboard name is baked into the variable names; the docs say to find-and-replace it). When the "UI fragments" backlog item lands,
       the same files become parameterised fragments. Not an engine feature in this plan.
-- [ ] Docs: `docs/20_data_formats.md` (`backend.ron`, `backend_path`, file naming table, actions, engine-written variables),
+- [x] Docs: `docs/20_data_formats.md` (`backend.ron`, `backend_path`, file naming table, actions, engine-written variables),
       `docs/30_runtime_events_and_logic.md` (online events, same-frame order, searching/timeout state-machine example, save/fail
       pattern), `docs/15_authoring_tools.md` (validate rows, `ironhold backend config` as a server-admin step), `docs/STATUS.md`,
       README line (online is optional), `docs/dev/40_determinism_and_networking.md` (backend responses are per-client inputs)
+
+**Implementation notes (v1, 2026-10-27; review round on `feature/backend_abstraction`):**
+- Variables are written in three places (`dispatch_backend_action`: `connecting`/`last_error`; the glue system: replies; the loader), in `Emit`/`Execute`
+  rather than one `PostExecute` writer: a reply's variables are then visible to the interpreter in the frame its event arrives.
+- Added beyond the plan: `backend.ready` (and `backend.offline` once loading ends without a backend) so an automatic sign-in has an event to bind
+  (a sign-in fired earlier answers `backend.busy`); status `signed_out` (working backend, nobody signed in) separate from `offline` (no usable backend);
+  the reason a project is offline goes to `backend.last_error`; `fake://?latency=N&fail=...` so failure screens can be rehearsed;
+  optional `request_timeout_secs`; `reserved_variable_write` strict warning; sign-in and sign-out share one in-flight slot; submitting while still
+  signing in answers that operation's own failure event.
+- Deferred (backlog): the `--strict` check for bindings on result events no action can produce; a validate warning for a `Label` bound to
+  `leaderboard.<x>.` with `<x>` undeclared; operation ids on `backend.busy`/`backend.offline`; a deadline for a `ConnectionLost` that never
+  reconnects (adapter's job: it must send `Reconnected` or `SignedOut`); tests for a reply surviving `LoadScene` and the `fake://` load path through a
+  real `backend.ron` asset (covered by the `backend_demo` playtest).
+- **For v2 (decide before the adapter crate starts):** the adapter cannot learn its configuration today (`Backend` has only `submit`/`poll`, and
+  `backend.ron` loads after the runner installs the adapter). Proposed: the runner registers an adapter factory in `AppOptions`
+  (`FnOnce(&ResolvedBackendConfig) -> Box<dyn Backend>`, called once `backend.ron` resolves; `ResolvedBackendConfig` = endpoint, effective `game_id`,
+  leaderboards). A `fake://` endpoint keeps selecting the built-in fake even if an adapter exists. The adapter must drop a server session for a
+  request the engine already timed out, and must not allocate or cross the JS boundary every frame when nothing arrived.
 
 ### v2 — Nakama adapter
 - [ ] `ironhold_nakama`: REST client + session refresh + `GameNs` newtypes; protocol layer from tag `spike/nakama_backend`; Nakama device-id charset check

@@ -55,7 +55,7 @@ from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 PORT = 8001
 BASE_URL = f"http://localhost:{PORT}"
 
-PROJECTS = ["quick_scene", "3rd_person_game_demo", "terrain_demo", "custom_materials", "primitive_world", "entity_logic_demo", "particles_demo", "effect_mayhem_demo", "foliage_demo", "stats_demo", "blank_project", "ui_demo", "local_coop_demo", "camera_modes", "dynamic_animation_control", "first_person_starter"]
+PROJECTS = ["quick_scene", "3rd_person_game_demo", "terrain_demo", "custom_materials", "primitive_world", "entity_logic_demo", "particles_demo", "effect_mayhem_demo", "foliage_demo", "stats_demo", "blank_project", "ui_demo", "backend_demo", "local_coop_demo", "camera_modes", "dynamic_animation_control", "first_person_starter"]
 
 # Root of the asset tree, relative to the working directory where this script runs.
 ASSETS_ROOT = Path("assets/projects")

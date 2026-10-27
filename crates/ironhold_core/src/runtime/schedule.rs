@@ -9,7 +9,7 @@
 //!
 //! Emit:    Scene  -> { Ui, Game } -> DirectActions -> Dialogue
 //!          Ui   = global_input -> unclaimed/claimed gamepad -> button -> icon_button
-//!          Game = Targeting -> ActionBar -> Interact -> DelayedEvents -> Stats      (GameStreamSet, chained)
+//!          Game = Targeting -> ActionBar -> Interact -> DelayedEvents -> Backend -> Stats   (GameStreamSet, chained)
 //! ```
 //!
 //! # Why
@@ -94,6 +94,8 @@ pub enum GameStreamSet {
     ActionBar,
     Interact,
     DelayedEvents,
+    /// `backend_glue_system`: online replies become `GameEvent`s and engine-written variables.
+    Backend,
     Stats,
 }
 
@@ -149,6 +151,7 @@ impl Plugin for GameplaySchedulePlugin {
                 GameStreamSet::ActionBar,
                 GameStreamSet::Interact,
                 GameStreamSet::DelayedEvents,
+                GameStreamSet::Backend,
                 GameStreamSet::Stats,
             )
                 .chain_ignore_deferred()

@@ -681,6 +681,9 @@ pub struct SceneV2Params<'w> {
 #[derive(bevy::ecs::system::SystemParam)]
 pub struct SceneStateParams<'w, 's> {
     pub load_mode: ResMut<'w, PendingSceneLoadMode>,
+    /// The online actions (`SignIn`, `SubmitScore`, ...) push their requests onto this hub's outbox (`runtime/backend.rs`);
+    /// `action_executor_system` is at the 16-param ceiling, so it reaches the hub through this bundle.
+    pub backend_hub: ResMut<'w, crate::runtime::backend::BackendHub>,
     /// `PauseGame`/`ResumeGame`/`TogglePause` take/release the `Menu` hold here (`action_executor_system` is at the
     /// 16-param ceiling, so it reaches the clock through this bundle).
     pub sim_clock: ResMut<'w, crate::runtime::sim_clock::SimClock>,
