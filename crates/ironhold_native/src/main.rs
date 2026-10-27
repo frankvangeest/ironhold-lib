@@ -1,4 +1,6 @@
-use ironhold_core::start_app;
+mod nakama;
+
+use ironhold_core::{start_app_with, AppOptions, RunMode};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -15,5 +17,10 @@ fn main() {
     }
     let project_path = project_name
         .map(|name| format!("projects/{}/{}.project.ron", name, name));
-    start_app(project_path, None);
+    start_app_with(AppOptions {
+        project_path,
+        scene_override: None,
+        run_mode: RunMode::Live,
+        backend_factory: nakama::backend_factory(),
+    });
 }

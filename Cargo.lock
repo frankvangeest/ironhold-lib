@@ -3478,6 +3478,7 @@ dependencies = [
  "gltf",
  "image",
  "ironhold_core",
+ "ironhold_nakama",
  "notify",
  "ron 0.11.0",
  "serde",
@@ -3520,7 +3521,9 @@ name = "ironhold_native"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "getrandom 0.3.4",
  "ironhold_core",
+ "ironhold_nakama",
 ]
 
 [[package]]
