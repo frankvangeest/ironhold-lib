@@ -1,3 +1,5 @@
+mod nakama;
+
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use ironhold_core::{start_app_with, AppOptions, RunMode};
@@ -38,7 +40,8 @@ fn install_pointer_lock_reporting() {
     on_error.forget();
 }
 
-/// Reads `?project=<name>`, `?scene=<path>` and `?static=1` from the page URL.
+/// Reads `?project=<name>`, `?scene=<path>`, `?nakama_key=<server key>` (the online backend adapter; without it a real endpoint runs offline), `?backend=<endpoint>` (replaces `backend.ron`'s endpoint)
+/// and `?static=1` from the page URL.
 /// - `project` is converted to a project-config asset path.
 /// - `scene`   is passed through as-is and used as an `InitialSceneOverride`.
 /// - `static=1` holds the simulation from the first frame (browser-test harness) and is honoured **only together with
@@ -55,6 +58,8 @@ fn read_url_params() -> AppOptions {
         .get("project")
         .map(|name| format!("projects/{}/{}.project.ron", name, name));
     options.scene_override = params.get("scene");
+    options.backend_factory = nakama::backend_factory(&params);
+    options.backend_endpoint = params.get("backend").filter(|e| !e.trim().is_empty());
     if params.get("static").as_deref() == Some("1") {
         if params.get("testing").as_deref() == Some("1") {
             options.run_mode = RunMode::Static;

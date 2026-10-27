@@ -3532,6 +3532,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "ironhold_core",
+ "ironhold_nakama",
  "wasm-bindgen",
  "web-sys",
 ]

@@ -148,6 +148,11 @@ impl std::fmt::Debug for BackendFactory {
     }
 }
 
+/// Replaces the `endpoint` of `backend.ron` (a runner's `--backend` / `?backend=`): the same project runs against the fake
+/// on a developer machine and a real server elsewhere without editing its data. Validated like the file's own endpoint.
+#[derive(Resource, Clone, Debug)]
+pub struct BackendEndpointOverride(pub String);
+
 /// The factory as a resource (inserted by `start_app_with` when the runner supplied one).
 #[derive(Resource, Clone, Debug)]
 pub struct BackendFactoryRes(pub BackendFactory);
@@ -694,6 +699,7 @@ fn load_backend_config_system(
     mut hub: ResMut<BackendHub>,
     slot: Option<NonSendMut<BackendSlot>>,
     factory: Option<Res<BackendFactoryRes>>,
+    endpoint_override: Option<Res<BackendEndpointOverride>>,
     mut vars: ResMut<GameVariables>,
     mut events: MessageWriter<GameEvent>,
     config_handle: Option<Res<ProjectConfigHandle>>,
@@ -722,7 +728,11 @@ fn load_backend_config_system(
     };
     match asset_server.load_state(&handle) {
         bevy::asset::LoadState::Loaded => {
-            let Some(config) = backend_configs.get(&handle).cloned() else { return };
+            let Some(mut config) = backend_configs.get(&handle).cloned() else { return };
+            if let Some(o) = endpoint_override.as_deref() {
+                info!("backend endpoint overridden by the runner: {:?}", o.0);
+                config.endpoint = Some(o.0.clone());
+            }
             let problems = config.problems();
             if !problems.is_empty() {
                 error!("Invalid backend.ron: {} - running offline", problems.join("; "));
