@@ -121,7 +121,7 @@ pub(crate) fn rewrite_self(action: Action, spawn_id: &str) -> Action {
         Action::SetUiVisible { id, visible } => Action::SetUiVisible { id, visible },
         // Backend leaderboard names and variable names are literal ids declared in `backend.ron`.
         Action::SubmitScore { leaderboard, score_var } => Action::SubmitScore { leaderboard, score_var },
-        Action::ShowLeaderboard { leaderboard, count } => Action::ShowLeaderboard { leaderboard, count },
+        Action::FetchLeaderboard { leaderboard, count } => Action::FetchLeaderboard { leaderboard, count },
 
         // ── No string fields at all: identity, grouped ──────────────────────────────
         other @ (Action::Quit
@@ -250,7 +250,7 @@ pub(crate) fn rewrite_target(action: Action, target_id: &str) -> Action {
         Action::SetUiVisible { id, visible } => Action::SetUiVisible { id, visible },
         // Backend leaderboard names and variable names are literal ids declared in `backend.ron`.
         Action::SubmitScore { leaderboard, score_var } => Action::SubmitScore { leaderboard, score_var },
-        Action::ShowLeaderboard { leaderboard, count } => Action::ShowLeaderboard { leaderboard, count },
+        Action::FetchLeaderboard { leaderboard, count } => Action::FetchLeaderboard { leaderboard, count },
 
         // ── No string fields at all: identity, grouped ──────────────────────────────
         other @ (Action::Quit

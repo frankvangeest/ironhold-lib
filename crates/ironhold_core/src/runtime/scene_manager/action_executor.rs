@@ -103,7 +103,7 @@ pub fn action_executor_system(
                     }
                 }
             }
-            a @ (Action::SignIn | Action::SignOut | Action::SubmitScore { .. } | Action::ShowLeaderboard { .. }) => {
+            a @ (Action::SignIn | Action::SignOut | Action::SubmitScore { .. } | Action::FetchLeaderboard { .. }) => {
                 crate::runtime::backend::dispatch_backend_action(
                     &a,
                     &mut scene_state.backend_hub,

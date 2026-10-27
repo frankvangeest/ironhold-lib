@@ -1,7 +1,7 @@
 // Copy-and-edit snippet (not loaded by the engine): a top-5 leaderboard block.
 // Paste it into a scene's `ui:` list. The leaderboard name ("best") is part of every variable name below: when you copy it for
 // another leaderboard, find-and-replace `leaderboard.best.` and the `leaderboard:` value of the refresh binding.
-// The refresh button needs `ui.button_pressed:refresh` -> ShowLeaderboard(leaderboard: "best", count: 5).
+// The refresh button needs `ui.button_pressed:refresh` -> FetchLeaderboard(leaderboard: "best", count: 5).
 // An unset variable renders as empty text, so rows the server did not return still show their "4. " prefix, and
 // `leaderboard.best.my_rank` is empty (the label reads "Your rank: ") until you have a score.
 Group((

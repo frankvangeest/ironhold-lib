@@ -18,7 +18,7 @@ pub struct Finding {
 }
 
 fn is_online_action(a: &Action) -> bool {
-    matches!(a, Action::SignIn | Action::SignOut | Action::SubmitScore { .. } | Action::ShowLeaderboard { .. })
+    matches!(a, Action::SignIn | Action::SignOut | Action::SubmitScore { .. } | Action::FetchLeaderboard { .. })
 }
 
 /// `http://` is only acceptable for a machine on the developer's own network.
@@ -86,14 +86,14 @@ pub fn errors(
     }
     for (src, action) in actions {
         let leaderboard = match action {
-            Action::SubmitScore { leaderboard, .. } | Action::ShowLeaderboard { leaderboard, .. } => leaderboard,
+            Action::SubmitScore { leaderboard, .. } | Action::FetchLeaderboard { leaderboard, .. } => leaderboard,
             _ => continue,
         };
-        if let Action::ShowLeaderboard { count, .. } = action {
+        if let Action::FetchLeaderboard { count, .. } = action {
             if *count == 0 || *count > MAX_LEADERBOARD_ROWS {
                 out.push(Finding {
                     source_file: src.clone(),
-                    message: format!("ShowLeaderboard(leaderboard: {leaderboard:?}): count {count} must be 1-{MAX_LEADERBOARD_ROWS}"),
+                    message: format!("FetchLeaderboard(leaderboard: {leaderboard:?}): count {count} must be 1-{MAX_LEADERBOARD_ROWS}"),
                     kind: "leaderboard_count_range",
                 });
             }

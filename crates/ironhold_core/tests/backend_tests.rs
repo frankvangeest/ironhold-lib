@@ -77,7 +77,7 @@ fn submit(lb: &str) -> Action {
 }
 
 fn list(lb: &str) -> Action {
-    Action::ShowLeaderboard { leaderboard: lb.into(), count: 10 }
+    Action::FetchLeaderboard { leaderboard: lb.into(), count: 10 }
 }
 
 fn count(app: &App, name: &str) -> usize {
@@ -313,8 +313,8 @@ fn the_online_actions_parse_from_ron() {
         ("SignIn", Action::SignIn),
         ("SignOut", Action::SignOut),
         ("SubmitScore(leaderboard: \"best\", score_var: \"score\")", submit("best")),
-        ("ShowLeaderboard(leaderboard: \"best\")", Action::ShowLeaderboard { leaderboard: "best".into(), count: 10 }),
-        ("ShowLeaderboard(leaderboard: \"best\", count: 3)", Action::ShowLeaderboard { leaderboard: "best".into(), count: 3 }),
+        ("FetchLeaderboard(leaderboard: \"best\")", Action::FetchLeaderboard { leaderboard: "best".into(), count: 10 }),
+        ("FetchLeaderboard(leaderboard: \"best\", count: 3)", Action::FetchLeaderboard { leaderboard: "best".into(), count: 3 }),
     ] {
         let got: Action = ron::de::from_str(src).unwrap_or_else(|e| panic!("{src} must parse: {e}"));
         assert_eq!(got, want);

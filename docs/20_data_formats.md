@@ -4048,7 +4048,7 @@ column.
 | `SignIn` | Start the online session defined in `backend.ron`. Answers `backend.signed_in`, `backend.sign_in_failed` or `backend.unreachable` later; `backend.status` and `backend.display_name` keep Labels up to date. With no backend it answers `backend.offline`. See [`backend.ron`](#backendron--backendconfig-). |
 | `SignOut` | End the online session. Answers `backend.signed_out`. |
 | `SubmitScore(leaderboard: "id", score_var: "var")` | Send the whole number held in the variable `score_var` to a leaderboard declared in `backend.ron`. Answers `score.submitted:{leaderboard}` or `score.submit_failed:{leaderboard}` (reason in `backend.last_error`). Fails rather than sending 0 if the variable is not a whole number or the leaderboard is not declared. Example: `SubmitScore(leaderboard: "best", score_var: "score")` |
-| `ShowLeaderboard(leaderboard: "id", count: u32)` | Fetch the top rows of a leaderboard into the `leaderboard.<name>.*` variables. `count` is optional, `1`-`10`, default `10` (larger values are capped at 10). Answers `leaderboard.listed:{leaderboard}` or `leaderboard.list_failed:{leaderboard}`. Example: `ShowLeaderboard(leaderboard: "best", count: 5)` |
+| `FetchLeaderboard(leaderboard: "id", count: u32)` | Fetch the top rows of a leaderboard into the `leaderboard.<name>.*` variables. `count` is optional, `1`-`10`, default `10` (larger values are capped at 10). Answers `leaderboard.listed:{leaderboard}` or `leaderboard.list_failed:{leaderboard}`. Example: `FetchLeaderboard(leaderboard: "best", count: 5)` |
 
 #### `SetUiVisible` <a id="setuivisible"></a>
 
@@ -5050,7 +5050,7 @@ only surfaced as a runtime no-op the first time a player opened the shop.
 
 ## `backend.ron` — BackendConfig ✅
 
-Online features for a project: sign-in and leaderboards (v1). Referenced via `backend_path` in `{name}.project.ron`. Optional — a project without one runs fully offline, and the online actions (`SignIn`, `SignOut`, `SubmitScore`, `ShowLeaderboard`) answer `backend.offline` instead of doing anything. There is no convention-path fallback: the file is only read when `backend_path` is set. A worked example is `assets/projects/backend_demo`.
+Online features for a project: sign-in and leaderboards (v1). Referenced via `backend_path` in `{name}.project.ron`. Optional — a project without one runs fully offline, and the online actions (`SignIn`, `SignOut`, `SubmitScore`, `FetchLeaderboard`) answer `backend.offline` instead of doing anything. There is no convention-path fallback: the file is only read when `backend_path` is set. A worked example is `assets/projects/backend_demo`.
 
 **Fields:**
 
@@ -5060,7 +5060,7 @@ Online features for a project: sign-in and leaderboards (v1). Referenced via `ba
 | `game_id` | `Option<String>` | `None` | Your game's name on a shared server (1-32 characters of `a-z`, `0-9`, `_` only). Omit to use the project's `project_id`, which must then match the same rule. |
 | `endpoint` | `Option<String>` | `None` | Where the server lives. Omit for an offline project. `"fake://"` is an in-memory test backend (needs no server; sign-in always works, four fixed rivals fill each leaderboard, nothing is saved between runs). To rehearse failure screens, add options: `"fake://?fail=sign_in"` (rejected), `unreachable`, `submit`, `list` (comma list), `silent` (never answers, so the request times out) and `latency=N` (frames before an answer, about 60 per second). Otherwise `"https://..."`; plain `"http://..."` is only meant for a server on your own machine or LAN. A real server needs a build that includes that server's adapter (none exists yet); without one the project runs offline and `backend.last_error` says so. |
 | `features` | `Vec<BackendFeature>` | `[]` | Extra capabilities you plan to use, so a server can be set up for them: `CloudSave`, `Lobbies`, `Matchmaker`. Declared only in v1 — **nothing reads them yet, and they do nothing**. |
-| `leaderboards` | `Vec<Leaderboard>` | `[]` | The leaderboards this game uses. Every `SubmitScore`/`ShowLeaderboard` must name one of these. On a real server, adding or renaming one will need a server-side step (a later version). |
+| `leaderboards` | `Vec<Leaderboard>` | `[]` | The leaderboards this game uses. Every `SubmitScore`/`FetchLeaderboard` must name one of these. On a real server, adding or renaming one will need a server-side step (a later version). |
 | `request_timeout_secs` | `Option<f32>` | `15` | How long a request may stay unanswered before the engine fails it (1-120). |
 
 **`Leaderboard(...)` fields:**
@@ -5102,7 +5102,7 @@ Replies arrive a moment after the action, while the game is paused, and survive 
 |-------|------|
 | `backend.signed_in` | Sign-in succeeded (also fired at once if you were already signed in) |
 | `backend.sign_in_failed` | The server rejected the sign-in |
-| `backend.unreachable` | The server could not be reached, or a `SignIn`/`SignOut` got no answer within 15 seconds (a `SubmitScore`/`ShowLeaderboard` that times out fires its own `score.submit_failed:{lb}` / `leaderboard.list_failed:{lb}` instead) |
+| `backend.unreachable` | The server could not be reached, or a `SignIn`/`SignOut` got no answer within 15 seconds (a `SubmitScore`/`FetchLeaderboard` that times out fires its own `score.submit_failed:{lb}` / `leaderboard.list_failed:{lb}` instead) |
 | `backend.signed_out` | `SignOut` finished (also fired at once if you were not signed in) |
 | `backend.ready` | `backend.ron` finished loading and the backend can be used (bind your automatic `SignIn` here) |
 | `backend.offline` | The project has no working backend: fired once when loading finishes without one (the reason is in `backend.last_error`), and again whenever an online action is used |
@@ -5111,8 +5111,8 @@ Replies arrive a moment after the action, while the game is paused, and survive 
 | `backend.reconnected` | The connection came back (`backend.status` is `online` again) |
 | `score.submitted:{leaderboard}` | `SubmitScore` was accepted |
 | `score.submit_failed:{leaderboard}` | `SubmitScore` failed (not signed in or still signing in, undeclared leaderboard, variable not a whole number, server refused); the reason is in `backend.last_error` |
-| `leaderboard.listed:{leaderboard}` | `ShowLeaderboard` finished; the variables below are up to date |
-| `leaderboard.list_failed:{leaderboard}` | `ShowLeaderboard` failed (not signed in or still signing in, undeclared leaderboard, server refused) |
+| `leaderboard.listed:{leaderboard}` | `FetchLeaderboard` finished; the variables below are up to date |
+| `leaderboard.list_failed:{leaderboard}` | `FetchLeaderboard` failed (not signed in or still signing in, undeclared leaderboard, server refused) |
 
 ### Engine-written variables
 

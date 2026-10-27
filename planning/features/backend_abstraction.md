@@ -16,7 +16,7 @@ _Planned at: `cd90a12` (2026-10-25)_
 ## What
 
 A game author gets online features without writing code: a project's `backend.ron` (found through `backend_path` in
-`.project.ron`) declares which online features the project uses, and RON actions (`SignIn`, `SubmitScore`, `ShowLeaderboard`, ...)
+`.project.ron`) declares which online features the project uses, and RON actions (`SignIn`, `SubmitScore`, `FetchLeaderboard`, ...)
 talk to whatever backend the engine was built with. Results come back as pipeline events plus **engine-written variables** a
 designer can bind to Labels (`Label.bind`). With no backend configured or reachable the project starts and plays normally; online
 actions answer with a clear event instead of failing. The first and probably only real adapter is Nakama.
@@ -94,7 +94,7 @@ Failure events exist **per operation** and carry that operation's id. Data goes 
 | Area | Actions | Events | Engine-written variables (reserved `backend.` prefix, excluded from `SaveState`) |
 |---|---|---|---|
 | Account | `SignIn`, `SignOut` | `backend.signed_in`, `backend.signed_out`, `backend.sign_in_failed`, `backend.offline` (nothing configured), `backend.unreachable` (server down), `backend.busy`, `backend.connection_lost`, `backend.reconnected` | `backend.status` (`offline`/`connecting`/`online`), `backend.display_name`, `backend.last_error` (text, for a Label) |
-| Leaderboard | `SubmitScore(leaderboard:, score_var:)`, `ShowLeaderboard(leaderboard:, count:)` | `score.submitted:{leaderboard}`, `score.submit_failed:{leaderboard}`, `leaderboard.listed:{leaderboard}`, `leaderboard.list_failed:{leaderboard}` | `leaderboard.<name>.count`, `leaderboard.<name>.<n>.name`, `.<n>.score`, `.my_rank`, `.my_best` (n = 1..count, fixed max 10) |
+| Leaderboard | `SubmitScore(leaderboard:, score_var:)`, `FetchLeaderboard(leaderboard:, count:)` | `score.submitted:{leaderboard}`, `score.submit_failed:{leaderboard}`, `leaderboard.listed:{leaderboard}`, `leaderboard.list_failed:{leaderboard}` | `leaderboard.<name>.count`, `leaderboard.<name>.<n>.name`, `.<n>.score`, `.my_rank`, `.my_best` (n = 1..count, fixed max 10) |
 | Cloud save (after local save) | `SaveToCloud(slot:)`, `LoadFromCloud(slot:)`, `DeleteCloudSave(slot:)` | `cloud.written:{slot}`, `cloud.loaded:{slot}`, `cloud.empty:{slot}`, `cloud.save_failed:{slot}`, `cloud.load_failed:{slot}`, `cloud.conflict:{slot}` | — |
 | Lobbies (v3) | `ListLobbies`, `CreateLobby(name:, max_players:)`, `JoinLobby(row:)`, `LeaveLobby` | `lobby.listed`, `lobby.created`, `lobby.joined`, `lobby.left`, `lobby.list_failed`, `lobby.join_failed` | `lobby.count`, `lobby.<n>.name`, `lobby.<n>.players` ("2/4"), n = 1..10 |
 | Matchmaker (v3) | `FindMatch(min:, max:, timeout_secs:)`, `CancelMatch` | `matchmaker.searching`, `matchmaker.matched`, `matchmaker.cancelled`, `matchmaker.timed_out`, `matchmaker.failed` | `matchmaker.status` |
@@ -197,6 +197,7 @@ latency, higher ceiling, +34 KB wasm).
       README line (online is optional), `docs/dev/40_determinism_and_networking.md` (backend responses are per-client inputs)
 
 **Implementation notes (v1, 2026-10-27; review round on `feature/backend_abstraction`):**
+- The leaderboard action is named `FetchLeaderboard` (renamed from `ShowLeaderboard` on 2026-10-27): it only fetches rows into variables and shows nothing by itself.
 - Variables are written in three places (`dispatch_backend_action`: `connecting`/`last_error`; the glue system: replies; the loader), in `Emit`/`Execute`
   rather than one `PostExecute` writer: a reply's variables are then visible to the interpreter in the frame its event arrives.
 - Added beyond the plan: `backend.ready` (and `backend.offline` once loading ends without a backend) so an automatic sign-in has an event to bind
@@ -259,7 +260,7 @@ last-write-wins plus `cloud.conflict:{slot}`; sign-in is an explicit `SignIn` ac
 ## Acceptance criteria
 
 - Given a project without `backend.ron`, when it starts, then no backend code runs and online actions emit `backend.offline`.
-- Given `FakeBackend`, when a state machine fires `SubmitScore` then `ShowLeaderboard`, then `score.submitted:{leaderboard}` and
+- Given `FakeBackend`, when a state machine fires `SubmitScore` then `FetchLeaderboard`, then `score.submitted:{leaderboard}` and
   `leaderboard.listed:{leaderboard}` arrive and the `leaderboard.<name>.<n>.*` variables hold the rows.
 - A designer can show a top-5 leaderboard and (v3) a lobby list using only Labels and Buttons from RON.
 - A failed submit or save emits that operation's failure event (`score.submit_failed:{leaderboard}`, `cloud.save_failed:{slot}`), never one generic error.

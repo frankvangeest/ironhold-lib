@@ -62,7 +62,7 @@ _Last updated: 2026‑10‑11_
 | Terrain rendering           |   ✅   | WebGPU compatible heightmap and splatmap based terrain. |
 | IBL / Environment Lighting  |   ✅   | Scene `lighting` (Ambient, Directional, Environment) & Project fallback. HDR camera mode and bloom are excluded — see `docs/20_data_formats.md`. |
 | Capability registry         |   ⛔   | Planned (declare events/actions/validation per capability). |
-| Online backend (v1)         |   🟡   | `backend.ron` + `SignIn`/`SignOut`/`SubmitScore`/`ShowLeaderboard`, results as events and engine-written variables, an in-memory `fake://` test backend and `ironhold validate` checks (see `backend.ron` in `docs/20_data_formats.md` and the `backend_demo` project). No real server adapter yet; the hosted web build uses the fake. |
+| Online backend (v1)         |   🟡   | `backend.ron` + `SignIn`/`SignOut`/`SubmitScore`/`FetchLeaderboard`, results as events and engine-written variables, an in-memory `fake://` test backend and `ironhold validate` checks (see `backend.ron` in `docs/20_data_formats.md` and the `backend_demo` project). No real server adapter yet; the hosted web build uses the fake. |
 
 ### Platforms
 | Area                  | Status | Notes |

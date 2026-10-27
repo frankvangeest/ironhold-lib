@@ -471,7 +471,7 @@ pub enum Action {
     /// Fetch the top `count` (1-10, default 10) rows of a leaderboard. Answers `leaderboard.listed:{leaderboard}` after writing
     /// `leaderboard.<name>.count`, `leaderboard.<name>.<n>.name`/`.score`, `.my_rank` and `.my_best`, or
     /// `leaderboard.list_failed:{leaderboard}`.
-    ShowLeaderboard {
+    FetchLeaderboard {
         leaderboard: String,
         #[serde(default = "default_leaderboard_count")]
         count: u32,
@@ -508,7 +508,7 @@ impl Action {
             | Action::OpenShop(_) | Action::CloseShop | Action::BuyItem(_)
             | Action::OpenContainer(_) | Action::CloseContainer | Action::TakeAllFromContainer
             | Action::ToggleOwnNameplate | Action::JoinPlayer
-            | Action::SignIn | Action::SignOut | Action::SubmitScore { .. } | Action::ShowLeaderboard { .. } => false,
+            | Action::SignIn | Action::SignOut | Action::SubmitScore { .. } | Action::FetchLeaderboard { .. } => false,
         }
     }
 }

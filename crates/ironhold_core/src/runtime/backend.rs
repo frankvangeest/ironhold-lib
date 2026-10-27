@@ -247,7 +247,7 @@ fn set_error(vars: &mut GameVariables, text: &str) {
 
 // ─── Executor side: the online Actions ───────────────────────────────────────
 
-/// Handles `SignIn`, `SignOut`, `SubmitScore` and `ShowLeaderboard` for `action_executor_system`. Anything else is ignored.
+/// Handles `SignIn`, `SignOut`, `SubmitScore` and `FetchLeaderboard` for `action_executor_system`. Anything else is ignored.
 /// A request is only accepted when the backend is ready, the session allows it and no request of the same kind is in flight;
 /// every refusal answers with an event the same frame, so a designer's state machine never waits on silence.
 pub fn dispatch_backend_action(
@@ -306,9 +306,9 @@ pub fn dispatch_backend_action(
             }
             hub.enqueue(kind);
         }
-        Action::ShowLeaderboard { leaderboard, count } => {
+        Action::FetchLeaderboard { leaderboard, count } => {
             let fail = |vars: &mut GameVariables, events: &mut MessageWriter<GameEvent>, why: &str| {
-                warn!("ShowLeaderboard({leaderboard}): {why}");
+                warn!("FetchLeaderboard({leaderboard}): {why}");
                 set_error(vars, why);
                 emit(events, format!("leaderboard.list_failed:{leaderboard}"));
             };

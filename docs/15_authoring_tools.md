@@ -97,8 +97,8 @@ Sample `watch` output (each save prints the changed file and a result):
 |---|---|---|---|
 | a `backend.ron` that does not parse, has an unsupported `schema_version`, an invalid or duplicate `game_id`/leaderboard name (or, when `game_id` is omitted, an invalid or missing `project_id`), a bad `fake://` option, a `request_timeout_secs` outside 1-120 (`[a-z0-9_]`, 1-32 characters), or an `endpoint` that is not `fake://`, `https://` or `http://` | `backend_config` | the project runs offline; the engine logs the same reason | fix the file |
 | an `endpoint` using plain `http://` to a host outside localhost/LAN | `backend_endpoint_http` | a hosted `https` page cannot reach it, and traffic is unencrypted | use `https://` |
-| `SubmitScore`/`ShowLeaderboard` naming a leaderboard that `backend.ron` does not declare | `undeclared_leaderboard` | the action always answers its failure event | declare it in `backend.ron` or fix the name |
-| `ShowLeaderboard` with `count` 0 or above 10 | `leaderboard_count_range` | the engine clamps it to 1-10 | use 1-10 |
+| `SubmitScore`/`FetchLeaderboard` naming a leaderboard that `backend.ron` does not declare | `undeclared_leaderboard` | the action always answers its failure event | declare it in `backend.ron` or fix the name |
+| `FetchLeaderboard` with `count` 0 or above 10 | `leaderboard_count_range` | the engine clamps it to 1-10 | use 1-10 |
 | `--strict`: a rule that writes an engine-owned variable (`SetVariable`/`IncrementVariable` on a key starting `backend.` or `leaderboard.`) | `reserved_variable_write` | the engine overwrites it at the next backend reply | read it with a `Label` instead of writing it |
 | `--strict`: an online action in a project with no `backend_path` | `online_action_without_backend` | it only ever answers `backend.offline` | add `backend_path` or remove the action |
 | `--strict`: `SubmitScore` whose `score_var` nothing in the project writes | `score_var_never_written` | the submit fails or sends a stale value | write it with `SetVariable`/`IncrementVariable` |
