@@ -695,6 +695,10 @@ fn action_kind(a: &Action) -> &'static str {
         Action::PauseGame => "PauseGame",
         Action::ResumeGame => "ResumeGame",
         Action::TogglePause => "TogglePause",
+        Action::SignIn => "SignIn",
+        Action::SignOut => "SignOut",
+        Action::SubmitScore { .. } => "SubmitScore",
+        Action::ShowLeaderboard { .. } => "ShowLeaderboard",
     }
 }
 

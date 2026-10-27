@@ -68,6 +68,7 @@ fn the_documented_systems_are_in_the_documented_sets() {
         ("GameStreamSet::ActionBar", &["cooldown_tick_system", "action_bar_input_system", "action_bar_visual_system"]),
         ("GameStreamSet::Interact", &["interactable_system", "cursor_capture_system"]),
         ("GameStreamSet::DelayedEvents", &["tick_delayed_events_system"]),
+        ("GameStreamSet::Backend", &["backend_glue_system"]),
         ("GameStreamSet::Stats", &["stat_modifier_system", "stat_regen_system", "stat_effective_value_system"]),
         ("GameplaySet::Interpret", &["fsm_interpreter_system", "entity_fsm_interpreter_system"]),
         (
@@ -115,7 +116,8 @@ fn the_pipeline_phases_and_streams_run_in_the_documented_order() {
     assert_set_before(&r, "GameStreamSet::Targeting", "GameStreamSet::ActionBar");
     assert_set_before(&r, "GameStreamSet::ActionBar", "GameStreamSet::Interact");
     assert_set_before(&r, "GameStreamSet::Interact", "GameStreamSet::DelayedEvents");
-    assert_set_before(&r, "GameStreamSet::DelayedEvents", "GameStreamSet::Stats");
+    assert_set_before(&r, "GameStreamSet::DelayedEvents", "GameStreamSet::Backend");
+    assert_set_before(&r, "GameStreamSet::Backend", "GameStreamSet::Stats");
     // Chains inside the sets.
     assert_chain(&r, &["check_project_loaded", "spawn_scene_v2"]);
     assert_chain(&r, &["global_input_system", "unclaimed_gamepad_trigger_system", "button_system", "icon_button_click_system"]);
@@ -373,7 +375,7 @@ fn every_game_stream_set_is_inside_emit() {
     let r = report();
     for sub in [
         "GameStreamSet::Targeting", "GameStreamSet::ActionBar", "GameStreamSet::Interact", "GameStreamSet::DelayedEvents",
-        "GameStreamSet::Stats", "EmitSet::Game",
+        "GameStreamSet::Backend", "GameStreamSet::Stats", "EmitSet::Game",
     ] {
         for sys in r.members.get(sub).unwrap_or_else(|| panic!("{sub} is empty")) {
             assert!(r.in_set("GameplaySet::Emit", sys), "`{sys}` ({sub}) must also be inside GameplaySet::Emit");

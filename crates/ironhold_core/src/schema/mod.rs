@@ -10,6 +10,7 @@ pub mod ron_loader;
 pub mod stats;
 pub mod dialogue;
 pub mod items;
+pub mod backend;
 
 pub use project::*;
 pub use player::*;

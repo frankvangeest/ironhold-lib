@@ -1,0 +1,13 @@
+// backend_demo: online features against the in-memory test backend.
+// "fake://" needs no server: sign-in always works, four fixed rivals fill the leaderboard, and nothing is saved between runs.
+// To use a real server, replace the endpoint with its https:// address (the build must include that backend's adapter).
+BackendConfig(
+    schema_version: 1,
+    // Namespace on a shared server: [a-z0-9_], 1-32 characters. Defaults to project_id when omitted.
+    game_id: "backend_demo",
+    endpoint: "fake://",
+    leaderboards: [
+        // ranking: HigherIsBetter | LowerIsBetter     keep: Best | Latest | Total
+        Leaderboard(name: "best", ranking: HigherIsBetter, keep: Best),
+    ],
+)

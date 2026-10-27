@@ -150,6 +150,12 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub state_machine_path: Option<String>,
 
+    /// Path to this project's `backend.ron` (online features: sign-in, leaderboards, ...). No convention-path fallback: if
+    /// unset the project runs fully offline and the online actions answer `backend.offline`. Example: `"backend.ron"`.
+    /// See `planning/features/backend_abstraction.md`.
+    #[serde(default)]
+    pub backend_path: Option<String>,
+
     // V1: inline per-model transform corrections
     #[serde(default)]
     pub model_fixes: HashMap<String, TransformFix>, // det: order-independent

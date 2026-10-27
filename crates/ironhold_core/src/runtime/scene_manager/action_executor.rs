@@ -103,6 +103,14 @@ pub fn action_executor_system(
                     }
                 }
             }
+            a @ (Action::SignIn | Action::SignOut | Action::SubmitScore { .. } | Action::ShowLeaderboard { .. }) => {
+                crate::runtime::backend::dispatch_backend_action(
+                    &a,
+                    &mut scene_state.backend_hub,
+                    &mut scene_state.game_vars,
+                    &mut game_events,
+                );
+            }
             Action::Quit => {
                 info!("Executing Action::Quit");
                 exit.write(AppExit::Success);

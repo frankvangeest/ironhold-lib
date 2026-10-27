@@ -1,0 +1,52 @@
+// Copy-and-edit snippet (not loaded by the engine): a top-5 leaderboard block.
+// Paste it into a scene's `ui:` list. The leaderboard name ("best") is part of every variable name below: when you copy it for
+// another leaderboard, find-and-replace `leaderboard.best.` and the `leaderboard:` value of the refresh binding.
+// The refresh button needs `ui.button_pressed:refresh` -> ShowLeaderboard(leaderboard: "best", count: 5).
+// Rows beyond the number the server returned stay empty; `leaderboard.best.my_rank` is empty until you have a score.
+Group((
+    id: "leaderboard",
+    flex_direction: Column,
+    gap: 4.0,
+    padding: 10.0,
+    background_color: (0.05, 0.05, 0.08, 0.85),
+    children: [
+        Label((id: "lb_title", text: "Top 5", size: (360.0, 28.0), align: Left)),
+        Group((
+            gap: 12.0,
+            children: [
+                Label((id: "lb_name_1", text: "", bind: "leaderboard.best.1.name", format: "1. {}", size: (220.0, 26.0), align: Left)),
+                Label((id: "lb_score_1", text: "", bind: "leaderboard.best.1.score", format: "{}", size: (100.0, 26.0), align: Right)),
+            ],
+        )),
+        Group((
+            gap: 12.0,
+            children: [
+                Label((id: "lb_name_2", text: "", bind: "leaderboard.best.2.name", format: "2. {}", size: (220.0, 26.0), align: Left)),
+                Label((id: "lb_score_2", text: "", bind: "leaderboard.best.2.score", format: "{}", size: (100.0, 26.0), align: Right)),
+            ],
+        )),
+        Group((
+            gap: 12.0,
+            children: [
+                Label((id: "lb_name_3", text: "", bind: "leaderboard.best.3.name", format: "3. {}", size: (220.0, 26.0), align: Left)),
+                Label((id: "lb_score_3", text: "", bind: "leaderboard.best.3.score", format: "{}", size: (100.0, 26.0), align: Right)),
+            ],
+        )),
+        Group((
+            gap: 12.0,
+            children: [
+                Label((id: "lb_name_4", text: "", bind: "leaderboard.best.4.name", format: "4. {}", size: (220.0, 26.0), align: Left)),
+                Label((id: "lb_score_4", text: "", bind: "leaderboard.best.4.score", format: "{}", size: (100.0, 26.0), align: Right)),
+            ],
+        )),
+        Group((
+            gap: 12.0,
+            children: [
+                Label((id: "lb_name_5", text: "", bind: "leaderboard.best.5.name", format: "5. {}", size: (220.0, 26.0), align: Left)),
+                Label((id: "lb_score_5", text: "", bind: "leaderboard.best.5.score", format: "{}", size: (100.0, 26.0), align: Right)),
+            ],
+        )),
+        Label((id: "lb_rank_label", text: "", bind: "leaderboard.best.my_rank", format: "Your rank: {}", size: (360.0, 26.0), align: Left)),
+        Button((id: "refresh_btn", text: "Refresh", action: "ui.refresh")),
+    ],
+))

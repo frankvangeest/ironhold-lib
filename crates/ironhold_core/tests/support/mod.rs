@@ -301,7 +301,7 @@ pub fn inspect_schedule<L: bevy::ecs::schedule::ScheduleLabel + Clone>(app: &mut
             for set in [EmitSet::Scene, EmitSet::Ui, EmitSet::Game, EmitSet::DirectActions, EmitSet::Dialogue] {
                 check(format!("EmitSet::{set:?}"), set.intern());
             }
-            for set in [GameStreamSet::Targeting, GameStreamSet::ActionBar, GameStreamSet::Interact, GameStreamSet::DelayedEvents, GameStreamSet::Stats] {
+            for set in [GameStreamSet::Targeting, GameStreamSet::ActionBar, GameStreamSet::Interact, GameStreamSet::DelayedEvents, GameStreamSet::Backend, GameStreamSet::Stats] {
                 check(format!("GameStreamSet::{set:?}"), set.intern());
             }
         }
@@ -330,7 +330,7 @@ pub fn inspect_schedule<L: bevy::ecs::schedule::ScheduleLabel + Clone>(app: &mut
         for s in [EmitSet::Scene, EmitSet::Ui, EmitSet::Game, EmitSet::DirectActions, EmitSet::Dialogue] {
             record(&format!("EmitSet::{s:?}"), s.intern());
         }
-        for s in [GameStreamSet::Targeting, GameStreamSet::ActionBar, GameStreamSet::Interact, GameStreamSet::DelayedEvents, GameStreamSet::Stats] {
+        for s in [GameStreamSet::Targeting, GameStreamSet::ActionBar, GameStreamSet::Interact, GameStreamSet::DelayedEvents, GameStreamSet::Backend, GameStreamSet::Stats] {
             record(&format!("GameStreamSet::{s:?}"), s.intern());
         }
 

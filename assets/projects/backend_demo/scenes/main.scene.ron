@@ -1,0 +1,111 @@
+// backend_demo: sign in, submit a score and read a leaderboard through the project's online backend (backend.ron).
+// The account and leaderboard blocks are the same RON as ui/signin.ui.ron and ui/leaderboard.ui.ron: copy those files to start your own.
+// Use plain ASCII in on-screen text: the engine font has no glyph for em-dashes and similar characters.
+(
+    schema_version: 2,
+    name: "main",
+    entities: [],
+
+    ui: [
+        Group((
+            id: "root",
+            flex_direction: Column,
+            gap: 12.0,
+            padding: 16.0,
+            width: Percent(100.0),
+            height: Percent(100.0),
+            children: [
+                Label((id: "title", text: "backend_demo - online features", size: (640.0, 32.0), align: Left)),
+                Label((id: "fake_note", text: "Offline test backend (fake://): scores are not saved and nobody else is online.", size: (900.0, 26.0), align: Left)),
+                Group((
+                    gap: 16.0,
+                    children: [
+                        Group((
+                            id: "account",
+                            flex_direction: Column,
+                            gap: 6.0,
+                            padding: 10.0,
+                            background_color: (0.05, 0.05, 0.08, 0.85),
+                            children: [
+                                Label((id: "status_label", text: "", bind: "backend.status", format: "Status: {}", size: (360.0, 28.0), align: Left)),
+                                Label((id: "name_label", text: "", bind: "backend.display_name", format: "Signed in as: {}", size: (360.0, 28.0), align: Left)),
+                                Label((id: "error_label", text: "", bind: "backend.last_error", format: "{}", size: (360.0, 28.0), align: Left)),
+                                Group((
+                                    gap: 8.0,
+                                    children: [
+                                        Button((id: "sign_in_btn", text: "Sign in", action: "ui.sign_in")),
+                                        Button((id: "sign_out_btn", text: "Sign out", action: "ui.sign_out")),
+                                    ],
+                                )),
+                            ],
+                        )),
+                        Group((
+                            id: "score",
+                            flex_direction: Column,
+                            gap: 6.0,
+                            padding: 10.0,
+                            background_color: (0.05, 0.05, 0.08, 0.85),
+                            children: [
+                                Label((id: "score_label", text: "", bind: "score", format: "Score: {}", size: (360.0, 28.0), align: Left)),
+                                Group((
+                                    gap: 8.0,
+                                    children: [
+                                        Button((id: "add_btn", text: "+10", action: "ui.add_score")),
+                                        Button((id: "submit_btn", text: "Submit score", action: "ui.submit")),
+                                    ],
+                                )),
+                            ],
+                        )),
+                        Group((
+                            id: "leaderboard",
+                            flex_direction: Column,
+                            gap: 4.0,
+                            padding: 10.0,
+                            background_color: (0.05, 0.05, 0.08, 0.85),
+                            children: [
+                                Label((id: "lb_title", text: "Top 5", size: (360.0, 28.0), align: Left)),
+                                Group((
+                                    gap: 12.0,
+                                    children: [
+                                        Label((id: "lb_name_1", text: "", bind: "leaderboard.best.1.name", format: "1. {}", size: (220.0, 26.0), align: Left)),
+                                        Label((id: "lb_score_1", text: "", bind: "leaderboard.best.1.score", format: "{}", size: (100.0, 26.0), align: Right)),
+                                    ],
+                                )),
+                                Group((
+                                    gap: 12.0,
+                                    children: [
+                                        Label((id: "lb_name_2", text: "", bind: "leaderboard.best.2.name", format: "2. {}", size: (220.0, 26.0), align: Left)),
+                                        Label((id: "lb_score_2", text: "", bind: "leaderboard.best.2.score", format: "{}", size: (100.0, 26.0), align: Right)),
+                                    ],
+                                )),
+                                Group((
+                                    gap: 12.0,
+                                    children: [
+                                        Label((id: "lb_name_3", text: "", bind: "leaderboard.best.3.name", format: "3. {}", size: (220.0, 26.0), align: Left)),
+                                        Label((id: "lb_score_3", text: "", bind: "leaderboard.best.3.score", format: "{}", size: (100.0, 26.0), align: Right)),
+                                    ],
+                                )),
+                                Group((
+                                    gap: 12.0,
+                                    children: [
+                                        Label((id: "lb_name_4", text: "", bind: "leaderboard.best.4.name", format: "4. {}", size: (220.0, 26.0), align: Left)),
+                                        Label((id: "lb_score_4", text: "", bind: "leaderboard.best.4.score", format: "{}", size: (100.0, 26.0), align: Right)),
+                                    ],
+                                )),
+                                Group((
+                                    gap: 12.0,
+                                    children: [
+                                        Label((id: "lb_name_5", text: "", bind: "leaderboard.best.5.name", format: "5. {}", size: (220.0, 26.0), align: Left)),
+                                        Label((id: "lb_score_5", text: "", bind: "leaderboard.best.5.score", format: "{}", size: (100.0, 26.0), align: Right)),
+                                    ],
+                                )),
+                                Label((id: "lb_rank_label", text: "", bind: "leaderboard.best.my_rank", format: "Your rank: {}", size: (360.0, 26.0), align: Left)),
+                                Button((id: "refresh_btn", text: "Refresh", action: "ui.refresh")),
+                            ],
+                        )),
+                    ],
+                )),
+            ],
+        )),
+    ],
+)

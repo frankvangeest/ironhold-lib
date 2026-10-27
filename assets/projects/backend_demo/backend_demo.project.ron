@@ -1,0 +1,26 @@
+(
+    schema_version: 3,
+    project_id: "backend_demo",
+    display_name: "Backend Demo",
+
+    initial_scene: "scenes/main.scene.ron",
+
+    asset_catalog: "assets.ron",
+    prefab_catalog: "prefabs/prefabs.ron",
+    state_machine_path: "logic/state_machine.ron",
+
+    // Online features (sign-in, leaderboards). No convention-path fallback: without this line the project is fully offline.
+    backend_path: "backend.ron",
+
+    ui_scale: (
+        reference: (1280.0, 720.0),
+    ),
+
+    global_environment: (
+        intensity: 400.0,
+        fallback: (
+            top_color: (0.10, 0.18, 0.38),
+            bottom_color: (0.01, 0.01, 0.01),
+        ),
+    ),
+)

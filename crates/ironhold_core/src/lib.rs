@@ -263,6 +263,7 @@ impl Plugin for GamePlugin {
             .add_plugins(capabilities::foliage::FoliagePlugin)
             // Defines GameplaySet/EmitSet/GameStreamSet and their order (D3). Before the plugins whose systems join the sets.
             .add_plugins(crate::runtime::schedule::GameplaySchedulePlugin)
+            .add_plugins(crate::runtime::backend::BackendPlugin)
             .add_plugins(capabilities::action_bar::ActionBarPlugin)
             .add_plugins(capabilities::targeting::TargetingPlugin)
             .add_plugins(capabilities::target_indicator::TargetIndicatorPlugin)
