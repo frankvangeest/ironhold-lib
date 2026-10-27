@@ -187,6 +187,10 @@ latency, higher ceiling, +34 KB wasm).
       while paused, `global_on` binding, determinism (batch sorted by `request_id`)
 - [ ] Demo project via `/new-project` (one screen, no 3D): sign-in status, a `score` counter + Submit, a top-5 leaderboard of Labels;
       labelled "offline test backend" when `fake://`; states which backend the hosted web build uses (the fake, labelled)
+- [ ] Default UI snippets (answered follow-up to decision 1, 2026-10-27): the demo project ships ready-made, copy-and-edit blocks as separate files
+      in a `ui/` folder (`leaderboard.ui.ron` top-5 rows, `signin.ui.ron` status + button), documented as paste-in RON. Plain files for now
+      (the leaderboard name is baked into the variable names; the docs say to find-and-replace it). When the "UI fragments" backlog item lands,
+      the same files become parameterised fragments. Not an engine feature in this plan.
 - [ ] Docs: `docs/20_data_formats.md` (`backend.ron`, `backend_path`, file naming table, actions, engine-written variables),
       `docs/30_runtime_events_and_logic.md` (online events, same-frame order, searching/timeout state-machine example, save/fail
       pattern), `docs/15_authoring_tools.md` (validate rows, `ironhold backend config` as a server-admin step), `docs/STATUS.md`,
@@ -202,6 +206,7 @@ latency, higher ceiling, +34 KB wasm).
 
 ### v3 — lobbies and matchmaker
 - [ ] `JoinLobby(row:)` resolves against the snapshot taken when the list was written (rows shift on refresh); also expose `lobby.<n>.id`
+- [ ] Default UI snippet `lobby.ui.ron` (rows with a Join button each) in the demo project's `ui/` folder, same rules as v1
 - [ ] Public-read lobby objects with `JoinLobby(row:)`; then matchmaker (`FindMatch`, `CancelMatch`, timeout). Docs mark these **"matching only, no shared
       gameplay yet"** until a relay transport exists (designers get a match handle and nothing to play).
 
