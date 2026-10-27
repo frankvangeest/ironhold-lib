@@ -50,15 +50,14 @@ fn read_url_params() -> AppOptions {
     let mut options = AppOptions::default();
     let Some(window) = web_sys::window() else { return options };
     let Ok(search) = window.location().search() else { return options };
-    if search.is_empty() || search == "?" {
-        return options;
-    }
-    let Ok(params) = web_sys::UrlSearchParams::new_with_str(&search) else { return options };
+    // Always a factory (even with no address parameters) so a real endpoint without a key says so on screen.
+    let params = if search.is_empty() || search == "?" { None } else { web_sys::UrlSearchParams::new_with_str(&search).ok() };
+    options.backend_factory = nakama::backend_factory(params.as_ref());
+    let Some(params) = params else { return options };
     options.project_path = params
         .get("project")
         .map(|name| format!("projects/{}/{}.project.ron", name, name));
     options.scene_override = params.get("scene");
-    options.backend_factory = nakama::backend_factory(&params);
     // A page link must never choose which server receives a player's device id (it is their account credential), so the page
     // can only pick the test backend; a real endpoint comes from the project's own backend.ron.
     options.backend_endpoint = params.get("backend").filter(|e| !e.trim().is_empty()).filter(|e| {

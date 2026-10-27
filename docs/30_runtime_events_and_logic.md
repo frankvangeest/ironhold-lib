@@ -803,7 +803,7 @@ When an entity should reappear after a delay — training dummies, respawning en
 
 **Key notes:**
 - The health reset (`SetStat`) happens before the visibility restore (`SetEntityVisible`) because entry actions are queued FIFO — HP is guaranteed to be full by the time the entity becomes interactable again.
-- `EmitEventAfterDelay` is cleared on `LoadScene`, so the delayed respawn event is silently cancelled if the player loads a different scene before the 15 seconds elapse.
+- `EmitEventAfterDelay` is cleared on `LoadScene`, so the delayed respawn event is silently cancelled if the player loads a different scene before the `request_timeout_secs` (15 by default) elapse.
 - Only labels attached via `stat_label` / `world_stat_bar` auto-hide when the entity is hidden. Screen-space UI labels driven by `SetVariable` continue to display.
 
 **When to use this pattern vs. `Despawn` + `Spawn`:**

@@ -236,6 +236,18 @@ latency, higher ceiling, +34 KB wasm).
 - [ ] Account deletion/export path (before any public deployment)
 - [ ] **Blocked on `save_load_game_state.md` shipping:** cloud save/load reusing `SaveState`, with the conflict event (do not start with a separate format)
 
+**Implementation notes (v2, 2026-10-28; review round on `feature/nakama_adapter`):**
+- `Backend` gained `cancel(request_id)` (called when the engine times a request out) so a refresh-and-retry chain stops; `SignOut` answers every request in
+  flight with a failure and forgets it, so a late sign-in/refresh/list can never bring the old session or the old player's board back; one shared session
+  renewal serves all calls that got a 401 (refresh token first, the device id if that is refused).
+- The web page address can only select `fake://` (a link must never choose which server receives a player's device id); a real endpoint comes from `backend.ron`.
+  Native `--backend` accepts any endpoint.
+- The runners always supply a factory; with no key or no device-id storage it fails with the reason on screen (`backend.last_error`), and a factory's own error
+  text is passed through (written for designers, never contains the key).
+- The Lua module is deny-by-default (matches, chat, groups, friends, tournaments, account linking, realtime) and also guards the declared board list and
+  strips a client's per-write operator. Verified by `crates/ironhold_nakama/tests/contract/run.sh` against a local container (not the homelab yet).
+- Deferred: see the backlog item "Backend v2 follow-ups".
+
 ### v3 — lobbies and matchmaker
 - [ ] `JoinLobby(row:)` resolves against the snapshot taken when the list was written (rows shift on refresh); also expose `lobby.<n>.id`
 - [ ] Default UI snippet `lobby.ui.ron` (rows with a Join button each) in the demo project's `ui/` folder, same rules as v1

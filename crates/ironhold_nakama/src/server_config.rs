@@ -135,7 +135,11 @@ mod tests {
 
     #[test]
     fn the_module_registers_the_game_id_hooks() {
-        for name in ["AuthenticateDevice", "WriteLeaderboardRecord", "ListLeaderboardRecords", "WriteStorageObjects"] {
+        for name in [
+            "AuthenticateDevice", "WriteLeaderboardRecord", "ListLeaderboardRecords", "WriteStorageObjects",
+            // closed by default
+            "LinkDevice", "ListMatches", "MatchmakerAdd", "ChannelJoin",
+        ] {
             assert!(MODULE_LUA.contains(name), "{name}");
         }
     }

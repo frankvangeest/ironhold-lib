@@ -16,7 +16,7 @@ use crate::output::OutputMode;
 pub enum BackendCommand {
     #[command(
         about = "Generate the Nakama server module config for one or more projects",
-        after_help = "The projects named together become one server: each game_id may appear once.\n\nExamples:\n  ironhold backend config assets/projects/backend_demo --out deploy/nakama-modules\n  ironhold backend config assets/projects/game_a assets/projects/game_b --out deploy/nakama-modules\n\nWithout --out the generated ironhold_games.lua is printed. With --out it writes ironhold_games.lua and ironhold.lua\n(the generic module) into that folder; copy both into Nakama's modules directory and restart Nakama."
+        after_help = "The projects named together become one server: each game_id may appear once, and a game left out can no longer sign in, so always name every project the server hosts.\n\nExamples:\n  ironhold backend config assets/projects/backend_demo --out deploy/nakama-modules\n  ironhold backend config assets/projects/game_a assets/projects/game_b --out deploy/nakama-modules\n\nWithout --out the generated ironhold_games.lua is printed. With --out it writes ironhold_games.lua and ironhold.lua\n(the generic module) into that folder; copy both into Nakama's modules directory and restart Nakama."
     )]
     Config {
         /// Project directories to include (each with a `backend_path` in its `.project.ron`)
@@ -78,7 +78,7 @@ fn config(dirs: &[PathBuf], out: Option<&Path>, mode: &OutputMode) -> Result<(),
                 println!("{}", serde_json::json!({ "written": [GAMES_FILE, "ironhold.lua"], "games": ids }));
             } else {
                 println!("Wrote {GAMES_FILE} and ironhold.lua to {} for: {}", folder.display(), ids.join(", "));
-                println!("Copy both into Nakama's modules directory and restart Nakama. Leaderboard changes need this redeploy.");
+                println!("Copy both into Nakama's modules directory and restart Nakama. Leaderboard changes need this redeploy; always include every project the server hosts.");
             }
         }
     }

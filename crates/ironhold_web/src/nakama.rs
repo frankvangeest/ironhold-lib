@@ -26,9 +26,9 @@ fn device_uuid(window: &web_sys::Window) -> Option<String> {
 }
 
 /// Always a factory, so a project with a real endpoint says what is missing (`backend.last_error`) instead of blaming the build.
-pub fn backend_factory(params: &web_sys::UrlSearchParams) -> Option<BackendFactory> {
+pub fn backend_factory(params: Option<&web_sys::UrlSearchParams>) -> Option<BackendFactory> {
     let missing = |why: &'static str| Some(BackendFactory::new(move |_| Err(why.to_string())));
-    let Some(server_key) = params.get("nakama_key").filter(|k| !k.trim().is_empty()) else {
+    let Some(server_key) = params.and_then(|p| p.get("nakama_key")).filter(|k| !k.trim().is_empty()) else {
         return missing("no Nakama server key: add ?nakama_key=... to the page address");
     };
     let Some(device_uuid) = web_sys::window().and_then(|w| device_uuid(&w)) else {

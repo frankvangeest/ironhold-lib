@@ -140,6 +140,20 @@ fn a_client_for_game_a_cannot_touch_game_b() {
     assert_eq!(put("alpha.saves"), 200);
     assert_eq!(put("beta.saves"), 403);
     assert_eq!(put("saves"), 403, "an unprefixed collection belongs to no game");
+    // A client may not pick its own operator per write: a lower score with operator "set" must not replace a better one.
+    let write_op = |score: &str, op: &str| {
+        raw("POST", "/v2/leaderboard/alpha.best", &bearer, &format!(r#"{{"score":"{score}","operator":"{op}"}}"#)).0
+    };
+    assert_eq!(write_op("500", "best"), 200);
+    write_op("1", "set");
+    let (_, listing) = raw("GET", "/v2/leaderboard/alpha.best?limit=100", &bearer, "");
+    assert!(listing.contains(r#""score":"500""#), "the client's operator override must be ignored: {listing}");
+    // A board the config does not declare is unreachable, even with the right prefix.
+    assert_eq!(write(&bearer, "alpha.undeclared"), 403);
+    // APIs the engine does not use are closed: account linking would put one account in two games.
+    let (status, _) = raw("POST", "/v2/account/link/device", &bearer, r#"{"id":"beta:0123456789abcdef"}"#);
+    assert_eq!(status, 403, "LinkDevice is closed");
+    assert_eq!(raw("GET", "/v2/match?limit=5", &bearer, "").0, 403, "match listing is closed");
     // The client cannot choose its game through session vars at sign-in...
     let (spoof, _) = raw_session(&format!("alpha:{}", unique("spoof")), r#","vars":{"game_id":"beta"}"#).expect("signs in");
     assert_eq!(write(&format!("Bearer {spoof}"), "beta.best"), 403, "vars from the client must be ignored");

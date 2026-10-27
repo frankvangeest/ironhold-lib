@@ -94,11 +94,11 @@ Sample `watch` output (each save prints the changed file and a result):
 
 ### Online backend
 
-`ironhold backend config <project>... [--out <dir>]` generates the server config for the Nakama module (a server-admin step, see [Running against a Nakama server](20_data_formats.md#running-against-a-nakama-server)): it prints `ironhold_games.lua`, or with `--out` writes it together with the generic `ironhold.lua`. It refuses an invalid `backend.ron` or a `game_id` used twice.
+`ironhold backend config <project>... [--out <dir>]` generates the server config for the Nakama module (a server-admin step, see [Running against a Nakama server](20_data_formats.md#running-against-a-nakama-server)): it prints `ironhold_games.lua`, or with `--out` writes it together with the generic `ironhold.lua`. Always name every project the server hosts: the file is the complete list of games, and a game left out can no longer sign in. It refuses an invalid `backend.ron` or a `game_id` used twice.
 
 | What you see | Code | What breaks if ignored | Fix |
 |---|---|---|---|
-| a `backend.ron` that does not parse, has an unsupported `schema_version`, an invalid or duplicate `game_id`/leaderboard name (or, when `game_id` is omitted, an invalid or missing `project_id`), a bad `fake://` option, a `request_timeout_secs` outside 1-120 (`[a-z0-9_]`, 1-32 characters), or an `endpoint` that is not `fake://`, `https://` or `http://` | `backend_config` | the project runs offline; the engine logs the same reason | fix the file |
+| a `backend.ron` that does not parse, has an unsupported `schema_version`, an invalid or duplicate `game_id`/leaderboard name (`[a-z0-9_]`, 1-32 characters) (or, when `game_id` is omitted, an invalid or missing `project_id`), a bad `fake://` option, a `request_timeout_secs` outside 1-120, or an `endpoint` that is not `fake://`, `https://` or `http://` | `backend_config` | the project runs offline; the engine logs the same reason | fix the file |
 | an `endpoint` using plain `http://` to a host outside localhost/LAN | `backend_endpoint_http` | a hosted `https` page cannot reach it, and traffic is unencrypted | use `https://` |
 | `SubmitScore`/`FetchLeaderboard` naming a leaderboard that `backend.ron` does not declare | `undeclared_leaderboard` | the action always answers its failure event | declare it in `backend.ron` or fix the name |
 | `FetchLeaderboard` with `count` 0 or above 10 | `leaderboard_count_range` | the engine clamps it to 1-10 | use 1-10 |
