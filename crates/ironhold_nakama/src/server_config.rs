@@ -110,6 +110,30 @@ mod tests {
     }
 
     #[test]
+    fn the_contract_fixture_is_what_the_generator_writes() {
+        let c: BackendConfig = ron::from_str(
+            r#"BackendConfig(schema_version: 1, endpoint: Some("http://x"),
+                leaderboards: [Leaderboard(name: "best", ranking: HigherIsBetter, keep: Best),
+                               Leaderboard(name: "fast", ranking: LowerIsBetter, keep: Latest)])"#,
+        )
+        .unwrap();
+        let beta: BackendConfig = ron::from_str(
+            r#"BackendConfig(schema_version: 1, endpoint: Some("http://x"),
+                leaderboards: [Leaderboard(name: "best", ranking: HigherIsBetter, keep: Best)])"#,
+        )
+        .unwrap();
+        let lua = generate_games_lua(&[
+            GameServerConfig { game_id: "beta", leaderboards: &beta.leaderboards },
+            GameServerConfig { game_id: "alpha", leaderboards: &c.leaderboards },
+        ])
+        .unwrap();
+        let fixture = include_str!("../tests/contract/modules/ironhold_games.lua").replace("
+", "
+");
+        assert_eq!(lua, fixture);
+    }
+
+    #[test]
     fn the_module_registers_the_game_id_hooks() {
         for name in ["AuthenticateDevice", "WriteLeaderboardRecord", "ListLeaderboardRecords", "WriteStorageObjects"] {
             assert!(MODULE_LUA.contains(name), "{name}");

@@ -53,3 +53,6 @@ tools/bin/
 # Temp folder for throwaway scripts/debugging — folder tracked, contents ignored
 temp/
 !temp/.gitkeep
+
+# Copied in by the contract test run script and removed again
+crates/ironhold_nakama/tests/contract/modules/ironhold.lua

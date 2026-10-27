@@ -31,6 +31,8 @@ enum Stage {
     Call { retried: bool },
     /// Refreshing the session after a 401, then the call is retried.
     Refresh,
+    /// The list is parsed but the player's rank is missing: this answer is the rank lookup. Any failure delivers the list as is.
+    Rank { listing: BackendReply },
 }
 
 struct Pending {
@@ -150,16 +152,42 @@ impl NakamaBackend {
                     self.reply(id, kind.failure("the session expired, sign in again"));
                 }
             },
+            Stage::Rank { listing } => {
+                let rank = self.session.as_ref().and_then(|s| protocol::parse_rank(&resp, &s.user_id));
+                let reply = match listing {
+                    BackendReply::Leaderboard { leaderboard, rows, my_best, .. } => {
+                        BackendReply::Leaderboard { leaderboard, rows, my_rank: rank, my_best }
+                    }
+                    other => other,
+                };
+                self.reply(id, reply);
+            }
             Stage::Call { retried } => {
                 let result = match &kind {
                     RequestKind::SubmitScore { leaderboard, .. } => protocol::parse_submit(&resp)
                         .map(|()| BackendReply::ScoreSubmitted { leaderboard: leaderboard.clone() }),
-                    RequestKind::ListLeaderboard { leaderboard, .. } => protocol::parse_listing(&resp).map(|l| BackendReply::Leaderboard {
-                        leaderboard: leaderboard.clone(),
-                        rows: l.rows.into_iter().map(|(name, score)| LeaderRow { name, score }).collect(),
-                        my_rank: l.my_rank,
-                        my_best: l.my_best,
-                    }),
+                    RequestKind::ListLeaderboard { leaderboard, .. } => {
+                        let user_id = self.session.as_ref().map(|s| s.user_id.clone()).unwrap_or_default();
+                        match protocol::parse_listing(&resp, &user_id) {
+                            Ok(l) => {
+                                let reply = BackendReply::Leaderboard {
+                                    leaderboard: leaderboard.clone(),
+                                    rows: l.rows.into_iter().map(|(name, score)| LeaderRow { name, score }).collect(),
+                                    my_rank: l.my_rank,
+                                    my_best: l.my_best,
+                                };
+                                if l.needs_rank {
+                                    if let (Some(s), Ok(board)) = (self.session.clone(), self.ns.leaderboard(leaderboard)) {
+                                        self.send(id, protocol::rank_around_owner(&self.base, &s.token, &board, &s.user_id));
+                                        self.pending.insert(id, Pending { kind, stage: Stage::Rank { listing: reply } });
+                                        return;
+                                    }
+                                }
+                                Ok(reply)
+                            }
+                            Err(f) => Err(f),
+                        }
+                    }
                     RequestKind::SignIn | RequestKind::SignOut => return,
                 };
                 match result {

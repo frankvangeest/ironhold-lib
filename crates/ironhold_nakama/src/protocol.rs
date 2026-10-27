@@ -66,6 +66,13 @@ pub fn list_leaderboard(base: &str, token: &str, board: &NsLeaderboardId, limit:
     req
 }
 
+/// The records around one owner, whose first record carries the owner's rank (`owner_records` of a plain list omit it).
+pub fn rank_around_owner(base: &str, token: &str, board: &NsLeaderboardId, user_id: &str) -> ehttp::Request {
+    let mut req = ehttp::Request::get(format!("{base}/v2/leaderboard/{}/owner/{user_id}?limit=1", board.as_str()));
+    req.headers.insert("Authorization", format!("Bearer {token}"));
+    req
+}
+
 /// A server answer, boiled down to what the adapter acts on.
 #[derive(Debug, PartialEq)]
 pub enum Failure {
@@ -120,6 +127,8 @@ pub struct Listing {
     pub rows: Vec<(String, i64)>,
     pub my_rank: Option<u32>,
     pub my_best: Option<i64>,
+    /// The player has a record but is not in the rows and the list carried no rank: ask `rank_around_owner`.
+    pub needs_rank: bool,
 }
 
 fn num(o: &Value, key: &str) -> Option<i64> {
@@ -130,7 +139,7 @@ fn num(o: &Value, key: &str) -> Option<i64> {
     }
 }
 
-pub fn parse_listing(resp: &ehttp::Response) -> Result<Listing, Failure> {
+pub fn parse_listing(resp: &ehttp::Response, user_id: &str) -> Result<Listing, Failure> {
     let v = ok_json(resp)?;
     let array = |key: &str| v.get(key).and_then(Value::as_array).cloned().unwrap_or_default();
     let rows = array("records")
@@ -140,13 +149,20 @@ pub fn parse_listing(resp: &ehttp::Response) -> Result<Listing, Failure> {
             (name, num(o, "score").unwrap_or(0))
         })
         .collect();
-    let mine = array("owner_records");
-    let mine = mine.first();
-    Ok(Listing {
-        rows,
-        my_rank: mine.and_then(|o| num(o, "rank")).and_then(|r| u32::try_from(r).ok()),
-        my_best: mine.and_then(|o| num(o, "score")),
-    })
+    let owner_records = array("owner_records");
+    let mine = owner_records.first();
+    // The rank sits on the player's row when they are in the top list; `owner_records` themselves carry none.
+    let in_rows = array("records").iter().find(|o| o.get("owner_id").and_then(Value::as_str) == Some(user_id)).and_then(|o| num(o, "rank"));
+    let my_rank = in_rows.or_else(|| mine.and_then(|o| num(o, "rank"))).and_then(|r| u32::try_from(r).ok());
+    Ok(Listing { rows, my_rank, my_best: mine.and_then(|o| num(o, "score")), needs_rank: mine.is_some() && my_rank.is_none() })
+}
+
+/// The player's rank from a `rank_around_owner` answer.
+pub fn parse_rank(resp: &ehttp::Response, user_id: &str) -> Option<u32> {
+    let v = ok_json(resp).ok()?;
+    let records = v.get("records")?.as_array()?;
+    let mine = records.iter().find(|o| o.get("owner_id").and_then(Value::as_str) == Some(user_id))?;
+    u32::try_from(num(mine, "rank")?).ok()
 }
 
 #[cfg(test)]
@@ -194,14 +210,24 @@ mod tests {
     #[test]
     fn a_listing_reads_string_numbers_and_my_record() {
         let body = json!({
-            "records": [{"username": "Ada", "score": "900", "rank": "1"}, {"username": "", "score": 5}],
-            "owner_records": [{"score": "450", "rank": "4"}]
+            "records": [{"owner_id": "me", "username": "Ada", "score": "900", "rank": "1"}, {"username": "", "score": 5}],
+            "owner_records": [{"owner_id": "me", "score": "900"}]
         })
         .to_string();
-        let l = parse_listing(&resp(200, &body)).unwrap();
+        let l = parse_listing(&resp(200, &body), "me").unwrap();
         assert_eq!(l.rows, vec![("Ada".to_string(), 900), ("?".to_string(), 5)]);
-        assert_eq!((l.my_rank, l.my_best), (Some(4), Some(450)));
-        let empty = parse_listing(&resp(200, "{}")).unwrap();
-        assert_eq!((empty.rows.len(), empty.my_rank, empty.my_best), (0, None, None));
+        assert_eq!((l.my_rank, l.my_best, l.needs_rank), (Some(1), Some(900), false));
+        let empty = parse_listing(&resp(200, "{}"), "me").unwrap();
+        assert_eq!((empty.rows.len(), empty.my_rank, empty.my_best, empty.needs_rank), (0, None, None, false));
+    }
+
+    #[test]
+    fn a_player_outside_the_top_list_needs_a_rank_lookup() {
+        let body = json!({ "records": [{"owner_id": "x", "score": "9", "rank": "1"}], "owner_records": [{"owner_id": "me", "score": "2"}] }).to_string();
+        let l = parse_listing(&resp(200, &body), "me").unwrap();
+        assert_eq!((l.my_rank, l.my_best, l.needs_rank), (None, Some(2), true));
+        let around = json!({ "records": [{"owner_id": "me", "score": "2", "rank": "42"}] }).to_string();
+        assert_eq!(parse_rank(&resp(200, &around), "me"), Some(42));
+        assert_eq!(parse_rank(&resp(404, "{}"), "me"), None);
     }
 }

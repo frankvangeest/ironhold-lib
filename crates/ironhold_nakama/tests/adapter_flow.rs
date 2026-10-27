@@ -137,8 +137,12 @@ fn sign_in_submit_and_list_use_the_namespaced_ids() {
         ("POST", "/v2/leaderboard/my_game.best") => (200, "{}".to_string()),
         ("GET", p) if p.starts_with("/v2/leaderboard/my_game.best?") => (
             200,
-            r#"{"records":[{"username":"Ada","score":"900","rank":"1"}],"owner_records":[{"score":"40","rank":"7"}]}"#.to_string(),
+            r#"{"records":[{"owner_id":"x","username":"Ada","score":"900","rank":"1"}],"owner_records":[{"owner_id":"u1","score":"40"}]}"#.to_string(),
         ),
+        // The list carried no rank for the player, so the adapter asks around the owner.
+        ("GET", p) if p.starts_with("/v2/leaderboard/my_game.best/owner/u1") => {
+            (200, r#"{"records":[{"owner_id":"u1","score":"40","rank":"7"}]}"#.to_string())
+        }
         _ => (404, r#"{"message":"nope"}"#.to_string()),
     });
     let mut b = adapter(&url);
@@ -155,6 +159,7 @@ fn sign_in_submit_and_list_use_the_namespaced_ids() {
     assert!(log[0].1.contains("create=true") && log[0].2.starts_with("Basic "), "{log:?}");
     assert!(log[1].2.starts_with("Bearer "), "{log:?}");
     assert!(log[2].1.contains("owner_ids=u1") && log[2].1.contains("limit=5"), "{log:?}");
+    assert!(log[3].1.contains("/owner/u1"), "{log:?}");
     stop.store(true, Ordering::Relaxed);
 }
 
