@@ -40,7 +40,7 @@ fn install_pointer_lock_reporting() {
     on_error.forget();
 }
 
-/// Reads `?project=<name>`, `?scene=<path>`, `?nakama_key=<server key>` (the online backend adapter; without it a real endpoint runs offline), `?backend=<endpoint>` (replaces `backend.ron`'s endpoint)
+/// Reads `?project=<name>`, `?scene=<path>`, `?nakama_key=<server key>` (the online backend adapter; without it a real endpoint runs offline), `?backend=fake://...` (replaces `backend.ron`'s endpoint with a test backend)
 /// and `?static=1` from the page URL.
 /// - `project` is converted to a project-config asset path.
 /// - `scene`   is passed through as-is and used as an `InitialSceneOverride`.
@@ -59,7 +59,15 @@ fn read_url_params() -> AppOptions {
         .map(|name| format!("projects/{}/{}.project.ron", name, name));
     options.scene_override = params.get("scene");
     options.backend_factory = nakama::backend_factory(&params);
-    options.backend_endpoint = params.get("backend").filter(|e| !e.trim().is_empty());
+    // A page link must never choose which server receives a player's device id (it is their account credential), so the page
+    // can only pick the test backend; a real endpoint comes from the project's own backend.ron.
+    options.backend_endpoint = params.get("backend").filter(|e| !e.trim().is_empty()).filter(|e| {
+        let ok = e.starts_with("fake://");
+        if !ok {
+            web_sys::console::warn_1(&"ignoring ?backend=: the page address can only select a fake:// backend".into());
+        }
+        ok
+    });
     if params.get("static").as_deref() == Some("1") {
         if params.get("testing").as_deref() == Some("1") {
             options.run_mode = RunMode::Static;

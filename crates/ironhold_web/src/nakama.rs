@@ -12,7 +12,8 @@ const STORAGE_KEY: &str = "ironhold.device_id";
 fn device_uuid(window: &web_sys::Window) -> Option<String> {
     let storage = window.local_storage().ok().flatten()?;
     if let Ok(Some(existing)) = storage.get_item(STORAGE_KEY) {
-        if existing.len() >= 16 {
+        // Anything unusable is replaced, so a damaged value cannot take the game offline for good.
+        if (16..=100).contains(&existing.len()) && existing.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
             return Some(existing);
         }
     }
@@ -24,8 +25,14 @@ fn device_uuid(window: &web_sys::Window) -> Option<String> {
     Some(id)
 }
 
+/// Always a factory, so a project with a real endpoint says what is missing (`backend.last_error`) instead of blaming the build.
 pub fn backend_factory(params: &web_sys::UrlSearchParams) -> Option<BackendFactory> {
-    let server_key = params.get("nakama_key").filter(|k| !k.trim().is_empty())?;
-    let device_uuid = device_uuid(&web_sys::window()?)?;
+    let missing = |why: &'static str| Some(BackendFactory::new(move |_| Err(why.to_string())));
+    let Some(server_key) = params.get("nakama_key").filter(|k| !k.trim().is_empty()) else {
+        return missing("no Nakama server key: add ?nakama_key=... to the page address");
+    };
+    let Some(device_uuid) = web_sys::window().and_then(|w| device_uuid(&w)) else {
+        return missing("the browser would not store a device id (private window or blocked site data?)");
+    };
     Some(ironhold_nakama::factory(NakamaOptions { server_key, device_uuid }))
 }

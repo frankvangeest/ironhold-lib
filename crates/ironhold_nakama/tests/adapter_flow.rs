@@ -234,3 +234,131 @@ fn bad_configuration_is_refused_at_startup() {
     bad_game.game_id = "Bad Game".into();
     assert!(NakamaBackend::new(&bad_game, &opts).is_err());
 }
+
+fn poll_for(b: &mut NakamaBackend, ms: u64) -> Vec<BackendEvent> {
+    let until = Instant::now() + Duration::from_millis(ms);
+    let mut out = Vec::new();
+    while Instant::now() < until {
+        b.poll(&mut out);
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    out
+}
+
+#[test]
+fn a_refused_refresh_signs_in_again_with_the_device_id_and_the_call_succeeds() {
+    let auths = Arc::new(AtomicUsize::new(0));
+    let (a2, calls) = (auths.clone(), Arc::new(AtomicUsize::new(0)));
+    let (url, _seen, stop) = serve(move |method, path, _auth, _body| match (method, path) {
+        ("POST", p) if p.starts_with("/v2/account/authenticate/device") => {
+            a2.fetch_add(1, Ordering::Relaxed);
+            (200, format!(r#"{{"token":"{}","refresh_token":"r"}}"#, jwt("u1", "A")))
+        }
+        // The refresh token has expired.
+        ("POST", "/v2/account/session/refresh") => (401, r#"{"message":"Refresh token invalid"}"#.to_string()),
+        ("POST", "/v2/leaderboard/my_game.best") => {
+            if calls.fetch_add(1, Ordering::Relaxed) == 0 {
+                (401, r#"{"message":"Auth token invalid"}"#.to_string())
+            } else {
+                (200, "{}".to_string())
+            }
+        }
+        _ => (404, "{}".to_string()),
+    });
+    let mut b = adapter(&url);
+    ask(&mut b, 1, RequestKind::SignIn);
+    assert_eq!(ask(&mut b, 2, submit_kind(1)).reply, BackendReply::ScoreSubmitted { leaderboard: "best".into() });
+    assert_eq!(auths.load(Ordering::Relaxed), 2, "one sign-in, one re-authentication");
+    stop.store(true, Ordering::Relaxed);
+}
+
+#[test]
+fn two_calls_that_both_expire_share_one_renewal() {
+    let refreshes = Arc::new(AtomicUsize::new(0));
+    let (r2, calls) = (refreshes.clone(), Arc::new(AtomicUsize::new(0)));
+    let (url, _seen, stop) = serve(move |method, path, _auth, _body| match (method, path) {
+        ("POST", p) if p.starts_with("/v2/account/authenticate/device") => {
+            (200, format!(r#"{{"token":"{}","refresh_token":"r"}}"#, jwt("u1", "A")))
+        }
+        ("POST", "/v2/account/session/refresh") => {
+            r2.fetch_add(1, Ordering::Relaxed);
+            std::thread::sleep(Duration::from_millis(200));
+            (200, format!(r#"{{"token":"{}","refresh_token":"r2"}}"#, jwt("u1", "A")))
+        }
+        ("POST", "/v2/leaderboard/my_game.best") => {
+            // The first two calls find the token stale; the retries are accepted.
+            if calls.fetch_add(1, Ordering::Relaxed) < 2 {
+                (401, "{}".to_string())
+            } else {
+                (200, "{}".to_string())
+            }
+        }
+        _ => (404, "{}".to_string()),
+    });
+    let mut b = adapter(&url);
+    ask(&mut b, 1, RequestKind::SignIn);
+    b.submit(BackendRequest { id: 2, kind: submit_kind(1) });
+    b.submit(BackendRequest { id: 3, kind: submit_kind(2) });
+    let got = poll_for(&mut b, 1500);
+    assert_eq!(got.len(), 2, "{got:?}");
+    assert!(got.iter().all(|e| matches!(e.reply, BackendReply::ScoreSubmitted { .. })), "{got:?}");
+    assert_eq!(refreshes.load(Ordering::Relaxed), 1);
+    stop.store(true, Ordering::Relaxed);
+}
+
+#[test]
+fn sign_out_answers_what_is_in_flight_and_a_late_sign_in_changes_nothing() {
+    let (url, _seen, stop) = serve(|method, path, _a, _b| match (method, path) {
+        ("POST", p) if p.starts_with("/v2/account/authenticate/device") => {
+            std::thread::sleep(Duration::from_millis(300));
+            (200, format!(r#"{{"token":"{}","refresh_token":"r"}}"#, jwt("u1", "A")))
+        }
+        _ => (200, "{}".to_string()),
+    });
+    let mut b = adapter(&url);
+    b.submit(BackendRequest { id: 1, kind: RequestKind::SignIn });
+    b.submit(BackendRequest { id: 2, kind: RequestKind::SignOut });
+    let got = poll_for(&mut b, 800);
+    assert_eq!(got.len(), 2, "exactly one reply per request: {got:?}");
+    assert!(matches!(&got[0], BackendEvent { request_id: 1, reply: BackendReply::SignInFailed { .. } }), "{got:?}");
+    assert_eq!(got[1], BackendEvent { request_id: 2, reply: BackendReply::SignedOut });
+    // The late authenticate answer must not have installed a session.
+    assert!(matches!(ask(&mut b, 3, submit_kind(1)).reply, BackendReply::ScoreFailed { .. }));
+    stop.store(true, Ordering::Relaxed);
+}
+
+#[test]
+fn a_cancelled_request_makes_no_retry() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let c2 = calls.clone();
+    let (url, _seen, stop) = serve(move |method, path, _a, _b| match (method, path) {
+        ("POST", p) if p.starts_with("/v2/account/authenticate/device") => {
+            (200, format!(r#"{{"token":"{}","refresh_token":"r"}}"#, jwt("u1", "A")))
+        }
+        ("POST", "/v2/account/session/refresh") => {
+            std::thread::sleep(Duration::from_millis(200));
+            (200, format!(r#"{{"token":"{}","refresh_token":"r2"}}"#, jwt("u1", "A")))
+        }
+        ("POST", "/v2/leaderboard/my_game.best") => {
+            c2.fetch_add(1, Ordering::Relaxed);
+            (401, "{}".to_string())
+        }
+        _ => (404, "{}".to_string()),
+    });
+    let mut b = adapter(&url);
+    ask(&mut b, 1, RequestKind::SignIn);
+    b.submit(BackendRequest { id: 2, kind: submit_kind(1) });
+    // Wait until the first call was answered (it is now waiting for the renewal), then the engine gives up on it.
+    let until = Instant::now() + Duration::from_secs(5);
+    while calls.load(Ordering::Relaxed) == 0 && Instant::now() < until {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    std::thread::sleep(Duration::from_millis(50));
+    let mut early = Vec::new();
+    b.poll(&mut early);
+    b.cancel(2);
+    let got = poll_for(&mut b, 700);
+    assert!(got.iter().all(|e| e.request_id != 2), "no reply after a cancel: {got:?}");
+    assert_eq!(calls.load(Ordering::Relaxed), 1, "the call was not retried after the cancel");
+    stop.store(true, Ordering::Relaxed);
+}

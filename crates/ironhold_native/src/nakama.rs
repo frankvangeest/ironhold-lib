@@ -23,8 +23,9 @@ fn server_key() -> Option<String> {
 fn device_uuid() -> Option<String> {
     let path = home().join(".ironhold").join("device_id");
     if let Ok(existing) = std::fs::read_to_string(&path) {
-        let existing = existing.trim().to_string();
-        if existing.len() >= 16 {
+        // A hand-edited or damaged file must not take the game offline for good: anything unusable is replaced.
+        let existing = existing.trim_start_matches('\u{feff}').trim().to_string();
+        if (16..=100).contains(&existing.len()) && existing.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
             return Some(existing);
         }
     }
@@ -37,9 +38,14 @@ fn device_uuid() -> Option<String> {
     Some(id)
 }
 
-/// `None` when this machine has no server key: a project with a real endpoint then runs offline and says so.
+/// Always a factory, so a project with a real endpoint says what is missing (`backend.last_error`) instead of blaming the build.
 pub fn backend_factory() -> Option<BackendFactory> {
-    let server_key = server_key()?;
-    let device_uuid = device_uuid()?;
+    let missing = |why: &'static str| Some(BackendFactory::new(move |_| Err(why.to_string())));
+    let Some(server_key) = server_key() else {
+        return missing("no Nakama server key: set NAKAMA_SERVER_KEY (or put it in ~/.nakama_server_key)");
+    };
+    let Some(device_uuid) = device_uuid() else {
+        return missing("the device id could not be saved: is your home folder writable?");
+    };
     Some(ironhold_nakama::factory(NakamaOptions { server_key, device_uuid }))
 }

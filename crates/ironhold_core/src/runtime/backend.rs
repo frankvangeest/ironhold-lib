@@ -109,6 +109,9 @@ pub struct BackendEvent {
 pub trait Backend {
     fn submit(&mut self, req: BackendRequest);
     fn poll(&mut self, out: &mut Vec<BackendEvent>);
+    /// The engine gave up on this request (it timed out): stop any follow-up work for it (a retry, a refresh chain) and drop
+    /// the answer when it arrives. Work already on the wire cannot be recalled. Default: nothing to cancel.
+    fn cancel(&mut self, _request_id: u64) {}
 }
 
 /// Holds the installed backend. A `NonSend` resource because a wasm adapter owns `!Send` JS handles; the runner installs
@@ -383,8 +386,9 @@ pub fn backend_glue_system(
     let hub = &mut *hub;
     let mut batch: Vec<BackendEvent> = Vec::new();
 
-    match slot.and_then(|s| if s.0.is_some() { Some(s) } else { None }) {
-        Some(mut slot) => {
+    let mut slot = slot.filter(|s| s.0.is_some());
+    match slot.as_mut() {
+        Some(slot) => {
             let backend = slot.0.as_mut().expect("checked above");
             while let Some(req) = hub.outbox.pop_front() {
                 if let Some(f) = hub.in_flight.get_mut(&req.id) {
@@ -412,6 +416,11 @@ pub fn backend_glue_system(
         .filter(|(id, f)| f.started.is_some_and(|s| now - s >= hub.request_timeout_secs) && !batch.iter().any(|e| e.request_id == **id))
         .map(|(id, _)| *id)
         .collect();
+    if let Some(backend) = slot.as_mut().and_then(|s| s.0.as_mut()) {
+        for id in &expired {
+            backend.cancel(*id);
+        }
+    }
     for id in expired {
         let kind = hub.in_flight[&id].kind.clone();
         warn!("backend request {id} ({kind:?}) timed out after {}s", hub.request_timeout_secs);
@@ -775,9 +784,10 @@ fn build_adapter(
         game_id: config.effective_game_id(project_id).unwrap_or_default(),
         leaderboards: config.leaderboards.clone(),
     };
+    // The adapter's reason is written for the screen (it never contains the server key), so it goes to `backend.last_error` as is.
     (factory.0 .0)(&resolved).map_err(|e| {
         error!("Backend adapter could not start: {e}");
-        "the server adapter could not start (see the log)".to_string()
+        e.chars().take(120).collect()
     })
 }
 
@@ -884,7 +894,7 @@ mod tests {
         assert!(err.contains("no server adapter"));
         let failing = BackendFactoryRes(BackendFactory::new(|_| Err("boom".to_string())));
         let err = build_adapter(Some(&failing), None, &config, "https://x").err().unwrap();
-        assert!(err.contains("could not start") && !err.contains("boom"));
+        assert_eq!(err, "boom", "the adapter's reason reaches the screen");
     }
 
     fn drain(fake: &mut FakeBackend, polls: u32) -> Vec<BackendEvent> {
