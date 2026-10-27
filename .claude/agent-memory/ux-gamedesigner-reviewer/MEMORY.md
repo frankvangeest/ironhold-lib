@@ -1,6 +1,6 @@
 # Memory Index
 
-- [backend_abstraction plan-review](project_backend_abstraction_plan_review.md) — JSON event payloads unbindable; no leaderboard read; cloud save payload undefined; async-reply traps
+- [backend_abstraction plan+v1 review](project_backend_abstraction_plan_review.md) — v1 shipped; stuck "connecting" pattern, status "offline" ambiguity, unscoped busy, fake can't fail
 
 - [entity.attacked co-op attribution](project_npc_attacked_coop_attribution.md) — nearest-player rule documented only in docs/30 ~109; docs/20 NPC section silent
 

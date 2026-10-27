@@ -15,5 +15,15 @@ Plan-review of `planning/features/backend_abstraction.md` at `f302479` (2026-10-
 - Hidden deps: cloud save needs `SaveState` from the unshipped `save_load_game_state.md`; the glue system's schedule must follow `gameplay_fixed_tick_pipeline.md` if the interpreter moves to FixedUpdate. Paused `Time<Virtual>` -> request timeouts must use `Time<Real>`; message buffers don't flip while paused (see [[real-pause-review-facts]]).
 - Backend responses are per-client external inputs: they must never feed lockstep sim state un-replicated; record them in a replay stream like input.
 
+
+Code review of v1 (`feature/backend_abstraction`, 1455f9c, 2026-10-27), facts that outlive it:
+- The shipped `Backend` trait has no configure step and `AppOptions`/`start_app_with` has no adapter hook, while `backend.ron`
+  loads asynchronously AFTER the runner would install the adapter: a real adapter cannot learn endpoint/game_id. Fix shape: a
+  runner-registered factory `FnOnce(&ResolvedBackendConfig) -> Box<dyn Backend>` called from `choose_backend`.
+- `BackendAvailability::Loading` answers `backend.busy` and no load-complete event exists, so `scene.ready -> SignIn` races
+  the backend.ron fetch (web vs native diverge).
+- In-flight dedupe is per kind, so SignOut during Connecting enqueues; a late SignedIn reply can land after SignedOut.
+- `game_id` defaulting to `project_id` is never charset-checked (runtime or CLI), and the runtime never computes the effective id.
+
 **Why:** these were the load-bearing gaps; recurring if lobby/multiplayer plans are revised.
 **How to apply:** any review of backend, lobby, cloud-save or Form 2 networking plans. See [[nakama-spike-facts]], [[determinism-networking]].

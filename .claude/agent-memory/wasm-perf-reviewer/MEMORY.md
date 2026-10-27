@@ -47,4 +47,5 @@
 - [Pipeline system sets (D3)](project_pipeline_system_sets.md) — +1 ApplyDeferred (Scene->{Ui,Game}), sync nodes dedup per distance, cheap on web; warmup now sees PipelineWarmup 1 frame later
 - [First-person cursor capture](project_first_person_cursor_capture.md) — cursor_capture_system writes CursorOptions only on click/self-clearing release (no per-frame relock); FP look parse_key/frame nit; hide_own_body kills self-shadow
 - [Aim target system](project_aim_target_system.md) — FP v2 crosshair targeting: change-guarded writes, per-target affine inverse nit, LOS rays bounded by catch circle; starter lacks particle warmup
+- [Backend glue system](project_backend_glue_system.md) — online backend v1: glue runs every frame for all projects, idle = alloc-free; NonSend slot native-only cost; recheck adapter poll()
 - [Debug-state DOM sync](project_debug_state_dom_sync.md) — per-frame JSON+set_text_content in release; ~6 tiny allocs/frame; CANNOT gate out (play.html readiness) or dirty-skip (frame counter)

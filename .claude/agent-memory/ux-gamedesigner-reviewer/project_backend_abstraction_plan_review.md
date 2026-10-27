@@ -1,20 +1,24 @@
 ---
 name: backend-abstraction-plan-review
-description: 2026-10-25 plan review of planning/features/backend_abstraction.md (Nakama online actions); verdict Needs more design work; key designer gaps to re-check when v1 lands
+description: backend_abstraction (Nakama online actions) plan review 2026-10-25 + v1 implementation review 2026-10-27; open designer gaps to re-check at v2
 metadata:
   type: project
 ---
 
-Reviewed `planning/features/backend_abstraction.md` (Draft, planned at cd90a12) on 2026-10-25. Verdict: Needs more design work.
+Plan review 2026-10-25 (Needs more design work) -> plan revised (no payloads in event names, per-op failure events,
+indexed `leaderboard.<name>.<n>.*` variables, backend_path + schema_version). v1 implementation reviewed 2026-10-27
+(worktree ironhold-lib-backend_abstraction, canonical example `assets/projects/backend_demo`, docs/20 `backend.ron` section).
 
-Gaps to re-check at implementation review time:
-- `lobby.listed:{json}` / `matchmaker.matched:{json}` break the exact-match `<category>.<verb>:<id>` rule (docs/20 ~3968); no UI can show a JSON list; no text-input widget exists, so player-named lobbies/display names are impossible.
-- No action to READ a leaderboard (only SubmitScore); `score.submitted` has no board payload; plan text itself says `backend.score_submitted` in one place.
-- Cloud save payload undefined; local `save_load_game_state.md` is still Draft (not shipped) and uses `save.written/loaded/load_failed:{slot}` — cloud names should mirror it.
-- `backend.ron` needs schema_version + a `backend_path` in ProjectConfig (no convention-path fallback exists); `game_id` overlaps `project_id`.
-- Async replies vs state-scoped `on:` (same trap as EmitEventAfterDelay); delayed events can't be cancelled so designer-built matchmaking timeouts misfire -> want `timeout_secs`.
-- v3 matchmaking/lobbies are a dead end for designers until the v4 relay exists.
-- Leaderboard config changes need regenerate + redeploy via CLI that designers may not have.
+Open at v1 review (re-check at v2):
+- docs/30 "searching state with a timeout" pattern has no exit on `backend.sign_in_failed`/`backend.offline`/`backend.busy` -> stuck in `connecting`.
+- `backend.status` value `offline` means "signed out" too, while event `backend.offline` means "no backend at all"; offline reason (bad backend.ron, no adapter for https endpoint) only goes to console, never `backend.last_error`.
+- `backend.busy` is unscoped (no leaderboard id) and sets no last_error; SubmitScore while signing in answers busy, not submit_failed.
+- FakeBackend answers in ~2 frames and never fails -> designers cannot rehearse connecting/failure/timeout paths (only tests can inject).
+- `ShowLeaderboard` only fetches into variables (name implies UI). Snippet rows render "4. " / "Signed in as: " when empty (format prefix stays).
+- backend.*/leaderboard.* keys missing from docs/20 Label "GameVariables auto-written" table; docs/30 frame-order list lacks backend replies (refusals are executor-emitted = next frame, replies same frame).
+- validate does not check Label `bind: "leaderboard.<x>..."` against declared boards (find-and-replace snippet workflow makes this the likely typo).
+- Leaderboard vars not cleared on SignOut. docs/README index has no online entry.
+- Still v2+: `ironhold backend config` server-admin step undocumented; cloud save waits on save_load_game_state.
 
-**Why:** online features are the first async, seconds-late, can-fail event source in the pipeline; every existing pattern assumes same/next-frame replies.
-**How to apply:** when v1 code/docs arrive, check each item above; also check docs/30 Same-frame event order lists backend events, and docs/20 engine-written GameVariables table gains backend keys. Related: [[project_docs_lag_actions]], [[project_auto_written_gamevariables_undocumented]], [[project_fsm_designer_traps]].
+**Why:** online is the first async, can-fail event source; every existing pattern assumes same/next-frame replies.
+**How to apply:** at v2 review check each item, plus real-adapter latency makes the stuck-state and busy gaps bite. Related: [[project_docs_lag_actions]], [[project_auto_written_gamevariables_undocumented]], [[project_fsm_designer_traps]], [[project_same_frame_event_order]].
