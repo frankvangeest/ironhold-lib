@@ -48,6 +48,6 @@ Group((
             ],
         )),
         Label((id: "lb_rank_label", text: "", bind: "leaderboard.best.my_rank", format: "Your rank: {}", size: (360.0, 26.0), align: Left)),
-        Button((id: "refresh_btn", text: "Refresh", action: "ui.refresh")),
+        Button((id: "refresh_btn", text: "Refresh", action: "ui.refresh", size: (150.0, 44.0))),
     ],
 ))

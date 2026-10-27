@@ -181,7 +181,7 @@ fn an_undeclared_leaderboard_fails_with_the_operations_own_event() {
     app.update();
     assert_eq!(count(&app, "score.submit_failed:nope"), 1);
     assert_eq!(count(&app, "leaderboard.list_failed:nope"), 1);
-    assert!(var(&app, "backend.last_error").unwrap().contains("not declared"));
+    assert!(var(&app, "backend.last_error").unwrap().contains("not in backend.ron"));
 }
 
 #[test]

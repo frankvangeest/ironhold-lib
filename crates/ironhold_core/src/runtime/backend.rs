@@ -290,7 +290,7 @@ pub fn dispatch_backend_action(
                 emit(events, format!("score.submit_failed:{leaderboard}"));
             };
             if hub.config.as_ref().and_then(|c| c.leaderboard(leaderboard)).is_none() {
-                return fail(vars, events, &format!("leaderboard {leaderboard:?} is not declared in backend.ron"));
+                return fail(vars, events, &format!("leaderboard {leaderboard:?} is not in backend.ron"));
             }
             let Some(score) = vars.0.get(score_var).and_then(|v| v.trim().parse::<i64>().ok()) else {
                 return fail(vars, events, &format!("variable {score_var:?} does not hold a whole number"));
@@ -313,7 +313,7 @@ pub fn dispatch_backend_action(
                 emit(events, format!("leaderboard.list_failed:{leaderboard}"));
             };
             if hub.config.as_ref().and_then(|c| c.leaderboard(leaderboard)).is_none() {
-                return fail(vars, events, &format!("leaderboard {leaderboard:?} is not declared in backend.ron"));
+                return fail(vars, events, &format!("leaderboard {leaderboard:?} is not in backend.ron"));
             }
             match hub.status {
                 BackendStatus::Connecting => return fail(vars, events, "still signing in, try again in a moment"),
@@ -695,7 +695,7 @@ fn load_backend_config_system(
             let problems = config.problems();
             if !problems.is_empty() {
                 error!("Invalid backend.ron: {} - running offline", problems.join("; "));
-                return finish_offline(hub, &mut vars, &mut events, &format!("backend.ron is invalid: {}", problems.join("; ")));
+                return finish_offline(hub, &mut vars, &mut events, "backend.ron is invalid (see the log)");
             }
             choose_backend(hub, slot, &mut vars, &mut events, config);
         }
@@ -739,7 +739,7 @@ fn choose_backend(
         slot.install(Box::new(FakeBackend::from_endpoint(&config, &endpoint)));
     } else if slot.0.is_none() {
         warn!("backend.ron endpoint {endpoint:?} needs an adapter, but this build has none installed - running offline");
-        return finish_offline(hub, vars, events, "this build has no server adapter: use endpoint \"fake://\" for now");
+        return finish_offline(hub, vars, events, "no server adapter in this build; use fake://");
     }
     if let Some(t) = config.request_timeout_secs {
         hub.request_timeout_secs = f64::from(t);

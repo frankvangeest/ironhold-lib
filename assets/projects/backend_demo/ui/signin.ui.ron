@@ -4,6 +4,7 @@
 // `backend.status` is "offline" (no usable backend in this project/build: `backend.last_error` says why), "signed_out",
 // "connecting" or "online". `backend.last_error` also holds the reason after a failure; the label is wide enough for
 // the longest messages (labels do not wrap or clip). "Signed in as:" shows with an empty name while signed out.
+// A Button does not grow to fit its text: give it a `size:` wide enough (about 14 px per character at the default font).
 Group((
     id: "account",
     flex_direction: Column,
@@ -11,14 +12,14 @@ Group((
     padding: 10.0,
     background_color: (0.05, 0.05, 0.08, 0.85),
     children: [
-        Label((id: "status_label", text: "", bind: "backend.status", format: "Status: {}", size: (360.0, 28.0), align: Left)),
-        Label((id: "name_label", text: "", bind: "backend.display_name", format: "Signed in as: {}", size: (360.0, 28.0), align: Left)),
-        Label((id: "error_label", text: "", bind: "backend.last_error", format: "{}", size: (520.0, 28.0), align: Left)),
+        Label((id: "status_label", text: "", bind: "backend.status", format: "Status: {}", size: (640.0, 28.0), align: Left)),
+        Label((id: "name_label", text: "", bind: "backend.display_name", format: "Signed in as: {}", size: (640.0, 28.0), align: Left)),
+        Label((id: "error_label", text: "", bind: "backend.last_error", format: "{}", size: (640.0, 28.0), align: Left)),
         Group((
             gap: 8.0,
             children: [
-                Button((id: "sign_in_btn", text: "Sign in", action: "ui.sign_in")),
-                Button((id: "sign_out_btn", text: "Sign out", action: "ui.sign_out")),
+                Button((id: "sign_in_btn", text: "Sign in", action: "ui.sign_in", size: (150.0, 44.0))),
+                Button((id: "sign_out_btn", text: "Sign out", action: "ui.sign_out", size: (150.0, 44.0))),
             ],
         )),
     ],

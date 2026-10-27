@@ -16,42 +16,50 @@
             height: Percent(100.0),
             children: [
                 Label((id: "title", text: "backend_demo - online features", size: (640.0, 32.0), align: Left)),
-                Label((id: "fake_note", text: "Offline test backend (fake://): scores are not saved and nobody else is online.", size: (900.0, 26.0), align: Left)),
+                Label((id: "fake_note", text: "Test backend (fake://): scores are not saved.", size: (640.0, 26.0), align: Left)),
                 Group((
                     gap: 16.0,
+                    flex_wrap: Wrap,
                     children: [
                         Group((
-                            id: "account",
+                            id: "left_column",
                             flex_direction: Column,
-                            gap: 6.0,
-                            padding: 10.0,
-                            background_color: (0.05, 0.05, 0.08, 0.85),
+                            gap: 12.0,
                             children: [
-                                Label((id: "status_label", text: "", bind: "backend.status", format: "Status: {}", size: (360.0, 28.0), align: Left)),
-                                Label((id: "name_label", text: "", bind: "backend.display_name", format: "Signed in as: {}", size: (360.0, 28.0), align: Left)),
-                                Label((id: "error_label", text: "", bind: "backend.last_error", format: "{}", size: (520.0, 28.0), align: Left)),
                                 Group((
-                                    gap: 8.0,
+                                    id: "account",
+                                    flex_direction: Column,
+                                    gap: 6.0,
+                                    padding: 10.0,
+                                    background_color: (0.05, 0.05, 0.08, 0.85),
                                     children: [
-                                        Button((id: "sign_in_btn", text: "Sign in", action: "ui.sign_in")),
-                                        Button((id: "sign_out_btn", text: "Sign out", action: "ui.sign_out")),
+                                        Label((id: "status_label", text: "", bind: "backend.status", format: "Status: {}", size: (640.0, 28.0), align: Left)),
+                                        Label((id: "name_label", text: "", bind: "backend.display_name", format: "Signed in as: {}", size: (640.0, 28.0), align: Left)),
+                                        Label((id: "error_label", text: "", bind: "backend.last_error", format: "{}", size: (640.0, 28.0), align: Left)),
+                                        Group((
+                                            gap: 8.0,
+                                            children: [
+                                                Button((id: "sign_in_btn", text: "Sign in", action: "ui.sign_in", size: (150.0, 44.0))),
+                                                Button((id: "sign_out_btn", text: "Sign out", action: "ui.sign_out", size: (150.0, 44.0))),
+                                            ],
+                                        )),
                                     ],
                                 )),
-                            ],
-                        )),
-                        Group((
-                            id: "score",
-                            flex_direction: Column,
-                            gap: 6.0,
-                            padding: 10.0,
-                            background_color: (0.05, 0.05, 0.08, 0.85),
-                            children: [
-                                Label((id: "score_label", text: "", bind: "score", format: "Score: {}", size: (360.0, 28.0), align: Left)),
                                 Group((
-                                    gap: 8.0,
+                                    id: "score",
+                                    flex_direction: Column,
+                                    gap: 6.0,
+                                    padding: 10.0,
+                                    background_color: (0.05, 0.05, 0.08, 0.85),
                                     children: [
-                                        Button((id: "add_btn", text: "+10", action: "ui.add_score")),
-                                        Button((id: "submit_btn", text: "Submit score", action: "ui.submit")),
+                                        Label((id: "score_label", text: "", bind: "score", format: "Score: {}", size: (640.0, 28.0), align: Left)),
+                                        Group((
+                                            gap: 8.0,
+                                            children: [
+                                                Button((id: "add_btn", text: "+10", action: "ui.add_score", size: (150.0, 44.0))),
+                                                Button((id: "submit_btn", text: "Submit score", action: "ui.submit", size: (200.0, 44.0))),
+                                            ],
+                                        )),
                                     ],
                                 )),
                             ],
@@ -100,7 +108,7 @@
                                     ],
                                 )),
                                 Label((id: "lb_rank_label", text: "", bind: "leaderboard.best.my_rank", format: "Your rank: {}", size: (360.0, 26.0), align: Left)),
-                                Button((id: "refresh_btn", text: "Refresh", action: "ui.refresh")),
+                                Button((id: "refresh_btn", text: "Refresh", action: "ui.refresh", size: (150.0, 44.0))),
                             ],
                         )),
                     ],
