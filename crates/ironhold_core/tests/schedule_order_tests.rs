@@ -68,7 +68,7 @@ fn the_documented_systems_are_in_the_documented_sets() {
         ("GameStreamSet::ActionBar", &["cooldown_tick_system", "action_bar_input_system", "action_bar_visual_system"]),
         ("GameStreamSet::Interact", &["interactable_system", "cursor_capture_system"]),
         ("GameStreamSet::DelayedEvents", &["tick_delayed_events_system"]),
-        ("GameStreamSet::Backend", &["backend_glue_system"]),
+        ("GameStreamSet::Backend", &["load_backend_config_system", "backend_glue_system"]),
         ("GameStreamSet::Stats", &["stat_modifier_system", "stat_regen_system", "stat_effective_value_system"]),
         ("GameplaySet::Interpret", &["fsm_interpreter_system", "entity_fsm_interpreter_system"]),
         (

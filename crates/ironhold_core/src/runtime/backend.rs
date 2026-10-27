@@ -8,8 +8,10 @@
 //! # Rules
 //! - Replies are **per-client external inputs**. They never touch replicated state; they arrive while paused and survive
 //!   `LoadScene` (bind them in `global_on`, same trap as `EmitEventAfterDelay`).
-//! - [`backend_glue_system`] is the only writer of `backend.*`/`leaderboard.*` variables after a request was accepted, and
-//!   it sorts each frame's batch by `request_id`, so the order the interpreter sees does not depend on the adapter.
+//! - Variables are written in three places, all inside the backend slot or the executor arm that accepted the request:
+//!   [`dispatch_backend_action`] (`backend.status = connecting`, `backend.last_error`), [`backend_glue_system`] (replies) and
+//!   the config loader. Writing in `Emit` rather than `PostExecute` makes a reply's variables visible to the interpreter in the
+//!   frame its event arrives. The glue system sorts each frame's batch by `request_id`, so the order does not depend on the adapter.
 //! - Timeouts count on `Time<Real>` (virtual time is frozen while paused).
 //! - Event names carry ids the designer can write (`score.submitted:best_time`), never JSON or error text; the text goes to
 //!   `backend.last_error` for a Label.
@@ -20,9 +22,9 @@ use bevy::prelude::*;
 
 use crate::runtime::messages::GameEvent;
 use crate::runtime::scene_manager::resolve_project_path;
-use crate::runtime::schedule::{GameStreamSet, GameplaySet};
+use crate::runtime::schedule::GameStreamSet;
 use crate::schema::backend::{
-    is_fake_endpoint, BackendConfig, Keep, LeaderboardDef, Ranking, MAX_LEADERBOARD_ROWS,
+    is_fake_endpoint, parse_fake_endpoint, BackendConfig, Keep, LeaderboardDef, Ranking, MAX_LEADERBOARD_ROWS,
 };
 use crate::schema::project::{ProjectConfig, ProjectConfigHandle};
 use crate::schema::{Action, ImplicitRonPlugin};
@@ -45,8 +47,8 @@ impl RequestKind {
     /// Two requests with the same key must not be in flight at once (the second one answers `backend.busy`).
     fn dedupe_key(&self) -> String {
         match self {
-            RequestKind::SignIn => "sign_in".to_string(),
-            RequestKind::SignOut => "sign_out".to_string(),
+            // One group: a sign-in and a sign-out must never be in flight together (their replies could land in either order).
+            RequestKind::SignIn | RequestKind::SignOut => "session".to_string(),
             RequestKind::SubmitScore { leaderboard, .. } => format!("submit:{leaderboard}"),
             RequestKind::ListLeaderboard { leaderboard, .. } => format!("list:{leaderboard}"),
         }
@@ -137,8 +139,11 @@ pub enum BackendAvailability {
 /// The session state mirrored to `backend.status`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BackendStatus {
+    /// No usable backend at all (nothing configured, a failed `backend.ron`, or no adapter in this build).
     #[default]
     Offline,
+    /// A working backend, nobody signed in.
+    SignedOut,
     Connecting,
     Online,
 }
@@ -147,6 +152,7 @@ impl BackendStatus {
     fn as_str(self) -> &'static str {
         match self {
             BackendStatus::Offline => "offline",
+            BackendStatus::SignedOut => "signed_out",
             BackendStatus::Connecting => "connecting",
             BackendStatus::Online => "online",
         }
@@ -171,6 +177,8 @@ pub struct BackendHub {
     pub status: BackendStatus,
     pub config: Option<BackendConfig>,
     pub request_timeout_secs: f64,
+    /// True after an unsolicited `ConnectionLost` until `Reconnected` (or a sign-out) ends it.
+    reconnecting: bool,
     next_id: u64,
     outbox: VecDeque<BackendRequest>,
     in_flight: BTreeMap<u64, InFlight>,
@@ -184,6 +192,7 @@ impl Default for BackendHub {
             status: BackendStatus::Offline,
             config: None,
             request_timeout_secs: DEFAULT_REQUEST_TIMEOUT_SECS,
+            reconnecting: false,
             next_id: 1,
             outbox: VecDeque::new(),
             in_flight: BTreeMap::new(),
@@ -195,7 +204,13 @@ impl Default for BackendHub {
 impl BackendHub {
     /// A hub that already has its config and an installed backend (tests, and runners that skip `backend.ron`).
     pub fn ready(config: BackendConfig) -> Self {
-        Self { availability: BackendAvailability::Ready, config: Some(config), load: LoadPhase::Done, ..Default::default() }
+        Self {
+            availability: BackendAvailability::Ready,
+            status: BackendStatus::SignedOut,
+            config: Some(config),
+            load: LoadPhase::Done,
+            ..Default::default()
+        }
     }
 
     /// Requests accepted but not yet answered (outbox included).
@@ -248,22 +263,23 @@ pub fn dispatch_backend_action(
     }
     match action {
         Action::SignIn => {
-            if hub.status == BackendStatus::Online {
-                return emit(events, "backend.signed_in");
-            }
+            // Busy first: a sign-out in flight still reads Online, and answering "signed in" now would be a lie.
             if hub.is_busy(&RequestKind::SignIn) {
                 return emit(events, "backend.busy");
+            }
+            if hub.status == BackendStatus::Online {
+                return emit(events, "backend.signed_in");
             }
             set_error(vars, "");
             set_status(hub, vars, BackendStatus::Connecting);
             hub.enqueue(RequestKind::SignIn);
         }
         Action::SignOut => {
-            if hub.status == BackendStatus::Offline {
-                return emit(events, "backend.signed_out");
-            }
             if hub.is_busy(&RequestKind::SignOut) {
                 return emit(events, "backend.busy");
+            }
+            if hub.status == BackendStatus::SignedOut {
+                return emit(events, "backend.signed_out");
             }
             hub.enqueue(RequestKind::SignOut);
         }
@@ -280,8 +296,8 @@ pub fn dispatch_backend_action(
                 return fail(vars, events, &format!("variable {score_var:?} does not hold a whole number"));
             };
             match hub.status {
-                BackendStatus::Connecting => return emit(events, "backend.busy"),
-                BackendStatus::Offline => return fail(vars, events, "not signed in"),
+                BackendStatus::Connecting => return fail(vars, events, "still signing in, try again in a moment"),
+                BackendStatus::Offline | BackendStatus::SignedOut => return fail(vars, events, "not signed in"),
                 BackendStatus::Online => {}
             }
             let kind = RequestKind::SubmitScore { leaderboard: leaderboard.clone(), score };
@@ -300,8 +316,8 @@ pub fn dispatch_backend_action(
                 return fail(vars, events, &format!("leaderboard {leaderboard:?} is not declared in backend.ron"));
             }
             match hub.status {
-                BackendStatus::Connecting => return emit(events, "backend.busy"),
-                BackendStatus::Offline => return fail(vars, events, "not signed in"),
+                BackendStatus::Connecting => return fail(vars, events, "still signing in, try again in a moment"),
+                BackendStatus::Offline | BackendStatus::SignedOut => return fail(vars, events, "not signed in"),
                 BackendStatus::Online => {}
             }
             let kind = RequestKind::ListLeaderboard {
@@ -385,40 +401,56 @@ fn apply_reply(hub: &mut BackendHub, vars: &mut GameVariables, events: &mut Mess
             emit(events, "backend.signed_in");
         }
         BackendReply::SignInFailed { reason } => {
-            set_status(hub, vars, BackendStatus::Offline);
+            hub.reconnecting = false;
+            set_status(hub, vars, BackendStatus::SignedOut);
             set_error(vars, &reason);
             emit(events, "backend.sign_in_failed");
         }
         BackendReply::Unreachable { reason } => {
-            set_status(hub, vars, BackendStatus::Offline);
+            hub.reconnecting = false;
+            set_status(hub, vars, BackendStatus::SignedOut);
             set_error(vars, &reason);
             emit(events, "backend.unreachable");
         }
         BackendReply::SignedOut => {
-            set_status(hub, vars, BackendStatus::Offline);
+            hub.reconnecting = false;
+            set_status(hub, vars, BackendStatus::SignedOut);
             vars.0.insert("backend.display_name".to_string(), String::new());
+            // The previous player's board and rank must not stay on screen for the next one.
+            vars.0.retain(|k, _| !k.starts_with("leaderboard."));
             emit(events, "backend.signed_out");
         }
-        BackendReply::ScoreSubmitted { leaderboard } => emit(events, format!("score.submitted:{leaderboard}")),
+        BackendReply::ScoreSubmitted { leaderboard } => {
+            set_error(vars, "");
+            emit(events, format!("score.submitted:{leaderboard}"));
+        }
         BackendReply::ScoreFailed { leaderboard, reason } => {
             set_error(vars, &reason);
             emit(events, format!("score.submit_failed:{leaderboard}"));
         }
         BackendReply::Leaderboard { leaderboard, rows, my_rank, my_best } => {
             write_leaderboard_vars(vars, &leaderboard, &rows, my_rank, my_best);
+            set_error(vars, "");
             emit(events, format!("leaderboard.listed:{leaderboard}"));
         }
         BackendReply::LeaderboardFailed { leaderboard, reason } => {
             set_error(vars, &reason);
             emit(events, format!("leaderboard.list_failed:{leaderboard}"));
         }
+        // Only meaningful for a live session: a socket closing after a sign-out must not make "not signed in" read "connecting".
         BackendReply::ConnectionLost => {
-            set_status(hub, vars, BackendStatus::Connecting);
-            emit(events, "backend.connection_lost");
+            if hub.status == BackendStatus::Online {
+                hub.reconnecting = true;
+                set_status(hub, vars, BackendStatus::Connecting);
+                emit(events, "backend.connection_lost");
+            }
         }
         BackendReply::Reconnected => {
-            set_status(hub, vars, BackendStatus::Online);
-            emit(events, "backend.reconnected");
+            if hub.reconnecting {
+                hub.reconnecting = false;
+                set_status(hub, vars, BackendStatus::Online);
+                emit(events, "backend.reconnected");
+            }
         }
     }
 }
@@ -491,6 +523,25 @@ impl FakeBackend {
             };
             fake.boards.insert(lb.name.clone(), seed.iter().map(|(n, s)| (n.to_string(), *s)).collect());
             fake.defs.insert(lb.name.clone(), lb.clone());
+        }
+        fake
+    }
+
+    /// The test backend a `fake://?latency=N&fail=...` endpoint asks for (`schema::backend::parse_fake_endpoint`).
+    pub fn from_endpoint(config: &BackendConfig, endpoint: &str) -> Self {
+        let mut fake = Self::from_config(config);
+        // An invalid query was already reported by `BackendConfig::problems`; here it falls back to the defaults.
+        if let Ok(o) = parse_fake_endpoint(endpoint) {
+            if let Some(l) = o.latency {
+                fake.latency_polls = l;
+            }
+            fake.failures = FakeFailures {
+                reject_sign_in: o.reject_sign_in,
+                unreachable: o.unreachable,
+                submit: o.submit,
+                list: o.list,
+                silent: o.silent,
+            };
         }
         fake
     }
@@ -603,12 +654,17 @@ fn backend_config_pending(hub: Res<BackendHub>) -> bool {
     !matches!(hub.load, LoadPhase::Done)
 }
 
+fn backend_is_ready(hub: Res<BackendHub>) -> bool {
+    hub.availability == BackendAvailability::Ready
+}
+
 /// Resolves `backend_path` after the project config is available, without blocking the scene load: until it finishes the
 /// online actions answer `backend.busy`; a failed load logs an error and the project runs offline.
 fn load_backend_config_system(
     mut hub: ResMut<BackendHub>,
     slot: Option<NonSendMut<BackendSlot>>,
     mut vars: ResMut<GameVariables>,
+    mut events: MessageWriter<GameEvent>,
     config_handle: Option<Res<ProjectConfigHandle>>,
     project_configs: Res<Assets<ProjectConfig>>,
     backend_configs: Res<Assets<BackendConfig>>,
@@ -624,7 +680,7 @@ fn load_backend_config_system(
     let Some(handle) = loading else {
         let Some(project) = config_handle.as_deref().and_then(|h| project_configs.get(&h.0)) else { return };
         match &project.backend_path {
-            None => finish_offline(hub, &mut vars, "the project has no backend_path"),
+            None => finish_offline(hub, &mut vars, &mut events, "the project has no backend_path"),
             Some(path) => {
                 let resolved = resolve_project_path(&project_root.0, path);
                 info!("Loading backend config from: {resolved}");
@@ -639,44 +695,59 @@ fn load_backend_config_system(
             let problems = config.problems();
             if !problems.is_empty() {
                 error!("Invalid backend.ron: {} - running offline", problems.join("; "));
-                return finish_offline(hub, &mut vars, "invalid backend.ron");
+                return finish_offline(hub, &mut vars, &mut events, &format!("backend.ron is invalid: {}", problems.join("; ")));
             }
-            choose_backend(hub, slot, &mut vars, config);
+            choose_backend(hub, slot, &mut vars, &mut events, config);
         }
         bevy::asset::LoadState::Failed(e) => {
             error!("backend.ron failed to load: {e} - running offline");
-            finish_offline(hub, &mut vars, "backend.ron failed to load");
+            finish_offline(hub, &mut vars, &mut events, "backend.ron failed to load");
         }
         _ => {}
     }
 }
 
-fn finish_offline(hub: &mut BackendHub, vars: &mut GameVariables, why: &str) {
+/// The project has no usable backend: say why on screen (`backend.last_error`) and tell the rules (`backend.offline`), which is
+/// also what a sign-in fired before `backend.ron` resolved should retry on.
+fn finish_offline(hub: &mut BackendHub, vars: &mut GameVariables, events: &mut MessageWriter<GameEvent>, why: &str) {
     info!("Backend offline: {why}");
     hub.availability = BackendAvailability::Offline;
     hub.load = LoadPhase::Done;
     set_status(hub, vars, BackendStatus::Offline);
+    set_error(vars, why);
+    emit(events, "backend.offline");
 }
 
 /// `fake://` selects the in-memory backend; any other endpoint needs an adapter the runner already installed.
-fn choose_backend(hub: &mut BackendHub, slot: Option<NonSendMut<BackendSlot>>, vars: &mut GameVariables, config: BackendConfig) {
+fn choose_backend(
+    hub: &mut BackendHub,
+    slot: Option<NonSendMut<BackendSlot>>,
+    vars: &mut GameVariables,
+    events: &mut MessageWriter<GameEvent>,
+    config: BackendConfig,
+) {
     let endpoint = config.endpoint.clone();
     hub.config = Some(config.clone());
     let Some(endpoint) = endpoint else {
-        return finish_offline(hub, vars, "backend.ron has no endpoint");
+        return finish_offline(hub, vars, events, "backend.ron has no endpoint");
     };
     let Some(mut slot) = slot else {
-        return finish_offline(hub, vars, "no backend slot");
+        return finish_offline(hub, vars, events, "no backend slot");
     };
     if is_fake_endpoint(&endpoint) {
-        slot.install(Box::new(FakeBackend::from_config(&config)));
+        // A `fake://` endpoint always means the in-memory backend, even if a runner installed an adapter.
+        slot.install(Box::new(FakeBackend::from_endpoint(&config, &endpoint)));
     } else if slot.0.is_none() {
         warn!("backend.ron endpoint {endpoint:?} needs an adapter, but this build has none installed - running offline");
-        return finish_offline(hub, vars, "no adapter installed");
+        return finish_offline(hub, vars, events, "this build has no server adapter: use endpoint \"fake://\" for now");
+    }
+    if let Some(t) = config.request_timeout_secs {
+        hub.request_timeout_secs = f64::from(t);
     }
     hub.availability = BackendAvailability::Ready;
     hub.load = LoadPhase::Done;
-    set_status(hub, vars, BackendStatus::Offline);
+    set_status(hub, vars, BackendStatus::SignedOut);
+    emit(events, "backend.ready");
     info!("Backend ready (endpoint {endpoint:?})");
 }
 
@@ -689,9 +760,13 @@ impl Plugin for BackendPlugin {
             .add_plugins(ImplicitRonPlugin::<BackendConfig>::new(&["ron"]))
             .add_systems(
                 Update,
-                load_backend_config_system.run_if(backend_config_pending).before(GameplaySet::Emit),
-            )
-            .add_systems(Update, backend_glue_system.in_set(GameStreamSet::Backend));
+                (
+                    load_backend_config_system.run_if(backend_config_pending),
+                    backend_glue_system.run_if(backend_is_ready),
+                )
+                    .chain()
+                    .in_set(GameStreamSet::Backend),
+            );
     }
 }
 

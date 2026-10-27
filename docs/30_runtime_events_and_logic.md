@@ -423,9 +423,11 @@ runs; every online action then answers `backend.offline`.
 | `backend.signed_in` / `backend.signed_out` | `SignIn` / `SignOut` finished |
 | `backend.sign_in_failed` | the server rejected the sign-in (`backend.last_error` has the reason) |
 | `backend.unreachable` | the server could not be reached, or a `SignIn`/`SignOut` got no answer in 15 s |
-| `backend.offline` | the project has no usable backend (no `backend_path`, no endpoint, or a failed `backend.ron` load) |
-| `backend.busy` | the same request is already in flight, or `backend.ron` is still loading; fire the action again to retry |
-| `score.submitted:{leaderboard}` / `score.submit_failed:{leaderboard}` | `SubmitScore` result |
+| `backend.ready` | `backend.ron` finished loading and the backend can be used: the place for an automatic `SignIn` (a sign-in fired earlier, e.g. on `scene.ready`, may answer `backend.busy`) |
+| `backend.offline` | the project has no usable backend (no `backend_path`, no endpoint, or a failed `backend.ron` load). Fired once when loading finishes without one (reason in `backend.last_error`) and again whenever an online action is used |
+| `backend.busy` | the same request is already in flight, a sign-in and a sign-out overlap, or `backend.ron` is still loading; fire the action again to retry |
+| `backend.connection_lost` / `backend.reconnected` | a live connection dropped / came back (only with a real server; `backend.status` follows) |
+| `score.submitted:{leaderboard}` / `score.submit_failed:{leaderboard}` | `SubmitScore` result; also the answer when you submit before signing in or while still signing in (the reason is in `backend.last_error`) |
 | `leaderboard.listed:{leaderboard}` / `leaderboard.list_failed:{leaderboard}` | `ShowLeaderboard` result (rows are in `leaderboard.<name>.*` variables first) |
 
 Rules that matter when you wire them:
@@ -433,8 +435,10 @@ Rules that matter when you wire them:
   scoped to one state would miss them (the same trap as `EmitEventAfterDelay`).
 - Event names carry only ids you wrote (`score.submitted:best`); the reason for a failure goes to the variable `backend.last_error`,
   which a `Label` can show.
-- A reply is visible the **same frame** it is produced: the backend runs after the delayed events and before the stat events in the
-  game stream, so a rule on `leaderboard.listed:best` already sees the new `leaderboard.best.*` variables.
+- A real reply is visible the **same frame** it is produced: the backend runs after the delayed events and before the stat events in the
+  game stream (item 2.3 of the frame order above), so a rule on `leaderboard.listed:best` already sees the new `leaderboard.best.*`
+  variables. A **refusal** (`backend.offline`, `backend.busy`, `score.submit_failed:{lb}` for "not signed in") is emitted by the action
+  itself, so it counts as an event your actions emitted (item 2.1) and rules read it one frame later.
 - Replies are per-player input from outside the game. They never change shared game state by themselves; a rule that reacts to
   one runs on that player's machine only.
 - Requests with the same kind (`SignIn` twice, two `SubmitScore` to one leaderboard) never run in parallel: the second answers
@@ -460,11 +464,16 @@ states: [ ( name: "idle", on: [ ( event: "ui.button_pressed:sign_in", do_actions
 transitions: [
     ( from: "idle",       on: "ui.button_pressed:sign_in", to: "connecting" ),
     ( from: "connecting", on: "backend.signed_in",          to: "idle" ),
+    ( from: "connecting", on: "backend.sign_in_failed",    to: "idle" ),
     ( from: "connecting", on: "backend.unreachable",       to: "idle" ),
+    ( from: "connecting", on: "backend.offline",           to: "idle" ),
+    ( from: "connecting", on: "backend.busy",              to: "idle" ),
 ],
 ```
-The engine itself fails every request after 15 s (`backend.unreachable` for sign-in, the operation's own failure event otherwise), so the state
-machine never waits forever.
+Give the waiting state an exit for **every** answer the action can produce (success, `sign_in_failed`, `unreachable`, and the
+immediate refusals `offline` and `busy`), and clear any hint on the way out. The engine fails every accepted request after
+`request_timeout_secs` (15 by default; `backend.unreachable` for sign-in, the operation's own failure event otherwise), so an accepted
+request never leaves the state machine waiting forever.
 
 ### The `initial_state` entry-actions gotcha
 **`entry_actions` on the `initial_state` do *not* run at boot.** Entry actions only run when a **transition** enters a state — the state you start in was never "entered" by a transition, so its `entry_actions` are silently skipped. If you follow "start flat, add states later" and move boot-time work (like `PlayMusicLoop` on scene-ready) into your first state's `entry_actions`, expecting it to fire immediately, it won't. Keep boot-time work in a `global_on` `scene.ready:<scene>` binding instead, or restructure so the initial state is only reached via an explicit transition from a dedicated boot state.

@@ -4586,7 +4586,12 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
 
     let mut cross_errors = cross_file_checks(project);
     cross_errors.extend(
-        super::backend_checks::errors(project.backend_source, project.backend, project.actions)
+        super::backend_checks::errors(
+            project.backend_source,
+            project.backend,
+            project.project_config.and_then(|c| c.project_id.as_deref()),
+            project.actions,
+        )
             .into_iter()
             .map(|f| CrossFileError { source_file: f.source_file, message: f.message, error_type: f.kind }),
     );

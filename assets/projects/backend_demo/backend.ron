@@ -1,6 +1,9 @@
 // backend_demo: online features against the in-memory test backend.
 // "fake://" needs no server: sign-in always works, four fixed rivals fill the leaderboard, and nothing is saved between runs.
-// To use a real server, replace the endpoint with its https:// address (the build must include that backend's adapter).
+// Try the failure paths too: "fake://?fail=sign_in" (rejected), "fake://?fail=unreachable", "fake://?fail=submit,list",
+// "fake://?fail=silent" (never answers: the request times out) and "fake://?latency=120" (about two seconds to answer).
+// A real server needs a build that includes its adapter (not available yet); without one the project runs offline and
+// `backend.last_error` says so.
 BackendConfig(
     schema_version: 1,
     // Namespace on a shared server: [a-z0-9_], 1-32 characters. Defaults to project_id when omitted.

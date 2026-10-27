@@ -29,7 +29,7 @@
                             children: [
                                 Label((id: "status_label", text: "", bind: "backend.status", format: "Status: {}", size: (360.0, 28.0), align: Left)),
                                 Label((id: "name_label", text: "", bind: "backend.display_name", format: "Signed in as: {}", size: (360.0, 28.0), align: Left)),
-                                Label((id: "error_label", text: "", bind: "backend.last_error", format: "{}", size: (360.0, 28.0), align: Left)),
+                                Label((id: "error_label", text: "", bind: "backend.last_error", format: "{}", size: (520.0, 28.0), align: Left)),
                                 Group((
                                     gap: 8.0,
                                     children: [

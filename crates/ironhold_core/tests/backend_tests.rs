@@ -197,8 +197,12 @@ fn online_actions_before_sign_in_fail_per_operation_and_while_connecting_say_bus
 
     act(&mut app, Action::SignIn); // now connecting
     act(&mut app, submit("best"));
+    // The reason is written by the refusal itself (the sign-in reply, a frame later, clears it again).
+    assert_eq!(var(&app, "backend.last_error").as_deref(), Some("still signing in, try again in a moment"));
     app.update();
-    assert_eq!(count(&app, "backend.busy"), 1);
+    // Refused with that operation's own failure event, not a bare busy.
+    assert_eq!(count(&app, "score.submit_failed:best"), 2);
+    assert_eq!(count(&app, "backend.busy"), 0);
 }
 
 #[test]
@@ -207,7 +211,7 @@ fn a_rejected_sign_in_and_an_unreachable_server_are_different_events() {
     act(&mut app, Action::SignIn);
     settle(&mut app);
     assert_eq!(count(&app, "backend.sign_in_failed"), 1);
-    assert_eq!(var(&app, "backend.status").as_deref(), Some("offline"));
+    assert_eq!(var(&app, "backend.status").as_deref(), Some("signed_out"));
     assert!(!var(&app, "backend.last_error").unwrap().is_empty());
 
     let mut app = app_with(fake().with_failures(FakeFailures { unreachable: true, ..Default::default() }));
@@ -299,7 +303,7 @@ fn sign_out_resets_the_status_and_display_name() {
     act(&mut app, Action::SignOut);
     settle(&mut app);
     assert_eq!(count(&app, "backend.signed_out"), 1);
-    assert_eq!(var(&app, "backend.status").as_deref(), Some("offline"));
+    assert_eq!(var(&app, "backend.status").as_deref(), Some("signed_out"));
     assert_eq!(var(&app, "backend.display_name").as_deref(), Some(""));
 }
 
@@ -336,4 +340,106 @@ fn the_demo_snippets_parse_and_are_embedded_in_the_demo_scene() {
             assert!(scene.contains(line.trim()), "ui/{name}.ui.ron line {line:?} is missing from scenes/main.scene.ron");
         }
     }
+}
+
+#[test]
+fn signing_out_clears_the_previous_players_leaderboard_variables() {
+    let mut app = app_with(fake());
+    act(&mut app, Action::SignIn);
+    settle(&mut app);
+    act(&mut app, list("best"));
+    settle(&mut app);
+    assert!(var(&app, "leaderboard.best.1.name").is_some(), "precondition: the board was fetched");
+    act(&mut app, Action::SignOut);
+    settle(&mut app);
+    assert_eq!(var(&app, "leaderboard.best.1.name"), None);
+    assert_eq!(var(&app, "leaderboard.best.my_rank"), None);
+}
+
+#[test]
+fn sign_in_and_sign_out_never_run_together() {
+    // Sign-out while a sign-in is in flight: busy, so the late sign-in reply cannot undo it.
+    let mut app = app_with(fake());
+    act(&mut app, Action::SignIn);
+    act(&mut app, Action::SignOut);
+    settle(&mut app);
+    assert_eq!(count(&app, "backend.busy"), 1);
+    assert_eq!(var(&app, "backend.status").as_deref(), Some("online"), "the sign-in finished, the sign-out was refused");
+
+    // Sign-in while a sign-out is in flight: busy, never a false "signed in".
+    act(&mut app, Action::SignOut);
+    act(&mut app, Action::SignIn);
+    settle(&mut app);
+    assert_eq!(count(&app, "backend.busy"), 2);
+    assert_eq!(count(&app, "backend.signed_in"), 1, "no second signed_in while the sign-out was running");
+    assert_eq!(var(&app, "backend.status").as_deref(), Some("signed_out"));
+}
+
+/// Hands the glue system whatever the test pushes, as unsolicited events.
+struct Injector(std::rc::Rc<std::cell::RefCell<Vec<BackendEvent>>>);
+
+impl Backend for Injector {
+    fn submit(&mut self, _req: BackendRequest) {}
+    fn poll(&mut self, out: &mut Vec<BackendEvent>) {
+        out.append(&mut self.0.borrow_mut());
+    }
+}
+
+fn lost() -> BackendEvent {
+    BackendEvent { request_id: 0, reply: BackendReply::ConnectionLost }
+}
+
+fn back() -> BackendEvent {
+    BackendEvent { request_id: 0, reply: BackendReply::Reconnected }
+}
+
+#[test]
+fn connection_lost_and_reconnected_only_apply_to_a_live_session() {
+    let shared = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let mut app = app_with(Injector(shared.clone()));
+
+    // Signed out: both are ignored, status stays signed_out.
+    shared.borrow_mut().extend([lost(), back()]);
+    settle(&mut app);
+    assert_eq!(app.world().resource::<BackendHub>().status, BackendStatus::SignedOut);
+    assert_eq!(count(&app, "backend.connection_lost") + count(&app, "backend.reconnected"), 0);
+
+    // Online: lost -> connecting, reconnected -> online.
+    app.world_mut().resource_mut::<BackendHub>().status = BackendStatus::Online;
+    shared.borrow_mut().push(lost());
+    settle(&mut app);
+    assert_eq!(var(&app, "backend.status").as_deref(), Some("connecting"));
+    shared.borrow_mut().push(back());
+    settle(&mut app);
+    assert_eq!(var(&app, "backend.status").as_deref(), Some("online"));
+    assert_eq!((count(&app, "backend.connection_lost"), count(&app, "backend.reconnected")), (1, 1));
+}
+
+#[test]
+fn a_fake_endpoint_can_ask_for_failures() {
+    let backend = FakeBackend::from_endpoint(&config(), "fake://?latency=0&fail=sign_in");
+    let mut app = app_with(backend);
+    act(&mut app, Action::SignIn);
+    settle(&mut app);
+    assert_eq!(count(&app, "backend.sign_in_failed"), 1);
+}
+
+#[test]
+fn a_project_without_backend_path_resolves_offline_and_says_so() {
+    use ironhold_core::schema::{ProjectConfig, ProjectConfigHandle};
+    let mut app = setup_test_app();
+    app.init_resource::<Seen>();
+    app.add_systems(Update, record.in_set(GameplaySet::Interpret).after(ironhold_core::runtime::entity_fsm_interpreter_system));
+    app.update(); // Startup replaces any handle inserted earlier with the real project's
+    let handle = app.world_mut().resource_mut::<Assets<ProjectConfig>>().add(ProjectConfig {
+        schema_version: 3,
+        initial_scene: "scenes/t.ron".to_string(),
+        ..Default::default()
+    });
+    app.world_mut().insert_resource(ProjectConfigHandle(handle));
+    settle(&mut app);
+    assert_eq!(app.world().resource::<BackendHub>().availability, BackendAvailability::Offline);
+    assert_eq!(count(&app, "backend.offline"), 1, "{:?}", seen(&app));
+    assert_eq!(var(&app, "backend.status").as_deref(), Some("offline"));
+    assert!(!var(&app, "backend.last_error").unwrap_or_default().is_empty(), "the reason must be on screen");
 }

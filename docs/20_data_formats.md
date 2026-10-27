@@ -909,6 +909,8 @@ The `bind` variable is kept in sync by rules in `logic/state_machine.ron` that l
 | `target_id` | targeting | spawn id of the current target (e.g. `"orc_01"`) |
 | `audio_volume_percent` | audio | the chosen volume preset as an integer string (`"100"` by default, `"25"` after `SetVolume(25)`), present from the first frame. It is the preset the player picked, **not** the effective volume: unaffected by `max_volume` and by mute. Reserved: bind a `Label` to it but don't `SetVariable` it — if you do, your value shows only until the next `SetVolume`/`ToggleMute`/project load, then silently reverts. **Mute is NOT auto-written** — bridge `audio.muted`/`audio.unmuted` with `SetVariable` (see `SyncAudioState`). |
 
+`backend.*` and `leaderboard.<name>.*` (online backend: sign-in status, last error, leaderboard rows) are engine-written too: see [`backend.ron`](#backendron--backendconfig-) for the full list. Do not `SetVariable` them.
+
 The targeting variables update on every selection change (click, Tab, or `SetTarget`) and blank on clear/`LoadScene`; `audio_volume_percent` updates on every `SetVolume`, survives scene loads, and resets to `"100"` when a project loads. (`score` is **not** engine-written: your own `IncrementVariable("score", …)` rules write it and the engine only reads it, for the debug-state readout.) Example: `Label((id: "target_label", bind: "target_display", format: "Target: {}"))` — see `assets/projects/3rd_person_game_demo`.
 
 > **2+ players present (including party mode):** the three targeting variables go blank whenever 2+
@@ -5055,10 +5057,11 @@ Online features for a project: sign-in and leaderboards (v1). Referenced via `ba
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `schema_version` | `u32` | required | Must be `1`. |
-| `game_id` | `Option<String>` | `None` | Your game's name on a shared server (1-32 characters of `a-z`, `0-9`, `_` only). Omit to use the project's `project_id`. |
-| `endpoint` | `Option<String>` | `None` | Where the server lives. Omit for an offline project. `"fake://"` is an in-memory test backend (needs no server; sign-in always works, four fixed rivals fill each leaderboard, nothing is saved between runs). Otherwise `"https://..."`; plain `"http://..."` is only meant for a server on your own machine or LAN. A real server needs a build that includes that server's adapter; without one the project runs offline. |
-| `features` | `Vec<BackendFeature>` | `[]` | Extra capabilities you plan to use, so a server can be set up for them: `CloudSave`, `Lobbies`, `Matchmaker`. Declared only in v1 — nothing reads them yet. |
-| `leaderboards` | `Vec<Leaderboard>` | `[]` | The leaderboards this game uses. Every `SubmitScore`/`ShowLeaderboard` must name one of these. |
+| `game_id` | `Option<String>` | `None` | Your game's name on a shared server (1-32 characters of `a-z`, `0-9`, `_` only). Omit to use the project's `project_id`, which must then match the same rule. |
+| `endpoint` | `Option<String>` | `None` | Where the server lives. Omit for an offline project. `"fake://"` is an in-memory test backend (needs no server; sign-in always works, four fixed rivals fill each leaderboard, nothing is saved between runs). To rehearse failure screens, add options: `"fake://?fail=sign_in"` (rejected), `unreachable`, `submit`, `list` (comma list), `silent` (never answers, so the request times out) and `latency=N` (frames before an answer, about 60 per second). Otherwise `"https://..."`; plain `"http://..."` is only meant for a server on your own machine or LAN. A real server needs a build that includes that server's adapter (none exists yet); without one the project runs offline and `backend.last_error` says so. |
+| `features` | `Vec<BackendFeature>` | `[]` | Extra capabilities you plan to use, so a server can be set up for them: `CloudSave`, `Lobbies`, `Matchmaker`. Declared only in v1 — **nothing reads them yet, and they do nothing**. |
+| `leaderboards` | `Vec<Leaderboard>` | `[]` | The leaderboards this game uses. Every `SubmitScore`/`ShowLeaderboard` must name one of these. On a real server, adding or renaming one will need a server-side step (a later version). |
+| `request_timeout_secs` | `Option<f32>` | `15` | How long a request may stay unanswered before the engine fails it (1-120). |
 
 **`Leaderboard(...)` fields:**
 
@@ -5093,7 +5096,7 @@ Wire it up in the project config with `backend_path: "backend.ron"`.
 
 ### Online events
 
-Replies arrive a moment after the action, while the game is paused, and survive `LoadScene` — bind them in the top-level `global_on:`, not inside a state's `on:` list. Every refused request still answers with an event the same frame, so a state machine never waits on silence.
+Replies arrive a moment after the action, while the game is paused, and survive `LoadScene` — bind them in the top-level `global_on:`, not inside a state's `on:` list. Every refused request still answers with an event (read by the rules one frame after the action), so a state machine never waits on silence. Retry-on-start-up: a sign-in fired before `backend.ron` finished loading answers `backend.busy`; bind `backend.ready` (or `backend.offline`) to know when it is safe.
 
 | Event | When |
 |-------|------|
@@ -5101,29 +5104,32 @@ Replies arrive a moment after the action, while the game is paused, and survive 
 | `backend.sign_in_failed` | The server rejected the sign-in |
 | `backend.unreachable` | The server could not be reached, or a `SignIn`/`SignOut` got no answer within 15 seconds (a `SubmitScore`/`ShowLeaderboard` that times out fires its own `score.submit_failed:{lb}` / `leaderboard.list_failed:{lb}` instead) |
 | `backend.signed_out` | `SignOut` finished (also fired at once if you were not signed in) |
-| `backend.offline` | An online action was used but the project has no working backend |
-| `backend.busy` | The backend is still loading or connecting, or the same request is already waiting for an answer |
+| `backend.ready` | `backend.ron` finished loading and the backend can be used (bind your automatic `SignIn` here) |
+| `backend.offline` | The project has no working backend: fired once when loading finishes without one (the reason is in `backend.last_error`), and again whenever an online action is used |
+| `backend.busy` | `backend.ron` is still loading, or the same request (or a sign-in against a sign-out) is already waiting for an answer |
 | `backend.connection_lost` | The live connection dropped (`backend.status` goes back to `connecting`) |
 | `backend.reconnected` | The connection came back (`backend.status` is `online` again) |
 | `score.submitted:{leaderboard}` | `SubmitScore` was accepted |
-| `score.submit_failed:{leaderboard}` | `SubmitScore` failed (not signed in, undeclared leaderboard, variable not a whole number, server refused) |
+| `score.submit_failed:{leaderboard}` | `SubmitScore` failed (not signed in or still signing in, undeclared leaderboard, variable not a whole number, server refused); the reason is in `backend.last_error` |
 | `leaderboard.listed:{leaderboard}` | `ShowLeaderboard` finished; the variables below are up to date |
-| `leaderboard.list_failed:{leaderboard}` | `ShowLeaderboard` failed (not signed in, undeclared leaderboard, server refused) |
+| `leaderboard.list_failed:{leaderboard}` | `ShowLeaderboard` failed (not signed in or still signing in, undeclared leaderboard, server refused) |
 
 ### Engine-written variables
 
-These are written by the engine; bind a `Label` to them (`bind: "backend.status"`). Do not write them yourself.
+These are written by the engine; bind a `Label` to them (`bind: "backend.status"`). Do not write them yourself: the engine overwrites them at the next backend reply (`ironhold validate --strict` reports a rule that does, as `reserved_variable_write`). They are not touched by `LoadScene`.
 
 | Variable | Value |
 |---|---|
-| `backend.status` | `offline`, `connecting` or `online` |
+| `backend.status` | `offline` (no usable backend: nothing configured, a bad `backend.ron`, or no adapter in this build), `signed_out` (a working backend, nobody signed in), `connecting` or `online` |
 | `backend.display_name` | The signed-in player's name; empty when signed out |
-| `backend.last_error` | Short reason for the most recent failure; cleared on a new sign-in |
+| `backend.last_error` | Short reason for the most recent failure or for why the project is offline; cleared on a new sign-in and after any success |
 | `leaderboard.<name>.count` | Rows in the last fetched list (0-10) |
 | `leaderboard.<name>.<n>.name` | Player name at rank `n` (`n` = 1 to 10); absent beyond `count` |
 | `leaderboard.<name>.<n>.score` | Score at rank `n`; absent beyond `count` |
 | `leaderboard.<name>.my_rank` | The signed-in player's rank; empty when they have no score |
 | `leaderboard.<name>.my_best` | The signed-in player's score on that board; empty when they have none |
+
+Signing out removes every `leaderboard.*` variable, so the next player never sees the previous player's board or rank. An unset variable renders as empty text (with a `format:`, the text around `{}` still shows).
 
 `assets/projects/backend_demo/ui/signin.ui.ron` and `ui/leaderboard.ui.ron` are copy-and-edit UI snippets (not loaded by the engine) showing sign-in status/buttons and a top-5 board; paste them into a scene's `ui:` list.
 
