@@ -1,6 +1,6 @@
 # Feature: Backend abstraction (core contract + Nakama adapter)
 
-_Status: Draft (plan-review round 1 done 2026-10-25: needs the decisions in "Decisions for Frank"; the proposed answers below are written in as defaults)_
+_Status: Ready (plan-review round 1 done 2026-10-25; all seven decisions answered 2026-10-27, see "Decisions (answered)")_
 _Planned at: `cd90a12` (2026-10-25)_
 
 ## Phases
@@ -198,24 +198,36 @@ latency, higher ceiling, +34 KB wasm).
 - [ ] Generic Lua module with `game_id` session variable and before-hooks; `ironhold backend config`; pinned server version; contract tests against
       a local Nakama container (script, not hosted CI); adversarial test: a client for game A sending game B's ids is rejected
 - [ ] Endpoint override per environment; sign-in, `SignOut`, leaderboard submit/list; account deletion/export path (before any public deployment)
-- [ ] Cloud save/load with conflict event, once `save_load_game_state.md` has shipped
+- [ ] **Blocked on `save_load_game_state.md` shipping:** cloud save/load reusing `SaveState`, with the conflict event (do not start with a separate format)
 
 ### v3 — lobbies and matchmaker
+- [ ] `JoinLobby(row:)` resolves against the snapshot taken when the list was written (rows shift on refresh); also expose `lobby.<n>.id`
 - [ ] Public-read lobby objects with `JoinLobby(row:)`; then matchmaker (`FindMatch`, `CancelMatch`, timeout). Docs mark these **"matching only, no shared
       gameplay yet"** until a relay transport exists (designers get a match handle and nothing to play).
 
 ### v4 — stage 2
 - [ ] `wss://` from an `https` page, mixed content/CORS, tunnel latency and idle behaviour, half-open drop (the open spike criteria)
 
-## Decisions for Frank
+## Decisions (answered 2026-10-27)
 
-1. **Lists to the UI:** indexed engine-written variables + `JoinLobby(row:)` (proposed, no new widget), or engine-owned panels?
-2. **Lobby vocabulary:** this plan supersedes the lobby actions/events in `networking_multiplayer.md` Form 2 (`lobby.*`, `row:`)?
-3. **Cloud save:** wait for `save_load_game_state.md` and reuse its `SaveState` (proposed; v1/v2 = sign-in + leaderboards), or ship a separate format?
-4. **Crates:** two (contract + `FakeBackend` in core, `ironhold_nakama`) as proposed, or three?
-5. **Relay trait:** defer until the sync library is chosen (proposed)?
-6. **Server-side `game_id` enforcement** in v2 (proposed), or accept a single trusted-games server for now (then say so here)?
-7. **Native I/O model** (thread + blocking tungstenite vs tokio thread): decide in v2 (proposed) or now?
+1. **Lists to the UI:** indexed engine-written variables + `JoinLobby(row:)`; no engine-owned panels. Panels may later be a convenience layer on top.
+2. **Lobby vocabulary:** this plan supersedes Form 2's lobby actions/events in `networking_multiplayer.md`.
+3. **Cloud save:** waits for `save_load_game_state.md` and reuses `SaveState`; v1/v2 = sign-in + leaderboards.
+4. **Crates:** two (contract + `FakeBackend` in core, `ironhold_nakama`).
+5. **Relay trait:** deferred until the sync library is chosen.
+6. **`game_id` enforcement:** server-side in v2.
+7. **Native I/O model:** decided in v2 (task above).
+
+### Form 2 coverage check (done 2026-10-27)
+
+| Form 2 item (`networking_multiplayer.md`) | Where it lives now |
+|---|---|
+| `CreateLobby(name:, max_players:)`, `JoinLobby`, `ListLobbies` | This plan, v3 (`JoinLobby(row:)` instead of `lobby_id:`) |
+| `multiplayer.lobby_*` events with JSON payload | `lobby.*` events plus `lobby.<n>.*` variables |
+| `LobbyList` UI component | Not built; Labels and Buttons bound to the variables (decision 1) |
+| Lobby metadata held by the relay vs the host | Resolved here: lobby objects live in the meta backend (Nakama), not the relay |
+| `max_players` enforcement | Open: enforce in the lobby object (v3), host simulation only checks |
+| Relay choice (Matchbox vs managed), NAT handshake, direct/relay fallback, internet latency, rollback | Stays in `networking_multiplayer.md` (relay seam deferred) |
 
 Smaller defaults taken (say if you disagree): fake selected by `endpoint: "fake://"`; Lua server module; `game_id` defaults to `project_id`;
 last-write-wins plus `cloud.conflict:{slot}`; sign-in is an explicit `SignIn` action, online actions before sign-in finishes answer
