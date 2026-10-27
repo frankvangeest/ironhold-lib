@@ -92,6 +92,18 @@ Sample `watch` output (each save prints the changed file and a result):
 | a `Button`, `IconButton`, key binding or gamepad binding whose `ui.button_pressed:<trigger>` is not handled by any binding in `state_machine.ron` or a `behaviors/*.behavior.ron` file (also the built-in panel triggers such as `close_inventory`, `take_all_from_container`, `buy_item:<key>` when that panel is in a scene) | `unreachable_trigger` | "I clicked the button and nothing happened" | add a binding for the trigger, or remove the button |
 | a state machine / behavior / dialogue file that fails to parse | `parse_error` | the button-wiring checks are skipped for the whole project | fix that file's parse error first |
 
+### Online backend
+| What you see | Code | What breaks if ignored | Fix |
+|---|---|---|---|
+| a `backend.ron` that does not parse, has an unsupported `schema_version`, an invalid or duplicate `game_id`/leaderboard name (`[a-z0-9_]`, 1-32 characters), or an `endpoint` that is not `fake://`, `https://` or `http://` | `backend_config` | the project runs offline; the engine logs the same reason | fix the file |
+| an `endpoint` using plain `http://` to a host outside localhost/LAN | `backend_endpoint_http` | a hosted `https` page cannot reach it, and traffic is unencrypted | use `https://` |
+| `SubmitScore`/`ShowLeaderboard` naming a leaderboard that `backend.ron` does not declare | `undeclared_leaderboard` | the action always answers its failure event | declare it in `backend.ron` or fix the name |
+| `ShowLeaderboard` with `count` 0 or above 10 | `leaderboard_count_range` | the engine clamps it to 1-10 | use 1-10 |
+| `--strict`: an online action in a project with no `backend_path` | `online_action_without_backend` | it only ever answers `backend.offline` | add `backend_path` or remove the action |
+| `--strict`: `SubmitScore` whose `score_var` nothing in the project writes | `score_var_never_written` | the submit fails or sends a stale value | write it with `SetVariable`/`IncrementVariable` |
+| `--strict`: a `game_id` also used by another project in the same folder | `duplicate_game_id` | both games would share leaderboards on one server | give each project its own `game_id` |
+| `--strict`: a local-network `http://` endpoint | `backend_plain_http` | fine on a LAN, unusable from a hosted page | use `https://` before publishing |
+
 ### Scenes and UI layout
 | What you see | Code | What breaks if ignored | Fix |
 |---|---|---|---|

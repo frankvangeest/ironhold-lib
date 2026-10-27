@@ -115,6 +115,14 @@ Mitigations:
   or network-sync key — key on something author-stable instead (prefab key + a designer-authored
   slot id).
 
+### Backend responses are per-client inputs 🧭
+Replies from the online backend (sign-in, leaderboard rows, later cloud saves and lobbies) arrive when the server answers, at a
+different frame on every machine. They are external input, like a key press: they must never change state that lockstep or a
+replay shares between peers on one peer only (for example a cloud load must not restore variables mid-session on one machine).
+Today the engine writes only `backend.*`/`leaderboard.*` variables and emits events; a rule that reacts to them runs on that
+player's machine only. When replay exists, replies are recorded like input. The glue system sorts each frame's replies by request
+id, so the order the interpreters see does not depend on the adapter's threads (`runtime/backend.rs`, `GameStreamSet::Backend`).
+
 ### Physics determinism 🧪
 _(Updated 2026-09-15 — system-architect investigation into
 `planning/stakeholder_priority_list.md`'s "Rapier cross-platform float divergence" item, then v1
