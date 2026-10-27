@@ -216,6 +216,17 @@ latency, higher ceiling, +34 KB wasm).
   request the engine already timed out, and must not allocate or cross the JS boundary every frame when nothing arrived.
 
 ### v2 — Nakama adapter
+
+**Design decisions (2026-10-27, before the adapter crate):**
+- **Hand-off:** the runner puts an adapter factory in `AppOptions` (`BackendFactory`, called once when `backend.ron` resolves with a non-`fake://`
+  endpoint, given `ResolvedBackendConfig` = endpoint, effective `game_id`, leaderboards). No factory = offline with the existing reason text.
+- **I/O model, narrowed:** v2 is request/response only (sign-in, submit, list), so both targets use `ehttp` callbacks that push into an
+  `mpsc` channel drained by `poll()`; no thread of our own, no tokio, same code on native and wasm32, nothing `!Send` crosses the channel.
+  The realtime socket (matchmaker, reconnect, relay) arrives in v3, where the thread-vs-tokio question from the Approach is decided; the
+  `ConnectionLost`/`Reconnected` replies stay unused until then.
+- **Slices:** (a) core factory hand-off + test; (b) `ironhold_nakama` REST client (sign-in with device id, session refresh, submit, list, `GameNs`
+  newtypes) native, tested against the LAN Nakama; (c) Lua module + `ironhold backend config` + `game_id` hooks + adversarial test;
+  (d) wasm32 build and browser check; (e) endpoint override, account deletion path, docs.
 - [ ] `ironhold_nakama`: REST client + session refresh + `GameNs` newtypes; protocol layer from tag `spike/nakama_backend`; Nakama device-id charset check
 - [ ] Decide native I/O model (thread + blocking tungstenite vs current-thread tokio), written down; wasm transports (`ehttp`/`ewebsock`, `NonSend`)
 - [ ] Generic Lua module with `game_id` session variable and before-hooks; `ironhold backend config`; pinned server version; contract tests against
