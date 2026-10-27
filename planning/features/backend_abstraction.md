@@ -1,13 +1,13 @@
 # Feature: Backend abstraction (core contract + Nakama adapter)
 
-_Status: Ready (plan-review round 1 done 2026-10-25; all seven decisions answered 2026-10-27, see "Decisions (answered)")_
+_Status: In Progress (v1 Done, v2-v4 Queued). Plan-review round 1 done 2026-10-25; all seven decisions answered 2026-10-27, see "Decisions (answered)"._
 _Planned at: `cd90a12` (2026-10-25)_
 
 ## Phases
 
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
-| v1 | Contract in core (Actions, events, engine-written variables, poll trait, glue system) + `FakeBackend`; sign-in and leaderboard only; nothing networked | Queued | — |
+| v1 | Contract in core (Actions, events, engine-written variables, poll trait, glue system) + `FakeBackend`; sign-in and leaderboard only; nothing networked | Done | 8745ef9 (2026-10-27) |
 | v2 | `ironhold_nakama` adapter, **native and wasm32 on the LAN**: sign-in, leaderboards, server module with `game_id` enforcement; cloud save once local save exists | Queued | — |
 | v3 | Lobby list (public-read storage), then matchmaker | Queued | — |
 | v4 | Stage 2: `wss://` from an `https` page, tunnel latency and idle sockets, half-open drop | Queued | — |
