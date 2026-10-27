@@ -1,0 +1,17 @@
+[package]
+name = "ironhold_nakama"
+version = "0.1.0"
+edition = "2021"
+description = "Nakama adapter for Ironhold's online backend contract (REST, native and wasm32)"
+repository = "https://github.com/frankvangeest/ironhold-lib"
+license = "MIT OR Apache-2.0"
+authors = ["Frank van Geest"]
+
+[dependencies]
+ironhold_core = { path = "../ironhold_core" }
+ehttp = "0.7"
+serde_json = "1"
+base64 = "0.22"
+
+[dev-dependencies]
+ron = "0.11"

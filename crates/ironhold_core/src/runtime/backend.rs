@@ -55,7 +55,7 @@ impl RequestKind {
     }
 
     /// The failure reply for this request (used for timeouts and a backend that vanished).
-    fn failure(&self, reason: &str) -> BackendReply {
+    pub fn failure(&self, reason: &str) -> BackendReply {
         match self {
             RequestKind::SignIn | RequestKind::SignOut => BackendReply::Unreachable { reason: reason.to_string() },
             RequestKind::SubmitScore { leaderboard, .. } => {
