@@ -93,6 +93,9 @@ Sample `watch` output (each save prints the changed file and a result):
 | a state machine / behavior / dialogue file that fails to parse | `parse_error` | the button-wiring checks are skipped for the whole project | fix that file's parse error first |
 
 ### Online backend
+
+`ironhold backend config <project>... [--out <dir>]` generates the server config for the Nakama module (a server-admin step, see [Running against a Nakama server](20_data_formats.md#running-against-a-nakama-server)): it prints `ironhold_games.lua`, or with `--out` writes it together with the generic `ironhold.lua`. It refuses an invalid `backend.ron` or a `game_id` used twice.
+
 | What you see | Code | What breaks if ignored | Fix |
 |---|---|---|---|
 | a `backend.ron` that does not parse, has an unsupported `schema_version`, an invalid or duplicate `game_id`/leaderboard name (or, when `game_id` is omitted, an invalid or missing `project_id`), a bad `fake://` option, a `request_timeout_secs` outside 1-120 (`[a-z0-9_]`, 1-32 characters), or an `endpoint` that is not `fake://`, `https://` or `http://` | `backend_config` | the project runs offline; the engine logs the same reason | fix the file |

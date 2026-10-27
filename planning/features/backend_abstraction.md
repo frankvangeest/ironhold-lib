@@ -227,11 +227,13 @@ latency, higher ceiling, +34 KB wasm).
 - **Slices:** (a) core factory hand-off + test; (b) `ironhold_nakama` REST client (sign-in with device id, session refresh, submit, list, `GameNs`
   newtypes) native, tested against the LAN Nakama; (c) Lua module + `ironhold backend config` + `game_id` hooks + adversarial test;
   (d) wasm32 build and browser check; (e) endpoint override, account deletion path, docs.
-- [ ] `ironhold_nakama`: REST client + session refresh + `GameNs` newtypes; protocol layer from tag `spike/nakama_backend`; Nakama device-id charset check
-- [ ] Decide native I/O model (thread + blocking tungstenite vs current-thread tokio), written down; wasm transports (`ehttp`/`ewebsock`, `NonSend`)
-- [ ] Generic Lua module with `game_id` session variable and before-hooks; `ironhold backend config`; pinned server version; contract tests against
+- [x] `ironhold_nakama`: REST client + session refresh + `GameNs` newtypes; protocol layer from tag `spike/nakama_backend`; Nakama device-id charset check
+- [x] Decide native I/O model: v2 is request/response only, so `ehttp` callbacks into a channel on both targets (see Design decisions); the realtime socket question moves to v3
+- [x] Generic Lua module with `game_id` session variable and before-hooks; `ironhold backend config`; pinned server version; contract tests against
       a local Nakama container (script, not hosted CI); adversarial test: a client for game A sending game B's ids is rejected
-- [ ] Endpoint override per environment; sign-in, `SignOut`, leaderboard submit/list; account deletion/export path (before any public deployment)
+      (`crates/ironhold_nakama/tests/contract/run.sh`; also covers spoofed session vars at sign-in and refresh, unknown games, other sign-in methods)
+- [x] Endpoint override per environment (`--backend`, `?backend=`); sign-in, `SignOut`, leaderboard submit/list
+- [ ] Account deletion/export path (before any public deployment)
 - [ ] **Blocked on `save_load_game_state.md` shipping:** cloud save/load reusing `SaveState`, with the conflict event (do not start with a separate format)
 
 ### v3 — lobbies and matchmaker
