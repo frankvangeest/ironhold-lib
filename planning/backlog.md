@@ -11,7 +11,7 @@
 
 ## Active
 
-- [ ] **Backend abstraction (`ironhold_backend` + Nakama adapter)** _(2026-10-25, Frank)_ - RON-declared online features (`backend.ron`), online Actions and `backend.*` events in core, a fake in-memory backend, then the Nakama adapter (sign-in, cloud saves, leaderboards, lobbies, matchmaker, relay transport), namespaced by `game_id` so one Nakama can serve several games. Phases v1-v5 and open questions: `planning/features/backend_abstraction.md` (Status: In progress, v1 Done (8745ef9, 2026-10-27; contract, FakeBackend, sign-in and leaderboard actions, `backend_demo`), v2 (Nakama adapter) next; plan-review round 1 done 2026-10-25, seven decisions answered 2026-10-27).
+- [ ] **Backend abstraction (`ironhold_backend` + Nakama adapter)** _(2026-10-25, Frank)_ - RON-declared online features (`backend.ron`), online Actions and `backend.*` events in core, a fake in-memory backend, then the Nakama adapter (sign-in, cloud saves, leaderboards, lobbies, matchmaker, relay transport), namespaced by `game_id` so one Nakama can serve several games. Phases v1-v5 and open questions: `planning/features/backend_abstraction.md` (Status: In progress, v1 Done (8745ef9, 2026-10-27; contract, FakeBackend, sign-in and leaderboard actions, `backend_demo`), v2 Done (e97da79, 2026-10-28; Nakama adapter on native and web, server module, `ironhold backend config`, deployed to the homelab and playtested), v3 (lobbies, matchmaker) next; plan-review round 1 done 2026-10-25, seven decisions answered 2026-10-27).
 
 
 
