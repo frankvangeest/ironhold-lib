@@ -1,24 +1,32 @@
 ---
 name: backend-abstraction-plan-review
-description: backend_abstraction (Nakama online actions) plan review 2026-10-25 + v1 implementation review 2026-10-27; open designer gaps to re-check at v2
+description: backend_abstraction (Nakama online actions) plan review 2026-10-25, v1 impl review 2026-10-27, v2 nakama_adapter docs review 2026-10-28; open designer gaps
 metadata:
   type: project
 ---
 
-Plan review 2026-10-25 (Needs more design work) -> plan revised (no payloads in event names, per-op failure events,
-indexed `leaderboard.<name>.<n>.*` variables, backend_path + schema_version). v1 implementation reviewed 2026-10-27
-(worktree ironhold-lib-backend_abstraction, canonical example `assets/projects/backend_demo`, docs/20 `backend.ron` section).
+Plan review 2026-10-25 -> v1 reviewed 2026-10-27 (canonical example `assets/projects/backend_demo`, docs/20 `backend.ron` section)
+-> v2 (feature/nakama_adapter) docs reviewed 2026-10-28: docs/20 "Running against a Nakama server", docs/15 "Online backend".
 
-Open at v1 review (re-check at v2):
-- docs/30 "searching state with a timeout" pattern has no exit on `backend.sign_in_failed`/`backend.offline`/`backend.busy` -> stuck in `connecting`.
-- `backend.status` value `offline` means "signed out" too, while event `backend.offline` means "no backend at all"; offline reason (bad backend.ron, no adapter for https endpoint) only goes to console, never `backend.last_error`.
-- `backend.busy` is unscoped (no leaderboard id) and sets no last_error; SubmitScore while signing in answers busy, not submit_failed.
-- FakeBackend answers in ~2 frames and never fails -> designers cannot rehearse connecting/failure/timeout paths (only tests can inject).
-- `ShowLeaderboard` only fetches into variables (name implies UI). Snippet rows render "4. " / "Signed in as: " when empty (format prefix stays).
-- backend.*/leaderboard.* keys missing from docs/20 Label "GameVariables auto-written" table; docs/30 frame-order list lacks backend replies (refusals are executor-emitted = next frame, replies same frame).
-- validate does not check Label `bind: "leaderboard.<x>..."` against declared boards (find-and-replace snippet workflow makes this the likely typo).
-- Leaderboard vars not cleared on SignOut. docs/README index has no online entry.
-- Still v2+: `ironhold backend config` server-admin step undocumented; cloud save waits on save_load_game_state.
+Closed by v2: docs/30 "connecting" pattern now exits on failed/unreachable/offline; leaderboard vars cleared on SignOut;
+docs/README has an online row; `ironhold backend config` documented; fake:// failure rehearsal (`?fail=`, `latency=`).
 
-**Why:** online is the first async, can-fail event source; every existing pattern assumes same/next-frame replies.
-**How to apply:** at v2 review check each item, plus real-adapter latency makes the stuck-state and busy gaps bite. Related: [[project_docs_lag_actions]], [[project_auto_written_gamevariables_undocumented]], [[project_fsm_designer_traps]], [[project_same_frame_event_order]].
+Open at v2 review (re-check next time):
+- Missing server key makes the runner install NO factory, so `backend.last_error` reads "no server adapter in this build; use
+  fake://" (core runtime/backend.rs build_adapter) - contradicts docs saying the reason is shown. Same for unavailable localStorage.
+- No designer-facing source for the server key value (Nakama `socket.server_key`, default "defaultkey") and no troubleshooting
+  table mapping last_error texts ("the server rejected the sign-in" = wrong key, "unknown game" = game not in deployed
+  ironhold_games.lua) to fixes.
+- `ironhold backend config` output REPLACES the whole games list: regenerating with one project drops the others -> their
+  sign-in fails "unknown game". Not warned. Changing ranking/keep of an existing board likely no-ops (leaderboard_create on an
+  existing id) - unverified, undocumented.
+- Stale text: docs/20 leaderboards row "(a later version)"; backend_demo/backend.ron comment "(not available yet)"; STATUS
+  "hosted web build still uses the fake" (really: the demo's backend.ron; ?backend= can repoint it). Hardcoded "15 seconds" vs
+  request_timeout_secs.
+- Device id = account: clearing site data / new browser = new account, scores orphaned; display_name is Nakama's random username.
+- Still from v1: backend.busy unscoped; validate does not check Label bind leaderboard.<x> names.
+
+**Why:** online is the first async, can-fail event source; real-adapter failures surface only as last_error text.
+**How to apply:** for any backend change, check last_error wording against docs and the troubleshooting path. Related:
+[[project_docs_lag_actions]], [[project_auto_written_gamevariables_undocumented]], [[project_fsm_designer_traps]],
+[[project_warn_vs_silent_fallback_principle]].

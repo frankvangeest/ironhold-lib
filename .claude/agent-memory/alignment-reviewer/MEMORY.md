@@ -59,5 +59,5 @@
 - [Scene ambient light](scene_ambient_light_pattern.md) — AmbientLight entity -> GlobalAmbientLight; per-scene luminance-ratio table; global_environment EnvironmentMapLight is ALSO a dead bare entity; cd/m^2; invalid_lighting + cascade-builder PANIC fields
 - [FPS control scheme + cursor capture](fps_control_scheme_cursor_capture_pattern.md) — InputMapDef serde(from) layering, live-camera stick owner, web-only cursor.lock_lost; Escape double-bind + hide_own_body widget traps
 - [Aim target + mouse slot (FPS v2)](aim_target_mouse_slot_pattern.md) — SelectAimHeight only inserted with click_selectable (targetable-only aim height dead); target_name = prefab key; slot do_actions now in validate all_actions
-- [Online backend v1 pattern](backend_abstraction_pattern.md) — request-Action/outbox/glue shape, touchpoints for new online Actions, v1 traps (no backend.ready, fake failures, timeout, reserved vars)
+- [Online backend v1+v2 pattern](backend_abstraction_pattern.md) — request-Action/outbox/glue shape, runner-vs-RON config split (server key URL-only on web), v1 fixed traps, v2 Nakama traps
 - [Restriction-lift doc sweep](restriction_lift_doc_sweep.md) — a fix that lifts a "don't combine X+Y" rule must purge every copy; docs/20 field row is the usual miss (trigger_zone mass)

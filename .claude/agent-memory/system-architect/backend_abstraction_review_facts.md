@@ -25,5 +25,18 @@ Code review of v1 (`feature/backend_abstraction`, 1455f9c, 2026-10-27), facts th
 - In-flight dedupe is per kind, so SignOut during Connecting enqueues; a late SignedIn reply can land after SignedOut.
 - `game_id` defaulting to `project_id` is never charset-checked (runtime or CLI), and the runtime never computes the effective id.
 
+Code review of v2 (`feature/nakama_adapter`, a601837, 2026-10-28), facts that outlive it:
+- Engine `SignIn` while hub status is Online answers `backend.signed_in` without asking the adapter, so any adapter-side
+  session loss (refresh failed) that only emits a per-op failure leaves the player stuck "Online" with every call failing.
+  An adapter that loses its session must drive the hub to SignedOut (needs a reply variant or reuse of an unsolicited one).
+- The `Backend` trait has no cancel: after the engine's 15 s `Time<Real>` timeout the adapter keeps its multi-stage chain
+  (call -> 401 -> refresh -> retry -> rank) running, so a "timed out" submit can still land (Keep::Total double-counts on retry).
+- ehttp 0.7 native spawns one OS thread per request (ureq 3 + rustls/ring); default timeout 30 s recv-body only; web fetch has none.
+- Cargo resolver-2 feature unification: `-p ironhold_cli` alone has no ehttp, but a combined `-p cli -p native` / `--workspace`
+  build links `client` into the CLI too.
+- `?backend=` + localStorage device uuid = credential exfiltration vector (device id IS the account credential).
+- Lua module guards only leaderboard/storage REST APIs; realtime socket (no `register_rt_before`), Link*, groups, tournaments,
+  ListMatches etc. are open. Contract compose uses token_expiry 7200 s, so the refresh path is never hit against real Nakama.
+
 **Why:** these were the load-bearing gaps; recurring if lobby/multiplayer plans are revised.
 **How to apply:** any review of backend, lobby, cloud-save or Form 2 networking plans. See [[nakama-spike-facts]], [[determinism-networking]].

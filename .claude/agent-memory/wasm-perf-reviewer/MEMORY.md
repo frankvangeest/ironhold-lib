@@ -49,3 +49,4 @@
 - [Aim target system](project_aim_target_system.md) — FP v2 crosshair targeting: change-guarded writes, per-target affine inverse nit, LOS rays bounded by catch circle; starter lacks particle warmup
 - [Backend glue system](project_backend_glue_system.md) — online backend v1: glue runs every frame for all projects, idle = alloc-free; NonSend slot native-only cost; recheck adapter poll()
 - [Debug-state DOM sync](project_debug_state_dom_sync.md) — per-frame JSON+set_text_content in release; ~6 tiny allocs/frame; CANNOT gate out (play.html readiness) or dirty-skip (frame counter)
+- [Nakama adapter (backend v2)](project_nakama_adapter.md) — ehttp gates ureq/rustls off wasm (cargo tree verified); poll idle alloc-free; localStorage only with ?nakama_key
