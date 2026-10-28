@@ -9,6 +9,8 @@ authors = ["Frank van Geest"]
 
 [dependencies]
 ironhold_core = { path = "../ironhold_core" }
+ironhold_nakama = { path = "../ironhold_nakama" }
+getrandom = "0.3"
 bevy = { workspace = true }
 [features]
 inspector = ["ironhold_core/inspector"]

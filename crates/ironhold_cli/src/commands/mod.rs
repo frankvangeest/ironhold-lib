@@ -1,3 +1,4 @@
+pub mod backend;
 pub mod backend_checks;
 pub mod inspect;
 pub mod query;

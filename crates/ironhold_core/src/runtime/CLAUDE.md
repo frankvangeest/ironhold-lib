@@ -58,4 +58,10 @@ only against pads **not** claimed by a live player's `BoundGamepad`, by an undra
   batch by `request_id`, times requests out on `Time<Real>` and writes events plus the `backend.*`/`leaderboard.*` variables.
 - Event names carry only designer-writable ids, never JSON or error text (the interpreter matches names exactly); reasons go to
   `backend.last_error`. Every failure is per operation (`score.submit_failed:{lb}`), never one generic error.
+- The runner hands the engine a `BackendFactory` through `AppOptions` (`backend_factory`, plus `backend_endpoint` to override `backend.ron`'s endpoint);
+  `choose_backend` calls it once, only for a non-`fake://` endpoint with nothing installed in the slot. The Nakama adapter (`crates/ironhold_nakama`)
+  is request/response over `ehttp` and channels, with no thread or runtime of its own of ours (ehttp on native spawns one OS thread per request,
+  so a request is not free); its pure server-config generator is behind `default-features = false` so `-p ironhold_cli` alone never links
+  an HTTP stack (a workspace-wide build unifies the feature on). `Backend::cancel` is how a timed-out request stops its retry chain; an
+  adapter must forget a cancelled request and drop its late answer.
 - Never use Bevy task pools for adapter I/O. `FakeBackend` latency counts polls, never wall-clock time.

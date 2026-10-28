@@ -84,6 +84,11 @@ pub struct AppOptions {
     /// Initial scene override (`?scene=`), relative to the project root.
     pub scene_override: Option<String>,
     pub run_mode: RunMode,
+    /// Builds the online backend adapter once `backend.ron` resolves (see `runtime::backend::BackendFactory`); `None` = this
+    /// runner has no server adapter and a non-`fake://` endpoint runs offline.
+    pub backend_factory: Option<crate::runtime::backend::BackendFactory>,
+    /// Replaces `backend.ron`'s `endpoint` (`--backend` / `?backend=`); `None` = use the file's.
+    pub backend_endpoint: Option<String>,
 }
 
 /// Live game state exposed to the DOM (WASM) and available to tests.
@@ -973,11 +978,11 @@ fn sync_debug_state_to_dom(debug: Res<DebugState>) {
 }
 
 pub fn start_app(project_path: Option<String>, scene_override: Option<String>) {
-    start_app_with(AppOptions { project_path, scene_override, run_mode: RunMode::Live });
+    start_app_with(AppOptions { project_path, scene_override, run_mode: RunMode::Live, backend_factory: None, backend_endpoint: None });
 }
 
 pub fn start_app_with(options: AppOptions) {
-    let AppOptions { project_path, scene_override, run_mode } = options;
+    let AppOptions { project_path, scene_override, run_mode, backend_factory, backend_endpoint } = options;
     let asset_path = if cfg!(target_arch = "wasm32") {
         "assets".to_string()
     } else {
@@ -1048,6 +1053,12 @@ pub fn start_app_with(options: AppOptions) {
         ));
     }
     app.insert_resource(run_mode);
+    if let Some(endpoint) = backend_endpoint {
+        app.insert_resource(crate::runtime::backend::BackendEndpointOverride(endpoint));
+    }
+    if let Some(factory) = backend_factory {
+        app.insert_resource(crate::runtime::backend::BackendFactoryRes(factory));
+    }
 
     // Matches `FIXED_TICK_RATE` (`capabilities::physics`), not an independent 60.0 literal — a
     // native framepace that doesn't evenly divide the physics tick rate beats against it (a

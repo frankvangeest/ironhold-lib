@@ -1,6 +1,6 @@
 # Feature: Backend abstraction (core contract + Nakama adapter)
 
-_Status: In Progress (v1 Done, v2-v4 Queued). Plan-review round 1 done 2026-10-25; all seven decisions answered 2026-10-27, see "Decisions (answered)"._
+_Status: In Progress (v1 and v2 Done, v3-v4 Queued). Plan-review round 1 done 2026-10-25; all seven decisions answered 2026-10-27, see "Decisions (answered)"._
 _Planned at: `cd90a12` (2026-10-25)_
 
 ## Phases
@@ -8,7 +8,7 @@ _Planned at: `cd90a12` (2026-10-25)_
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
 | v1 | Contract in core (Actions, events, engine-written variables, poll trait, glue system) + `FakeBackend`; sign-in and leaderboard only; nothing networked | Done | 8745ef9 (2026-10-27) |
-| v2 | `ironhold_nakama` adapter, **native and wasm32 on the LAN**: sign-in, leaderboards, server module with `game_id` enforcement; cloud save once local save exists | Queued | — |
+| v2 | `ironhold_nakama` adapter, **native and wasm32 on the LAN**: sign-in, leaderboards, server module with `game_id` enforcement; cloud save once local save exists | Done | e97da79 (2026-10-28) |
 | v3 | Lobby list (public-read storage), then matchmaker | Queued | — |
 | v4 | Stage 2: `wss://` from an `https` page, tunnel latency and idle sockets, half-open drop | Queued | — |
 | later | Relay transport: only after the sync library is chosen (see "Relay seam") | Icebox | — |
@@ -216,12 +216,37 @@ latency, higher ceiling, +34 KB wasm).
   request the engine already timed out, and must not allocate or cross the JS boundary every frame when nothing arrived.
 
 ### v2 — Nakama adapter
-- [ ] `ironhold_nakama`: REST client + session refresh + `GameNs` newtypes; protocol layer from tag `spike/nakama_backend`; Nakama device-id charset check
-- [ ] Decide native I/O model (thread + blocking tungstenite vs current-thread tokio), written down; wasm transports (`ehttp`/`ewebsock`, `NonSend`)
-- [ ] Generic Lua module with `game_id` session variable and before-hooks; `ironhold backend config`; pinned server version; contract tests against
+
+**Design decisions (2026-10-27, before the adapter crate):**
+- **Hand-off:** the runner puts an adapter factory in `AppOptions` (`BackendFactory`, called once when `backend.ron` resolves with a non-`fake://`
+  endpoint, given `ResolvedBackendConfig` = endpoint, effective `game_id`, leaderboards). No factory = offline with the existing reason text.
+- **I/O model, narrowed:** v2 is request/response only (sign-in, submit, list), so both targets use `ehttp` callbacks that push into an
+  `mpsc` channel drained by `poll()`; no thread of our own, no tokio, same code on native and wasm32, nothing `!Send` crosses the channel.
+  The realtime socket (matchmaker, reconnect, relay) arrives in v3, where the thread-vs-tokio question from the Approach is decided; the
+  `ConnectionLost`/`Reconnected` replies stay unused until then.
+- **Slices:** (a) core factory hand-off + test; (b) `ironhold_nakama` REST client (sign-in with device id, session refresh, submit, list, `GameNs`
+  newtypes) native, tested against the LAN Nakama; (c) Lua module + `ironhold backend config` + `game_id` hooks + adversarial test;
+  (d) wasm32 build and browser check; (e) endpoint override, account deletion path, docs.
+- [x] `ironhold_nakama`: REST client + session refresh + `GameNs` newtypes; protocol layer from tag `spike/nakama_backend`; Nakama device-id charset check
+- [x] Decide native I/O model: v2 is request/response only, so `ehttp` callbacks into a channel on both targets (see Design decisions); the realtime socket question moves to v3
+- [x] Generic Lua module with `game_id` session variable and before-hooks; `ironhold backend config`; pinned server version; contract tests against
       a local Nakama container (script, not hosted CI); adversarial test: a client for game A sending game B's ids is rejected
-- [ ] Endpoint override per environment; sign-in, `SignOut`, leaderboard submit/list; account deletion/export path (before any public deployment)
+      (`crates/ironhold_nakama/tests/contract/run.sh`; also covers spoofed session vars at sign-in and refresh, unknown games, other sign-in methods)
+- [x] Endpoint override per environment (`--backend`, `?backend=`); sign-in, `SignOut`, leaderboard submit/list
+- [ ] Account deletion/export path (before any public deployment)
 - [ ] **Blocked on `save_load_game_state.md` shipping:** cloud save/load reusing `SaveState`, with the conflict event (do not start with a separate format)
+
+**Implementation notes (v2, 2026-10-28; review round on `feature/nakama_adapter`):**
+- `Backend` gained `cancel(request_id)` (called when the engine times a request out) so a refresh-and-retry chain stops; `SignOut` answers every request in
+  flight with a failure and forgets it, so a late sign-in/refresh/list can never bring the old session or the old player's board back; one shared session
+  renewal serves all calls that got a 401 (refresh token first, the device id if that is refused).
+- The web page address can only select `fake://` (a link must never choose which server receives a player's device id); a real endpoint comes from `backend.ron`.
+  Native `--backend` accepts any endpoint.
+- The runners always supply a factory; with no key or no device-id storage it fails with the reason on screen (`backend.last_error`), and a factory's own error
+  text is passed through (written for designers, never contains the key).
+- The Lua module is deny-by-default (matches, chat, groups, friends, tournaments, account linking, realtime) and also guards the declared board list and
+  strips a client's per-write operator. Verified by `crates/ironhold_nakama/tests/contract/run.sh` against a local container (not the homelab yet).
+- Deferred: see the backlog item "Backend v2 follow-ups".
 
 ### v3 — lobbies and matchmaker
 - [ ] `JoinLobby(row:)` resolves against the snapshot taken when the list was written (rows shift on refresh); also expose `lobby.<n>.id`

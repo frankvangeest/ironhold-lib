@@ -1,0 +1,22 @@
+[package]
+name = "ironhold_nakama"
+version = "0.1.0"
+edition = "2021"
+description = "Nakama adapter for Ironhold's online backend contract (REST, native and wasm32)"
+repository = "https://github.com/frankvangeest/ironhold-lib"
+license = "MIT OR Apache-2.0"
+authors = ["Frank van Geest"]
+
+[dependencies]
+ironhold_core = { path = "../ironhold_core" }
+ehttp = { version = "0.7", optional = true }
+serde_json = { version = "1", optional = true }
+base64 = { version = "0.22", optional = true }
+
+[features]
+default = ["client"]
+# The network adapter. The CLI uses the crate without it, so `ironhold` never links an HTTP stack.
+client = ["dep:ehttp", "dep:serde_json", "dep:base64"]
+
+[dev-dependencies]
+ron = "0.11"

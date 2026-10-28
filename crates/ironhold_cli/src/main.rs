@@ -58,6 +58,15 @@ enum Command {
         project_dir: std::path::PathBuf,
     },
     #[command(
+        about = "Online backend tools (server module config for Nakama)",
+        after_help = "Examples:
+  ironhold backend config assets/projects/backend_demo --out deploy/nakama-modules"
+    )]
+    Backend {
+        #[command(subcommand)]
+        subcommand: commands::backend::BackendCommand,
+    },
+    #[command(
         about = "Print a compact summary of a project (scenes, prefabs, effects, rules, size)",
         after_help = "Examples:\n  ironhold stats assets/projects/particles_demo/\n  ironhold stats assets/projects/3rd_person_game_demo/\n  ironhold --json stats assets/projects/quick_scene/"
     )]
@@ -79,6 +88,7 @@ fn main() {
         Command::Query { subcommand } => commands::query::run(subcommand, &mode),
         Command::Watch { project_dir } => commands::watch::run(&project_dir),
         Command::Stats { project_dir } => commands::stats::run(&project_dir, &mode),
+        Command::Backend { subcommand } => commands::backend::run(subcommand, &mode),
     };
 
     if let Err(e) = result {

@@ -55,7 +55,7 @@ impl RequestKind {
     }
 
     /// The failure reply for this request (used for timeouts and a backend that vanished).
-    fn failure(&self, reason: &str) -> BackendReply {
+    pub fn failure(&self, reason: &str) -> BackendReply {
         match self {
             RequestKind::SignIn | RequestKind::SignOut => BackendReply::Unreachable { reason: reason.to_string() },
             RequestKind::SubmitScore { leaderboard, .. } => {
@@ -109,6 +109,9 @@ pub struct BackendEvent {
 pub trait Backend {
     fn submit(&mut self, req: BackendRequest);
     fn poll(&mut self, out: &mut Vec<BackendEvent>);
+    /// The engine gave up on this request (it timed out): stop any follow-up work for it (a retry, a refresh chain) and drop
+    /// the answer when it arrives. Work already on the wire cannot be recalled. Default: nothing to cancel.
+    fn cancel(&mut self, _request_id: u64) {}
 }
 
 /// Holds the installed backend. A `NonSend` resource because a wasm adapter owns `!Send` JS handles; the runner installs
@@ -121,6 +124,41 @@ impl BackendSlot {
         self.0 = Some(backend);
     }
 }
+
+/// What an adapter factory is told once `backend.ron` has resolved.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResolvedBackendConfig {
+    pub endpoint: String,
+    /// The effective `game_id` (falls back to the project id).
+    pub game_id: String,
+    pub leaderboards: Vec<LeaderboardDef>,
+}
+
+/// Builds the adapter for a project's `backend.ron`; the runner puts one in `AppOptions`. Called at most once, and only for a
+/// non-`fake://` endpoint with no adapter already installed in the slot.
+#[derive(Clone)]
+pub struct BackendFactory(pub std::sync::Arc<dyn Fn(&ResolvedBackendConfig) -> Result<Box<dyn Backend>, String> + Send + Sync>);
+
+impl BackendFactory {
+    pub fn new(f: impl Fn(&ResolvedBackendConfig) -> Result<Box<dyn Backend>, String> + Send + Sync + 'static) -> Self {
+        Self(std::sync::Arc::new(f))
+    }
+}
+
+impl std::fmt::Debug for BackendFactory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("BackendFactory")
+    }
+}
+
+/// Replaces the `endpoint` of `backend.ron` (a runner's `--backend` / `?backend=`): the same project runs against the fake
+/// on a developer machine and a real server elsewhere without editing its data. Validated like the file's own endpoint.
+#[derive(Resource, Clone, Debug)]
+pub struct BackendEndpointOverride(pub String);
+
+/// The factory as a resource (inserted by `start_app_with` when the runner supplied one).
+#[derive(Resource, Clone, Debug)]
+pub struct BackendFactoryRes(pub BackendFactory);
 
 // ─── Hub: outbox, in-flight table, status ────────────────────────────────────
 
@@ -348,8 +386,9 @@ pub fn backend_glue_system(
     let hub = &mut *hub;
     let mut batch: Vec<BackendEvent> = Vec::new();
 
-    match slot.and_then(|s| if s.0.is_some() { Some(s) } else { None }) {
-        Some(mut slot) => {
+    let mut slot = slot.filter(|s| s.0.is_some());
+    match slot.as_mut() {
+        Some(slot) => {
             let backend = slot.0.as_mut().expect("checked above");
             while let Some(req) = hub.outbox.pop_front() {
                 if let Some(f) = hub.in_flight.get_mut(&req.id) {
@@ -377,6 +416,11 @@ pub fn backend_glue_system(
         .filter(|(id, f)| f.started.is_some_and(|s| now - s >= hub.request_timeout_secs) && !batch.iter().any(|e| e.request_id == **id))
         .map(|(id, _)| *id)
         .collect();
+    if let Some(backend) = slot.as_mut().and_then(|s| s.0.as_mut()) {
+        for id in &expired {
+            backend.cancel(*id);
+        }
+    }
     for id in expired {
         let kind = hub.in_flight[&id].kind.clone();
         warn!("backend request {id} ({kind:?}) timed out after {}s", hub.request_timeout_secs);
@@ -663,6 +707,8 @@ fn backend_is_ready(hub: Res<BackendHub>) -> bool {
 fn load_backend_config_system(
     mut hub: ResMut<BackendHub>,
     slot: Option<NonSendMut<BackendSlot>>,
+    factory: Option<Res<BackendFactoryRes>>,
+    endpoint_override: Option<Res<BackendEndpointOverride>>,
     mut vars: ResMut<GameVariables>,
     mut events: MessageWriter<GameEvent>,
     config_handle: Option<Res<ProjectConfigHandle>>,
@@ -691,13 +737,18 @@ fn load_backend_config_system(
     };
     match asset_server.load_state(&handle) {
         bevy::asset::LoadState::Loaded => {
-            let Some(config) = backend_configs.get(&handle).cloned() else { return };
+            let Some(mut config) = backend_configs.get(&handle).cloned() else { return };
+            if let Some(o) = endpoint_override.as_deref() {
+                info!("backend endpoint overridden by the runner: {:?}", o.0);
+                config.endpoint = Some(o.0.clone());
+            }
             let problems = config.problems();
             if !problems.is_empty() {
                 error!("Invalid backend.ron: {} - running offline", problems.join("; "));
                 return finish_offline(hub, &mut vars, &mut events, "backend.ron is invalid (see the log)");
             }
-            choose_backend(hub, slot, &mut vars, &mut events, config);
+            let project_id = config_handle.as_deref().and_then(|h| project_configs.get(&h.0)).and_then(|p| p.project_id.clone());
+            choose_backend(hub, slot, factory.as_deref(), project_id.as_deref(), &mut vars, &mut events, config);
         }
         bevy::asset::LoadState::Failed(e) => {
             error!("backend.ron failed to load: {e} - running offline");
@@ -718,10 +769,34 @@ fn finish_offline(hub: &mut BackendHub, vars: &mut GameVariables, events: &mut M
     emit(events, "backend.offline");
 }
 
+/// Asks the runner's factory for the adapter of a non-`fake://` endpoint; the `Err` text is what `backend.last_error` shows.
+fn build_adapter(
+    factory: Option<&BackendFactoryRes>,
+    project_id: Option<&str>,
+    config: &BackendConfig,
+    endpoint: &str,
+) -> Result<Box<dyn Backend>, String> {
+    let Some(factory) = factory else {
+        return Err("no server adapter in this build; use fake://".to_string());
+    };
+    let resolved = ResolvedBackendConfig {
+        endpoint: endpoint.to_string(),
+        game_id: config.effective_game_id(project_id).unwrap_or_default(),
+        leaderboards: config.leaderboards.clone(),
+    };
+    // The adapter's reason is written for the screen (it never contains the server key), so it goes to `backend.last_error` as is.
+    (factory.0 .0)(&resolved).map_err(|e| {
+        error!("Backend adapter could not start: {e}");
+        e.chars().take(120).collect()
+    })
+}
+
 /// `fake://` selects the in-memory backend; any other endpoint needs an adapter the runner already installed.
 fn choose_backend(
     hub: &mut BackendHub,
     slot: Option<NonSendMut<BackendSlot>>,
+    factory: Option<&BackendFactoryRes>,
+    project_id: Option<&str>,
     vars: &mut GameVariables,
     events: &mut MessageWriter<GameEvent>,
     config: BackendConfig,
@@ -738,8 +813,13 @@ fn choose_backend(
         // A `fake://` endpoint always means the in-memory backend, even if a runner installed an adapter.
         slot.install(Box::new(FakeBackend::from_endpoint(&config, &endpoint)));
     } else if slot.0.is_none() {
-        warn!("backend.ron endpoint {endpoint:?} needs an adapter, but this build has none installed - running offline");
-        return finish_offline(hub, vars, events, "no server adapter in this build; use fake://");
+        match build_adapter(factory, project_id, &config, &endpoint) {
+            Ok(adapter) => slot.install(adapter),
+            Err(why) => {
+                error!("Backend adapter unavailable: {why} - running offline");
+                return finish_offline(hub, vars, events, &why);
+            }
+        }
     }
     if let Some(t) = config.request_timeout_secs {
         hub.request_timeout_secs = f64::from(t);
@@ -781,6 +861,40 @@ mod tests {
                                Leaderboard(name: "fast", ranking: LowerIsBetter, keep: Latest)])"#,
         )
         .unwrap()
+    }
+
+    fn https_config() -> BackendConfig {
+        ron::from_str(
+            r#"BackendConfig(schema_version: 1, endpoint: Some("https://play.example.org"),
+                leaderboards: [Leaderboard(name: "best", ranking: HigherIsBetter, keep: Best)])"#,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn the_factory_gets_the_resolved_config_with_the_project_id_as_game_id() {
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let sink = seen.clone();
+        let factory = BackendFactoryRes(BackendFactory::new(move |c| {
+            *sink.lock().unwrap() = Some(c.clone());
+            Ok(Box::new(FakeBackend::from_config(&https_config())))
+        }));
+        let config = https_config();
+        assert!(build_adapter(Some(&factory), Some("my_game"), &config, "https://play.example.org").is_ok());
+        let got = seen.lock().unwrap().clone().unwrap();
+        assert_eq!(got.game_id, "my_game");
+        assert_eq!(got.endpoint, "https://play.example.org");
+        assert_eq!(got.leaderboards.len(), 1);
+    }
+
+    #[test]
+    fn no_factory_or_a_failing_factory_means_offline_with_a_reason() {
+        let config = https_config();
+        let err = build_adapter(None, None, &config, "https://x").err().unwrap();
+        assert!(err.contains("no server adapter"));
+        let failing = BackendFactoryRes(BackendFactory::new(|_| Err("boom".to_string())));
+        let err = build_adapter(Some(&failing), None, &config, "https://x").err().unwrap();
+        assert_eq!(err, "boom", "the adapter's reason reaches the screen");
     }
 
     fn drain(fake: &mut FakeBackend, polls: u32) -> Vec<BackendEvent> {

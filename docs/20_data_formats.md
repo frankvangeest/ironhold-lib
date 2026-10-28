@@ -5058,9 +5058,9 @@ Online features for a project: sign-in and leaderboards (v1). Referenced via `ba
 |---|---|---|---|
 | `schema_version` | `u32` | required | Must be `1`. |
 | `game_id` | `Option<String>` | `None` | Your game's name on a shared server (1-32 characters of `a-z`, `0-9`, `_` only). Omit to use the project's `project_id`, which must then match the same rule. |
-| `endpoint` | `Option<String>` | `None` | Where the server lives. Omit for an offline project. `"fake://"` is an in-memory test backend (needs no server; sign-in always works, four fixed rivals fill each leaderboard, nothing is saved between runs). To rehearse failure screens, add options: `"fake://?fail=sign_in"` (rejected), `unreachable`, `submit`, `list` (comma list), `silent` (never answers, so the request times out) and `latency=N` (frames before an answer, about 60 per second). Otherwise `"https://..."`; plain `"http://..."` is only meant for a server on your own machine or LAN. A real server needs a build that includes that server's adapter (none exists yet); without one the project runs offline and `backend.last_error` says so. |
+| `endpoint` | `Option<String>` | `None` | Where the server lives. Omit for an offline project. `"fake://"` is an in-memory test backend (needs no server; sign-in always works, four fixed rivals fill each leaderboard, nothing is saved between runs). To rehearse failure screens, add options: `"fake://?fail=sign_in"` (rejected), `unreachable`, `submit`, `list` (comma list), `silent` (never answers, so the request times out) and `latency=N` (frames before an answer, about 60 per second). Otherwise `"https://..."`; plain `"http://..."` is only meant for a server on your own machine or LAN. A real server needs a build that includes that server's adapter (the Nakama adapter is built into the native and web runners; see [Running against a Nakama server](#running-against-a-nakama-server)); without one, or without its server key, the project runs offline and `backend.last_error` says so. |
 | `features` | `Vec<BackendFeature>` | `[]` | Extra capabilities you plan to use, so a server can be set up for them: `CloudSave`, `Lobbies`, `Matchmaker`. Declared only in v1 — **nothing reads them yet, and they do nothing**. |
-| `leaderboards` | `Vec<Leaderboard>` | `[]` | The leaderboards this game uses. Every `SubmitScore`/`FetchLeaderboard` must name one of these. On a real server, adding or renaming one will need a server-side step (a later version). |
+| `leaderboards` | `Vec<Leaderboard>` | `[]` | The leaderboards this game uses. Every `SubmitScore`/`FetchLeaderboard` must name one of these. On a real server, adding or renaming one needs the server-admin step in [Running against a Nakama server](#running-against-a-nakama-server). |
 | `request_timeout_secs` | `Option<f32>` | `15` | How long a request may stay unanswered before the engine fails it (1-120). |
 
 **`Leaderboard(...)` fields:**
@@ -5094,6 +5094,47 @@ Wire it up in the project config with `backend_path: "backend.ron"`.
 - `endpoint` must start with `fake://`, `https://` or `http://`.
 - Unknown field names are errors, like everywhere else in RON.
 
+### Running against a Nakama server
+
+The runners include an adapter for [Nakama](https://heroiclabs.com/nakama/) (tested with 3.41.0). Your `backend.ron` does not change; two things are supplied around it, and one is made for you:
+
+| What | Native | Web |
+|---|---|---|
+| **Server key**: the `socket.server_key` value from your Nakama configuration (Nakama's built-in default is `defaultkey`; ask whoever runs the server). It identifies your deployment and ships in every web build, so it is not a secret. | the `NAKAMA_SERVER_KEY` environment variable, or a file named by `NAKAMA_SERVER_KEY_FILE` (default `.nakama_server_key` in your home folder, `%USERPROFILE%` on Windows) | `?nakama_key=...` in the page address |
+| **Endpoint**, only when you want to try another backend than the file's | `--backend fake://` or `--backend http://host:7350` | `?backend=fake://` (a page address can only pick the `fake://` test backend; a real server always comes from `backend.ron`). Encode `&` inside options as `%26`: `?backend=fake://?fail=submit%26latency=60` |
+| **Device id** (made for you) | made once, kept in `.ironhold/device_id` in your home folder | made once, kept in the browser's `localStorage` |
+
+A web page for a real server looks like `play.html?project=my_game&nakama_key=defaultkey`. For a quick native try: `NAKAMA_SERVER_KEY=defaultkey ironhold_native --project my_game --backend http://localhost:7350`.
+
+Without the key, or if the device id cannot be stored, a project with a real endpoint runs offline: `backend.offline` fires and `backend.last_error` says which of the two it is.
+
+**The device id is the player's account.** Each game gets its own account on the server (`{game_id}:{device id}`) and its leaderboards are stored as `{game_id}.{name}`. Clearing the browser's site data, using another browser or profile, or switching between the native and web builds starts a new account: earlier scores and rank stay behind under the old one. The player's name (`backend.display_name`, and the names on a leaderboard) is made up by the server (a random string such as `rodEaheABo`); there is no way to choose one yet.
+
+**Server admin step.** A Nakama server must run the Ironhold module, which creates the leaderboards (a client cannot), keeps one game from touching another's data, and closes every API the engine does not use:
+
+```bash
+ironhold backend config assets/projects/game_a assets/projects/game_b --out deploy/nakama-modules
+```
+
+writes `ironhold_games.lua` (generated from the `backend.ron` files you name) and `ironhold.lua` (the generic module). Copy both into Nakama's modules folder (`data/modules`, `/nakama/data/modules` in the Docker image) and restart Nakama.
+
+- **Always name every project the server hosts.** `ironhold_games.lua` is the complete list of games: a game left out can no longer sign in (`the server rejected the sign-in`, `backend.sign_in_failed`).
+- Adding, renaming or removing a leaderboard needs this again. Renaming leaves the old scores behind under the old name. **Changing `ranking` or `keep` of an existing leaderboard has no effect**: Nakama keeps the settings it created the board with, so give the board a new name instead.
+- A `SubmitScore` that times out may still have reached the server. For a `keep: Total` leaderboard a retry can therefore count twice.
+- Web pages served over `https` cannot reach a plain `http://` server (browsers block it), so a hosted build needs an `https://` endpoint.
+
+When something goes wrong, the reason is in `backend.last_error`:
+
+| `backend.last_error` | Cause | Fix |
+|---|---|---|
+| `no Nakama server key: ...` | no server key was supplied | add `?nakama_key=` (web) or set `NAKAMA_SERVER_KEY` (native) |
+| `the browser would not store a device id ...` / `the device id could not be saved ...` | no usable `localStorage`, or a home folder that cannot be written | allow site data (not a private window) or make the folder writable |
+| `the server rejected the sign-in` | wrong server key, or the game is not in the deployed `ironhold_games.lua` | check the key; re-run `ironhold backend config` for every hosted project and restart Nakama |
+| `Leaderboard not found.` / `that leaderboard is not declared` | a leaderboard was added to `backend.ron` but the server was not updated | re-run `ironhold backend config` and redeploy |
+| `server unreachable` | nothing answered at the endpoint (also happens on a mixed `https` page and `http` server) | check the address, firewall and `https` |
+| `backend.ron is invalid (see the log)` | the file, or the `--backend`/`?backend=` value, failed the same checks as `ironhold validate` | fix the value; the log names the problem |
+| `signed out` | the player signed out while the request was running | nothing to fix |
+
 ### Online events
 
 Replies arrive a moment after the action, while the game is paused, and survive `LoadScene` — bind them in the top-level `global_on:`, not inside a state's `on:` list. Every refused request still answers with an event (read by the rules one frame after the action), so a state machine never waits on silence. Retry-on-start-up: a sign-in fired before `backend.ron` finished loading answers `backend.busy`; bind `backend.ready` (or `backend.offline`) to know when it is safe.
@@ -5102,7 +5143,7 @@ Replies arrive a moment after the action, while the game is paused, and survive 
 |-------|------|
 | `backend.signed_in` | Sign-in succeeded (also fired at once if you were already signed in) |
 | `backend.sign_in_failed` | The server rejected the sign-in |
-| `backend.unreachable` | The server could not be reached, or a `SignIn`/`SignOut` got no answer within 15 seconds (a `SubmitScore`/`FetchLeaderboard` that times out fires its own `score.submit_failed:{lb}` / `leaderboard.list_failed:{lb}` instead) |
+| `backend.unreachable` | The server could not be reached, or a `SignIn`/`SignOut` got no answer within `request_timeout_secs` (15 by default) (a `SubmitScore`/`FetchLeaderboard` that times out fires its own `score.submit_failed:{lb}` / `leaderboard.list_failed:{lb}` instead) |
 | `backend.signed_out` | `SignOut` finished (also fired at once if you were not signed in) |
 | `backend.ready` | `backend.ron` finished loading and the backend can be used (bind your automatic `SignIn` here) |
 | `backend.offline` | The project has no working backend: fired once when loading finishes without one (the reason is in `backend.last_error`), and again whenever an online action is used |
