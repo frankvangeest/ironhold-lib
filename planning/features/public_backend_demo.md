@@ -99,21 +99,21 @@ the LAN** (see acceptance criteria). Nothing here is skippable: Pages serves `ma
 - [ ] Update `docs/STATUS.md` (hosted build no longer fake-only) and the backend_abstraction plan status
 - [ ] Tests
 
-## Open questions (for Frank)
-1. **Separate online project (recommended) or switch `backend_demo` itself to the public endpoint?** Switching means the
-   offline failure-path demo and the browser suite lose their `fake://` default.
-2. **Secret rotation before the tunnel:** rotate by hand now (Postgres needs `ALTER USER` plus restart; session keys and
-   console password are cheap; the server key is baked into builds, so rotate it before the first public build), or wait
-   for the vault/rotation backlog items and keep the demo LAN-only until then? Recommendation: rotate by hand once, before
-   going public; the vault stays its own project.
-3. **Privacy/deletion:** v2's follow-up list requires account deletion/export before public deployment. For an anonymous
-   demo, is a documented manual deletion on request plus the "what is stored" note enough for now (recommended), or do we
-   build the in-game action first?
-4. **Hostname:** `play.frankcreates.com` as proposed, or another?
-5. **Abuse limits:** Cloudflare WAF rule only, or also a module-side limit (e.g. cap leaderboard writes per session)?
-   Recommendation: WAF only for the demo, module-side limits belong to the multi-tenant investigation.
-6. **Availability expectation:** the homelab is a single machine. Accept "demo may be offline" with the honest UI message,
-   or keep a fallback to `fake://` automatically? Recommendation: no automatic fallback (it would hide failures).
+## Decisions (Frank, 2026-10-29)
+- **Hostname:** `play.frankcreates.com`.
+- **Availability:** the demo may be offline; honest UI message, no automatic fallback to `fake://`.
+- **Secrets:** the homelab vault is live but not every service uses it yet (migration is in progress, in the homelab repo,
+  in a separate session). Gate for P1: Nakama's secrets are vault-managed and the ones printed into the 2026-10-28
+  transcript are rotated before the hostname goes live. This plan does not change the homelab repo; it only waits on it.
+
+## Open questions (recommendations pending Frank's confirmation)
+1. **Separate online project (recommended) or switch `backend_demo` itself?** Separate keeps the browser suite and baselines
+   offline and deterministic and keeps the `fake://` failure-path demo; costs one more registered project.
+2. **Privacy/deletion:** recommended: documented manual deletion on request plus a "what is stored" note for the demo; the
+   in-game delete/export action stays a hard requirement for the hosting platform (relax the v2 follow-up from "before any
+   public deployment" to "before collecting anything beyond anonymous scores").
+3. **Abuse limits:** recommended: Cloudflare WAF rate-limit rule only; scores are unverified (say so in the demo note);
+   module-side limits belong to the multi-tenant investigation.
 
 ## Acceptance criteria
 - Given the Pages build of `backend_demo_online` opened on a phone on mobile data, when the visitor presses sign in, then
