@@ -38,5 +38,17 @@ Code review of v2 (`feature/nakama_adapter`, a601837, 2026-10-28), facts that ou
 - Lua module guards only leaderboard/storage REST APIs; realtime socket (no `register_rt_before`), Link*, groups, tournaments,
   ListMatches etc. are open. Contract compose uses token_expiry 7200 s, so the refresh path is never hit against real Nakama.
 
+Plan review of `public_backend_demo.md` (889f611, 2026-10-30), facts that outlive it:
+- Runners build the `BackendFactory` BEFORE backend.ron loads and today decide key + device uuid eagerly (web/native
+  `nakama.rs`), returning an error-only factory when the key is missing. Any data-side key (`server_key` in backend.ron) needs
+  the key resolved INSIDE the factory closure from `ResolvedBackendConfig`, and device-uuid creation moved into the closure too,
+  or every page load of every project writes a persistent id to localStorage.
+- Precedence "runner key wins" lets a crafted `?nakama_key=` link or a stale `NAKAMA_SERVER_KEY`/`~/.nakama_server_key` break
+  sign-in ("the server rejected the sign-in"); recommended "key travels with its endpoint": file key only for the file endpoint,
+  dropped when `--backend`/`?backend=` overrides it.
+- A real adapter never reports `backend.offline` for a down server: the factory makes no request, so availability is Ready and
+  the failure only shows on SignIn (`backend.unreachable`, "server unreachable"). Cloudflare 429/5xx pages lack CORS -> same.
+- github.io user/project Pages share ONE origin, so `ironhold.device_id` (the account credential) is readable by every repo's page.
+
 **Why:** these were the load-bearing gaps; recurring if lobby/multiplayer plans are revised.
 **How to apply:** any review of backend, lobby, cloud-save or Form 2 networking plans. See [[nakama-spike-facts]], [[determinism-networking]].

@@ -1,6 +1,7 @@
 # Memory Index
 
 - [backend_abstraction plan+v1+v2 review](project_backend_abstraction_plan_review.md) — v2 Nakama: no-key says "no adapter", config regen drops games, no key source/troubleshooting
+- [public_backend_demo plan review](project_public_backend_demo_plan_review.md) — offline vs unreachable conflated; CF 5xx/429 text; copy trap on game_id allowlist; stale nakama_key docs
 
 - [entity.attacked co-op attribution](project_npc_attacked_coop_attribution.md) — nearest-player rule documented only in docs/30 ~109; docs/20 NPC section silent
 
