@@ -96,4 +96,5 @@
 - [Action::Spawn rejects Primitive prefabs](project_action_spawn_rejects_primitive_prefabs.md) — model "" lookup fails, spawn skipped with warn; only scene-load builds primitives; validate silent
 - [SelectAimHeight only with ClickSelectable](project_selectaimheight_only_with_clickselectable.md) — targetable-only prefab's select_aim_height ignored (1.0 used); hand-spawned tests mask it
 - [Lighting: Bevy cascade asserts + shadow clamps](project_lighting_bevy_asserts_and_clamps.md) — num_cascades 0/overlap>=1 panic; directional size clamped, point not; WebGL2 max is 2048
+- [Backend game_id: runtime vs CLI](project_backend_game_id_runtime_vs_cli.md) — problems() skips the project_id fallback; first runtime check is GameNs::new inside the factory, after device-id side effects
 - [npc_id vs SpawnId](project_npc_id_vs_spawn_id.md) — equal for scene/Spawn NPCs; composite-child NPCs get the prefab key as npc_id and no SpawnId (collide across instances)

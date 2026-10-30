@@ -26,5 +26,13 @@ No ActionQueue push from the backend — correct pattern. Refusals (busy/offline
   yet)"/"a later version" comments in backend_demo/backend.ron and docs/20 leaderboards row; (8) `?backend=fake://?fail=a&latency=N`
   needs URL-encoding, undocumented.
 - `backend.status` `offline` vs `signed_out` now split (v1 fix).
+- public_backend_demo P2 (reviewed 2026-10-30): optional `BackendConfig.server_key` FIXES v2 traps (1) and (2) — runners
+  always return a factory; key resolved inside it by `ironhold_nakama::resolve_server_key(file, runner)` (file wins;
+  `ResolvedBackendConfig.server_key` is `None` when `BackendEndpointOverride` is active). Format check lives in
+  `BackendConfig::problems()` (so runtime + CLI `backend_config` share it); strict kinds `backend_server_key_unused`,
+  `backend_default_server_key`. Traps seen: the factory runs at backend.ron resolve (page load), NOT at sign-in, so a
+  real-endpoint project writes the device id before any Sign in ("lazy" only vs offline projects); docs/20 "Validation
+  rules" bullet list is the usual missed site when a field gains a check; override to the *same* endpoint still drops the
+  file key; native missing-key hint says "set server_key in backend.ron" even when `--backend` made that useless.
 
 Related: [[audio-state-pattern]] (engine-written variable precedent), [[real-pause-pattern]], [[diagnostic-only-feature-pattern]], [[web-host-page-contract]].

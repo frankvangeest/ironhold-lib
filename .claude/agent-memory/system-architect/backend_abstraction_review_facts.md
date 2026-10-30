@@ -50,5 +50,13 @@ Plan review of `public_backend_demo.md` (889f611, 2026-10-30), facts that outliv
   the failure only shows on SignIn (`backend.unreachable`, "server unreachable"). Cloudflare 429/5xx pages lack CORS -> same.
 - github.io user/project Pages share ONE origin, so `ironhold.device_id` (the account credential) is readable by every repo's page.
 
+Code review of P2 (`feature/public_backend_demo`, uncommitted on 4ea6142, 2026-10-30): plan implemented as written
+(`RunnerOptions` + `DeviceUuidSource` closure + `resolve_server_key` in ironhold_nakama; core only sets
+`ResolvedBackendConfig::server_key = None` when `BackendEndpointOverride` is present). Residual facts:
+- The factory cannot tell "file had no key" from "file key dropped by override", so the missing-key hint wrongly says
+  "set server_key in backend.ron" under `--backend` (also when the override equals the file's endpoint).
+- Runner keys (`?nakama_key=`, env) are never checked with `is_valid_server_key`; only the file key is (via `problems()`).
+- The device uuid is created before `NakamaBackend::new` validates endpoint/game_id (safe only because `problems()` ran first).
+
 **Why:** these were the load-bearing gaps; recurring if lobby/multiplayer plans are revised.
 **How to apply:** any review of backend, lobby, cloud-save or Form 2 networking plans. See [[nakama-spike-facts]], [[determinism-networking]].
