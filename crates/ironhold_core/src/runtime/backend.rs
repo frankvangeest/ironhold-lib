@@ -131,6 +131,9 @@ pub struct ResolvedBackendConfig {
     pub endpoint: String,
     /// The effective `game_id` (falls back to the project id).
     pub game_id: String,
+    /// `backend.ron`'s `server_key`, only when the endpoint is the file's own: it is `None` when a runner override replaced the
+    /// endpoint, so the file's key is never sent to a server the file did not name. Public, so `Debug` may print it.
+    pub server_key: Option<String>,
     pub leaderboards: Vec<LeaderboardDef>,
 }
 
@@ -748,7 +751,7 @@ fn load_backend_config_system(
                 return finish_offline(hub, &mut vars, &mut events, "backend.ron is invalid (see the log)");
             }
             let project_id = config_handle.as_deref().and_then(|h| project_configs.get(&h.0)).and_then(|p| p.project_id.clone());
-            choose_backend(hub, slot, factory.as_deref(), project_id.as_deref(), &mut vars, &mut events, config);
+            choose_backend(hub, slot, factory.as_deref(), project_id.as_deref(), &mut vars, &mut events, config, endpoint_override.is_some());
         }
         bevy::asset::LoadState::Failed(e) => {
             error!("backend.ron failed to load: {e} - running offline");
@@ -775,6 +778,7 @@ fn build_adapter(
     project_id: Option<&str>,
     config: &BackendConfig,
     endpoint: &str,
+    endpoint_overridden: bool,
 ) -> Result<Box<dyn Backend>, String> {
     let Some(factory) = factory else {
         return Err("no server adapter in this build; use fake://".to_string());
@@ -782,6 +786,7 @@ fn build_adapter(
     let resolved = ResolvedBackendConfig {
         endpoint: endpoint.to_string(),
         game_id: config.effective_game_id(project_id).unwrap_or_default(),
+        server_key: if endpoint_overridden { None } else { config.server_key.clone() },
         leaderboards: config.leaderboards.clone(),
     };
     // The adapter's reason is written for the screen (it never contains the server key), so it goes to `backend.last_error` as is.
@@ -800,6 +805,7 @@ fn choose_backend(
     vars: &mut GameVariables,
     events: &mut MessageWriter<GameEvent>,
     config: BackendConfig,
+    endpoint_overridden: bool,
 ) {
     let endpoint = config.endpoint.clone();
     hub.config = Some(config.clone());
@@ -813,7 +819,7 @@ fn choose_backend(
         // A `fake://` endpoint always means the in-memory backend, even if a runner installed an adapter.
         slot.install(Box::new(FakeBackend::from_endpoint(&config, &endpoint)));
     } else if slot.0.is_none() {
-        match build_adapter(factory, project_id, &config, &endpoint) {
+        match build_adapter(factory, project_id, &config, &endpoint, endpoint_overridden) {
             Ok(adapter) => slot.install(adapter),
             Err(why) => {
                 error!("Backend adapter unavailable: {why} - running offline");
@@ -880,7 +886,7 @@ mod tests {
             Ok(Box::new(FakeBackend::from_config(&https_config())))
         }));
         let config = https_config();
-        assert!(build_adapter(Some(&factory), Some("my_game"), &config, "https://play.example.org").is_ok());
+        assert!(build_adapter(Some(&factory), Some("my_game"), &config, "https://play.example.org", false).is_ok());
         let got = seen.lock().unwrap().clone().unwrap();
         assert_eq!(got.game_id, "my_game");
         assert_eq!(got.endpoint, "https://play.example.org");
@@ -888,12 +894,28 @@ mod tests {
     }
 
     #[test]
+    fn the_files_server_key_reaches_the_factory_unless_the_endpoint_was_overridden() {
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let sink = seen.clone();
+        let factory = BackendFactoryRes(BackendFactory::new(move |c| {
+            *sink.lock().unwrap() = Some(c.server_key.clone());
+            Ok(Box::new(FakeBackend::from_config(&https_config())))
+        }));
+        let mut config = https_config();
+        config.server_key = Some("pub-key".to_string());
+        assert!(build_adapter(Some(&factory), None, &config, "https://play.example.org", false).is_ok());
+        assert_eq!(seen.lock().unwrap().clone().unwrap().as_deref(), Some("pub-key"));
+        assert!(build_adapter(Some(&factory), None, &config, "http://other:7350", true).is_ok());
+        assert_eq!(seen.lock().unwrap().clone().unwrap(), None, "the file's key must not follow an overridden endpoint");
+    }
+
+    #[test]
     fn no_factory_or_a_failing_factory_means_offline_with_a_reason() {
         let config = https_config();
-        let err = build_adapter(None, None, &config, "https://x").err().unwrap();
+        let err = build_adapter(None, None, &config, "https://x", false).err().unwrap();
         assert!(err.contains("no server adapter"));
         let failing = BackendFactoryRes(BackendFactory::new(|_| Err("boom".to_string())));
-        let err = build_adapter(Some(&failing), None, &config, "https://x").err().unwrap();
+        let err = build_adapter(Some(&failing), None, &config, "https://x", false).err().unwrap();
         assert_eq!(err, "boom", "the adapter's reason reaches the screen");
     }
 

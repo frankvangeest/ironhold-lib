@@ -59,7 +59,11 @@ only against pads **not** claimed by a live player's `BoundGamepad`, by an undra
 - Event names carry only designer-writable ids, never JSON or error text (the interpreter matches names exactly); reasons go to
   `backend.last_error`. Every failure is per operation (`score.submit_failed:{lb}`), never one generic error.
 - The runner hands the engine a `BackendFactory` through `AppOptions` (`backend_factory`, plus `backend_endpoint` to override `backend.ron`'s endpoint);
-  `choose_backend` calls it once, only for a non-`fake://` endpoint with nothing installed in the slot. The Nakama adapter (`crates/ironhold_nakama`)
+  `choose_backend` calls it once, only for a non-`fake://` endpoint with nothing installed in the slot. The server key belongs to the file's
+  own endpoint: `ResolvedBackendConfig::server_key` is `backend.ron`'s `server_key`, and `None` when a runner override replaced the endpoint; the
+  runner's key (`?nakama_key=`, env, key file) only fills in (`ironhold_nakama::resolve_server_key`). The runners resolve the key and the device
+  uuid inside the factory (which runs when `backend.ron` resolves, only for a real endpoint with a key), never at startup, so an offline
+  project never creates or stores a device id. The Nakama adapter (`crates/ironhold_nakama`)
   is request/response over `ehttp` and channels, with no thread or runtime of its own of ours (ehttp on native spawns one OS thread per request,
   so a request is not free); its pure server-config generator is behind `default-features = false` so `-p ironhold_cli` alone never links
   an HTTP stack (a workspace-wide build unifies the feature on). `Backend::cancel` is how a timed-out request stops its retry chain; an

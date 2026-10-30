@@ -12,6 +12,7 @@
 use std::collections::BTreeMap;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
+use ironhold_core::schema::backend::is_valid_server_key;
 use ironhold_core::runtime::backend::{
     Backend, BackendEvent, BackendFactory, BackendReply, BackendRequest, LeaderRow, RequestKind, ResolvedBackendConfig,
 };
@@ -19,8 +20,7 @@ use ironhold_core::runtime::backend::{
 use crate::ns::GameNs;
 use crate::protocol::{self, Failure, Session};
 
-/// What the runner supplies: not part of `backend.ron` (the server key is a client identifier but still per deployment,
-/// and the device uuid is per install).
+/// What the adapter needs to talk to one server: the (public) server key and this install's device uuid.
 #[derive(Debug, Clone)]
 pub struct NakamaOptions {
     pub server_key: String,
@@ -28,9 +28,55 @@ pub struct NakamaOptions {
     pub device_uuid: String,
 }
 
-/// The factory a runner puts in `AppOptions::backend_factory`.
-pub fn factory(options: NakamaOptions) -> BackendFactory {
-    BackendFactory::new(move |resolved| NakamaBackend::new(resolved, &options).map(|b| Box::new(b) as Box<dyn Backend>))
+/// Produces this install's device uuid, or the reason it cannot (shown on screen). Called only when a real server is about to
+/// be used, so a project that runs offline never creates or stores one.
+pub type DeviceUuidSource = std::sync::Arc<dyn Fn() -> Result<String, String> + Send + Sync>;
+
+/// What a runner supplies to [`factory`]; the rest comes from `backend.ron` once it resolves.
+#[derive(Clone)]
+pub struct RunnerOptions {
+    /// A server key from outside the project (`?nakama_key=`, `NAKAMA_SERVER_KEY`, a key file), if any. It only fills in when
+    /// `backend.ron` names none, see [`resolve_server_key`].
+    pub runner_key: Option<String>,
+    /// Shown as `backend.last_error` when no key is found anywhere.
+    pub missing_key_hint: String,
+    pub device_uuid: DeviceUuidSource,
+}
+
+/// Which server key to use. The file's key belongs to the file's own endpoint, so it wins; `file_key` is `None` when a
+/// runner override replaced that endpoint (see `ResolvedBackendConfig::server_key`), and then only the runner's key applies.
+/// Blank values and keys the adapter could not send (spaces, `:`, non-ASCII, too long: the same rule `backend.ron` is held to) count
+/// as absent.
+pub fn resolve_server_key(file_key: Option<&str>, runner_key: Option<&str>) -> Option<String> {
+    [file_key, runner_key].into_iter().flatten().map(str::trim).find(|k| is_valid_server_key(k)).map(str::to_string)
+}
+
+/// The checks that need neither the network nor storage, so a config that can never connect does not get as far as creating a
+/// device id.
+fn precheck(resolved: &ResolvedBackendConfig) -> Result<(), String> {
+    let ns = GameNs::new(&resolved.game_id)?;
+    for lb in &resolved.leaderboards {
+        ns.leaderboard(&lb.name)?;
+    }
+    Ok(())
+}
+
+/// The factory a runner puts in `AppOptions::backend_factory`. It resolves the key and the device uuid itself, so the runner
+/// does not need `backend.ron` to be loaded.
+pub fn factory(options: RunnerOptions) -> BackendFactory {
+    BackendFactory::new(move |resolved| {
+        let Some(server_key) = resolve_server_key(resolved.server_key.as_deref(), options.runner_key.as_deref()) else {
+            let supplied = options.runner_key.as_deref().is_some_and(|k| !k.trim().is_empty());
+            return Err(if supplied {
+                "the Nakama server key from the page address or environment is not valid (1-64 printable characters, no spaces or ':')".to_string()
+            } else {
+                options.missing_key_hint.clone()
+            });
+        };
+        precheck(resolved)?;
+        let device_uuid = (options.device_uuid)()?;
+        NakamaBackend::new(resolved, &NakamaOptions { server_key, device_uuid }).map(|b| Box::new(b) as Box<dyn Backend>)
+    })
 }
 
 /// Engine request ids start at 1; 0 is the one shared session renewal (refresh, then re-authenticate).

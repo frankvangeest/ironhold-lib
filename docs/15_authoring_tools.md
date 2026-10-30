@@ -98,7 +98,7 @@ Sample `watch` output (each save prints the changed file and a result):
 
 | What you see | Code | What breaks if ignored | Fix |
 |---|---|---|---|
-| a `backend.ron` that does not parse, has an unsupported `schema_version`, an invalid or duplicate `game_id`/leaderboard name (`[a-z0-9_]`, 1-32 characters) (or, when `game_id` is omitted, an invalid or missing `project_id`), a bad `fake://` option, a `request_timeout_secs` outside 1-120, or an `endpoint` that is not `fake://`, `https://` or `http://` | `backend_config` | the project runs offline; the engine logs the same reason | fix the file |
+| a `backend.ron` that does not parse, has an unsupported `schema_version`, an invalid or duplicate `game_id`/leaderboard name (`[a-z0-9_]`, 1-32 characters) (or, when `game_id` is omitted, an invalid or missing `project_id`), a bad `fake://` option, a `request_timeout_secs` outside 1-120, a `server_key` that is empty, longer than 64 characters, or contains a space, a `:` or a non-ASCII character, or an `endpoint` that is not `fake://`, `https://` or `http://` | `backend_config` | the project runs offline; the engine logs the same reason | fix the file |
 | an `endpoint` using plain `http://` to a host outside localhost/LAN | `backend_endpoint_http` | a hosted `https` page cannot reach it, and traffic is unencrypted | use `https://` |
 | `SubmitScore`/`FetchLeaderboard` naming a leaderboard that `backend.ron` does not declare | `undeclared_leaderboard` | the action always answers its failure event | declare it in `backend.ron` or fix the name |
 | `FetchLeaderboard` with `count` 0 or above 10 | `leaderboard_count_range` | the engine clamps it to 1-10 | use 1-10 |
@@ -107,6 +107,8 @@ Sample `watch` output (each save prints the changed file and a result):
 | `--strict`: `SubmitScore` whose `score_var` nothing in the project writes | `score_var_never_written` | the submit fails or sends a stale value | write it with `SetVariable`/`IncrementVariable` |
 | `--strict`: a `game_id` also used by another project in the same folder | `duplicate_game_id` | both games would share leaderboards on one server | give each project its own `game_id` |
 | `--strict`: a local-network `http://` endpoint | `backend_plain_http` | fine on a LAN, unusable from a hosted page | use `https://` before publishing |
+| `--strict`: `server_key` next to a `fake://` or missing `endpoint` | `backend_server_key_unused` | the key is never used | remove it, or set a real `endpoint` |
+| `--strict`: `server_key: "defaultkey"` on an `https://` endpoint | `backend_default_server_key` | Nakama's built-in key is known to everyone, so it does not tell your server from any other | set your own `socket.server_key` on the server and use it here |
 
 ### Scenes and UI layout
 | What you see | Code | What breaks if ignored | Fix |

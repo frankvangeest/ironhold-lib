@@ -103,7 +103,7 @@ fn config(endpoint: &str) -> ResolvedBackendConfig {
             leaderboards: [Leaderboard(name: "best", ranking: HigherIsBetter, keep: Best)])"#,
     )
     .unwrap();
-    ResolvedBackendConfig { endpoint: endpoint.to_string(), game_id: "my_game".to_string(), leaderboards: parsed.leaderboards }
+    ResolvedBackendConfig { endpoint: endpoint.to_string(), game_id: "my_game".to_string(), server_key: None, leaderboards: parsed.leaderboards }
 }
 
 fn adapter(endpoint: &str) -> NakamaBackend {
@@ -361,4 +361,77 @@ fn a_cancelled_request_makes_no_retry() {
     assert!(got.iter().all(|e| e.request_id != 2), "no reply after a cancel: {got:?}");
     assert_eq!(calls.load(Ordering::Relaxed), 1, "the call was not retried after the cancel");
     stop.store(true, Ordering::Relaxed);
+}
+
+#[test]
+fn the_key_goes_with_the_files_endpoint_and_the_device_uuid_is_only_made_when_a_server_is_used() {
+    use ironhold_nakama::{factory, resolve_server_key, RunnerOptions};
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::Arc;
+
+    assert_eq!(resolve_server_key(Some("file"), Some("runner")).as_deref(), Some("file"));
+    assert_eq!(resolve_server_key(None, Some("runner")).as_deref(), Some("runner"), "no key in the file: the runner's fills in");
+    assert_eq!(resolve_server_key(Some("  "), Some(" runner ")).as_deref(), Some("runner"), "blank is absent, and values are trimmed");
+    assert_eq!(resolve_server_key(None, None), None);
+
+    let made = Arc::new(AtomicUsize::new(0));
+    let counter = made.clone();
+    let f = factory(RunnerOptions {
+        runner_key: None,
+        missing_key_hint: "hint".into(),
+        device_uuid: Arc::new(move || {
+            counter.fetch_add(1, Ordering::Relaxed);
+            Ok("0123-abcd-4567".to_string())
+        }),
+    });
+    let mut c = config("http://127.0.0.1:1");
+    assert_eq!((f.0)(&c).err().as_deref(), Some("hint"), "no key anywhere: the hint is the reason");
+    assert_eq!(made.load(Ordering::Relaxed), 0, "no device id is made when no server can be used");
+    c.server_key = Some("file".into());
+    assert!((f.0)(&c).is_ok());
+    assert_eq!(made.load(Ordering::Relaxed), 1);
+
+    let failing = factory(RunnerOptions {
+        runner_key: Some("runner".into()),
+        missing_key_hint: String::new(),
+        device_uuid: Arc::new(|| Err("no storage".to_string())),
+    });
+    assert_eq!((failing.0)(&config("http://127.0.0.1:1")).err().as_deref(), Some("no storage"));
+
+    // A runner key alone is enough when the file names none (a `--backend` run drops the file's key).
+    let runner_only = factory(RunnerOptions {
+        runner_key: Some("runner".into()),
+        missing_key_hint: String::new(),
+        device_uuid: Arc::new(|| Ok("0123-abcd-4567".to_string())),
+    });
+    let c = config("http://127.0.0.1:1");
+    assert_eq!(c.server_key, None);
+    assert!((runner_only.0)(&c).is_ok());
+
+    // A runner key the adapter cannot send is refused with its own reason, not silently sent.
+    for bad in ["a:b", "a b", "k\u{e9}y"] {
+        assert_eq!(resolve_server_key(None, Some(bad)), None, "{bad:?}");
+    }
+    let bad_key = factory(RunnerOptions {
+        runner_key: Some("a:b".into()),
+        missing_key_hint: "hint".into(),
+        device_uuid: Arc::new(|| Ok("0123-abcd-4567".to_string())),
+    });
+    assert!((bad_key.0)(&c).err().unwrap().contains("not valid"));
+
+    // A config that can never connect does not make a device id.
+    let made = Arc::new(AtomicUsize::new(0));
+    let counter = made.clone();
+    let counting = factory(RunnerOptions {
+        runner_key: Some("runner".into()),
+        missing_key_hint: String::new(),
+        device_uuid: Arc::new(move || {
+            counter.fetch_add(1, Ordering::Relaxed);
+            Ok("0123-abcd-4567".to_string())
+        }),
+    });
+    let mut no_game = config("http://127.0.0.1:1");
+    no_game.game_id = String::new();
+    assert!((counting.0)(&no_game).is_err());
+    assert_eq!(made.load(Ordering::Relaxed), 0, "no device id for a config that can never connect");
 }

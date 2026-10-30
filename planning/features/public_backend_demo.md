@@ -138,7 +138,7 @@ Separate project (decided), created with `/new-project`: copies `backend_demo`'s
   error, i.e. "server unreachable"). Observe the real `last_error` and event for: tunnel down, Nakama down, rate-limited,
   from the Pages origin, and add the rows to the docs/20 troubleshooting table.
 - **Visitor notes in two places:** the `index.html` card (before the click) and the in-scene note (replacing
-  `fake_note`, 3-4 labels <= 58 chars): an anonymous device id is kept in this browser (and is readable by every page on
+  `fake_note`, 3-4 labels <= 58 chars): an anonymous device id is created and kept in this browser when the page loads (even before the visitor presses Sign in; and it is readable by every page on
   `frankvangeest.github.io`; log this for the hosting investigation: per-game origin or custom domain); the score is saved
   under a random name the server picks; clearing site data or another browser starts a new account and old scores stay
   behind; **scores are not verified** and the board may be reset; the demo server is sometimes offline; to request
@@ -166,7 +166,7 @@ here is skippable: Pages serves `main`.
 
 ## Tasks
 - [ ] P1 (homelab repo): tunnel + API-only Traefik router, DOCKER-USER fix, Block-429 rate-limit rule, vault-managed and rotated secrets, module cleanup, external smoke check
-- [ ] P2: `server_key` field, validation + two `--strict` checks, pure precedence function in `ironhold_nakama`, `ResolvedBackendConfig` field, runners return a real factory and own lazy device-id creation, tests per precedence case (file, runner, override, none) and a test that nothing is written to `localStorage` without a sign-in attempt where testable
+- [ ] P2: `server_key` field, validation + two `--strict` checks, pure precedence function in `ironhold_nakama`, `ResolvedBackendConfig` field, runners return a real factory and own lazy device-id creation, tests per precedence case (file, runner, override, none) and a test that no device id is made when no server can be used (no key, or a config that can never connect)
 - [ ] P2: docs and comments listed above; `cargo check -p ironhold_cli`; re-cache `tools/bin/ironhold`
 - [ ] P2: review cycle (alignment, system-architect, debug-detective; ux for the docs; wasm-perf skipped, no per-frame work)
 - [ ] P3: `/new-project backend_demo_online` (explicit sign-in, friendly-status recipe, notes, header comment), regenerate and redeploy `ironhold_games.lua` for both games

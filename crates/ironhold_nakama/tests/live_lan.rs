@@ -37,7 +37,7 @@ fn ask(b: &mut NakamaBackend, id: u64, kind: RequestKind) -> BackendEvent {
 #[ignore = "needs a reachable Nakama and its server key"]
 fn sign_in_and_out_against_a_real_server() {
     let url = std::env::var("NAKAMA_URL").unwrap_or_else(|_| "http://localhost:7350".to_string());
-    let resolved = ResolvedBackendConfig { endpoint: url, game_id: "backend_demo".into(), leaderboards: vec![] };
+    let resolved = ResolvedBackendConfig { endpoint: url, game_id: "backend_demo".into(), server_key: None, leaderboards: vec![] };
     let options = NakamaOptions { server_key: server_key(), device_uuid: "6f1c2b9e-0000-4a11-9a00-ironholdv2a".into() };
     let mut b = NakamaBackend::new(&resolved, &options).unwrap();
     let signed_in = ask(&mut b, 1, RequestKind::SignIn).reply;
