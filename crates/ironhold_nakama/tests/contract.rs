@@ -22,7 +22,7 @@ fn resolved(game: &str) -> ResolvedBackendConfig {
                            Leaderboard(name: "fast", ranking: LowerIsBetter, keep: Latest)])"#,
     )
     .unwrap();
-    ResolvedBackendConfig { endpoint: url(), game_id: game.to_string(), leaderboards: c.leaderboards }
+    ResolvedBackendConfig { endpoint: url(), game_id: game.to_string(), server_key: None, leaderboards: c.leaderboards }
 }
 
 fn adapter(game: &str, uuid: &str) -> NakamaBackend {

@@ -127,9 +127,7 @@ mod tests {
             GameServerConfig { game_id: "alpha", leaderboards: &c.leaderboards },
         ])
         .unwrap();
-        let fixture = include_str!("../tests/contract/modules/ironhold_games.lua").replace("
-", "
-");
+        let fixture = include_str!("../tests/contract/modules/ironhold_games.lua").replace("\r\n", "\n");
         assert_eq!(lua, fixture);
     }
 

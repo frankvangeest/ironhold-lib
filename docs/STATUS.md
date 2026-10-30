@@ -62,7 +62,7 @@ _Last updated: 2026‑10‑11_
 | Terrain rendering           |   ✅   | WebGPU compatible heightmap and splatmap based terrain. |
 | IBL / Environment Lighting  |   ✅   | Scene `lighting` (Ambient, Directional, Environment) & Project fallback. HDR camera mode and bloom are excluded — see `docs/20_data_formats.md`. |
 | Capability registry         |   ⛔   | Planned (declare events/actions/validation per capability). |
-| Online backend (v1, v2)     |   🟡   | `backend.ron` + `SignIn`/`SignOut`/`SubmitScore`/`FetchLeaderboard`, results as events and engine-written variables, an in-memory `fake://` test backend and `ironhold validate` checks (see `backend.ron` in `docs/20_data_formats.md` and the `backend_demo` project). A Nakama adapter (sign-in, leaderboards) is built into the native and web runners, with `ironhold backend config` for the server module (v2); the demo project's `backend.ron` uses the `fake://` backend, which is what the hosted build runs. |
+| Online backend (v1, v2)     |   🟡   | `backend.ron` + `SignIn`/`SignOut`/`SubmitScore`/`FetchLeaderboard`, results as events and engine-written variables, an in-memory `fake://` test backend and `ironhold validate` checks (see `backend.ron` in `docs/20_data_formats.md` and the `backend_demo` project). A Nakama adapter (sign-in, leaderboards) is built into the native and web runners, with `ironhold backend config` for the server module (v2); `backend.ron` can carry the server's public `server_key`; the `backend_demo` project uses the `fake://` backend, which is what the hosted build runs. |
 
 ### Platforms
 | Area                  | Status | Notes |

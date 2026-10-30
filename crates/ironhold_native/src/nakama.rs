@@ -1,10 +1,12 @@
-//! Wires the Nakama adapter into the native runner. Everything machine-specific stays out of the project: the server key
-//! comes from `NAKAMA_SERVER_KEY` or a key file, the device uuid is generated once and kept in the user's home folder.
+//! Wires the Nakama adapter into the native runner. Everything machine-specific stays out of the project: the device uuid is
+//! generated once and kept in the user's home folder (only when a project connects to a real server), and a server key from
+//! `NAKAMA_SERVER_KEY` or a key file fills in when the project's `backend.ron` names none (or when `--backend` points the
+//! project at another server, where the file's key must not follow).
 
 use std::path::PathBuf;
 
 use ironhold_core::runtime::backend::BackendFactory;
-use ironhold_nakama::NakamaOptions;
+use ironhold_nakama::RunnerOptions;
 
 fn home() -> PathBuf {
     PathBuf::from(std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")).unwrap_or_default())
@@ -39,13 +41,11 @@ fn device_uuid() -> Option<String> {
 }
 
 /// Always a factory, so a project with a real endpoint says what is missing (`backend.last_error`) instead of blaming the build.
+/// The key and the device uuid are resolved when the factory runs (after `backend.ron` has loaded), not here.
 pub fn backend_factory() -> Option<BackendFactory> {
-    let missing = |why: &'static str| Some(BackendFactory::new(move |_| Err(why.to_string())));
-    let Some(server_key) = server_key() else {
-        return missing("no Nakama server key: set NAKAMA_SERVER_KEY (or put it in ~/.nakama_server_key)");
-    };
-    let Some(device_uuid) = device_uuid() else {
-        return missing("the device id could not be saved: is your home folder writable?");
-    };
-    Some(ironhold_nakama::factory(NakamaOptions { server_key, device_uuid }))
+    Some(ironhold_nakama::factory(RunnerOptions {
+        runner_key: server_key(),
+        missing_key_hint: "no Nakama server key: set server_key in backend.ron (not sent to a --backend server) or NAKAMA_SERVER_KEY (or ~/.nakama_server_key)".to_string(),
+        device_uuid: std::sync::Arc::new(|| device_uuid().ok_or_else(|| "the device id could not be saved: is your home folder writable?".to_string())),
+    }))
 }

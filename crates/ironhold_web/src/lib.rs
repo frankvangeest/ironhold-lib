@@ -40,7 +40,7 @@ fn install_pointer_lock_reporting() {
     on_error.forget();
 }
 
-/// Reads `?project=<name>`, `?scene=<path>`, `?nakama_key=<server key>` (the online backend adapter; without it a real endpoint runs offline), `?backend=fake://...` (replaces `backend.ron`'s endpoint with a test backend)
+/// Reads `?project=<name>`, `?scene=<path>`, `?nakama_key=<server key>` (the online backend adapter; only used when `backend.ron` has no `server_key`, and without either a real endpoint runs offline), `?backend=fake://...` (replaces `backend.ron`'s endpoint with a test backend)
 /// and `?static=1` from the page URL.
 /// - `project` is converted to a project-config asset path.
 /// - `scene`   is passed through as-is and used as an `InitialSceneOverride`.

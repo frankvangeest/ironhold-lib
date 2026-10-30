@@ -6,7 +6,7 @@
 use std::collections::HashSet;
 use std::path::Path;
 
-use ironhold_core::schema::backend::{is_valid_backend_id, BackendConfig, MAX_LEADERBOARD_ROWS};
+use ironhold_core::schema::backend::{is_fake_endpoint, is_valid_backend_id, BackendConfig, MAX_LEADERBOARD_ROWS};
 use ironhold_core::schema::{Action, ProjectConfig};
 
 use super::utils::{find_project_ron, ron_from_str};
@@ -146,6 +146,23 @@ pub fn strict_warnings(
     }
 
     if let Some(cfg) = backend {
+        if let Some(key) = cfg.server_key.as_deref() {
+            let ep = cfg.endpoint.as_deref();
+            if ep.is_none_or(is_fake_endpoint) {
+                out.push(Finding {
+                    source_file: backend_source.to_string(),
+                    message: "server_key is set but the endpoint is fake:// or missing, so the key is never used".into(),
+                    kind: "backend_server_key_unused",
+                });
+            } else if key == "defaultkey" && ep.is_some_and(|e| e.starts_with("https://")) {
+                out.push(Finding {
+                    source_file: backend_source.to_string(),
+                    message: "server_key is Nakama's built-in default \"defaultkey\" on a public https endpoint: set a key of your own in the server's socket.server_key"
+                        .into(),
+                    kind: "backend_default_server_key",
+                });
+            }
+        }
         if let Some(ep) = cfg.endpoint.as_deref() {
             if ep.starts_with("http://") && is_local_host(ep) {
                 out.push(Finding {
@@ -250,5 +267,25 @@ mod tests {
         for bad in ["http://example.org", "http://8.8.8.8:7350", "http://172.32.0.1"] {
             assert!(!is_local_host(bad), "{bad}");
         }
+    }
+
+    #[test]
+    fn a_server_key_that_is_unused_or_the_public_default_is_flagged() {
+        let kinds = |ron: &str| -> Vec<&'static str> {
+            let cfg: BackendConfig = ron::from_str(ron).unwrap();
+            strict_warnings(Path::new("."), None, "backend.ron", Some(&cfg), &[]).into_iter().map(|f| f.kind).collect()
+        };
+        assert_eq!(kinds(r#"BackendConfig(schema_version: 1, endpoint: Some("fake://"), server_key: Some("k"))"#), ["backend_server_key_unused"]);
+        assert_eq!(kinds(r#"BackendConfig(schema_version: 1, server_key: Some("k"))"#), ["backend_server_key_unused"]);
+        assert_eq!(
+            kinds(r#"BackendConfig(schema_version: 1, endpoint: Some("https://play.example.org"), server_key: Some("defaultkey"))"#),
+            ["backend_default_server_key"]
+        );
+        assert!(kinds(r#"BackendConfig(schema_version: 1, endpoint: Some("https://play.example.org"), server_key: Some("mine"))"#).is_empty());
+        // The default key is fine on a LAN server; only the plain-http note remains.
+        assert_eq!(
+            kinds(r#"BackendConfig(schema_version: 1, endpoint: Some("http://localhost:7350"), server_key: Some("defaultkey"))"#),
+            ["backend_plain_http"]
+        );
     }
 }

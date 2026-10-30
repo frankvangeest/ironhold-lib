@@ -12,6 +12,8 @@ pub const BACKEND_SCHEMA_VERSION: u32 = 1;
 pub const MAX_LEADERBOARD_ROWS: u32 = 10;
 /// Longest `game_id`; ids are `[a-z0-9_]` so no separator used in storage keys can ever appear inside one.
 pub const MAX_ID_LEN: usize = 32;
+/// Longest `server_key` (Nakama's `socket.server_key` is a short word or a generated token).
+pub const MAX_SERVER_KEY_LEN: usize = 64;
 
 #[derive(Deserialize, Asset, TypePath, Debug, Clone, Default)]
 #[serde(deny_unknown_fields)]
@@ -24,6 +26,12 @@ pub struct BackendConfig {
     /// runner built in (`https://...`; plain `http` only for localhost/LAN).
     #[serde(default)]
     pub endpoint: Option<String>,
+    /// Nakama's `socket.server_key` for this deployment. **Public**: it ships with the build and anyone can read it; it
+    /// identifies the server, it does not protect it (never put `runtime.http_key` or console credentials here). Used only
+    /// with this file's own `endpoint`; ignored by `fake://`. A key the runner supplies (`?nakama_key=`, `NAKAMA_SERVER_KEY`)
+    /// only fills in when this is omitted.
+    #[serde(default)]
+    pub server_key: Option<String>,
     #[serde(default)]
     pub features: Vec<BackendFeature>,
     #[serde(default)]
@@ -75,6 +83,12 @@ pub enum Keep {
 /// `[a-z0-9_]{1,MAX_ID_LEN}`: the charset keeps `.`/`:` free as separators in namespaced keys.
 pub fn is_valid_backend_id(id: &str) -> bool {
     !id.is_empty() && id.len() <= MAX_ID_LEN && id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+}
+
+/// A `server_key` the adapter can send: printable ASCII, no whitespace, no `:` (the key is the Basic-auth user name, so a
+/// colon would split it), 1-`MAX_SERVER_KEY_LEN` characters.
+pub fn is_valid_server_key(key: &str) -> bool {
+    !key.is_empty() && key.len() <= MAX_SERVER_KEY_LEN && key.bytes().all(|b| b.is_ascii_graphic() && b != b':')
 }
 
 /// True for `endpoint` values that name the in-memory test backend.
@@ -170,6 +184,13 @@ impl BackendConfig {
                 }
             }
         }
+        if let Some(k) = &self.server_key {
+            if !is_valid_server_key(k) {
+                out.push(format!(
+                    "server_key must be 1-{MAX_SERVER_KEY_LEN} printable ASCII characters with no spaces and no ':' (it is Nakama's socket.server_key)"
+                ));
+            }
+        }
         if let Some(t) = self.request_timeout_secs {
             if !(1.0..=120.0).contains(&t) {
                 out.push(format!("request_timeout_secs {t} must be between 1 and 120"));
@@ -252,6 +273,19 @@ mod tests {
         let c: BackendConfig = ron::from_str("BackendConfig(schema_version: 1)").unwrap();
         assert_eq!(c.effective_game_id(Some("proj")).as_deref(), Some("proj"));
         assert_eq!(c.effective_game_id(None), None);
+    }
+
+    #[test]
+    fn server_key_is_optional_and_validated() {
+        let ok = parse(r#"BackendConfig(schema_version: 1, endpoint: "https://play.example.org", server_key: "abc-123_XYZ")"#);
+        assert_eq!(ok.server_key.as_deref(), Some("abc-123_XYZ"));
+        assert_eq!(ok.validate(), Ok(()));
+        assert_eq!(parse("BackendConfig(schema_version: 1)").server_key, None);
+        for bad in ["", "a b", "a:b", "kéy", &"x".repeat(MAX_SERVER_KEY_LEN + 1)] {
+            assert!(!is_valid_server_key(bad), "{bad:?} must be rejected");
+            let c = BackendConfig { schema_version: 1, server_key: Some(bad.to_string()), ..Default::default() };
+            assert_eq!(c.problems().len(), 1, "{bad:?}");
+        }
     }
 
     #[test]

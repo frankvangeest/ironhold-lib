@@ -1,9 +1,11 @@
 //! Wires the Nakama adapter into the web runner. The server key is a client identifier, not a secret (it ships in any web
-//! build), so it comes from the page URL (`?nakama_key=`); the device uuid is generated once per browser profile and kept
-//! in `localStorage`. Without a key a project with a real endpoint runs offline and says so.
+//! build): it normally comes from the project's `backend.ron` (`server_key`), and `?nakama_key=` in the page URL only fills in
+//! when the file names none. The device uuid is generated once per browser profile and kept in `localStorage`, and only when a
+//! project actually connects to a real server (a project that runs offline never writes it). Without a key anywhere a project
+//! with a real endpoint runs offline and says so.
 
 use ironhold_core::runtime::backend::BackendFactory;
-use ironhold_nakama::NakamaOptions;
+use ironhold_nakama::RunnerOptions;
 
 const STORAGE_KEY: &str = "ironhold.device_id";
 
@@ -26,13 +28,16 @@ fn device_uuid(window: &web_sys::Window) -> Option<String> {
 }
 
 /// Always a factory, so a project with a real endpoint says what is missing (`backend.last_error`) instead of blaming the build.
+/// The key and the device uuid are resolved when the factory runs (after `backend.ron` has loaded), not here.
 pub fn backend_factory(params: Option<&web_sys::UrlSearchParams>) -> Option<BackendFactory> {
-    let missing = |why: &'static str| Some(BackendFactory::new(move |_| Err(why.to_string())));
-    let Some(server_key) = params.and_then(|p| p.get("nakama_key")).filter(|k| !k.trim().is_empty()) else {
-        return missing("no Nakama server key: add ?nakama_key=... to the page address");
-    };
-    let Some(device_uuid) = web_sys::window().and_then(|w| device_uuid(&w)) else {
-        return missing("the browser would not store a device id (private window or blocked site data?)");
-    };
-    Some(ironhold_nakama::factory(NakamaOptions { server_key, device_uuid }))
+    let runner_key = params.and_then(|p| p.get("nakama_key")).filter(|k| !k.trim().is_empty());
+    Some(ironhold_nakama::factory(RunnerOptions {
+        runner_key,
+        missing_key_hint: "no Nakama server key: set server_key in backend.ron or add ?nakama_key=... to the page address".to_string(),
+        device_uuid: std::sync::Arc::new(|| {
+            web_sys::window()
+                .and_then(|w| device_uuid(&w))
+                .ok_or_else(|| "the browser would not store a device id (private window or blocked site data?)".to_string())
+        }),
+    }))
 }
