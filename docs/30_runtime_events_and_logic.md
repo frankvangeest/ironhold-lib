@@ -455,6 +455,25 @@ global_on: [
 ],
 ```
 
+**Pattern: a friendly message when the server is down** (`assets/projects/backend_demo_online`). `backend.*` variables belong to the
+engine (`ironhold validate` rejects writing them), so put your own wording in a game variable and show that in a `Label`. A stopped
+server, a stopped tunnel or a gateway error page all arrive as `backend.unreachable` or `backend.sign_in_failed`, and only when the
+player presses Sign in (a server being down is not `backend.offline`, which means there is no usable backend configured at all):
+
+```ron
+global_on: [
+    ( event: "ui.button_pressed:sign_in", do_actions: [ SetVariable("demo_msg", ""), SignIn ] ),
+    ( event: "backend.unreachable",       do_actions: [ SetVariable("demo_msg", "Server unavailable. Press Sign in to retry.") ] ),
+    ( event: "backend.sign_in_failed",    do_actions: [ SetVariable("demo_msg", "Server unavailable. Press Sign in to retry.") ] ),
+    ( event: "backend.signed_in",         do_actions: [ SetVariable("demo_msg", "") ] ),
+],
+```
+```ron
+Label((id: "demo_msg_label", text: "", bind: "demo_msg", format: "{}", size: (640.0, 28.0), align: Left)),
+```
+Keep the `backend.last_error` label too: it holds the exact reason for the detail line. Signing in on start-up (`backend.ready` ->
+`SignIn`) is left out on purpose in a public demo, so loading the page never creates an account or sends a request.
+
 **Pattern: a "searching" state with a timeout** (works for any slow request):
 
 ```ron

@@ -897,10 +897,39 @@
                     </div>
                 </div>
                 <div class="card-body">
-                    <div class="card-title">Backend Demo</div>
+                    <div class="card-title">Backend Demo (offline test backend)</div>
                     <div class="card-description">
                         Online features from RON alone: sign in, submit a score and read a top-5 leaderboard.
                         Runs against an in-memory test backend, so nothing is saved and no server is needed.
+                        The live-server version is the next card.
+                    </div>
+                    <div class="card-tag">
+                        <span class="tag blue">ui</span>
+                        <span class="tag purple">online</span>
+                    </div>
+                </div>
+            </a>
+
+            <a class="project-card" id="card-backend-demo-online" href="play.html?project=backend_demo_online"
+                data-keywords="backend online sign in leaderboard score multiplayer account nakama server live https ui demo">
+                <div class="card-thumbnail">
+                    <img src="screenshot_baselines/scenes/backend_demo_online_main.png" alt="Backend Demo Online screenshot"
+                        loading="lazy">
+                    <div class="play-overlay">
+                        <div class="play-btn">
+                            <svg viewBox="0 0 24 24">
+                                <polygon points="6,3 20,12 6,21" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="card-title">Online Backend Demo (live server)</div>
+                    <div class="card-description">
+                        Sign in anonymously, submit a score and see a real shared leaderboard stored on a Nakama server.
+                        Scores are not verified; your account lives in this browser (clearing site data starts a new one).
+                        The demo server is sometimes offline. To have your data deleted, open an issue on
+                        github.com/frankvangeest/ironhold-lib quoting the name shown after "Signed in as:".
                     </div>
                     <div class="card-tag">
                         <span class="tag blue">ui</span>
