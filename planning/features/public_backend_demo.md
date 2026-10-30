@@ -1,6 +1,6 @@
 # Feature: Public backend demo (GitHub Pages talking to the homelab Nakama)
 
-_Status: Ready (plan-review 2026-10-30, findings folded in; one design change for Frank to veto, see "Plan-review outcome")_
+_Status: In Progress (plan-review 2026-10-30, findings folded in; one design change for Frank to veto, see "Plan-review outcome")_
 _Planned at: `5683aed` (2026-10-28)_
 
 ## Phases
