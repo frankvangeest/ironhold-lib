@@ -9,8 +9,8 @@ BackendConfig(
     // Namespace on a shared server: [a-z0-9_], 1-32 characters. Defaults to project_id when omitted.
     game_id: "backend_demo_online",
     endpoint: "https://play.frankcreates.com",
-    // PLACEHOLDER: replaced with the server's rotated public key when the public hostname goes live (public_backend_demo P1).
-    server_key: "PLACEHOLDER_SET_AT_GO_LIVE",
+    // The server's public socket.server_key (rotated 2026-10-30); a new key means updating this line and republishing.
+    server_key: "7cc7497f91c8584c8f81008208d29ddb19261f14239c9a6d3fde316c52309173",
     leaderboards: [
         // ranking: HigherIsBetter | LowerIsBetter     keep: Best | Latest | Total
         Leaderboard(name: "best", ranking: HigherIsBetter, keep: Best),
