@@ -456,16 +456,25 @@ global_on: [
 ```
 
 **Pattern: a friendly message when the server is down** (`assets/projects/backend_demo_online`). `backend.*` variables belong to the
-engine (`ironhold validate` rejects writing them), so put your own wording in a game variable and show that in a `Label`. A stopped
-server, a stopped tunnel or a gateway error page all arrive as `backend.unreachable` or `backend.sign_in_failed`, and only when the
-player presses Sign in (a server being down is not `backend.offline`, which means there is no usable backend configured at all):
+engine (`ironhold validate --strict` warns about a rule that writes them, `reserved_variable_write`), so put your own wording in a game
+variable and show that in a `Label`. A server being down is not `backend.offline` (that means there is no usable backend configured at
+all). The first time a `SignIn` runs (here: when the player presses Sign in) a stopped server or tunnel arrives as `backend.unreachable`;
+so does a gateway error page in a browser, while a native run gets `backend.sign_in_failed` with `server answered HTTP <n>`. A refused
+sign-in (wrong key, a game the server does not host) is also `backend.sign_in_failed`, and retrying will not fix it, so give it its own
+wording and let the detail line say why. Once signed in, a server that stops answering shows up as `score.submit_failed:{lb}` and
+`leaderboard.list_failed:{lb}` instead. Clear the message on every success and on `backend.signed_out` (pressing Sign out during a
+sign-in also answers that sign-in as `backend.sign_in_failed`):
 
 ```ron
 global_on: [
-    ( event: "ui.button_pressed:sign_in", do_actions: [ SetVariable("demo_msg", ""), SignIn ] ),
-    ( event: "backend.unreachable",       do_actions: [ SetVariable("demo_msg", "Server unavailable. Press Sign in to retry.") ] ),
-    ( event: "backend.sign_in_failed",    do_actions: [ SetVariable("demo_msg", "Server unavailable. Press Sign in to retry.") ] ),
-    ( event: "backend.signed_in",         do_actions: [ SetVariable("demo_msg", "") ] ),
+    ( event: "ui.button_pressed:sign_in",    do_actions: [ SetVariable("demo_msg", ""), SignIn ] ),
+    ( event: "backend.unreachable",          do_actions: [ SetVariable("demo_msg", "Server unavailable. Press Sign in to retry.") ] ),
+    ( event: "backend.sign_in_failed",       do_actions: [ SetVariable("demo_msg", "Could not sign in. Try again or reload; see below.") ] ),
+    ( event: "score.submit_failed:best",     do_actions: [ SetVariable("demo_msg", "The request failed. Details below; try again.") ] ),
+    ( event: "leaderboard.list_failed:best", do_actions: [ SetVariable("demo_msg", "The request failed. Details below; try again.") ] ),
+    ( event: "backend.signed_in",            do_actions: [ SetVariable("demo_msg", "") ] ),
+    ( event: "backend.signed_out",           do_actions: [ SetVariable("demo_msg", "") ] ),
+    ( event: "leaderboard.listed:best",      do_actions: [ SetVariable("demo_msg", "") ] ),
 ],
 ```
 ```ron

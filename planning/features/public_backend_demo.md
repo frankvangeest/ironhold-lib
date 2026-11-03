@@ -207,3 +207,12 @@ here is skippable: Pages serves `main`.
 - `cargo test` suites and `ironhold validate --strict` pass for both demo projects; `test_web.py` runs `backend_demo_online`
   with no network traffic and no console errors; the fake demo and the browser suite are otherwise unchanged.
 - The Nakama secrets from the 2026-10-28 transcript are no longer valid before the hostname is announced.
+
+## Key rotation runbook (public `server_key`)
+
+The key sits in `assets/projects/backend_demo_online/backend.ron`, and Pages only changes through `/release`, so a rotation breaks the
+demo (`the server rejected the sign-in`) until the new key is live. Keep the gap short:
+1. On `integration`: edit the `server_key` line (a normal `assets/` commit, `ron_lint` + `validate --strict`), do not release yet.
+2. Prepare the release up to the point just before promoting (steps 11-14 of the workflow, `pkg/` committed).
+3. Rotate the key on the server (homelab vault + Nakama restart), then promote to `main` immediately (step 15).
+4. Open tabs and cached copies keep failing until reloaded; expect a few minutes of downtime and say so on the card if it is planned.

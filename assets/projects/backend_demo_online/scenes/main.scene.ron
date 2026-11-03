@@ -1,5 +1,5 @@
 // backend_demo_online: sign in, submit a score and read a leaderboard on a real Nakama server (backend.ron).
-// The account and leaderboard blocks are the same RON as ui/signin.ui.ron and ui/leaderboard.ui.ron: copy those files to start your own.
+// The account and leaderboard blocks are the same RON as ui/signin.ui.ron (incl. the demo_msg_label) and ui/leaderboard.ui.ron: copy those files to start your own.
 // Use plain ASCII in on-screen text: the engine font has no glyph for em-dashes and similar characters.
 (
     schema_version: 2,
@@ -17,9 +17,10 @@
             children: [
                 Label((id: "title", text: "backend_demo_online - live server", size: (640.0, 32.0), align: Left)),
                 Label((id: "note_1", text: "Live demo server: sign-in is anonymous.", size: (640.0, 26.0), align: Left)),
-                Label((id: "note_2", text: "Your account is kept in this browser only.", size: (640.0, 26.0), align: Left)),
+                Label((id: "note_2", text: "Your login key is kept in this browser only.", size: (640.0, 26.0), align: Left)),
                 Label((id: "note_3", text: "Scores are not verified; the board may be reset.", size: (640.0, 26.0), align: Left)),
-                Label((id: "note_4", text: "To delete your data, quote your name (see the card).", size: (640.0, 26.0), align: Left)),
+                Label((id: "note_4", text: "To delete your data, quote your name at:", size: (640.0, 26.0), align: Left)),
+                Label((id: "note_5", text: "github.com/frankvangeest/ironhold-lib/issues", size: (640.0, 26.0), align: Left)),
                 Group((
                     gap: 16.0,
                     flex_wrap: Wrap,
