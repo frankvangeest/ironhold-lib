@@ -1,6 +1,6 @@
 # Feature: Public backend demo (GitHub Pages talking to the homelab Nakama)
 
-_Status: In Progress (plan-review 2026-10-30, findings folded in; one design change for Frank to veto, see "Plan-review outcome")_
+_Status: Done (released and live-checked 2026-11-03; plan-review 2026-10-30, see "Plan-review outcome")_
 _Planned at: `5683aed` (2026-10-28)_
 
 ## Phases
@@ -10,7 +10,7 @@ _Planned at: `5683aed` (2026-10-28)_
 | P1 | Homelab stage 2: public `https://` hostname for Nakama's client API (homelab repo) | Done | 2026-11-03 |
 | P2 | Engine: optional `server_key` in `backend.ron` (+ validate, docs, tests) | Done (merged to `integration`) | 2026-11-03 |
 | P3 | Online demo project pointed at the public endpoint | Done (merged to `integration`, released) | 2026-11-03 |
-| P4 | `/release` batch, then the live check from the Pages origin | Released 2026-11-03; live check pending | - |
+| P4 | `/release` batch, then the live check from the Pages origin | Done | 2026-11-03 |
 
 P1 and P2 are independent and can run in parallel; P3 needs both; P4 needs P3.
 
@@ -173,9 +173,9 @@ here is skippable: Pages serves `main`.
 - [x] P3: card, README row, reword the `backend_demo` card, `docs/30` recipe, "Publishing an online game" checklist, baseline (own commit)
 - [x] P3/P4: record the real `last_error` (server down observed 2026-11-03: `server unreachable`; the 401 plus refresh path noted; rate-limited not observed separately, same transport error) for tunnel down / Nakama down / rate-limited from the Pages origin and add troubleshooting rows
 - [x] P4: `/release` (2026-11-03: all tests green, release build 31 MB, playtest confirmed, `main` fast-forwarded)
-- [ ] P4: the live acceptance checklist from the Pages origin on mobile data
+- [x] P4: the live acceptance checklist from the Pages origin on mobile data (passed 2026-11-03)
 - [x] Update `docs/STATUS.md` and the backend_abstraction plan status; log the "device id readable by every Pages site on the origin" finding in the multi-tenant investigation item
-- [ ] Tests
+- [x] Tests (P2 and P3 suites, the 2026-11-03 release run: 32 core files and the CLI suites green)
 
 ## Decisions (Frank, 2026-10-29)
 - **Separate online project** `backend_demo_online`; the `fake://` demo and the browser suite stay offline.
