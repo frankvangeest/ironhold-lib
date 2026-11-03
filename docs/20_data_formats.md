@@ -5108,7 +5108,7 @@ The runners include an adapter for [Nakama](https://heroiclabs.com/nakama/) (tes
 
 With `server_key` in `backend.ron` a web page for a real server is just `play.html?project=my_game`. Without it: `play.html?project=my_game&nakama_key=defaultkey`. For a quick native try without a key in the file: `NAKAMA_SERVER_KEY=defaultkey ironhold_native --project my_game --backend http://localhost:7350`.
 
-Without a key anywhere, or if the device id cannot be stored, a project with a real endpoint runs offline: `backend.offline` fires and `backend.last_error` says which of the two it is. A server that is merely down is different: the project is online and the problem shows when the player signs in (`backend.unreachable`, or `backend.sign_in_failed` when a gateway in front of the server answers with an error page).
+Without a key anywhere, or if the device id cannot be stored, a project with a real endpoint runs offline: `backend.offline` fires and `backend.last_error` says which of the two it is. A server that is merely down is different: the project is online and the problem shows when the player signs in (in a browser `backend.unreachable`, because a gateway error page carries no CORS headers and looks like no answer; a native run gets `backend.sign_in_failed` with `server answered HTTP <n>`).
 
 **The key goes with the file's endpoint.** When you point a native run at another server with `--backend`, the file's `server_key` is not sent there: only a key supplied from outside (`NAKAMA_SERVER_KEY`) applies. A shared link or old shell that still carries a key for the old server is ignored while `backend.ron` names one.
 
@@ -5147,9 +5147,15 @@ When something goes wrong, the reason is in `backend.last_error`:
 | `the browser would not store a device id ...` / `the device id could not be saved ...` | no usable `localStorage`, or a home folder that cannot be written | allow site data (not a private window) or make the folder writable |
 | `the server rejected the sign-in` | wrong server key (also an old page or copy after the key was rotated), or the game is not in the deployed `ironhold_games.lua` | check the key and reload; re-run `ironhold backend config` for every hosted project and restart Nakama |
 | `Leaderboard not found.` / `that leaderboard is not declared` | a leaderboard was added to `backend.ron` but the server was not updated | re-run `ironhold backend config` and redeploy |
-| `server unreachable` | nothing answered at the endpoint (also happens on a mixed `https` page and `http` server) | check the address, firewall and `https` |
+| `server unreachable` | nothing usable answered at the endpoint: the server or its tunnel is stopped, or the browser is offline. In a browser this is also what a gateway error page (502/530) or a rate-limit block looks like, because neither carries CORS headers (also happens on a mixed `https` page and `http` server) | check the address, the server and `https`; if it only happens in bursts, slow the calls down |
+| `server answered HTTP 502` (or another number) | a gateway or proxy in front of the server answered with an error page (seen in native runs; in a browser it shows as `server unreachable`) | check the server and its tunnel |
 | `backend.ron is invalid (see the log)` | the file, or the `--backend`/`?backend=` value, failed the same checks as `ironhold validate` | fix the value; the log names the problem |
 | `signed out` | the player signed out while the request was running | nothing to fix |
+
+Two browser-console messages that are expected:
+
+- **`401 (Unauthorized)` on a `/v2/leaderboard/...` or score call, followed by a `/v2/account/session/refresh` call and the same call again.** Nakama session tokens expire after 60 seconds by default. The adapter renews the session and retries once, so the player sees nothing. If the renewal itself fails, `backend.last_error` gives that reason (for example `the server rejected the sign-in` or `server unreachable`) and the call fails; `the session expired, sign in again` means the renewed session was refused as well.
+- **A CORS error plus `net::ERR_FAILED` when the server is down.** A gateway error page has no CORS headers, so the browser hides the real status. The game sees `backend.unreachable`, `backend.last_error` is `server unreachable`, and the friendly-message recipe in [docs/30](30_runtime_events_and_logic.md) shows your own text (observed on the live demo with the server stopped).
 
 ### Online events
 

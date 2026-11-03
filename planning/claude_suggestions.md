@@ -643,3 +643,5 @@
   If that baseline starts flaking, settle longer or give the entry its own threshold rather than raising the global one.
 - **Phase 4 render budget should cap total physical pixels, not just mobile DPR** _(observed at `d758771` 2026-10-11, responsive_ui phase 1 wasm-perf review)_
   The fitted canvas made big desktop monitors the worst case (4K at DPR 1.5: ~8.0 MP and ~350 MB of render targets vs ~2.07 MP / ~40 MB with the old fixed 1280x720 box; a DPR-3 phone got ~3x cheaper), so cap the total pixel budget (about 2-3.7 MP).
+- **`backend_demo` and `backend_demo_online` share byte-identical `ui/` snippets and near-identical logic with no drift guard** _(observed at `4a7e030` 2026-11-03, public_backend_demo P3 system-architect review)_
+  A change to the backend vocabulary (variable or event names) must be made twice by hand and nothing fails if the copies drift; a cheap test that the shared `ui/*.ui.ron` files match (or keeping canonical snippets in `backend_demo/ui/` only) would catch it.

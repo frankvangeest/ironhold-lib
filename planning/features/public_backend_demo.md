@@ -7,9 +7,9 @@ _Planned at: `5683aed` (2026-10-28)_
 
 | Phase | Backlog item | Status | Completed |
 |---|---|---|---|
-| P1 | Homelab stage 2: public `https://` hostname for Nakama's client API (homelab repo) | Queued | - |
-| P2 | Engine: optional `server_key` in `backend.ron` (+ validate, docs, tests) | Queued | - |
-| P3 | Online demo project pointed at the public endpoint | Queued | - |
+| P1 | Homelab stage 2: public `https://` hostname for Nakama's client API (homelab repo) | Done | 2026-11-03 |
+| P2 | Engine: optional `server_key` in `backend.ron` (+ validate, docs, tests) | Done (merged to `integration`) | 2026-11-03 |
+| P3 | Online demo project pointed at the public endpoint | Playtested, in step-4 review | - |
 | P4 | `/release` batch, then the live check from the Pages origin | Queued | - |
 
 P1 and P2 are independent and can run in parallel; P3 needs both; P4 needs P3.
@@ -165,13 +165,13 @@ playtest, fast-forward `main`). The real acceptance test runs **from the Pages o
 here is skippable: Pages serves `main`.
 
 ## Tasks
-- [ ] P1 (homelab repo): tunnel + API-only Traefik router, DOCKER-USER fix, Block-429 rate-limit rule, vault-managed and rotated secrets, module cleanup, external smoke check
-- [ ] P2: `server_key` field, validation + two `--strict` checks, pure precedence function in `ironhold_nakama`, `ResolvedBackendConfig` field, runners return a real factory and own lazy device-id creation, tests per precedence case (file, runner, override, none) and a test that no device id is made when no server can be used (no key, or a config that can never connect)
-- [ ] P2: docs and comments listed above; `cargo check -p ironhold_cli`; re-cache `tools/bin/ironhold`
-- [ ] P2: review cycle (alignment, system-architect, debug-detective; ux for the docs; wasm-perf skipped, no per-frame work)
-- [ ] P3: `/new-project backend_demo_online` (explicit sign-in, friendly-status recipe, notes, header comment), regenerate and redeploy `ironhold_games.lua` for both games
-- [ ] P3: card, README row, reword the `backend_demo` card, `docs/30` recipe, "Publishing an online game" checklist, baseline (own commit)
-- [ ] P3/P4: record the real `last_error` for tunnel down / Nakama down / rate-limited from the Pages origin and add troubleshooting rows
+- [x] P1 (homelab repo): tunnel + API-only Traefik router, DOCKER-USER fix, Block-429 rate-limit rule, vault-managed and rotated secrets, module cleanup, external smoke check
+- [x] P2: `server_key` field, validation + two `--strict` checks, pure precedence function in `ironhold_nakama`, `ResolvedBackendConfig` field, runners return a real factory and own lazy device-id creation, tests per precedence case (file, runner, override, none) and a test that no device id is made when no server can be used (no key, or a config that can never connect)
+- [x] P2: docs and comments listed above; `cargo check -p ironhold_cli`; re-cache `tools/bin/ironhold`
+- [x] P2: review cycle (alignment, system-architect, debug-detective; ux for the docs; wasm-perf skipped, no per-frame work)
+- [x] P3: `/new-project backend_demo_online` (explicit sign-in, friendly-status recipe, notes, header comment), regenerate and redeploy `ironhold_games.lua` for both games
+- [x] P3: card, README row, reword the `backend_demo` card, `docs/30` recipe, "Publishing an online game" checklist, baseline (own commit)
+- [x] P3/P4: record the real `last_error` (server down observed 2026-11-03: `server unreachable`; the 401 plus refresh path noted; rate-limited not observed separately, same transport error) for tunnel down / Nakama down / rate-limited from the Pages origin and add troubleshooting rows
 - [ ] P4: `/release`, then the live acceptance checklist from the Pages origin
 - [ ] Update `docs/STATUS.md` and the backend_abstraction plan status; log the "device id readable by every Pages site on the origin" finding in the multi-tenant investigation item
 - [ ] Tests
@@ -207,3 +207,12 @@ here is skippable: Pages serves `main`.
 - `cargo test` suites and `ironhold validate --strict` pass for both demo projects; `test_web.py` runs `backend_demo_online`
   with no network traffic and no console errors; the fake demo and the browser suite are otherwise unchanged.
 - The Nakama secrets from the 2026-10-28 transcript are no longer valid before the hostname is announced.
+
+## Key rotation runbook (public `server_key`)
+
+The key sits in `assets/projects/backend_demo_online/backend.ron`, and Pages only changes through `/release`, so a rotation breaks the
+demo (`the server rejected the sign-in`) until the new key is live. Keep the gap short:
+1. On `integration`: edit the `server_key` line (a normal `assets/` commit, `ron_lint` + `validate --strict`), do not release yet.
+2. Prepare the release up to the point just before promoting (steps 11-14 of the workflow, `pkg/` committed).
+3. Rotate the key on the server (homelab vault + Nakama restart), then promote to `main` immediately (step 15).
+4. Open tabs and cached copies keep failing until reloaded; expect a few minutes of downtime and say so on the card if it is planned.

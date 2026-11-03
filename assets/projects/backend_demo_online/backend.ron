@@ -1,0 +1,18 @@
+// backend_demo_online: the same demo as backend_demo, against a real Nakama server over https.
+// This endpoint and key only accept game_id "backend_demo_online". For your own game you need your own Nakama server, or ask its
+// admin to add your game (`ironhold backend config`). A copy that renames game_id fails with "the server rejected the sign-in";
+// one that keeps it writes into the demo leaderboard. See "Running against a Nakama server" in docs/20_data_formats.md.
+// server_key is Nakama's public socket.server_key: it ships with the build and identifies the server, it protects nothing.
+// Never put runtime.http_key or console credentials here.
+BackendConfig(
+    schema_version: 1,
+    // Namespace on a shared server: [a-z0-9_], 1-32 characters. Defaults to project_id when omitted.
+    game_id: "backend_demo_online",
+    endpoint: "https://play.frankcreates.com",
+    // The server's public socket.server_key (rotated 2026-10-30); a new key means updating this line and republishing.
+    server_key: "7cc7497f91c8584c8f81008208d29ddb19261f14239c9a6d3fde316c52309173",
+    leaderboards: [
+        // ranking: HigherIsBetter | LowerIsBetter     keep: Best | Latest | Total
+        Leaderboard(name: "best", ranking: HigherIsBetter, keep: Best),
+    ],
+)

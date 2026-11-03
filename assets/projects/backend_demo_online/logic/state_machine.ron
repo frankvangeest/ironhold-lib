@@ -1,0 +1,38 @@
+(
+    schema_version: 1,
+    // Every Button in scenes/main.scene.ron needs a handler here (ironhold validate reports `unreachable_trigger` otherwise).
+    // Online answers arrive seconds later, while paused and across LoadScene, so they are bound in global_on.
+    global_on: [
+        ( event: "scene.ready:main", do_actions: [ SetVariable("score", "0") ] ),
+
+        // Nothing is requested until the visitor presses Sign in (no auto sign-in), so a page load never creates an account.
+        ( event: "ui.button_pressed:sign_in",   do_actions: [ SetVariable("demo_msg", ""), SignIn ] ),
+        ( event: "ui.button_pressed:sign_out",  do_actions: [ SignOut ] ),
+        ( event: "ui.button_pressed:add_score", do_actions: [ IncrementVariable("score", 10) ] ),
+        ( event: "ui.button_pressed:submit",    do_actions: [ SubmitScore(leaderboard: "best", score_var: "score") ] ),
+        ( event: "ui.button_pressed:refresh",   do_actions: [ FetchLeaderboard(leaderboard: "best", count: 5) ] ),
+
+        // Signing in automatically on start-up is off on purpose in this project (see above): bind `backend.ready` (the backend finished loading), not `scene.ready:main` -
+        // a SignIn fired before that answers `backend.busy`. `backend.offline` means there is no usable backend at all.
+        // Do not enable this line in the demo: the browser test (test_web.py) would then call the live server and its baseline would change.
+        // ( event: "backend.ready", do_actions: [ SignIn ] ),
+
+        // Friendly status. backend.* variables are engine-owned (`ironhold validate --strict` warns about a rule that writes them), so the
+        // message goes through a game variable shown in its own Label; the raw backend.last_error Label stays below it as the detail line.
+        // Only a sign-in that never reached the server (or a gateway error page, seen in a browser as the same thing) is "unavailable":
+        // a refused sign-in (wrong key, game not hosted) arrives as backend.sign_in_failed and retrying alone will not fix it.
+        ( event: "backend.unreachable",    do_actions: [ SetVariable("demo_msg", "Demo server unavailable. Press Sign in to retry.") ] ),
+        ( event: "backend.sign_in_failed", do_actions: [ SetVariable("demo_msg", "Could not sign in. Try again or reload; see below.") ] ),
+        ( event: "backend.offline",        do_actions: [ SetVariable("demo_msg", "The online demo cannot start here; see below.") ] ),
+        // Once signed in, a server that stops answering shows up as these two instead.
+        ( event: "score.submit_failed:best",     do_actions: [ SetVariable("demo_msg", "The request failed. Details below; try again.") ] ),
+        ( event: "leaderboard.list_failed:best", do_actions: [ SetVariable("demo_msg", "The request failed. Details below; try again.") ] ),
+        // Clear it again on every success, and when the player signs out (that also answers a pending sign-in as sign_in_failed).
+        ( event: "backend.signed_out",           do_actions: [ SetVariable("demo_msg", "") ] ),
+        ( event: "leaderboard.listed:best",      do_actions: [ SetVariable("demo_msg", "") ] ),
+
+        // Fill the board as soon as sign-in works, and again after every accepted score.
+        ( event: "backend.signed_in",    do_actions: [ SetVariable("demo_msg", ""), FetchLeaderboard(leaderboard: "best", count: 5) ] ),
+        ( event: "score.submitted:best", do_actions: [ FetchLeaderboard(leaderboard: "best", count: 5) ] ),
+    ],
+)

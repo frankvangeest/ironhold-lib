@@ -130,7 +130,8 @@ destination state's `entry_actions` and the source state's `exit_actions` along 
 | `custom_materials` | Custom WGSL shaders on primitive shapes via `assets.ron` |
 | `primitive_world` | Entire world from geometric primitives: trees, cottages, fences, a pond, a village |
 | `ui_demo` | Nestable flexbox `Group` UI layouts: rows in columns, `SpaceBetween`, spacers, and screen-edge anchoring with no pixel coordinates |
-| `backend_demo` | Online features without code: sign in, submit a score and read a top-5 leaderboard through `backend.ron` (an in-memory test backend), with copy-and-edit UI snippets in `ui/` |
+| `backend_demo` | Online features without code: sign in, submit a score and read a top-5 leaderboard through `backend.ron` (an in-memory `fake://` test backend that needs no server), with copy-and-edit UI snippets in `ui/` |
+| `backend_demo_online` | The same demo against a real Nakama server over https (`endpoint` + `server_key` in `backend.ron`); only works with the public demo server it points at |
 | `first_person_starter` | A first-person starting point for a shooter: the male character seen through a `FirstPerson` camera, keyboard + mouse and gamepad controls (`controls: FirstPerson`, sprint on the left trigger), mouse capture, a crosshair and a small test arena |
 
 ---
