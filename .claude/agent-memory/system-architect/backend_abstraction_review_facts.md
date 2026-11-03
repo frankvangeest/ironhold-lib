@@ -58,5 +58,14 @@ Code review of P2 (`feature/public_backend_demo`, uncommitted on 4ea6142, 2026-1
 - Runner keys (`?nakama_key=`, env) are never checked with `is_valid_server_key`; only the file key is (via `problems()`).
 - The device uuid is created before `NakamaBackend::new` validates endpoint/game_id (safe only because `problems()` ran first).
 
+Code review of P3 (`feature/public_backend_demo`, 8f7fdf5..4a7e030, 2026-11-03), facts that outlive it:
+- `backend.display_name` = Nakama `session.username` (unique, auto-generated; "Player" if empty) -> deletion-by-quoted-name
+  works. A committed public `server_key` is fine; first commit used a `PLACEHOLDER_SET_AT_GO_LIVE` value, no earlier real key.
+- Key rotation is coupled to a full `/release` (main only advances via integration), so server-side rotation and the Pages
+  deploy must be done together or the demo is broken in between; stale tabs then see "the server rejected the sign-in".
+- `backend_demo_online` baseline is deterministic only because nothing auto-signs-in (no request at load). Adding
+  `backend.ready -> SignIn` there would make test_web hit the live server.
+- `backend_demo_online` ui/ snippets and assets/prefabs are byte-identical copies of `backend_demo`'s: hand-synced drift risk.
+
 **Why:** these were the load-bearing gaps; recurring if lobby/multiplayer plans are revised.
 **How to apply:** any review of backend, lobby, cloud-save or Form 2 networking plans. See [[nakama-spike-facts]], [[determinism-networking]].

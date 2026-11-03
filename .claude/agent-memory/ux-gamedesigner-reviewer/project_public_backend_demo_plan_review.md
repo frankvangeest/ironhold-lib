@@ -1,28 +1,26 @@
 ---
 name: public-backend-demo-plan-review
-description: public_backend_demo plan review 2026-10-30 (server_key in backend.ron, backend_demo_online on Pages vs homelab Nakama); open designer/visitor gaps to re-check at impl review
+description: public_backend_demo plan (2026-10-30) + P3 impl review (2026-11-03): friendly-down recipe, sign_in_failed overloaded, gateway-error doc contradiction, snippet drift, visitor privacy copy
 metadata:
   type: project
 ---
 
-Plan `planning/features/public_backend_demo.md` reviewed 2026-10-30 -> verdict: P2 ready with doc additions, P3 not ready.
+Plan `planning/features/public_backend_demo.md` reviewed 2026-10-30 (P2 ready, P3 not). P3 impl reviewed 2026-11-03: nothing blocking.
 
-Re-check at implementation review:
-- Plan conflates `backend.offline` (no usable backend config) with a down server (`backend.unreachable` / `backend.sign_in_failed`).
-  Demo has no auto SignIn (backend.ready line commented out), so "offline message on page load" acceptance can't happen as written.
-- Behind Cloudflare Tunnel a down homelab answers HTTP 502/530 (or WAF 429), not a transport error. Adapter maps non-2xx to
-  "server answered HTTP 5xx" via SignInFailed (protocol.rs ok_json); in browsers missing CORS on CF error pages may turn it into
-  "server unreachable". Rate-limited visitor would read "server unreachable". Needs a live check + troubleshooting rows.
-- Visitor-facing text today = raw `backend.status` tokens ("signed_out") and raw last_error; friendly copy needs a
-  SetVariable bridge on backend.unreachable / sign_in_failed (no recipe in docs/30 yet).
-- Copy trap: public server only accepts game_ids in deployed ironhold_games.lua; a designer copying backend_demo_online and
-  renaming game_id (as duplicate_game_id pushes) gets "the server rejected the sign-in". No designer publishing path exists in
-  any doc (README only links Pages).
-- Stale after P2: backend_demo/backend.ron comment "(the page address picks the key)"; docs/20 play.html?nakama_key example and
-  the "no Nakama server key" fix row; a stale ?nakama_key= in a shared link overrides a rotated in-file key.
-- "Rotating means rebuilding clients": for web, RON is served next to the build, so it is "republish + cache", verify wording.
-- Deletion-on-request needs an identifier the visitor can see: the random `backend.display_name` (unique Nakama username).
+Open after P3 impl review (re-check if touched again):
+- `backend.sign_in_failed` means BOTH "server rejected" (wrong key / game_id not in ironhold_games.lua) and a gateway 5xx with CORS
+  (native, last_error `server answered HTTP 5xx`, no row in docs/20 last_error table). The demo + docs/30 recipe map it to
+  "Server unavailable. Press Sign in to retry." -> the copy trap (renamed game_id) shows "unavailable" forever.
+- docs/20 ~5111 and docs/30 ~460 say a gateway error page -> sign_in_failed; docs/20 ~5150/5157 say browser gets `server unreachable`
+  (no CORS). Needs "web: unreachable; native: sign_in_failed + server answered HTTP n".
+- "validate rejects writing backend.*" (docs/30 ~459, state_machine.ron comment) is wrong: it is a `--strict` warning `reserved_variable_write`.
+- backend_demo_online main.scene.ron says account block = ui/signin.ui.ron, but snippet lacks demo_msg_label (drift).
+- Visitor copy: on-screen "see the card" dead-ends for deep links; card says "offline", screen says "unavailable" + raw `signed_out`;
+  nothing says WHAT is stored (random name, scores, device id); "note your name before clearing site data" missing.
+
+Earlier plan items now resolved: offline vs down distinguished in docs; publishing path section exists in docs/20; console lines explained.
 
 **Why:** first public deployment; visitors (not designers) see last_error text directly.
-**How to apply:** at impl review, read backend_demo_online scene/logic + docs/20 Nakama section against these. Related:
+**How to apply:** when backend error mapping or the demo changes, check the 4 surfaces: docs/20 last_error table + console notes,
+docs/30 Online events recipe, backend_demo_online RON comments, index.html card. Related:
 [[backend-abstraction-plan-review]], [[project_ui_label_button_font_and_clip]], [[project_em_dash_font_glyph_gap]].

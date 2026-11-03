@@ -98,3 +98,4 @@
 - [Lighting: Bevy cascade asserts + shadow clamps](project_lighting_bevy_asserts_and_clamps.md) — num_cascades 0/overlap>=1 panic; directional size clamped, point not; WebGL2 max is 2048
 - [Backend game_id: runtime vs CLI](project_backend_game_id_runtime_vs_cli.md) — problems() skips the project_id fallback; first runtime check is GameNs::new inside the factory, after device-id side effects
 - [npc_id vs SpawnId](project_npc_id_vs_spawn_id.md) — equal for scene/Spawn NPCs; composite-child NPCs get the prefab key as npc_id and no SpawnId (collide across instances)
+- [Backend failure-event semantics](project_backend_failure_event_semantics.md) — SignOut mid-sign-in = sign_in_failed("signed out"); failed renewal never says "session expired"; down-while-online no unreachable

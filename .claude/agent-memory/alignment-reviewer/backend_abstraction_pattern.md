@@ -34,5 +34,12 @@ No ActionQueue push from the backend — correct pattern. Refusals (busy/offline
   real-endpoint project writes the device id before any Sign in ("lazy" only vs offline projects); docs/20 "Validation
   rules" bullet list is the usual missed site when a field gains a check; override to the *same* endpoint still drops the
   file key; native missing-key hint says "set server_key in backend.ron" even when `--backend` made that useless.
+- public_backend_demo P3 (reviewed 2026-11-03, RON-only, ALIGNED): `backend_demo_online` teaches the friendly-message recipe
+  (game var `demo_msg` + own Label, since `backend.*` vars are validate-rejected writes). Traps seen: mapping
+  `backend.sign_in_failed` to "server unavailable" misdiagnoses key rotation / game-not-deployed (retry can't help; needs
+  reload/admin); recipe covers only sign-in, not in-session `score.submit_failed`/`leaderboard.list_failed`; `backend.offline`
+  "not available in this build" misdiagnoses blocked localStorage; load-time `backend.offline` can race the
+  `scene.ready` clear of the same var; the `ui/*.ui.ron` copy-snippets drift from the scene (demo_msg label missing).
+  docs/20 contradicts itself on gateway-error-page -> sign_in_failed (L5111) vs server unreachable (troubleshooting row).
 
 Related: [[audio-state-pattern]] (engine-written variable precedent), [[real-pause-pattern]], [[diagnostic-only-feature-pattern]], [[web-host-page-contract]].
