@@ -1,6 +1,6 @@
 # Feature: Backend abstraction (core contract + Nakama adapter)
 
-_Status: In Progress (v1 and v2 Done, v3-v4 Queued). Plan-review round 1 done 2026-10-25; all seven decisions answered 2026-10-27, see "Decisions (answered)"._
+_Status: In Progress (v1 and v2 Done, v3-v4 Queued; the public demo `backend_demo_online` with the optional `server_key` shipped through `planning/features/public_backend_demo.md`, 2026-11-03). Plan-review round 1 done 2026-10-25; all seven decisions answered 2026-10-27, see "Decisions (answered)"._
 _Planned at: `cd90a12` (2026-10-25)_
 
 ## Phases

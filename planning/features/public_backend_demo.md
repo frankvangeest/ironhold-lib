@@ -9,8 +9,8 @@ _Planned at: `5683aed` (2026-10-28)_
 |---|---|---|---|
 | P1 | Homelab stage 2: public `https://` hostname for Nakama's client API (homelab repo) | Done | 2026-11-03 |
 | P2 | Engine: optional `server_key` in `backend.ron` (+ validate, docs, tests) | Done (merged to `integration`) | 2026-11-03 |
-| P3 | Online demo project pointed at the public endpoint | Playtested, in step-4 review | - |
-| P4 | `/release` batch, then the live check from the Pages origin | Queued | - |
+| P3 | Online demo project pointed at the public endpoint | Done (merged to `integration`, released) | 2026-11-03 |
+| P4 | `/release` batch, then the live check from the Pages origin | Released 2026-11-03; live check pending | - |
 
 P1 and P2 are independent and can run in parallel; P3 needs both; P4 needs P3.
 
@@ -172,8 +172,9 @@ here is skippable: Pages serves `main`.
 - [x] P3: `/new-project backend_demo_online` (explicit sign-in, friendly-status recipe, notes, header comment), regenerate and redeploy `ironhold_games.lua` for both games
 - [x] P3: card, README row, reword the `backend_demo` card, `docs/30` recipe, "Publishing an online game" checklist, baseline (own commit)
 - [x] P3/P4: record the real `last_error` (server down observed 2026-11-03: `server unreachable`; the 401 plus refresh path noted; rate-limited not observed separately, same transport error) for tunnel down / Nakama down / rate-limited from the Pages origin and add troubleshooting rows
-- [ ] P4: `/release`, then the live acceptance checklist from the Pages origin
-- [ ] Update `docs/STATUS.md` and the backend_abstraction plan status; log the "device id readable by every Pages site on the origin" finding in the multi-tenant investigation item
+- [x] P4: `/release` (2026-11-03: all tests green, release build 31 MB, playtest confirmed, `main` fast-forwarded)
+- [ ] P4: the live acceptance checklist from the Pages origin on mobile data
+- [x] Update `docs/STATUS.md` and the backend_abstraction plan status; log the "device id readable by every Pages site on the origin" finding in the multi-tenant investigation item
 - [ ] Tests
 
 ## Decisions (Frank, 2026-10-29)
