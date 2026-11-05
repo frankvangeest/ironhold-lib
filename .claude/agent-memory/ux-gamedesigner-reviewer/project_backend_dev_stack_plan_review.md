@@ -1,22 +1,22 @@
 ---
 name: backend-dev-stack-plan-review
-description: backend_dev_stack plan-review 2026-11-05 - local Nakama under backend/; up.sh default project set excludes fake:// demos; hosted web build cannot reach it; needs cached CLI + Rust
+description: backend_dev_stack plan+impl review 2026-11-05 - local Nakama under backend/; doc checklist delivered; open nits = CLI-build link from dev section, CARGO_TARGET_DIR-unset cp, "web build cannot" overbroad
 metadata:
   type: project
 ---
 
-Plan `planning/features/backend_dev_stack.md` reviewed 2026-11-05: Needs more design work (doc side).
+Plan reviewed 2026-11-05 (needs more doc design); impl docs reviewed same day: all plan items delivered.
 
-Open items to re-check at impl review:
-- up.sh default games = projects with non-fake endpoint -> only backend_demo_online; `--backend http://127.0.0.1:7350` on backend_demo
-  then fails "the server rejected the sign-in". up.sh must print a runnable line naming an INCLUDED project + NAKAMA_SERVER_KEY=defaultkey
-  (file's server_key is not sent with --backend).
-- up.sh needs tools/bin/ironhold (gitignored, local build) -> repo clone + Rust; not a designer-only path. Docs must say so.
-- Hosted web build loads its own hosted assets/backend.ron -> cannot target a local server at all; needs local serve.py + edited
-  endpoint. docs/20 ~5130 "https page cannot reach http" vs localhost exception needs verifying (Chrome local-network-access prompt).
-- No docs/dev index file exists; the index is docs/README.md dev rows.
-- Warning must also be in up.sh stdout; Docker-not-installed / port-in-use / slow first pull messages unspecified.
+Resolved at impl: default up.sh set now includes fake:// projects (all with backend_path), printed command carries
+NAKAMA_SERVER_KEY=defaultkey; prerequisites first in backend/README.md; docs/20 ~5132 one-sentence pointer + prereqs,
+links only dev/backend_dev_stack.md#run-a-game-against-it; up.sh fail() messages match backend/README troubleshooting rows;
+"tested version pinned in backend/.env" at docs/20 ~5101; docs/15 ~97 links ../backend/README.md.
 
-**Why:** first local-server workflow; designers were promised "a designer or engine developer can run up.sh".
-**How to apply:** at impl review, run the printed up.sh instructions literally against a fake:// demo. Related:
-[[public-backend-demo-plan-review]], [[backend-abstraction-plan-review]], [[project_docs_audience_split]].
+Open nits (impl review): dev "Run a game against it" section says "needs the cached CLI" with no link to how to build it
+(the docs/20 reader lands there); backend/README cp line breaks if CARGO_TARGET_DIR unset; dev doc "the web build cannot use
+a local server" is broader than true (a local serve.py with edited endpoint can); "no project with a backend_path" error
+not in the troubleshooting table; port check covers only 7350.
+
+**Why:** first local-server workflow; docs/20 points designers at a dev page.
+**How to apply:** if backend/ docs change again, re-check the docs/20 -> dev anchor and the up.sh message/table parity.
+Related: [[public-backend-demo-plan-review]], [[backend-abstraction-plan-review]], [[project_docs_audience_split]].

@@ -41,5 +41,9 @@ No ActionQueue push from the backend — correct pattern. Refusals (busy/offline
   "not available in this build" misdiagnoses blocked localStorage; load-time `backend.offline` can race the
   `scene.ready` clear of the same var; the `ui/*.ui.ron` copy-snippets drift from the scene (demo_msg label missing).
   docs/20 contradicts itself on gateway-error-page -> sign_in_failed (L5111) vs server unreachable (troubleshooting row).
+- backend_dev_stack (reviewed 2026-11-05, dev tooling, ALIGNED): `backend/up.sh` derives the game list from each project's backend.ron
+  via `ironhold backend config` (no hardcoded game ids). Doc trap: "the web build cannot use a local server" is overstated — web
+  `?backend=` is fake://-only (ironhold_web lib.rs), but `BackendConfig::problems()` accepts `http://` endpoints, so a locally served
+  web build with an edited backend.ron (`http://127.0.0.1:7350` + key) CAN reach it; only the *hosted* build can't.
 
 Related: [[audio-state-pattern]] (engine-written variable precedent), [[real-pause-pattern]], [[diagnostic-only-feature-pattern]], [[web-host-page-contract]].
