@@ -67,5 +67,14 @@ Code review of P3 (`feature/public_backend_demo`, 8f7fdf5..4a7e030, 2026-11-03),
   `backend.ready -> SignIn` there would make test_web hit the live server.
 - `backend_demo_online` ui/ snippets and assets/prefabs are byte-identical copies of `backend_demo`'s: hand-synced drift risk.
 
+Plan review of v3 lobbies/matchmaker (9bc30b0, 2026-11-05), verdict Needs more design work:
+- No v3 Action/RequestKind exists yet (only `BackendFeature::Lobbies/Matchmaker` in schema/backend.rs); v3 is 3 bullets.
+- Public-read storage objects are owner-write only: joiners cannot bump "2/4", max_players is unenforceable, and a vanished
+  host leaves the object forever. Needs a server RPC (server-owned objects, OCC version) or an authoritative labelled match.
+  `RpcFunc` and realtime `Rpc` are in the Lua closed list.
+- Engine `request_timeout_secs` default 15 s == Nakama matchmaker interval 15 s: FindMatch would time out. Needs a per-kind deadline.
+- Engine-written vars clear only `leaderboard.` (backend.rs ~467); `lobby.`/`matchmaker.` are not under the reserved `backend.` prefix.
+- MatchmakerAdd guard should REWRITE query/properties (prepend `+properties.game:{gid}`), not validate them.
+
 **Why:** these were the load-bearing gaps; recurring if lobby/multiplayer plans are revised.
 **How to apply:** any review of backend, lobby, cloud-save or Form 2 networking plans. See [[nakama-spike-facts]], [[determinism-networking]].

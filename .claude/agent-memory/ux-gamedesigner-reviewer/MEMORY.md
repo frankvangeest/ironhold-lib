@@ -1,6 +1,7 @@
 # Memory Index
 
 - [backend_abstraction plan+v1+v2 review](project_backend_abstraction_plan_review.md) — v2 Nakama: no-key says "no adapter", config regen drops games, no key source/troubleshooting
+- [backend v3 lobby/matchmaker plan review](project_backend_v3_lobby_plan_review.md) — no "my lobby" vars/host/ready; empty-row Join; join_failed has no reason
 - [public_backend_demo plan+P3 review](project_public_backend_demo_plan_review.md) — sign_in_failed overloaded (rejected vs 5xx); gateway-error doc contradiction; snippet drift; visitor privacy copy
 
 - [entity.attacked co-op attribution](project_npc_attacked_coop_attribution.md) — nearest-player rule documented only in docs/30 ~109; docs/20 NPC section silent
