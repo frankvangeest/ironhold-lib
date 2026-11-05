@@ -217,9 +217,9 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.5 (deterministic
   `public_backend_demo`, 2026-11-03; also noted in "Investigation: multi-tenant game hosting on Nakama"). Bind the id to the
   endpoint/game (hash) before cloud save and **before any lobby is enabled on a public project**, because lobbies raise what a stolen
   id is worth. Blocks enabling "Backend v3a" lobbies in `backend_demo_online`.
-- [ ] **`backend/` folder: local Nakama for development, plus the server module** _(2026-11-03, Frank)_ - **Plan (Draft, 2026-11-05; two
-  decisions open, notably that the module can stay in `crates/ironhold_nakama/server/` because the CLI already embeds it and generates the
-  deployable files): `planning/features/backend_dev_stack.md`. Docker is installed but its daemon is not running here: Frank starts Docker Desktop.** One place in this repo that
+- [ ] **`backend/` folder: local Nakama for development, plus the server module** _(2026-11-03, Frank)_ - **Plan Ready (2026-11-05; decided: the module stays in
+  `crates/ironhold_nakama/server/` because the CLI already embeds it and generates the deployable files; the stack is one compose file with
+  variables, plus `up.sh`/`down.sh`): `planning/features/backend_dev_stack.md`. Docker is installed but its daemon is not running here: Frank starts Docker Desktop.** One place in this repo that
   holds everything needed to run a Nakama locally and to deploy the engine's server side: (1) a local dev stack (`docker-compose.yml`,
   `up`/`down` scripts, a README) with Nakama's default keys, bound to 127.0.0.1 only, with a README warning that it is never a
   deployable config; (2) the server module, moved from `crates/ironhold_nakama/server/ironhold.lua`, and the generated
