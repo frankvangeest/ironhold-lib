@@ -1,6 +1,6 @@
 # Feature: `backend/` folder - a local Nakama for development
 
-_Status: Draft (two decisions for Frank, see "Open questions")_
+_Status: Draft (decisions answered 2026-11-05, plan-review pending)_
 _Planned at: `dd2d811` (2026-11-05)_
 
 ## What
@@ -71,17 +71,13 @@ backend/
       ironhold_cli --test backend_config` and `cargo test -p ironhold_nakama` still pass
 - [ ] Update the homelab staging item's "module and config deploy path" to say "the CLI output" (cross-repo, backlog text only)
 
-## Open questions
+## Decisions (answered by Frank, 2026-11-05)
 
-1. **Module location.** Keep `ironhold.lua` in `crates/ironhold_nakama/server/` (recommended, see Approach) or move it into `backend/` as the
-   backlog item first proposed. The backlog item said "moved from"; the finding that the CLI embeds it and the homelab can use the CLI's output
-   removes the reason to move it.
-2. **Local server for a web playtest.** The web build only gets its endpoint from `backend.ron`, and the backend demos point at
-   `https://play.frankcreates.com`. To playtest v3a lobbies in a browser against the local stack, either a project needs a local
-   `backend.ron` (a `backend_demo_lobby` variant with `endpoint: "http://127.0.0.1:7350"`), or the dev server override gets a web path. Proposed:
-   the variant project, decided when `backend_demo_lobby` is planned; this folder only has to make the server reachable. Say if you want it
-   settled now.
-3. Does `up.sh` need to start Docker Desktop itself? Proposed: no, it prints "start Docker Desktop" and exits non-zero.
+1. **Module location:** `ironhold.lua` stays in `crates/ironhold_nakama/server/`; `backend/` generates `modules/` from the CLI. (The backlog
+   item's "moved from" wording is superseded.)
+2. **Local server for a web playtest:** a local variant of `backend_demo_lobby` with `endpoint: "http://127.0.0.1:7350"`, decided when that project
+   is planned; this folder only makes the server reachable.
+3. **Docker Desktop:** `up.sh` does not start it; it prints "start Docker Desktop" and exits non-zero (proposed, not objected to).
 
 ## Acceptance criteria
 
