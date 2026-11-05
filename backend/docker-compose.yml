@@ -1,0 +1,45 @@
+# LOCAL DEVELOPMENT ONLY. Never a deployable config: Nakama's default server key and console login, a throwaway Postgres password,
+# every port bound to 127.0.0.1. Production and staging live in the homelab repo.
+# Run it with backend/up.sh (generates ./modules first). The contract test reuses this file under another project name and port.
+name: ironhold-dev
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE}
+    environment:
+      POSTGRES_DB: nakama
+      POSTGRES_PASSWORD: localdb
+    volumes:
+      - nakama-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "nakama"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  nakama:
+    image: ${NAKAMA_IMAGE}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint:
+      - "/bin/sh"
+      - "-ecx"
+      - >
+        /nakama/nakama migrate up --database.address postgres:localdb@postgres:5432/nakama &&
+        exec /nakama/nakama --name nakama1 --database.address postgres:localdb@postgres:5432/nakama
+        --logger.level INFO --session.token_expiry_sec ${NAKAMA_TOKEN_EXPIRY:-7200} --runtime.path /nakama/data/modules
+    volumes:
+      - ${NAKAMA_MODULES:-./modules}:/nakama/data/modules
+    # The client API and the console. gRPC (7349) is deliberately not published.
+    ports:
+      - "127.0.0.1:${NAKAMA_PORT:-7350}:7350"
+      - "127.0.0.1:${NAKAMA_CONSOLE_PORT:-7351}:7351"
+    healthcheck:
+      test: ["CMD", "/nakama/nakama", "healthcheck"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  nakama-data:

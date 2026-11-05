@@ -226,6 +226,7 @@ Everything is indexed, with an audience tag per doc, in [`docs/README.md`](docs/
 | [`docs/dev/50_roadmap_and_milestones.md`](docs/dev/50_roadmap_and_milestones.md) | Milestones and roadmap |
 | [`docs/dev/70_profiling.md`](docs/dev/70_profiling.md) | Profiling and performance analysis |
 | [`docs/dev/browser_tests.md`](docs/dev/browser_tests.md) | Browser test suite |
+| [`docs/dev/backend_dev_stack.md`](docs/dev/backend_dev_stack.md) | Local Nakama for development (`backend/`, engine developers) |
 
 ---
 

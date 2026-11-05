@@ -1,0 +1,6 @@
+# Shell scripts, compose files and the backend pins must keep LF endings: a CR inside a script (`bash\r`) or an image tag breaks them.
+# (This repo checks out most other files as CRLF on Windows; only these types are pinned.)
+*.sh text eol=lf
+*.yml text eol=lf
+backend/.env text eol=lf
+.githooks/* text eol=lf

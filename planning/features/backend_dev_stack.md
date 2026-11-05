@@ -92,23 +92,31 @@ Traefik and Cloudflare stay in the homelab repo, whose deploy script takes `iron
 
 ## Tasks (in this order)
 
-- [ ] `.gitattributes` (rules above); confirm with `git ls-files --eol`
-- [ ] `backend/docker-compose.yml` and `backend/.env`; `.gitignore` entry for `backend/modules/`
-- [ ] Rework `crates/ironhold_nakama/tests/contract/run.sh` (name, env file, ports, absolute modules path, `--wait`, trap); delete its compose file; keep
+- [x] `.gitattributes` (rules above); confirm with `git ls-files --eol`
+- [x] `backend/docker-compose.yml` and `backend/.env`; `.gitignore` entry for `backend/modules/`
+- [x] Rework `crates/ironhold_nakama/tests/contract/run.sh` (name, env file, ports, absolute modules path, `--wait`, trap); delete its compose file; keep
       `tests/contract/modules/ironhold_games.lua` and the script's path and interface
-- [ ] `backend/up.sh`, `backend/down.sh`, `backend/README.md`
-- [ ] Docs: `docs/dev/backend_dev_stack.md` (developer page; how it works, the checks, re-run semantics, troubleshooting) with a row in the dev section of `docs/README.md`
+- [x] `backend/up.sh`, `backend/down.sh`, `backend/README.md`
+- [x] Docs: `docs/dev/backend_dev_stack.md` (developer page; how it works, the checks, re-run semantics, troubleshooting) with a row in the dev section of `docs/README.md`
       (there is no `docs/dev` index file); `docs/20_data_formats.md` "Running against a Nakama server": **one sentence plus prerequisites**, linking
       only the page's "Run a game against it" section, plus the plain statement "the hosted web build cannot use a local server; use `fake://` or ask a developer"
       (and check the existing "https pages cannot reach http" line against loopback, Chrome's local-network permission, instead of assuming), the `tested with 3.41.0`
       line pointed at `backend/.env` as the version of record, and local troubleshooting rows ("rejected sign-in: re-run `backend/up.sh <project>`", "after
       `down.sh -v` all local accounts and scores are gone"); `docs/15_authoring_tools.md`'s `ironhold backend config` row notes that `backend/up.sh` runs it for you; a root `README.md` pointer to `backend/`
-- [ ] Backlog: update the `backend/` item (module stays in the crate, plan link, Done when merged) and the homelab staging item's "module and config deploy path" wording (cross-repo, backlog text only)
-- [ ] Tests (no Docker daemon needed): `docker compose -f backend/docker-compose.yml --env-file backend/.env config` for the dev defaults and for the contract variable set
+- [x] Backlog: update the `backend/` item (module stays in the crate, plan link, Done when merged) and the homelab staging item's "module and config deploy path" wording (cross-repo, backlog text only)
+- [x] Tests (no Docker daemon needed): `docker compose -f backend/docker-compose.yml --env-file backend/.env config` for the dev defaults and for the contract variable set
       (resolved image, ports, mount path, project name); `bash -n` on each script; `git ls-files --eol`; `up.sh` on a machine without a daemon exits non-zero and writes nothing;
       module generation run on its own; `cargo test -p ironhold_nakama` and `cargo test -p ironhold_cli --test backend_config`
-- [ ] Tests (Docker running, Frank starts Docker Desktop): `up.sh` reaches healthy and the printed command signs in; `tests/contract/run.sh` passes **while the dev stack is up** and leaves it running with its data;
+- [x] Tests (Docker running; Docker Desktop was started by Frank): `up.sh` reaches healthy and the printed command signs in; `tests/contract/run.sh` passes **while the dev stack is up** and leaves it running with its data;
       editing a `backend.ron` and re-running `up.sh` picks the change up
+
+## Implementation notes (2026-11-05)
+
+- The stale-CLI check is a warning, not an exit (file times are reset by a git checkout): `up.sh` compares the CLI's embedded `ironhold.lua` with the source and warns when they differ; the source module is always the one loaded.
+- `up.sh` generates into a temporary folder and copies over `backend/modules/`; arguments are folder names under `assets/projects/`; the project scan reads each project's own `.project.ron` for `backend_path` set to a string; `-p ironhold-dev` and the ports are fixed inside the scripts so an inherited `COMPOSE_PROJECT_NAME`/`NAKAMA_PORT` cannot change them.
+- One stack per machine: several worktrees share it (documented). `.gitattributes` also pins `.githooks/*` to LF.
+- The printed command has no `--all-features` (`ironhold_native`'s only feature is `inspector`).
+- Not verified: the browser's behaviour for an `https` page reaching `http://127.0.0.1` (the docs only say the hosted web build cannot use a local server).
 
 ## Acceptance criteria
 
