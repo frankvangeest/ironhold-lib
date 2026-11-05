@@ -1,6 +1,6 @@
 # Feature: Backend abstraction (core contract + Nakama adapter)
 
-_Status: In Progress (v1 and v2 Done, v3-v4 Queued; the public demo `backend_demo_online` with the optional `server_key` shipped through `planning/features/done/public_backend_demo.md`, 2026-11-03). Plan-review round 1 done 2026-10-25; all seven decisions answered 2026-10-27, see "Decisions (answered)"._
+_Status: In Progress (v1 and v2 Done, v3a Ready, v3b and v4 Queued; the public demo `backend_demo_online` with the optional `server_key` shipped through `planning/features/done/public_backend_demo.md`, 2026-11-03). Plan-review round 1 done 2026-10-25; all seven decisions answered 2026-10-27, see "Decisions (answered)"._
 _Planned at: `cd90a12` (2026-10-25)_
 
 ## Phases
@@ -9,7 +9,8 @@ _Planned at: `cd90a12` (2026-10-25)_
 |---|---|---|---|
 | v1 | Contract in core (Actions, events, engine-written variables, poll trait, glue system) + `FakeBackend`; sign-in and leaderboard only; nothing networked | Done | 8745ef9 (2026-10-27) |
 | v2 | `ironhold_nakama` adapter, **native and wasm32 on the LAN**: sign-in, leaderboards, server module with `game_id` enforcement; cloud save once local save exists | Done | e97da79 (2026-10-28) |
-| v3 | Lobby list (public-read storage), then matchmaker | Queued | — |
+| v3a | Lobbies over REST: server-owned lobby objects behind generic Lua RPCs, waiting-room variables and events, `StartLobby`, `backend_demo_lobby` (fake first) | Ready | — |
+| v3b | Realtime socket and matchmaker (`FindMatch`, `CancelMatch`), "transport preview": fake and contract test only, not on the public demo | Queued | — |
 | v4 | Stage 2: `wss://` from an `https` page, tunnel latency and idle sockets, half-open drop | Queued | — |
 | later | Relay transport: only after the sync library is chosen (see "Relay seam") | Icebox | — |
 
@@ -37,6 +38,14 @@ event payloads removed (the interpreter matches event names exactly, so JSON or 
 the poll-trait model chosen; two crates instead of three; `backend_path`/`schema_version` added; failure events per operation;
 async and determinism rules written down; wasm moved into v2; the relay trait dropped; server-side `game_id` enforcement added;
 dependencies on the unshipped local save plan made explicit.
+
+## Plan-review round 2 (2026-11-05), what changed
+
+System-architect and UX review of v3 both returned "needs more design work" (the section was three bullets). All eight resulting decisions were
+accepted by Frank the same day (see "Decisions (answered 2026-11-05)"): v3 is split into **v3a** (lobbies over REST and server-side RPCs, no
+realtime socket) and **v3b** (socket and matchmaker, "transport preview"); lobbies are server-owned objects behind generic Lua RPCs instead of
+public-read objects a client writes; a waiting-room vocabulary, a start signal and fixed failure reasons were added; the matchmaker gets its own
+deadline. v3a is Ready; its prerequisites are tracked as backlog items (see v3a).
 
 ## Approach
 
@@ -96,8 +105,8 @@ Failure events exist **per operation** and carry that operation's id. Data goes 
 | Account | `SignIn`, `SignOut` | `backend.signed_in`, `backend.signed_out`, `backend.sign_in_failed`, `backend.offline` (nothing configured), `backend.unreachable` (server down), `backend.busy`, `backend.connection_lost`, `backend.reconnected` | `backend.status` (`offline`/`connecting`/`online`), `backend.display_name`, `backend.last_error` (text, for a Label) |
 | Leaderboard | `SubmitScore(leaderboard:, score_var:)`, `FetchLeaderboard(leaderboard:, count:)` | `score.submitted:{leaderboard}`, `score.submit_failed:{leaderboard}`, `leaderboard.listed:{leaderboard}`, `leaderboard.list_failed:{leaderboard}` | `leaderboard.<name>.count`, `leaderboard.<name>.<n>.name`, `.<n>.score`, `.my_rank`, `.my_best` (n = 1..count, fixed max 10) |
 | Cloud save (after local save) | `SaveToCloud(slot:)`, `LoadFromCloud(slot:)`, `DeleteCloudSave(slot:)` | `cloud.written:{slot}`, `cloud.loaded:{slot}`, `cloud.empty:{slot}`, `cloud.save_failed:{slot}`, `cloud.load_failed:{slot}`, `cloud.conflict:{slot}` | — |
-| Lobbies (v3) | `ListLobbies`, `CreateLobby(name:, max_players:)`, `JoinLobby(row:)`, `LeaveLobby` | `lobby.listed`, `lobby.created`, `lobby.joined`, `lobby.left`, `lobby.list_failed`, `lobby.join_failed` | `lobby.count`, `lobby.<n>.name`, `lobby.<n>.players` ("2/4"), n = 1..10 |
-| Matchmaker (v3) | `FindMatch(min:, max:, timeout_secs:)`, `CancelMatch` | `matchmaker.searching`, `matchmaker.matched`, `matchmaker.cancelled`, `matchmaker.timed_out`, `matchmaker.failed` | `matchmaker.status` |
+| Lobbies (v3a) | `ListLobbies`, `CreateLobby(name:, max_players:)`, `JoinLobby(row:)`, `LeaveLobby`, `StartLobby` (host only) | `lobby.listed`, `lobby.created`, `lobby.joined`, `lobby.left`, `lobby.started`, `lobby.member_joined`, `lobby.member_left`, `lobby.closed`, `lobby.list_failed`, `lobby.create_failed`, `lobby.join_failed`, `lobby.start_failed` | reserved `lobby.` prefix, excluded from `SaveState`: `lobby.count`, `lobby.<n>.name`, `.players` ("2/4"), `.id` (n = 1..10); `lobby.current.name`, `.players`, `.is_host` ("yes"/"no"), `.id`; `lobby.member.<n>.name` (n = 1..8); `lobby.last_error` (fixed reasons, see v3a) |
+| Matchmaker (v3b) | `FindMatch(min:, max:, timeout_secs:)`, `CancelMatch` | `matchmaker.searching`, `matchmaker.matched`, `matchmaker.cancelled`, `matchmaker.timed_out`, `matchmaker.failed` | `matchmaker.status` |
 
 - **Lists reach the UI as indexed variables plus row actions** (`JoinLobby(row: 3)`): a designer builds a list from N Labels and N
   Buttons they already know; no list widget and no text-input widget is needed. (Proposed; alternative is engine-owned panels like
@@ -248,11 +257,87 @@ latency, higher ceiling, +34 KB wasm).
   strips a client's per-write operator. Verified by `crates/ironhold_nakama/tests/contract/run.sh` against a local container (not the homelab yet).
 - Deferred: see the backlog item "Backend v2 follow-ups".
 
-### v3 — lobbies and matchmaker
-- [ ] `JoinLobby(row:)` resolves against the snapshot taken when the list was written (rows shift on refresh); also expose `lobby.<n>.id`
-- [ ] Default UI snippet `lobby.ui.ron` (rows with a Join button each) in the demo project's `ui/` folder, same rules as v1
-- [ ] Public-read lobby objects with `JoinLobby(row:)`; then matchmaker (`FindMatch`, `CancelMatch`, timeout). Docs mark these **"matching only, no shared
-      gameplay yet"** until a relay transport exists (designers get a match handle and nothing to play).
+### v3a — lobbies over REST (Ready)
+
+**Prerequisites** (backlog items, all done or explicitly waived before v3a reaches `integration`): the `backend/` folder (local Nakama,
+module moved there); the homelab staging Nakama; the homelab Cloudflare rate rule for `/v2/rpc`; "Backend v3a prerequisite: reopen the
+closed server APIs one by one". **Before lobbies are enabled on any public project** (including `backend_demo_online`): "Bind the device
+id to the game". Lobbies are not turned on in `backend_demo_online` by this plan; the new project `backend_demo_lobby` carries them.
+
+**Storage model (decision 8).** A lobby is a **server-owned** storage object (system user, collection `{game_id}.lobbies`; no client has read
+or write permission on it), created and changed only by generic Lua RPCs that take the game from the `game_id` session variable:
+`ironhold_lobby_create`, `_join`, `_list`, `_leave`, `_heartbeat`, `_start`. Clients never touch the collection (the module's storage
+before-hook rejects it). Why not public-read objects a client writes: Nakama storage is writable only by its owner, so a joiner could not
+change "2/4", `max_players` could not be enforced, and a vanished host would leave the object behind forever. Nakama groups (no expiry) and
+parties (no listing) are not used; authoritative labelled matches are the later alternative, once a relay exists.
+- **Expiry.** Each lobby and each member carries `expires_at`; `_heartbeat` extends it and returns the current lobby (members, started flag), so
+  one call both keeps the lobby alive and delivers changes. Defaults, tunable: expiry 30 s, engine heartbeat every 5 s while in a lobby.
+  `_list` drops expired lobbies and members. A closed tab or a vanished host is therefore covered without any cleanup job.
+- **Limits.** One lobby per user, at most 50 per game, `max_players` 2..8, a lobby name of at most 32 printable ASCII characters (validated
+  by the server; names are designer constants, there is no text input widget). A user's id and device id are never put in lobby data;
+  members appear by display name only.
+- **`StartLobby` (decision 3).** Host only. `_start` marks the lobby started; every member learns it on its next heartbeat and gets
+  `lobby.started`. The **match handle** (lobby id plus a server-issued token) stays inside the adapter and is never written to
+  `GameVariables`, so it cannot end up in a save. Nothing consumes it until a relay exists; it is the seam into the relay transport.
+- **Leaving (decision 4).** `SignOut` leaves the current lobby; `LoadScene` does not (a lobby survives scene changes like any backend reply);
+  a closed tab is covered by expiry. `CreateLobby` while already in a lobby answers `lobby.create_failed` (reason `already_in_lobby`).
+
+**Vocabulary** (see the table above). Rules a designer can rely on, to go into `docs/20_data_formats.md` and `docs/30_runtime_events_and_logic.md`:
+- `JoinLobby(row: n)` resolves against the snapshot taken when the list was last written (rows shift on refresh); `lobby.<n>.id` is exposed.
+  An empty or out-of-range row answers `lobby.join_failed` (reason `no_lobby`) plus a warning in the log, never silently. A joiner whose list is
+  stale gets reason `list_out_of_date` or `gone`.
+- `lobby.last_error` holds one fixed reason, set before the matching `*_failed` event: `full`, `gone`, `list_out_of_date`, `no_lobby`,
+  `already_in_lobby`, `limit_reached`, `not_host`, `server`. Designers word their own messages from it (the `demo_msg` pattern of
+  `backend_demo_online`); no error codes in event names. `lobby.closed` carries `host_left`, `removed` or `server`.
+- `lobby.<n>.*` and `lobby.member.<n>.*` are cleared by `SignOut` and when a list comes back empty; `lobby.current.*` is cleared by `lobby.left` and `lobby.closed`.
+- The designer drives list refresh (a Refresh button or an `EmitEventAfterDelay` loop); document a minimum of about 5 s.
+- **Connection drops (v3a, no socket):** when heartbeats keep failing past the expiry window, the engine drops its local lobby state and emits
+  `lobby.closed` (reason `server`) **before** `backend.connection_lost`, so a designer's state machine always has an exit from the waiting state.
+- Failure events: `lobby.list_failed`, `lobby.create_failed`, `lobby.join_failed`, `lobby.start_failed`; each has one id-less form because there is
+  exactly one list and one current lobby (stated in the docs).
+
+**Core and adapter.** New `RequestKind` variants with dedupe keys and failure mapping; unsolicited replies from heartbeats use request id 0, so the
+glue system's sort needs a stable tie-break; the reserved and save-excluded prefixes grow to `lobby.` (and `matchmaker.` for v3b), and the
+`reserved_variable_write` strict warning covers them. `FakeBackend` simulates lobbies including a few other members. Adapter code stays in
+`ironhold_nakama`; the CLI stays network-free.
+
+**Server module.** Reopen `RpcFunc` with an allowlist of the `ironhold_lobby_*` RPCs only; keep matches, parties, groups, friends, chat and
+realtime closed ("matching only"). Adversarial contract cases in `tests/contract/run.sh`: another game's lobby list/join/heartbeat, an oversized
+or non-ASCII name, joining a full lobby, a second lobby by one user, a direct storage read/write of the lobbies collection.
+
+**Validate (`ironhold validate`).** Error: `row` outside 1..10; `CreateLobby` `max_players` outside 2..8; an action whose feature (`Lobbies`) is not declared. `--strict` warning:
+`JoinLobby` with no `ListLobbies` anywhere in the project; a Label bound to `lobby.11.*`.
+
+**Demo and docs.** New project `backend_demo_lobby` (created with `/new-project`, on `fake://` first; a live-server variant only after the
+prerequisites): list, create, join, leave, start, a waiting room built from `lobby.current.*` and `lobby.member.<n>.*`, rows hidden with
+`SetUiVisible` keyed on `lobby.count`, friendly messages from `lobby.last_error`. Its card and on-screen text say **"Finds and joins players;
+nobody can play together yet"**; it ends on "Started: N players. Shared play arrives with networking". Default UI snippet `lobby.ui.ron` in its
+`ui/` folder. Docs: `docs/20` (action, event, variable and reason tables, the snapshot rule, limits), `docs/30` (empty list, full lobby, server
+down, the browse - waiting room - started flow as states), `docs/STATUS.md`, README row, `index.html` card.
+
+- [ ] Prerequisites done (see above)
+- [ ] Core: actions, events, variables, `RequestKind`s, request-id-0 ordering, reserved prefixes, `FakeBackend` lobbies, validate checks, tests
+- [ ] `ironhold_nakama`: lobby client over the generic RPCs, heartbeat loop, match handle kept in the adapter
+- [ ] Lua module: `ironhold_lobby_*` RPCs, `RpcFunc` allowlist, storage guard, limits, adversarial contract tests
+- [ ] `backend_demo_lobby` project, `lobby.ui.ron`, baseline (own commit), card
+- [ ] Docs as listed above; dev playtest against the staging Nakama
+
+### v3b — realtime socket and matchmaker ("transport preview", Queued, depends on v3a)
+
+- [ ] Per-kind request deadline: `FindMatch` uses its own `timeout_secs` and is exempt from the global `request_timeout_secs` (15 s equals Nakama's
+      15 s matchmaker interval, so the global timeout would fire before any result); `matchmaker.timed_out` is the engine's answer and calls
+      `cancel()`, which sends `MatchmakerRemove`
+- [ ] Realtime socket in `ironhold_nakama` behind `client`: native = a dedicated thread with blocking `tungstenite` (reusing the existing ureq/rustls
+      stack, no tokio); wasm32 = `web_sys::WebSocket` inside the `NonSend` adapter, closures pushing into the existing channel. **JSON envelope, not
+      protobuf** (matchmaker messages are tiny; protobuf adds about 34 KB to the wasm). Opened lazily on `FindMatch`, closed on matched or cancelled;
+      a fresh session token first (tokens last 60 s); `ConnectionLost`/`Reconnected` only while a socket is open; **no reconnect-and-resume in v3**:
+      Nakama drops the ticket with the session, so a drop answers `matchmaker.failed` (and cancels any search so the state machine can exit)
+- [ ] Lua: reopen `MatchmakerAdd` with a guard that **rewrites** the ticket (sets `string_properties.game` to the session's game and prepends
+      `+properties.game:{gid}` to the query), and `MatchmakerRemove`; keep `MatchJoin`/`MatchCreate`/`Party*` closed; adversarial contract
+      cases (cross-game ticket, forged `game` property)
+- [ ] `FindMatch`, `CancelMatch`, `matchmaker.searching/matched/cancelled/timed_out/failed`, `matchmaker.status`; validate: `FindMatch` with `min > max`
+- [ ] Demo: extend `backend_demo_lobby` with a Find match button, labelled "transport preview"; ships behind the fake and the contract test only,
+      **not on the public demo** until a relay transport exists (players would be matched into nothing). Docs mark it **"matching only, no shared gameplay yet"**
 
 ### v4 — stage 2
 - [ ] `wss://` from an `https` page, mixed content/CORS, tunnel latency and idle behaviour, half-open drop (the open spike criteria)
@@ -267,6 +352,22 @@ latency, higher ceiling, +34 KB wasm).
 6. **`game_id` enforcement:** server-side in v2.
 7. **Native I/O model:** decided in v2 (task above).
 
+### Decisions (answered 2026-11-05, plan-review round 2; Frank accepted all eight recommendations)
+
+Split: v3a lobbies over REST (Ready), v3b socket and matchmaker ("transport preview"). Details live in the v3a and v3b sections above.
+
+8. **Lobby storage:** server-owned objects behind generic `ironhold_lobby_*` Lua RPCs with expiry and heartbeat; per-user and per-game caps; no direct client access.
+9. **Waiting room:** `lobby.current.*`, `lobby.member.<n>.name`, and `lobby.member_joined`/`member_left`/`closed` events.
+10. **Start signal:** host-only `StartLobby`, `lobby.started`; the match handle stays in the adapter.
+11. **Leaving:** `SignOut` leaves, `LoadScene` does not, a closed tab is covered by expiry; a dropped connection ends the lobby state before `backend.connection_lost`.
+12. **Matchmaker timeout:** `FindMatch` has its own deadline, exempt from the global request timeout.
+13. **Realtime socket:** native dedicated thread with blocking `tungstenite` (no tokio); wasm32 `web_sys::WebSocket`; opened only during a search; JSON; no reconnect in v3.
+14. **Lua module:** reopen only an allowlist of `ironhold_lobby_*` RPCs (v3a) and a ticket-rewriting matchmaker guard (v3b); adversarial contract tests for each.
+15. **Demo:** new `backend_demo_lobby` on `fake://` first, labelled "finds and joins players; nobody can play together yet"; `backend_demo_online` is unchanged.
+
+Also adopted from the two reviews: fixed failure reasons in `lobby.last_error` instead of error codes in event names, a visible failure for `JoinLobby` on an
+empty or out-of-range row, designer-driven refresh with a documented minimum of about 5 s, and the validate checks listed in v3a.
+
 ### Form 2 coverage check (done 2026-10-27)
 
 | Form 2 item (`networking_multiplayer.md`) | Where it lives now |
@@ -275,7 +376,7 @@ latency, higher ceiling, +34 KB wasm).
 | `multiplayer.lobby_*` events with JSON payload | `lobby.*` events plus `lobby.<n>.*` variables |
 | `LobbyList` UI component | Not built; Labels and Buttons bound to the variables (decision 1) |
 | Lobby metadata held by the relay vs the host | Resolved here: lobby objects live in the meta backend (Nakama), not the relay |
-| `max_players` enforcement | Open: enforce in the lobby object (v3), host simulation only checks |
+| `max_players` enforcement | Resolved 2026-11-05: enforced on the server inside `ironhold_lobby_join` (v3a); a full lobby answers `lobby.join_failed` with reason `full`; host simulation only checks |
 | Relay choice (Matchbox vs managed), NAT handshake, direct/relay fallback, internet latency, rollback | Stays in `networking_multiplayer.md` (relay seam deferred) |
 
 Smaller defaults taken (say if you disagree): fake selected by `endpoint: "fake://"`; Lua server module; `game_id` defaults to `project_id`;
