@@ -94,7 +94,7 @@ Sample `watch` output (each save prints the changed file and a result):
 
 ### Online backend
 
-`ironhold backend config <project>... [--out <dir>]` generates the server config for the Nakama module (a server-admin step, see [Running against a Nakama server](20_data_formats.md#running-against-a-nakama-server)): it prints `ironhold_games.lua`, or with `--out` writes it together with the generic `ironhold.lua`. Always name every project the server hosts: the file is the complete list of games, and a game left out can no longer sign in. It refuses an invalid `backend.ron` or a `game_id` used twice.
+`ironhold backend config <project>... [--out <dir>]` generates the server config for the Nakama module (a server-admin step, see [Running against a Nakama server](20_data_formats.md#running-against-a-nakama-server); `backend/up.sh` runs it for you on a local development server, see [backend/README.md](../backend/README.md)): it prints `ironhold_games.lua`, or with `--out` writes it together with the generic `ironhold.lua`. Always name every project the server hosts: the file is the complete list of games, and a game left out can no longer sign in. It refuses an invalid `backend.ron` or a `game_id` used twice.
 
 | What you see | Code | What breaks if ignored | Fix |
 |---|---|---|---|

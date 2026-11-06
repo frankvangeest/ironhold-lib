@@ -5098,7 +5098,7 @@ Wire it up in the project config with `backend_path: "backend.ron"`.
 
 ### Running against a Nakama server
 
-The runners include an adapter for [Nakama](https://heroiclabs.com/nakama/) (tested with 3.41.0). Your `backend.ron` names the server (`endpoint`) and its public key (`server_key`); the rest is supplied around it or made for you:
+The runners include an adapter for [Nakama](https://heroiclabs.com/nakama/) (the tested version is pinned in `backend/.env`). Your `backend.ron` names the server (`endpoint`) and its public key (`server_key`); the rest is supplied around it or made for you:
 
 | What | Native | Web |
 |---|---|---|
@@ -5124,10 +5124,12 @@ ironhold backend config assets/projects/game_a assets/projects/game_b --out depl
 
 writes `ironhold_games.lua` (generated from the `backend.ron` files you name) and `ironhold.lua` (the generic module). Copy both into Nakama's modules folder (`data/modules`, `/nakama/data/modules` in the Docker image) and restart Nakama.
 
-- **Always name every project the server hosts.** `ironhold_games.lua` is the complete list of games: a game left out can no longer sign in (`the server rejected the sign-in`, `backend.sign_in_failed`).
+- **Always name every project the server hosts.** `ironhold_games.lua` is the complete list of games: a game left out can no longer sign in (`unknown game`, `backend.sign_in_failed`).
 - Adding, renaming or removing a leaderboard needs this again. Renaming leaves the old scores behind under the old name. **Changing `ranking` or `keep` of an existing leaderboard has no effect**: Nakama keeps the settings it created the board with, so give the board a new name instead.
 - A `SubmitScore` that times out may still have reached the server. For a `keep: Total` leaderboard a retry can therefore count twice.
 - Web pages served over `https` cannot reach a plain `http://` server (browsers block it), so a hosted build needs an `https://` endpoint.
+
+**Trying it on your own machine.** Engine developers can run a throwaway local Nakama with `backend/up.sh` (needs a repo clone, Rust, Docker Desktop and Git Bash); see [Run a game against it](dev/backend_dev_stack.md#run-a-game-against-it). **The hosted web build cannot use a local server:** a web page gets its server only from the project's `backend.ron`, so use `fake://` there, or ask a developer to run it natively for you.
 
 **Publishing an online game.** The server decides which games it accepts, so a copied project does not just work against someone else's server:
 
@@ -5145,7 +5147,8 @@ When something goes wrong, the reason is in `backend.last_error`:
 |---|---|---|
 | `no Nakama server key: ...` | no server key anywhere (also: a native `--backend` run, where the file's `server_key` is deliberately not sent to the other server) | set `server_key` in `backend.ron`, or add `?nakama_key=` (web) / set `NAKAMA_SERVER_KEY` (native) |
 | `the browser would not store a device id ...` / `the device id could not be saved ...` | no usable `localStorage`, or a home folder that cannot be written | allow site data (not a private window) or make the folder writable |
-| `the server rejected the sign-in` | wrong server key (also an old page or copy after the key was rotated), or the game is not in the deployed `ironhold_games.lua` | check the key and reload; re-run `ironhold backend config` for every hosted project and restart Nakama |
+| `the server rejected the sign-in` | wrong server key (also an old page or copy after the key was rotated) | check the key and reload |
+| `unknown game` | the game is not in the deployed `ironhold_games.lua` | re-run `ironhold backend config` for every hosted project and restart Nakama (on a local server: `backend/up.sh <project>...`) |
 | `Leaderboard not found.` / `that leaderboard is not declared` | a leaderboard was added to `backend.ron` but the server was not updated | re-run `ironhold backend config` and redeploy |
 | `server unreachable` | nothing usable answered at the endpoint: the server or its tunnel is stopped, or the browser is offline. In a browser this is also what a gateway error page (502/530) or a rate-limit block looks like, because neither carries CORS headers (also happens on a mixed `https` page and `http` server) | check the address, the server and `https`; if it only happens in bursts, slow the calls down |
 | `server answered HTTP 502` (or another number) | a gateway or proxy in front of the server answered with an error page (seen in native runs; in a browser it shows as `server unreachable`) | check the server and its tunnel |
