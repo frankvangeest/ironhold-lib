@@ -11,21 +11,6 @@
 
 ## Active
 
-- [ ] **`backend/` folder: local Nakama for development, plus the server module** _(2026-11-03, Frank)_ - **Plan Ready (2026-11-05; decided: the module stays in
-  `crates/ironhold_nakama/server/` because the CLI already embeds it and generates the deployable files; the stack is one compose file with
-  variables, plus `up.sh`/`down.sh`): `planning/features/backend_dev_stack.md`. Docker is installed but its daemon is not running here: Frank starts Docker Desktop.** One place in this repo that
-  holds everything needed to run a Nakama locally and to deploy the engine's server side: (1) a local dev stack (`docker-compose.yml`,
-  `up`/`down` scripts, a README) with Nakama's default keys, bound to 127.0.0.1 only, with a README warning that it is never a
-  deployable config; (2) the server module, moved from `crates/ironhold_nakama/server/ironhold.lua`, and the generated
-  `ironhold_games.lua` source (`ironhold backend config`); (3) the contract test's compose file folded into the same stack through an
-  override, so the Nakama version is pinned in one place (today `crates/ironhold_nakama/tests/contract/docker-compose.yml` pins
-  3.41.0 on its own, and the homelab pins it separately). Production and staging compose, vault secrets, Traefik and Cloudflare stay
-  in the homelab repo. Open: the homelab deploy script must then fetch the module from this repo (see the homelab backlog item
-  "Staging Nakama for Ironhold's `integration` tier", "module and config deploy path"); settle both in one plan. Check first whether
-  Docker is available on the development machine (a Juva laptop may restrict Docker Desktop). **Prerequisite of "Backend v3a"** (it must exist before v3a is built: v3 is
-  all server-module work and should not be tested against the live demo data). Also see the homelab backlog items "Staging Nakama for
-  Ironhold's `integration` tier" (the other half of the same prerequisite) and "Cloudflare rate rule for `/v2/rpc`".
-  **Active 2026-11-05**: branch `feature/backend_dev_stack`, worktree `../ironhold-lib-backend_dev_stack`.
 - [ ] **Backend abstraction (`ironhold_backend` + Nakama adapter)** _(2026-10-25, Frank)_ - RON-declared online features (`backend.ron`), online Actions and `backend.*` events in core, a fake in-memory backend, then the Nakama adapter (sign-in, cloud saves, leaderboards, lobbies, matchmaker, relay transport), namespaced by `game_id` so one Nakama can serve several games. Phases v1-v5 and open questions: `planning/features/backend_abstraction.md` (Status: In progress, v1 Done (8745ef9, 2026-10-27; contract, FakeBackend, sign-in and leaderboard actions, `backend_demo`), v2 Done (e97da79, 2026-10-28; Nakama adapter on native and web, server module, `ironhold backend config`, deployed to the homelab and playtested), v3 (lobbies, matchmaker) next, split into v3a (lobbies over REST) and v3b (realtime socket + matchmaker) after the 2026-11-05 plan-review: see the Queued items "Backend v3a" and "Backend v3b"; plan-review round 1 done 2026-10-25, seven decisions answered 2026-10-27).
 
 
@@ -211,8 +196,8 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.5 (deterministic
   host-only `StartLobby`), `lobby.*` events and `lobby.<n>.*` / `lobby.current.*` variables, a new demo project `backend_demo_lobby`
   (on `fake://` first). **Status: plan Ready (2026-11-05; the eight plan-review decisions were accepted by Frank and the plan's v3 section
   is rewritten as v3a/v3b, see `planning/features/backend_abstraction.md`)**; blocked only by the prerequisites below. **Prerequisites (all must be
-  done or explicitly waived before v3a reaches `integration`):** (1) "`backend/` folder: local Nakama for development, plus the
-  server module" (this list); (2) "Backend v3a prerequisite: reopen the closed server APIs one by one" (this list); (3) the homelab
+  done or explicitly waived before v3a reaches `integration`):** (1) "`backend/` folder: a local Nakama for development" (**done 2026-11-06**, see
+  Done); (2) "Backend v3a prerequisite: reopen the closed server APIs one by one" (this list); (3) the homelab
   item "Staging Nakama for Ironhold's `integration` tier"; (4) the homelab item "Cloudflare rate rule for `/v2/rpc`" (lobby spam through the
   open sign-up). **Before lobbies are enabled in `backend_demo_online` or any public project:** "Bind the device id to the game" (this list).
 - [ ] **Backend v3b: realtime socket and matchmaker ("transport preview")** _(2026-11-05, plan-review of v3)_ - `FindMatch`, `CancelMatch`,
@@ -225,8 +210,8 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.5 (deterministic
   module (`crates/ironhold_nakama/server/ironhold.lua`) is deny-by-default (RPCs, matchmaker add/remove, matches, parties, groups,
   realtime). Reopen only what v3a needs, each with its own `game_id` guard and an adversarial contract case in
   `crates/ironhold_nakama/tests/contract/run.sh`: an allowlist of `ironhold_lobby_*` RPCs (v3a); matchmaker add with a ticket rewrite
-  and remove (v3b). Keep `MatchJoin`/`MatchCreate`/`Party*` closed. Blocks "Backend v3a"; best done after the `backend/` folder item,
-  which moves the module.
+  and remove (v3b). Keep `MatchJoin`/`MatchCreate`/`Party*` closed. Blocks "Backend v3a"; the `backend/` folder is done (the module stayed in
+  `crates/ironhold_nakama/server/`).
 - [ ] **Bind the device id to the game** _(2026-11-05, lifted from "Backend v2 follow-ups" (5))_ - a game's anonymous device id sits in
   `localStorage` under the Pages origin, so one leaked id could be replayed on another game of the same server (finding from
   `public_backend_demo`, 2026-11-03; also noted in "Investigation: multi-tenant game hosting on Nakama"). Bind the id to the
@@ -399,6 +384,13 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 ## Done (reference)
 
 ### November 2026
+- [x] **`backend/` folder: a local Nakama for development** _(requested 2026-11-03, done 2026-11-06)_ - `backend/up.sh [project...]` generates the
+  server module and game list with `ironhold backend config` and starts Nakama + Postgres on 127.0.0.1 (default keys, banner, one stack per machine);
+  `backend/down.sh [-v]` stops it. One compose file with the versions pinned in `backend/.env`, reused by the contract test under its own project name
+  and ports, so a dev stack and a contract run no longer collide. The module stayed in `crates/ironhold_nakama/server/` (the CLI embeds it). A new
+  `.gitattributes` pins `*.sh`, `*.yml`, `backend/.env` and `.githooks/*` to LF. Dev play-test confirmed (sign in, score, leaderboard, unhosted game
+  rejected with `unknown game`, data kept across `down.sh`, gone after `-v`). Plan: `planning/features/done/backend_dev_stack.md`; developer page
+  `docs/dev/backend_dev_stack.md`. Prerequisite (1) of Backend v3a.
 - [x] **Public backend demo on GitHub Pages (`backend_demo_online`)** _(requested 2026-10-28, released and live-checked 2026-11-03)_ - the hosted build now has a second demo project that signs in and keeps a leaderboard on the homelab Nakama over `https://play.frankcreates.com`. P1 (homelab repo): Cloudflare Tunnel plus an API-only Traefik router, the console locked to docker-host with a `DOCKER-USER` rule, a Block-429 rate-limit rule, rotated vault-managed secrets, the server module cleaned. P2: optional `server_key` in `backend.ron` (the file key goes with the file's own endpoint). P3: the `backend_demo_online` project (no request until Sign in, a friendly server-down message through a game variable, notes on what is stored), the card, docs/20 troubleshooting rows and the docs/30 recipe. P4: full tests, 31 MB release build, release playtest, `main` fast-forwarded, live check from the Pages origin on mobile data passed. Plan: `planning/features/done/public_backend_demo.md`. Open follow-ups stay in "Backend v2 follow-ups" and the multi-tenant investigation.
 
 ### October 2026

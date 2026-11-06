@@ -645,3 +645,7 @@
   The fitted canvas made big desktop monitors the worst case (4K at DPR 1.5: ~8.0 MP and ~350 MB of render targets vs ~2.07 MP / ~40 MB with the old fixed 1280x720 box; a DPR-3 phone got ~3x cheaper), so cap the total pixel budget (about 2-3.7 MP).
 - **`backend_demo` and `backend_demo_online` share byte-identical `ui/` snippets and near-identical logic with no drift guard** _(observed at `4a7e030` 2026-11-03, public_backend_demo P3 system-architect review)_
   A change to the backend vocabulary (variable or event names) must be made twice by hand and nothing fails if the copies drift; a cheap test that the shared `ui/*.ui.ron` files match (or keeping canonical snippets in `backend_demo/ui/` only) would catch it.
+- **`backend_demo` says "Test backend (fake://): scores are not saved." even when run with `--backend <real server>`** _(observed at `4be4f58` 2026-11-06, backend_dev_stack play-test)_
+  The label is fixed text in the project's scene; after `--backend http://127.0.0.1:7350` scores are saved. Either drop the sentence, or show it only while `backend.endpoint` is `fake://`.
+- **`backend/up.sh` prints the CLI's own "Copy both into Nakama's modules directory and restart Nakama" line** _(observed at `4be4f58` 2026-11-06)_
+  `up.sh` already does that; hide the CLI's output and keep only the script's own messages, so a newcomer is not told to do it by hand.
