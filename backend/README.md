@@ -44,7 +44,7 @@ while it runs). The database is never touched, so adding a leaderboard to a `bac
 ## Rules worth knowing
 
 - **A game must be on the server's list before it can sign in.** `ironhold_games.lua` is generated from the projects you name, so a game left out gets
-  "the server rejected the sign-in". Re-run `backend/up.sh <project>...` with every project you want (naming some replaces the default set).
+  "unknown game" (a wrong or missing server key gives "the server rejected the sign-in" instead). Re-run `backend/up.sh <project>...` with every project you want (naming some replaces the default set).
 - **Each `game_id` may appear once.** Two projects that share a `game_id` make `ironhold backend config` fail; give a local variant of a demo its own
   `game_id`, or name only one of them.
 - **One local stack per machine.** The ports and the project name (`ironhold-dev`) are fixed, so several worktrees share the same server and database: whichever ran `backend/up.sh` last owns the loaded modules, and `backend/down.sh -v` from any of them deletes the shared database.
@@ -61,7 +61,8 @@ while it runs). The database is never touched, so adding a leaderboard to a `bac
 | `the cached CLI is missing` | build it once, see "What you need first" |
 | warning that the CLI is older than the sources | rebuild it if `backend config` fails or misses a new field |
 | `no project with a backend_path found` | add a `backend_path` to the project's `.project.ron`, or name a project that has one |
-| `the server rejected the sign-in` | the game is not on the list (run `backend/up.sh <project>`), or the key is missing or wrong (the command needs `NAKAMA_SERVER_KEY=defaultkey`) |
+| `unknown game` | the game is not on the list: run `backend/up.sh <project>` |
+| `the server rejected the sign-in` | the server key is missing or wrong (the command needs `NAKAMA_SERVER_KEY=defaultkey`) |
 | Nakama did not become healthy | `docker compose -f backend/docker-compose.yml --env-file backend/.env logs nakama` |
 
 ## Versions and the contract test

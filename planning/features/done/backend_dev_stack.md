@@ -1,6 +1,6 @@
 # Feature: `backend/` folder - a local Nakama for development
 
-_Status: Ready (plan-review 2026-11-05: both reviews returned "needs more design work", every finding folded in below, no open design choice left)_
+_Status: Done 2026-11-06 (merged into `integration`; Frank's dev play-test confirmed: sign-in, score and leaderboard against the local server, an unhosted game rejected, data kept across `down.sh`, gone after `down.sh -v`)_
 _Planned at: `dd2d811` (2026-11-05)_
 
 ## What
