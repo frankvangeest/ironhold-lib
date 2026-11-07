@@ -122,6 +122,8 @@ pub(crate) fn rewrite_self(action: Action, spawn_id: &str) -> Action {
         // Backend leaderboard names and variable names are literal ids declared in `backend.ron`.
         Action::SubmitScore { leaderboard, score_var } => Action::SubmitScore { leaderboard, score_var },
         Action::FetchLeaderboard { leaderboard, count } => Action::FetchLeaderboard { leaderboard, count },
+        // A lobby name is a literal entry of `lobby_names` in `backend.ron`.
+        Action::CreateLobby { name, max_players } => Action::CreateLobby { name, max_players },
 
         // ── No string fields at all: identity, grouped ──────────────────────────────
         other @ (Action::Quit
@@ -145,7 +147,11 @@ pub(crate) fn rewrite_self(action: Action, spawn_id: &str) -> Action {
             | Action::TakeAllFromContainer
             | Action::JoinPlayer
             | Action::SignIn
-            | Action::SignOut) => other,
+            | Action::SignOut
+            | Action::ListLobbies
+            | Action::JoinLobby { .. }
+            | Action::LeaveLobby
+            | Action::StartLobby) => other,
     }
 }
 
@@ -251,6 +257,8 @@ pub(crate) fn rewrite_target(action: Action, target_id: &str) -> Action {
         // Backend leaderboard names and variable names are literal ids declared in `backend.ron`.
         Action::SubmitScore { leaderboard, score_var } => Action::SubmitScore { leaderboard, score_var },
         Action::FetchLeaderboard { leaderboard, count } => Action::FetchLeaderboard { leaderboard, count },
+        // A lobby name is a literal entry of `lobby_names` in `backend.ron`.
+        Action::CreateLobby { name, max_players } => Action::CreateLobby { name, max_players },
 
         // ── No string fields at all: identity, grouped ──────────────────────────────
         other @ (Action::Quit
@@ -274,7 +282,11 @@ pub(crate) fn rewrite_target(action: Action, target_id: &str) -> Action {
             | Action::TakeAllFromContainer
             | Action::JoinPlayer
             | Action::SignIn
-            | Action::SignOut) => other,
+            | Action::SignOut
+            | Action::ListLobbies
+            | Action::JoinLobby { .. }
+            | Action::LeaveLobby
+            | Action::StartLobby) => other,
     }
 }
 

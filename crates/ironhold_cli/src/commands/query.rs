@@ -699,6 +699,11 @@ fn action_kind(a: &Action) -> &'static str {
         Action::SignOut => "SignOut",
         Action::SubmitScore { .. } => "SubmitScore",
         Action::FetchLeaderboard { .. } => "FetchLeaderboard",
+        Action::ListLobbies => "ListLobbies",
+        Action::CreateLobby { .. } => "CreateLobby",
+        Action::JoinLobby { .. } => "JoinLobby",
+        Action::LeaveLobby => "LeaveLobby",
+        Action::StartLobby => "StartLobby",
     }
 }
 

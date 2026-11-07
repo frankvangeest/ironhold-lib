@@ -103,7 +103,15 @@ pub fn action_executor_system(
                     }
                 }
             }
-            a @ (Action::SignIn | Action::SignOut | Action::SubmitScore { .. } | Action::FetchLeaderboard { .. }) => {
+            a @ (Action::SignIn
+            | Action::SignOut
+            | Action::SubmitScore { .. }
+            | Action::FetchLeaderboard { .. }
+            | Action::ListLobbies
+            | Action::CreateLobby { .. }
+            | Action::JoinLobby { .. }
+            | Action::LeaveLobby
+            | Action::StartLobby) => {
                 crate::runtime::backend::dispatch_backend_action(
                     &a,
                     &mut scene_state.backend_hub,

@@ -14,6 +14,37 @@ pub const MAX_LEADERBOARD_ROWS: u32 = 10;
 pub const MAX_ID_LEN: usize = 32;
 /// Longest `server_key` (Nakama's `socket.server_key` is a short word or a generated token).
 pub const MAX_SERVER_KEY_LEN: usize = 64;
+/// A lobby list never holds more rows than this (the engine-written `lobby.<n>.*` variables are fixed-size).
+pub const MAX_LOBBY_ROWS: u32 = 10;
+/// Most players one lobby can hold (`lobby.member.<n>.*`, n = 1..=8).
+pub const MAX_LOBBY_PLAYERS: u32 = 8;
+/// Fewest players a lobby can be created for (and the fewest that may be started).
+pub const MIN_LOBBY_PLAYERS: u32 = 2;
+/// Longest lobby name: printable ASCII only (the engine font has no wider glyphs, and the server refuses anything else).
+pub const MAX_LOBBY_NAME_LEN: usize = 32;
+/// Seconds between the heartbeats core sends while in a lobby (a little jitter is added). Fixed, shared with the Lua module:
+/// two sides that drift would drop players.
+pub const LOBBY_HEARTBEAT_SECS: f64 = 10.0;
+/// Seconds without a heartbeat after which the server drops a member (and the engine drops its own lobby state).
+pub const LOBBY_EXPIRY_SECS: f64 = 60.0;
+/// A `ListLobbies` inside this window is answered from the last list instead of asking the server again.
+pub const LOBBY_LIST_MIN_SECS: f64 = 5.0;
+
+/// Variable-name prefixes the engine writes itself. The runtime clears them on sign-out, `ironhold validate` warns about a rule that
+/// writes one, and `SaveState` must never persist them. `matchmaker.` joins the list with v3b.
+pub const RESERVED_VARIABLE_PREFIXES: [&str; 3] = ["backend.", "leaderboard.", "lobby."];
+
+/// The fixed failure reasons a lobby operation can end with (`lobby.<op>_failed:<reason>`, `lobby.last_error`).
+/// `host_left` and `removed` are reasons of `lobby.closed` only.
+pub const LOBBY_REASONS: [&str; 17] = [
+    "full", "gone", "list_out_of_date", "no_lobby", "already_in_lobby", "limit_reached", "not_host", "not_signed_in",
+    "not_in_lobby", "started", "too_few_players", "not_enabled", "rate_limited", "busy", "server", "host_left", "removed",
+];
+
+/// Printable ASCII, 1-`MAX_LOBBY_NAME_LEN` characters, not blank.
+pub fn is_valid_lobby_name(name: &str) -> bool {
+    !name.trim().is_empty() && name.len() <= MAX_LOBBY_NAME_LEN && name.bytes().all(|b| (0x20..0x7f).contains(&b))
+}
 
 #[derive(Deserialize, Asset, TypePath, Debug, Clone, Default)]
 #[serde(deny_unknown_fields)]
@@ -36,6 +67,10 @@ pub struct BackendConfig {
     pub features: Vec<BackendFeature>,
     #[serde(default)]
     pub leaderboards: Vec<LeaderboardDef>,
+    /// The lobby names `CreateLobby(name:)` may use (needs the `Lobbies` feature). A closed list, not free text: the server refuses any
+    /// other name, so a player cannot put arbitrary text on other players' screens. 1-32 printable ASCII characters each.
+    #[serde(default)]
+    pub lobby_names: Vec<String>,
     /// Seconds a request may stay unanswered before the engine fails it (default 15, allowed 1-120).
     #[serde(default)]
     pub request_timeout_secs: Option<f32>,
@@ -97,8 +132,9 @@ pub fn is_fake_endpoint(endpoint: &str) -> bool {
 }
 
 /// What a designer can ask of the test backend through the endpoint: `fake://?latency=30&fail=submit,list`.
-/// `latency` counts frames before an answer; `fail` is a comma list of `sign_in` (rejected), `unreachable`, `submit`, `list`
-/// and `silent` (never answers, so the request times out).
+/// `latency` counts frames before an answer; `fail` is a comma list of `sign_in` (rejected), `unreachable`, `submit`, `list`,
+/// `silent` (never answers, so the request times out) and the lobby options `join_full` (every join answers `full`), `gone`
+/// (every join answers `gone`), `start` (a start fails) and `heartbeat` (heartbeats fail, which ends in `lobby.closed:server`).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct FakeEndpointOptions {
     pub latency: Option<u64>,
@@ -107,6 +143,10 @@ pub struct FakeEndpointOptions {
     pub submit: bool,
     pub list: bool,
     pub silent: bool,
+    pub join_full: bool,
+    pub gone: bool,
+    pub start: bool,
+    pub heartbeat: bool,
 }
 
 /// Parses the query part of a `fake://` endpoint. An unknown option or value is an error (a typo must not silently do nothing).
@@ -130,9 +170,13 @@ pub fn parse_fake_endpoint(endpoint: &str) -> Result<FakeEndpointOptions, String
                         "submit" => out.submit = true,
                         "list" => out.list = true,
                         "silent" => out.silent = true,
+                        "join_full" => out.join_full = true,
+                        "gone" => out.gone = true,
+                        "start" => out.start = true,
+                        "heartbeat" => out.heartbeat = true,
                         other => {
                             return Err(format!(
-                                "fake endpoint: unknown failure {other:?} (use sign_in, unreachable, submit, list or silent)"
+                                "fake endpoint: unknown failure {other:?} (use sign_in, unreachable, submit, list, silent, join_full, gone, start or heartbeat)"
                             ))
                         }
                     }
@@ -172,6 +216,15 @@ impl BackendConfig {
             }
             if !seen.insert(lb.name.as_str()) {
                 out.push(format!("leaderboard {:?} is declared twice", lb.name));
+            }
+        }
+        let mut names = std::collections::BTreeSet::new();
+        for name in &self.lobby_names {
+            if !is_valid_lobby_name(name) {
+                out.push(format!("lobby name {name:?} must be 1-{MAX_LOBBY_NAME_LEN} printable ASCII characters (no accents, no dashes like the em-dash)"));
+            }
+            if !names.insert(name.as_str()) {
+                out.push(format!("lobby name {name:?} is listed twice"));
             }
         }
         if let Some(ep) = &self.endpoint {
@@ -286,6 +339,28 @@ mod tests {
             let c = BackendConfig { schema_version: 1, server_key: Some(bad.to_string()), ..Default::default() };
             assert_eq!(c.problems().len(), 1, "{bad:?}");
         }
+    }
+
+    #[test]
+    fn lobby_names_are_validated_and_the_lobby_fake_options_parse() {
+        let ok = parse(r#"BackendConfig(schema_version: 1, features: [Lobbies], lobby_names: ["Demo lobby", "Quick game"])"#);
+        assert_eq!(ok.validate(), Ok(()));
+        assert_eq!(parse("BackendConfig(schema_version: 1)").lobby_names, Vec::<String>::new());
+        for bad in ["", "   ", "caf\u{e9}", "a\u{2014}b", &"x".repeat(MAX_LOBBY_NAME_LEN + 1)] {
+            assert!(!is_valid_lobby_name(bad), "{bad:?} must be rejected");
+        }
+        let dup = parse(r#"BackendConfig(schema_version: 1, lobby_names: ["A", "A"])"#);
+        assert_eq!(dup.problems().len(), 1);
+        let o = parse_fake_endpoint("fake://?fail=join_full,gone,start,heartbeat").unwrap();
+        assert!(o.join_full && o.gone && o.start && o.heartbeat && !o.silent);
+        assert!(parse_fake_endpoint("fake://?fail=joinfull").is_err());
+    }
+
+    #[test]
+    fn the_reserved_prefixes_cover_what_the_engine_writes() {
+        assert!(RESERVED_VARIABLE_PREFIXES.iter().all(|p| p.ends_with('.')));
+        assert!(RESERVED_VARIABLE_PREFIXES.contains(&"lobby."));
+        assert!(LOBBY_REASONS.contains(&"full") && LOBBY_REASONS.contains(&"host_left"));
     }
 
     #[test]

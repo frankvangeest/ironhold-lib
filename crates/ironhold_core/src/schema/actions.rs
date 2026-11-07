@@ -476,6 +476,22 @@ pub enum Action {
         #[serde(default = "default_leaderboard_count")]
         count: u32,
     },
+    /// Ask the server for the open lobbies (needs `Lobbies` in `backend.ron`'s `features`). Answers `lobby.listed` after writing
+    /// `lobby.count` and `lobby.<n>.name`/`.players`/`.host` (n = 1..10), then `lobby.row_filled:<n>` or `lobby.row_empty:<n>` for every
+    /// n in 1..10 (and `lobby.list_empty` when there is nothing), or `lobby.list_failed` followed by `lobby.list_failed:<reason>`.
+    /// A second call within 5 seconds is answered from the last list. See `docs/20_data_formats.md`.
+    ListLobbies,
+    /// Open a lobby named `name` (one of `lobby_names` in `backend.ron`) for 2-8 players and join it as host. Answers `lobby.created`
+    /// (then `lobby.member_row_filled:<n>`/`lobby.member_row_empty:<n>`) or `lobby.create_failed` then `lobby.create_failed:<reason>`.
+    CreateLobby { name: String, max_players: u32 },
+    /// Join the lobby shown in row `row` (1-10) of the last `ListLobbies`. Answers `lobby.joined` or `lobby.join_failed` then
+    /// `lobby.join_failed:<reason>` (an empty row answers reason `no_lobby`).
+    JoinLobby { row: u32 },
+    /// Leave the current lobby (also when this client has lost track of it, for example after a page reload). Answers `lobby.left`.
+    LeaveLobby,
+    /// Host only: mark the lobby started. Answers `lobby.started` (for every member, on its next heartbeat) or `lobby.start_failed`
+    /// then `lobby.start_failed:<reason>`.
+    StartLobby,
 }
 
 impl Action {
@@ -508,7 +524,9 @@ impl Action {
             | Action::OpenShop(_) | Action::CloseShop | Action::BuyItem(_)
             | Action::OpenContainer(_) | Action::CloseContainer | Action::TakeAllFromContainer
             | Action::ToggleOwnNameplate | Action::JoinPlayer
-            | Action::SignIn | Action::SignOut | Action::SubmitScore { .. } | Action::FetchLeaderboard { .. } => false,
+            | Action::SignIn | Action::SignOut | Action::SubmitScore { .. } | Action::FetchLeaderboard { .. }
+            | Action::ListLobbies | Action::CreateLobby { .. } | Action::JoinLobby { .. } | Action::LeaveLobby
+            | Action::StartLobby => false,
         }
     }
 }
