@@ -1,25 +1,23 @@
 ---
 name: device-id-binding-plan-review
-description: device_id_binding plan-review 2026-11-07: endpoint-in-hash makes a server move wipe accounts; docs/20 ~5125 `{game_id}:{device id}` becomes false; legacy refusal must not reuse "unknown game"
+description: device_id_binding plan-review r1+r2 (2026-11-07): r2 Ready; residual = docs/30 ~477 + demo comment cause lists, native-neutral reject text, card "device id saved in browser" goes false, notice removal date
 metadata:
   type: project
 ---
 
-Plan `planning/features/device_id_binding.md` (Draft, fd6ce9b) reviewed 2026-11-07: Needs more design work (small).
+Plan `planning/features/device_id_binding.md`. r1 (fd6ce9b): Needs more design work. r2 (e37463e): **Ready**, residual nits only.
+Frank decided: migration A (clean break + rotate storage key to `device_secret` + purge legacy accounts + wipe `best`), endpoint NOT hashed.
 
-Open items to re-check on the next pass / implementation review:
-- Endpoint is a hash input: moving a game to another hostname (LAN -> tunnel, staging -> public, http -> https, new domain) silently
-  gives every player a new empty account. Web endpoint already only comes from backend.ron (docs/20 ~5114), so the redirect threat
-  is mostly native `--backend`. Recommended: decide now (id format is versioned v1): drop endpoint, or an optional `account_scope`.
-  Either way a "Moving to another server" paragraph in docs/20 next to "Rotating the key".
-- docs/20 ~5125 "`{game_id}:{device id}`" becomes false; ~5115 Device id row should split stored vs sent.
-- Legacy-id refusal must not reuse `unknown game` (its docs/20 fix row says re-run `ironhold backend config` - wrong advice).
-- Plan contradicts itself on server-check timing (Option A "same release" vs Server section/Tasks "after migration window").
-- Clean break: card's "note your name first" does not help; orphaned legacy rows keep the top-5; legacy accounts (raw uuid on server)
-  are pure retention -> recommend wiping board + deleting legacy accounts at cutover, one dated line on the card.
-- Same-origin limit sentence is programmer-speak; designer needs "all games under yourname.github.io share one address".
-- Private-window / blocked-storage path: unaffected (fails before derivation).
+Residual items to check at implementation review:
+- Reject text must be native-neutral and fit the 640px error_label (~58 chars at ~11px/char): plan's web-only
+  "this game version is out of date, reload the page" (49) fits; recommended "out of date: reload the page or update the game" (47).
+- docs/30 ~477-478 and backend_demo_online/logic/state_machine.ron ~23 list refused-sign-in causes (wrong key, game not hosted): add out-of-date build. Not in plan Tasks.
+- index.html card ~930-932 "the device id is also saved in this browser" becomes false (browser keeps a secret, server gets a derived code): make the wording task mandatory, not optional. Keep "note your name first" (still serves deletion requests).
+- Dated reset line needs a removal task/date, and can state the privacy plus (old ids deleted) and that the random name changes.
+- Board wipe after the ~1-day lag also erases scores of new-client accounts made in the lag; check whether Nakama account deletion already removes those users' records (then the wipe is unneeded).
+- Runner storage-failure messages are quoted by prefix in docs/20 ~5159 ("would not store a device id"): keep text verbatim or update the row.
+- Pending deletion-request GitHub issues: answer/close them after the purge.
 
-**Why:** last chance to change account identity cheaply (before lobbies on public + cloud save).
-**How to apply:** check docs/20 backend section, index.html backend_demo_online card, backend_demo_online note labels together.
+**Why:** last cheap moment to change account identity (before lobbies on public + cloud save).
+**How to apply:** at implementation review grep docs/20 ~5115-5161, docs/30 ~477, index.html card, demo state_machine.ron for "device id"/cause lists.
 Related: [[public-backend-demo-plan-review]], [[backend-v3-lobby-plan-review]].
