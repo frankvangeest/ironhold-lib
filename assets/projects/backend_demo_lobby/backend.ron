@@ -1,10 +1,14 @@
-// backend_demo_lobby: lobbies against the in-memory test backend (`fake://`). Nobody real is on the other side: three lobbies are
-// seeded (one with room, one half full, one full) and the other members of a lobby you join or create are scripted, so you can see
-// every event. Nothing is saved between runs and no two browsers ever meet.
-// Try the failure paths: "fake://?fail=join_full" (every join answers `full`), "fake://?fail=gone", "fake://?fail=start" (Start fails),
-// "fake://?fail=heartbeat" (the waiting room shows "Reconnecting..." and closes after a minute), "fake://?fail=sign_in",
-// "fake://?fail=unreachable" and "fake://?latency=120" (about two seconds to answer).
-// A real server is the next step (planning/features/backend_abstraction.md, v3a-2): this file only needs the endpoint to change then.
+// backend_demo_lobby: lobbies against the in-memory test backend (`fake://`). Nobody real is on the other side, nothing is saved between
+// runs and no two browsers ever meet. Three lobbies are seeded: row 1 "Demo lobby" (host Ada, 1/4), row 2 "Quick game" (host Grace,
+// 3/4) and row 3 "Demo lobby" (host Linus, full 2/2). The other members are scripted, so you can see every event:
+//   - a lobby YOU create: Ada joins on the 2nd check-in (about 20 s), Grace on the 4th, and the newest rival leaves on the 5th;
+//   - Ada's lobby (row 1) when you join it: Grace joins on the 2nd check-in and Ada PRESSES START on the 4th (you get lobby.started);
+//   - Grace's lobby (row 2) when you join it: Grace LEAVES on the 6th check-in (you get lobby.closed:host_left).
+// A check-in happens every 10 seconds. Try the failure paths too (add them to the endpoint): "fake://?fail=join_full" (every join answers
+// `full`), "fake://?fail=gone", "fake://?fail=start" (Start fails), "fake://?fail=list" (the list fails), "fake://?fail=heartbeat" (the
+// waiting room loses contact: "Reconnecting...", and after a minute lobby.closed:server), "fake://?fail=sign_in", "fake://?fail=unreachable"
+// and "fake://?latency=120" (about two seconds to answer).
+// A real server needs only another endpoint here once it supports lobbies. See "Lobbies" in docs/20_data_formats.md.
 BackendConfig(
     schema_version: 1,
     // Namespace on a shared server: [a-z0-9_], 1-32 characters. Defaults to project_id when omitted.

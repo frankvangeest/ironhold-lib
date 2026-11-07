@@ -36,10 +36,18 @@ pub const RESERVED_VARIABLE_PREFIXES: [&str; 3] = ["backend.", "leaderboard.", "
 
 /// The fixed failure reasons a lobby operation can end with (`lobby.<op>_failed:<reason>`, `lobby.last_error`).
 /// `host_left` and `removed` are reasons of `lobby.closed` only.
-pub const LOBBY_REASONS: [&str; 17] = [
-    "full", "gone", "list_out_of_date", "no_lobby", "already_in_lobby", "limit_reached", "not_host", "not_signed_in",
-    "not_in_lobby", "started", "too_few_players", "not_enabled", "rate_limited", "busy", "server", "host_left", "removed",
+pub const LOBBY_REASONS: [&str; 16] = [
+    "full", "gone", "no_lobby", "already_in_lobby", "limit_reached", "not_host", "not_signed_in", "not_in_lobby", "started",
+    "too_few_players", "not_enabled", "rate_limited", "busy", "server", "host_left", "removed",
 ];
+
+/// The reasons of `lobby.closed:<reason>` (a subset of `LOBBY_REASONS`; `server` belongs to both families).
+pub const LOBBY_CLOSED_REASONS: [&str; 3] = ["host_left", "removed", "server"];
+
+/// A reason a lobby operation can fail with (`lobby.<op>_failed:<reason>`): every reason except the two that only close a lobby.
+pub fn is_lobby_failure_reason(reason: &str) -> bool {
+    LOBBY_REASONS.contains(&reason) && !matches!(reason, "host_left" | "removed")
+}
 
 /// True for every event name the engine can emit for lobbies (`lobby.joined`, `lobby.join_failed:full`, `lobby.row_filled:3`, ...). The
 /// vocabulary is closed, so `ironhold validate --strict` can report a binding on a name no action can ever produce (a typo).
@@ -57,10 +65,8 @@ pub fn is_lobby_event(name: &str) -> bool {
     match head {
         "lobby.row_filled" | "lobby.row_empty" => row(MAX_LOBBY_ROWS),
         "lobby.member_row_filled" | "lobby.member_row_empty" => row(MAX_LOBBY_PLAYERS),
-        "lobby.closed" => matches!(tail, "host_left" | "removed" | "server"),
-        "lobby.list_failed" | "lobby.create_failed" | "lobby.join_failed" | "lobby.start_failed" => {
-            LOBBY_REASONS.contains(&tail) && !matches!(tail, "host_left" | "removed")
-        }
+        "lobby.closed" => LOBBY_CLOSED_REASONS.contains(&tail),
+        "lobby.list_failed" | "lobby.create_failed" | "lobby.join_failed" | "lobby.start_failed" => is_lobby_failure_reason(tail),
         _ => false,
     }
 }
@@ -403,7 +409,7 @@ mod tests {
             assert!(is_lobby_event(ok), "{ok}");
         }
         for bad in [
-            "lobby.joind", "lobby.join_failed:", "lobby.join_failed:host_left", "lobby.closed:full", "lobby.row_filled:0", "lobby.row_filled:11",
+            "lobby.joind", "lobby.join_failed:", "lobby.join_failed:host_left", "lobby.join_failed:list_out_of_date", "lobby.closed:full", "lobby.row_filled:0", "lobby.row_filled:11",
             "lobby.member_row_empty:9", "lobby.row_filled", "backend.ready", "lobby.created:x",
         ] {
             assert!(!is_lobby_event(bad), "{bad}");

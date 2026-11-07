@@ -15,8 +15,9 @@
             width: Percent(100.0),
             height: Percent(100.0),
             children: [
-                Label((id: "title", text: "backend_demo_lobby - lobbies", size: (760.0, 32.0), align: Left)),
-                Label((id: "fake_note", text: "Practice lobby with pretend players (test backend). No real players, no shared play yet.", size: (900.0, 26.0), align: Left)),
+                Label((id: "title", text: "backend_demo_lobby - lobbies", size: (640.0, 32.0), align: Left)),
+                Label((id: "fake_note", text: "Practice lobby: pretend players, test backend.", size: (600.0, 22.0), align: Left, font_size: 18.0)),
+                Label((id: "fake_note_2", text: "No real players. No shared play yet.", size: (600.0, 22.0), align: Left, font_size: 18.0)),
                 Group((
                     id: "account",
                     flex_direction: Column,
@@ -41,7 +42,7 @@
                     flex_direction: Column,
                     gap: 10.0,
                     children: [
-                        Label((id: "demo_msg_label", text: "", bind: "demo_msg", format: "{}", size: (700.0, 28.0), align: Left)),
+                        Label((id: "demo_msg_label", text: "", bind: "demo_msg", format: "{}", size: (600.0, 24.0), align: Left, font_size: 18.0)),
                         Group((
                             id: "browse",
                             flex_direction: Column,
@@ -49,57 +50,57 @@
                             padding: 10.0,
                             background_color: (0.05, 0.05, 0.08, 0.85),
                             children: [
-                                Label((id: "browse_title", text: "Open lobbies", size: (560.0, 28.0), align: Left)),
-                        Group((
-                            id: "row_1",
-                            gap: 12.0,
-                            children: [
-                                Label((id: "lobby_name_1", text: "", bind: "lobby.1.name", format: "{}", size: (220.0, 26.0), align: Left)),
-                                Label((id: "lobby_players_1", text: "", bind: "lobby.1.players", format: "{}", size: (70.0, 26.0), align: Right)),
-                                Label((id: "lobby_host_1", text: "", bind: "lobby.1.host", format: "host {}", size: (170.0, 26.0), align: Left)),
-                                Button((id: "join_btn_1", text: "Join", action: "ui.join_1", size: (90.0, 36.0))),
-                            ],
-                        )),
-                        Group((
-                            id: "row_2",
-                            gap: 12.0,
-                            children: [
-                                Label((id: "lobby_name_2", text: "", bind: "lobby.2.name", format: "{}", size: (220.0, 26.0), align: Left)),
-                                Label((id: "lobby_players_2", text: "", bind: "lobby.2.players", format: "{}", size: (70.0, 26.0), align: Right)),
-                                Label((id: "lobby_host_2", text: "", bind: "lobby.2.host", format: "host {}", size: (170.0, 26.0), align: Left)),
-                                Button((id: "join_btn_2", text: "Join", action: "ui.join_2", size: (90.0, 36.0))),
-                            ],
-                        )),
-                        Group((
-                            id: "row_3",
-                            gap: 12.0,
-                            children: [
-                                Label((id: "lobby_name_3", text: "", bind: "lobby.3.name", format: "{}", size: (220.0, 26.0), align: Left)),
-                                Label((id: "lobby_players_3", text: "", bind: "lobby.3.players", format: "{}", size: (70.0, 26.0), align: Right)),
-                                Label((id: "lobby_host_3", text: "", bind: "lobby.3.host", format: "host {}", size: (170.0, 26.0), align: Left)),
-                                Button((id: "join_btn_3", text: "Join", action: "ui.join_3", size: (90.0, 36.0))),
-                            ],
-                        )),
-                        Group((
-                            id: "row_4",
-                            gap: 12.0,
-                            children: [
-                                Label((id: "lobby_name_4", text: "", bind: "lobby.4.name", format: "{}", size: (220.0, 26.0), align: Left)),
-                                Label((id: "lobby_players_4", text: "", bind: "lobby.4.players", format: "{}", size: (70.0, 26.0), align: Right)),
-                                Label((id: "lobby_host_4", text: "", bind: "lobby.4.host", format: "host {}", size: (170.0, 26.0), align: Left)),
-                                Button((id: "join_btn_4", text: "Join", action: "ui.join_4", size: (90.0, 36.0))),
-                            ],
-                        )),
-                        Group((
-                            id: "row_5",
-                            gap: 12.0,
-                            children: [
-                                Label((id: "lobby_name_5", text: "", bind: "lobby.5.name", format: "{}", size: (220.0, 26.0), align: Left)),
-                                Label((id: "lobby_players_5", text: "", bind: "lobby.5.players", format: "{}", size: (70.0, 26.0), align: Right)),
-                                Label((id: "lobby_host_5", text: "", bind: "lobby.5.host", format: "host {}", size: (170.0, 26.0), align: Left)),
-                                Button((id: "join_btn_5", text: "Join", action: "ui.join_5", size: (90.0, 36.0))),
-                            ],
-                        )),
+                                Label((id: "browse_title", text: "", bind: "lobby.count", format: "Open lobbies: {}", size: (500.0, 28.0), align: Left)),
+                                Group((
+                                    id: "row_1",
+                                    gap: 12.0,
+                                    children: [
+                                        Label((id: "lobby_name_1", text: "", bind: "lobby.1.name", format: "{}", size: (170.0, 26.0), align: Left, font_size: 20.0)),
+                                        Label((id: "lobby_players_1", text: "", bind: "lobby.1.players", format: "{}", size: (60.0, 26.0), align: Right, font_size: 20.0)),
+                                        Label((id: "lobby_host_1", text: "", bind: "lobby.1.host", format: "{}", size: (130.0, 26.0), align: Left, font_size: 20.0)),
+                                        Button((id: "join_btn_1", text: "Join", action: "ui.join_1", size: (80.0, 36.0))),
+                                    ],
+                                )),
+                                Group((
+                                    id: "row_2",
+                                    gap: 12.0,
+                                    children: [
+                                        Label((id: "lobby_name_2", text: "", bind: "lobby.2.name", format: "{}", size: (170.0, 26.0), align: Left, font_size: 20.0)),
+                                        Label((id: "lobby_players_2", text: "", bind: "lobby.2.players", format: "{}", size: (60.0, 26.0), align: Right, font_size: 20.0)),
+                                        Label((id: "lobby_host_2", text: "", bind: "lobby.2.host", format: "{}", size: (130.0, 26.0), align: Left, font_size: 20.0)),
+                                        Button((id: "join_btn_2", text: "Join", action: "ui.join_2", size: (80.0, 36.0))),
+                                    ],
+                                )),
+                                Group((
+                                    id: "row_3",
+                                    gap: 12.0,
+                                    children: [
+                                        Label((id: "lobby_name_3", text: "", bind: "lobby.3.name", format: "{}", size: (170.0, 26.0), align: Left, font_size: 20.0)),
+                                        Label((id: "lobby_players_3", text: "", bind: "lobby.3.players", format: "{}", size: (60.0, 26.0), align: Right, font_size: 20.0)),
+                                        Label((id: "lobby_host_3", text: "", bind: "lobby.3.host", format: "{}", size: (130.0, 26.0), align: Left, font_size: 20.0)),
+                                        Button((id: "join_btn_3", text: "Join", action: "ui.join_3", size: (80.0, 36.0))),
+                                    ],
+                                )),
+                                Group((
+                                    id: "row_4",
+                                    gap: 12.0,
+                                    children: [
+                                        Label((id: "lobby_name_4", text: "", bind: "lobby.4.name", format: "{}", size: (170.0, 26.0), align: Left, font_size: 20.0)),
+                                        Label((id: "lobby_players_4", text: "", bind: "lobby.4.players", format: "{}", size: (60.0, 26.0), align: Right, font_size: 20.0)),
+                                        Label((id: "lobby_host_4", text: "", bind: "lobby.4.host", format: "{}", size: (130.0, 26.0), align: Left, font_size: 20.0)),
+                                        Button((id: "join_btn_4", text: "Join", action: "ui.join_4", size: (80.0, 36.0))),
+                                    ],
+                                )),
+                                Group((
+                                    id: "row_5",
+                                    gap: 12.0,
+                                    children: [
+                                        Label((id: "lobby_name_5", text: "", bind: "lobby.5.name", format: "{}", size: (170.0, 26.0), align: Left, font_size: 20.0)),
+                                        Label((id: "lobby_players_5", text: "", bind: "lobby.5.players", format: "{}", size: (60.0, 26.0), align: Right, font_size: 20.0)),
+                                        Label((id: "lobby_host_5", text: "", bind: "lobby.5.host", format: "{}", size: (130.0, 26.0), align: Left, font_size: 20.0)),
+                                        Button((id: "join_btn_5", text: "Join", action: "ui.join_5", size: (80.0, 36.0))),
+                                    ],
+                                )),
                                 Group((
                                     gap: 8.0,
                                     children: [
@@ -118,30 +119,30 @@
                             children: [
                                 Label((id: "room_title", text: "", bind: "lobby.current.name", format: "Lobby: {}", size: (560.0, 28.0), align: Left)),
                                 Label((id: "room_players", text: "", bind: "lobby.current.players", format: "Players: {}", size: (560.0, 26.0), align: Left)),
-                        Group((
-                            id: "member_row_1",
-                            children: [
-                                Label((id: "member_1", text: "", bind: "lobby.member.1.name", format: "1. {}", size: (300.0, 26.0), align: Left)),
-                            ],
-                        )),
-                        Group((
-                            id: "member_row_2",
-                            children: [
-                                Label((id: "member_2", text: "", bind: "lobby.member.2.name", format: "2. {}", size: (300.0, 26.0), align: Left)),
-                            ],
-                        )),
-                        Group((
-                            id: "member_row_3",
-                            children: [
-                                Label((id: "member_3", text: "", bind: "lobby.member.3.name", format: "3. {}", size: (300.0, 26.0), align: Left)),
-                            ],
-                        )),
-                        Group((
-                            id: "member_row_4",
-                            children: [
-                                Label((id: "member_4", text: "", bind: "lobby.member.4.name", format: "4. {}", size: (300.0, 26.0), align: Left)),
-                            ],
-                        )),
+                                Group((
+                                    id: "member_row_1",
+                                    children: [
+                                        Label((id: "member_1", text: "", bind: "lobby.member.1.name", format: "1. {}", size: (300.0, 26.0), align: Left, font_size: 22.0)),
+                                    ],
+                                )),
+                                Group((
+                                    id: "member_row_2",
+                                    children: [
+                                        Label((id: "member_2", text: "", bind: "lobby.member.2.name", format: "2. {}", size: (300.0, 26.0), align: Left, font_size: 22.0)),
+                                    ],
+                                )),
+                                Group((
+                                    id: "member_row_3",
+                                    children: [
+                                        Label((id: "member_3", text: "", bind: "lobby.member.3.name", format: "3. {}", size: (300.0, 26.0), align: Left, font_size: 22.0)),
+                                    ],
+                                )),
+                                Group((
+                                    id: "member_row_4",
+                                    children: [
+                                        Label((id: "member_4", text: "", bind: "lobby.member.4.name", format: "4. {}", size: (300.0, 26.0), align: Left, font_size: 22.0)),
+                                    ],
+                                )),
                                 Group((
                                     gap: 8.0,
                                     children: [
@@ -163,9 +164,10 @@
                             padding: 10.0,
                             background_color: (0.05, 0.05, 0.08, 0.85),
                             children: [
-                                Label((id: "started_title", text: "The host pressed Start.", size: (700.0, 28.0), align: Left)),
-                                Label((id: "started_note", text: "This is where a match would begin. Online play is not built yet.", size: (700.0, 28.0), align: Left)),
-                                Label((id: "started_players", text: "", bind: "lobby.current.players", format: "Players in this lobby: {}", size: (700.0, 26.0), align: Left)),
+                                Label((id: "started_title", text: "The lobby was started.", size: (560.0, 28.0), align: Left)),
+                                Label((id: "started_note", text: "This is where a match would begin.", size: (560.0, 24.0), align: Left, font_size: 20.0)),
+                                Label((id: "started_note_2", text: "Online play is not built yet.", size: (560.0, 24.0), align: Left, font_size: 20.0)),
+                                Label((id: "started_players", text: "", bind: "lobby.current.players", format: "Players in this lobby: {}", size: (560.0, 26.0), align: Left)),
                                 Button((id: "started_leave_btn", text: "Back to the lobbies", action: "ui.leave", size: (240.0, 44.0))),
                             ],
                         )),

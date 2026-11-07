@@ -3,18 +3,20 @@
     // Every Button in scenes/main.scene.ron needs a handler here (ironhold validate reports `unreachable_trigger` otherwise).
     // Online answers arrive seconds later, while paused and across LoadScene, so they are bound in global_on.
     global_on: [
-        // The panels start hidden; the browser fills in once the first list arrives.
-        ( event: "scene.ready:main", do_actions: [ SetVariable("demo_msg", "Signing in to the test backend..."), SetUiVisible(id: "room", visible: false), SetUiVisible(id: "started", visible: false), SetUiVisible(id: "row_1", visible: false), SetUiVisible(id: "row_2", visible: false), SetUiVisible(id: "row_3", visible: false), SetUiVisible(id: "row_4", visible: false), SetUiVisible(id: "row_5", visible: false) ] ),
+        // Everything starts hidden: the browser appears after sign-in, the rows after the first list.
+        ( event: "scene.ready:main", do_actions: [ SetVariable("demo_msg", "Signing in to the test backend..."), SetUiVisible(id: "browse", visible: false), SetUiVisible(id: "room", visible: false), SetUiVisible(id: "started", visible: false), SetUiVisible(id: "row_1", visible: false), SetUiVisible(id: "row_2", visible: false), SetUiVisible(id: "row_3", visible: false), SetUiVisible(id: "row_4", visible: false), SetUiVisible(id: "row_5", visible: false) ] ),
 
         // Signing in automatically: bind `backend.ready` (the backend finished loading), not `scene.ready:main`.
         ( event: "backend.ready", do_actions: [ SignIn ] ),
         ( event: "ui.button_pressed:sign_in", do_actions: [ SignIn ] ),
         ( event: "ui.button_pressed:sign_out", do_actions: [ SignOut ] ),
-        ( event: "backend.signed_in", do_actions: [ SetVariable("demo_msg", "Pick a lobby or create one."), ListLobbies ] ),
-        ( event: "backend.unreachable", do_actions: [ SetVariable("demo_msg", "The test backend is unreachable. Press Sign in to retry.") ] ),
+        ( event: "backend.signed_in", do_actions: [ SetVariable("demo_msg", "Pick a lobby or create one."), SetUiVisible(id: "browse", visible: true), ListLobbies ] ),
+        ( event: "backend.unreachable", do_actions: [ SetVariable("demo_msg", "Test backend unreachable. Press Sign in to retry.") ] ),
         ( event: "backend.sign_in_failed", do_actions: [ SetVariable("demo_msg", "Could not sign in. Press Sign in to retry.") ] ),
-        ( event: "backend.offline", do_actions: [ SetVariable("demo_msg", "The backend cannot start here; see the status above.") ] ),
-        ( event: "backend.signed_out", do_actions: [ SetVariable("demo_msg", "Signed out."), SetUiVisible(id: "room", visible: false), SetUiVisible(id: "started", visible: false), SetUiVisible(id: "browse", visible: true), SetUiVisible(id: "row_1", visible: false), SetUiVisible(id: "row_2", visible: false), SetUiVisible(id: "row_3", visible: false), SetUiVisible(id: "row_4", visible: false), SetUiVisible(id: "row_5", visible: false) ] ),
+        ( event: "backend.offline", do_actions: [ SetVariable("demo_msg", "No backend here; see the status above.") ] ),
+        ( event: "backend.busy", do_actions: [ SetVariable("demo_msg", "One moment...") ] ),
+        // A sign-out also leaves the lobby: lobby.left comes first, then this. Both end on the signed-out screen.
+        ( event: "backend.signed_out", do_actions: [ SetVariable("demo_msg", "Signed out."), SetUiVisible(id: "browse", visible: false), SetUiVisible(id: "room", visible: false), SetUiVisible(id: "started", visible: false), SetUiVisible(id: "row_1", visible: false), SetUiVisible(id: "row_2", visible: false), SetUiVisible(id: "row_3", visible: false), SetUiVisible(id: "row_4", visible: false), SetUiVisible(id: "row_5", visible: false) ] ),
 
         // Buttons.
         ( event: "ui.button_pressed:refresh", do_actions: [ ListLobbies ] ),
@@ -40,13 +42,15 @@
         ( event: "lobby.row_empty:5", do_actions: [ SetUiVisible(id: "row_5", visible: false) ] ),
         ( event: "lobby.list_empty", do_actions: [ SetVariable("demo_msg", "No open lobbies yet. Create one.") ] ),
         ( event: "lobby.list_failed", do_actions: [ SetVariable("demo_msg", "Could not load the lobbies. Press Refresh.") ] ),
+        ( event: "lobby.list_failed:not_signed_in", do_actions: [ SetVariable("demo_msg", "Sign in to see the lobbies.") ] ),
+        ( event: "lobby.list_failed:busy", do_actions: [ SetVariable("demo_msg", "Still loading...") ] ),
 
         // Entering and leaving the waiting room. The host (who created it) gets the Start button; a joiner does not.
         ( event: "lobby.created", do_actions: [ SetVariable("demo_msg", "Lobby open. Waiting for players..."), SetUiVisible(id: "browse", visible: false), SetUiVisible(id: "room", visible: true), SetUiVisible(id: "started", visible: false), SetUiVisible(id: "start_row", visible: true) ] ),
         ( event: "lobby.joined", do_actions: [ SetVariable("demo_msg", "Joined. Waiting for the host to start."), SetUiVisible(id: "browse", visible: false), SetUiVisible(id: "room", visible: true), SetUiVisible(id: "started", visible: false), SetUiVisible(id: "start_row", visible: false) ] ),
         ( event: "lobby.left", do_actions: [ SetVariable("demo_msg", "You left the lobby."), SetUiVisible(id: "browse", visible: true), SetUiVisible(id: "room", visible: false), SetUiVisible(id: "started", visible: false), ListLobbies ] ),
         ( event: "lobby.closed", do_actions: [ SetUiVisible(id: "browse", visible: true), SetUiVisible(id: "room", visible: false), SetUiVisible(id: "started", visible: false), ListLobbies ] ),
-        ( event: "lobby.started", do_actions: [ SetVariable("demo_msg", "The host started the lobby."), SetUiVisible(id: "browse", visible: false), SetUiVisible(id: "room", visible: false), SetUiVisible(id: "started", visible: true) ] ),
+        ( event: "lobby.started", do_actions: [ SetVariable("demo_msg", "The lobby was started."), SetUiVisible(id: "browse", visible: false), SetUiVisible(id: "room", visible: false), SetUiVisible(id: "started", visible: true) ] ),
 
         // The waiting room: one rule per member row.
         ( event: "lobby.member_row_filled:1", do_actions: [ SetUiVisible(id: "member_row_1", visible: true) ] ),
@@ -67,13 +71,15 @@
         ( event: "lobby.join_failed:started", do_actions: [ SetVariable("demo_msg", "That lobby already started.") ] ),
         ( event: "lobby.join_failed:no_lobby", do_actions: [ SetVariable("demo_msg", "That row is empty. Press Refresh.") ] ),
         ( event: "lobby.create_failed", do_actions: [ SetVariable("demo_msg", "Could not create a lobby. Try again.") ] ),
-        ( event: "lobby.create_failed:already_in_lobby", do_actions: [ SetVariable("demo_msg", "You are already in a lobby.") ] ),
+        // After a page reload on a real server the player can still be in a lobby the game forgot: leave it, then try again.
+        ( event: "lobby.create_failed:already_in_lobby", do_actions: [ SetVariable("demo_msg", "Leaving your old lobby. Try again."), LeaveLobby ] ),
         ( event: "lobby.start_failed", do_actions: [ SetVariable("demo_msg", "Could not start the lobby.") ] ),
         ( event: "lobby.start_failed:too_few_players", do_actions: [ SetVariable("demo_msg", "Wait for at least one more player.") ] ),
         ( event: "lobby.start_failed:not_host", do_actions: [ SetVariable("demo_msg", "Only the host can start.") ] ),
         ( event: "lobby.closed:host_left", do_actions: [ SetVariable("demo_msg", "The host left, so the lobby closed.") ] ),
-        ( event: "lobby.closed:removed", do_actions: [ SetVariable("demo_msg", "You were dropped from the lobby (no contact for a minute).") ] ),
-        ( event: "lobby.closed:server", do_actions: [ SetVariable("demo_msg", "Lost contact with the server. The lobby is closed.") ] ),
+        ( event: "lobby.closed:removed", do_actions: [ SetVariable("demo_msg", "Dropped from the lobby (no contact for a minute).") ] ),
+        ( event: "lobby.closed:server", do_actions: [ SetVariable("demo_msg", "Lost contact with the server. Lobby closed.") ] ),
+        // There is no event when contact comes back: the message is replaced by the next one (a member joining, a list, ...).
         ( event: "lobby.connection_trouble", do_actions: [ SetVariable("demo_msg", "Reconnecting...") ] ),
     ],
 )

@@ -135,13 +135,34 @@ fn scripted_with_delay(
 }
 
 fn info(id: &str, members: &[&str], max: u32) -> LobbyInfo {
+    info_v(id, members, max, 1, false)
+}
+
+fn info_v(id: &str, members: &[&str], max: u32, version: u64, started: bool) -> LobbyInfo {
     LobbyInfo {
         id: id.into(),
+        version,
         name: "Demo lobby".into(),
         max,
-        started: false,
+        started,
         host: members[0].into(),
         members: members.iter().map(|m| m.to_string()).collect(),
+    }
+}
+
+/// The fake plus a mailbox: whatever a test puts in it arrives as an unsolicited reply (request id 0), like a dropped session would.
+struct Injecting {
+    inner: FakeBackend,
+    inbox: Arc<Mutex<Vec<BackendEvent>>>,
+}
+
+impl Backend for Injecting {
+    fn submit(&mut self, req: BackendRequest) {
+        self.inner.submit(req);
+    }
+    fn poll(&mut self, out: &mut Vec<BackendEvent>) {
+        self.inner.poll(out);
+        out.append(&mut self.inbox.lock().unwrap());
     }
 }
 
@@ -414,7 +435,8 @@ fn a_host_who_walks_away_closes_the_lobby_with_its_reason() {
     let mut app = signed_in_app();
     act(&mut app, Action::ListLobbies);
     settle(&mut app);
-    act(&mut app, Action::JoinLobby { row: 1 });
+    // Row 2 is Grace's lobby: its scripted host leaves on the sixth heartbeat (Ada, row 1, starts hers on the fourth).
+    act(&mut app, Action::JoinLobby { row: 2 });
     settle(&mut app);
     for _ in 0..5 {
         advance(&mut app, 12.0);
@@ -657,4 +679,325 @@ fn the_lobby_demos_snippets_parse_and_are_embedded_in_its_scene() {
             assert!(scene.contains(line.trim()), "ui/{name}.ui.ron line {line:?} is missing from scenes/main.scene.ron");
         }
     }
+}
+
+
+fn heartbeats(asked: &Arc<Mutex<Vec<RequestKind>>>) -> usize {
+    asked.lock().unwrap().iter().filter(|k| matches!(k, RequestKind::LobbyHeartbeat { .. })).count()
+}
+
+/// A scripted backend for a host with company: sign-in works, a lobby with Ada in it exists after `CreateLobby`.
+fn host_script(
+    heartbeat: impl Fn() -> BackendReply + 'static,
+    start: impl Fn() -> BackendReply + 'static,
+) -> impl FnMut(&RequestKind) -> BackendReply {
+    move |kind| match kind {
+        RequestKind::SignIn => BackendReply::SignedIn { display_name: "Player".into() },
+        RequestKind::CreateLobby { .. } => BackendReply::LobbyCreated { lobby: info("L1", &["Player", "Ada"], 4) },
+        RequestKind::LobbyHeartbeat { .. } => heartbeat(),
+        RequestKind::StartLobby { .. } => start(),
+        RequestKind::SignOut => BackendReply::SignedOut,
+        _ => BackendReply::LobbyLeft,
+    }
+}
+
+#[test]
+fn a_started_lobby_does_not_expire_after_a_heartbeat_failed_before_the_start() {
+    let (backend, _) = scripted(host_script(
+        || BackendReply::LobbyHeartbeatFailed { reason: "server".into() },
+        || BackendReply::LobbyStarted { lobby: info_v("L1", &["Player", "Ada"], 4, 2, true) },
+    ));
+    let mut app = app_with(backend, true);
+    act(&mut app, Action::SignIn);
+    settle(&mut app);
+    act(&mut app, create("Demo lobby", 4));
+    settle(&mut app);
+    advance(&mut app, 12.0); // the heartbeat fails: trouble
+    settle(&mut app);
+    assert_eq!(count(&app, "lobby.connection_trouble"), 1);
+    act(&mut app, Action::StartLobby);
+    settle(&mut app);
+    assert_eq!(count(&app, "lobby.started"), 1);
+    clear_seen(&mut app);
+    // Nobody checks in after a start, so nothing may close it a minute later.
+    for _ in 0..3 {
+        advance(&mut app, 61.0);
+        settle(&mut app);
+    }
+    assert_eq!(count(&app, "lobby.closed"), 0, "a started lobby survives until the player leaves: {:?}", seen(&app));
+    assert_eq!(var(&app, "lobby.current.name").as_deref(), Some("Demo lobby"));
+}
+
+#[test]
+fn a_start_is_announced_once_when_the_heartbeat_answer_gets_there_first() {
+    let (backend, _) = scripted_with_delay(
+        host_script(
+            || BackendReply::LobbyState { lobby: info_v("L1", &["Player", "Ada"], 4, 2, true) },
+            || BackendReply::LobbyStarted { lobby: info_v("L1", &["Player", "Ada"], 4, 2, true) },
+        ),
+        |kind| match kind {
+            RequestKind::LobbyHeartbeat { .. } => 3,
+            RequestKind::StartLobby { .. } => 6,
+            _ => 0,
+        },
+    );
+    let mut app = app_with(backend, true);
+    act(&mut app, Action::SignIn);
+    settle(&mut app);
+    act(&mut app, create("Demo lobby", 4));
+    settle(&mut app);
+    clear_seen(&mut app);
+    advance(&mut app, 12.0); // a heartbeat is on the wire
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::StartLobby);
+    for _ in 0..14 {
+        app.update();
+    }
+    assert_eq!(count(&app, "lobby.started"), 1, "the heartbeat answer and the start answer must not both announce it: {:?}", seen(&app));
+    assert_eq!(count(&app, "lobby.start_failed"), 0);
+}
+
+#[test]
+fn an_older_lobby_answer_never_undoes_a_start() {
+    // The heartbeat sent before the start is answered after it, with the lobby as it was (version 1, Ada missing).
+    let (backend, asked) = scripted_with_delay(
+        host_script(
+            || BackendReply::LobbyState { lobby: info_v("L1", &["Player"], 4, 1, false) },
+            || BackendReply::LobbyStarted { lobby: info_v("L1", &["Player", "Ada"], 4, 2, true) },
+        ),
+        |kind| if matches!(kind, RequestKind::LobbyHeartbeat { .. }) { 5 } else { 0 },
+    );
+    let mut app = app_with(backend, true);
+    act(&mut app, Action::SignIn);
+    settle(&mut app);
+    act(&mut app, create("Demo lobby", 4));
+    settle(&mut app);
+    clear_seen(&mut app);
+    advance(&mut app, 12.0);
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::StartLobby);
+    for _ in 0..14 {
+        app.update();
+    }
+    assert_eq!(count(&app, "lobby.started"), 1);
+    assert_eq!(count(&app, "lobby.member_left"), 0, "the old answer was dropped, not applied: {:?}", seen(&app));
+    assert_eq!(var(&app, "lobby.member.2.name").as_deref(), Some("Ada"));
+    advance(&mut app, 30.0);
+    settle(&mut app);
+    assert_eq!(heartbeats(&asked), 1, "a started lobby does not resume heartbeats");
+}
+
+#[test]
+fn signing_out_during_a_create_still_tells_the_server_to_leave() {
+    let (backend, asked) = scripted_with_delay(
+        host_script(|| BackendReply::LobbyLeft, || BackendReply::LobbyLeft),
+        |kind| if matches!(kind, RequestKind::CreateLobby { .. }) { 3 } else { 0 },
+    );
+    let mut app = app_with(backend, true);
+    act(&mut app, Action::SignIn);
+    settle(&mut app);
+    clear_seen(&mut app);
+    act(&mut app, create("Demo lobby", 4));
+    act(&mut app, Action::SignOut);
+    for _ in 0..12 {
+        app.update();
+    }
+    let asked = asked.lock().unwrap().clone();
+    let leave = asked.iter().position(|k| *k == RequestKind::LeaveLobby).expect("the server was told to leave");
+    let sign_out = asked.iter().position(|k| *k == RequestKind::SignOut).expect("and signed out");
+    assert!(leave < sign_out, "the leave goes out before the logout: {asked:?}");
+    assert_eq!(count(&app, "lobby.created"), 0, "the late create answer is dropped");
+}
+
+#[test]
+fn a_list_answer_survives_leaving_a_lobby_that_ended_while_it_was_on_the_way() {
+    let (backend, _) = scripted_with_delay(
+        |kind| match kind {
+            RequestKind::SignIn => BackendReply::SignedIn { display_name: "Player".into() },
+            RequestKind::CreateLobby { .. } => BackendReply::LobbyCreated { lobby: info("L1", &["Player", "Ada"], 4) },
+            RequestKind::ListLobbies => BackendReply::LobbyListed { rows: vec![] },
+            _ => BackendReply::LobbyLeft,
+        },
+        |kind| if matches!(kind, RequestKind::ListLobbies) { 3 } else { 0 },
+    );
+    let mut app = app_with(backend, true);
+    act(&mut app, Action::SignIn);
+    settle(&mut app);
+    act(&mut app, create("Demo lobby", 4));
+    settle(&mut app);
+    clear_seen(&mut app);
+    act(&mut app, Action::ListLobbies); // answered three polls from now
+    act(&mut app, Action::LeaveLobby); // ends the membership first
+    for _ in 0..10 {
+        app.update();
+    }
+    assert_eq!(count(&app, "lobby.left"), 1);
+    assert_eq!(count(&app, "lobby.listed"), 1, "a list belongs to the session, not to the lobby that was left: {:?}", seen(&app));
+}
+
+#[test]
+fn a_heartbeat_answer_that_no_longer_lists_the_player_means_they_were_removed() {
+    let (backend, _) = scripted(host_script(
+        || BackendReply::LobbyState { lobby: info_v("L1", &["Ada"], 4, 2, false) },
+        || BackendReply::LobbyLeft,
+    ));
+    let mut app = app_with(backend, true);
+    act(&mut app, Action::SignIn);
+    settle(&mut app);
+    act(&mut app, create("Demo lobby", 4));
+    settle(&mut app);
+    clear_seen(&mut app);
+    advance(&mut app, 12.0);
+    settle(&mut app);
+    let closed: Vec<String> = seen(&app).into_iter().filter(|e| e.starts_with("lobby.closed")).collect();
+    assert_eq!(closed, vec!["lobby.closed", "lobby.closed:removed"]);
+    assert_eq!(var(&app, "lobby.current.name"), None);
+}
+
+#[test]
+fn a_session_that_the_server_ends_closes_the_lobby_with_the_server_reason() {
+    let inbox = Arc::new(Mutex::new(Vec::new()));
+    let mut app = app_with(Injecting { inner: fake(), inbox: inbox.clone() }, true);
+    act(&mut app, Action::SignIn);
+    settle(&mut app);
+    act(&mut app, create("Demo lobby", 4));
+    settle(&mut app);
+    clear_seen(&mut app);
+    inbox.lock().unwrap().push(BackendEvent { request_id: 0, reply: BackendReply::SignedOut });
+    settle(&mut app);
+    let seen = seen(&app);
+    assert_eq!(seen.iter().filter(|e| e.as_str() == "lobby.closed:server").count(), 1, "{seen:?}");
+    assert_eq!(seen.iter().filter(|e| e.as_str() == "backend.signed_out").count(), 1);
+    assert!(app.world().resource::<GameVariables>().0.keys().all(|k| !k.starts_with("lobby.")));
+    // And an explicit sign-out (which already left the lobby) does not announce a close on top of `lobby.left`.
+    let mut app = signed_in_app();
+    act(&mut app, create("Demo lobby", 4));
+    settle(&mut app);
+    clear_seen(&mut app);
+    act(&mut app, Action::SignOut);
+    settle(&mut app);
+    assert_eq!(count(&app, "lobby.left"), 1);
+    assert_eq!(count(&app, "lobby.closed"), 0);
+}
+
+#[test]
+fn a_reason_from_the_wrong_family_reads_as_server() {
+    let (backend, _) = scripted(|kind| match kind {
+        RequestKind::SignIn => BackendReply::SignedIn { display_name: "Player".into() },
+        RequestKind::ListLobbies => BackendReply::LobbyListed {
+            rows: vec![LobbyRow { id: "a".into(), name: "Demo lobby".into(), players: 1, max: 4, host: "Ada".into() }],
+        },
+        RequestKind::JoinLobby { .. } => BackendReply::LobbyJoinFailed { reason: "host_left".into() },
+        RequestKind::CreateLobby { .. } => BackendReply::LobbyCreated { lobby: info("L1", &["Player", "Ada"], 4) },
+        RequestKind::LobbyHeartbeat { .. } => BackendReply::LobbyClosed { reason: "full".into() },
+        _ => BackendReply::LobbyLeft,
+    });
+    let mut app = app_with(backend, true);
+    act(&mut app, Action::SignIn);
+    settle(&mut app);
+    act(&mut app, Action::ListLobbies);
+    settle(&mut app);
+    clear_seen(&mut app);
+    act(&mut app, Action::JoinLobby { row: 1 });
+    settle(&mut app);
+    assert_eq!(seen(&app), vec!["lobby.join_failed", "lobby.join_failed:server"], "host_left only closes a lobby");
+    act(&mut app, create("Demo lobby", 4));
+    settle(&mut app);
+    clear_seen(&mut app);
+    advance(&mut app, 12.0);
+    settle(&mut app);
+    let closed: Vec<String> = seen(&app).into_iter().filter(|e| e.starts_with("lobby.closed")).collect();
+    assert_eq!(closed, vec!["lobby.closed", "lobby.closed:server"], "full does not close a lobby");
+}
+
+#[test]
+fn a_list_while_a_sign_out_is_in_flight_is_refused_and_the_cached_list_is_gone_after_it() {
+    let (backend, asked) = scripted(|kind| match kind {
+        RequestKind::SignIn => BackendReply::SignedIn { display_name: "Player".into() },
+        RequestKind::SignOut => BackendReply::SignedOut,
+        _ => BackendReply::LobbyListed { rows: vec![] },
+    });
+    let mut app = app_with(backend, true);
+    act(&mut app, Action::SignIn);
+    settle(&mut app);
+    act(&mut app, Action::ListLobbies);
+    settle(&mut app);
+    clear_seen(&mut app);
+    // Same frame: the sign-out is in flight when the list is asked for.
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::SignOut);
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::ListLobbies);
+    app.update();
+    app.update();
+    assert_eq!(count(&app, "lobby.list_failed:not_signed_in"), 1, "{:?}", seen(&app));
+    settle(&mut app);
+    act(&mut app, Action::SignIn);
+    settle(&mut app);
+    let lists_before = asked.lock().unwrap().iter().filter(|k| **k == RequestKind::ListLobbies).count();
+    act(&mut app, Action::ListLobbies);
+    settle(&mut app);
+    let lists_after = asked.lock().unwrap().iter().filter(|k| **k == RequestKind::ListLobbies).count();
+    assert_eq!(lists_after, lists_before + 1, "the previous player's list must not be replayed from the cache");
+}
+
+#[test]
+fn expiry_counts_from_the_last_good_answer_not_from_the_first_failure() {
+    let mut app = app_with(
+        FakeBackend::from_config(&config(true)).with_latency(1).with_failures(FakeFailures { heartbeat: true, ..Default::default() }),
+        true,
+    );
+    act(&mut app, Action::SignIn);
+    settle(&mut app);
+    act(&mut app, create("Demo lobby", 4));
+    settle(&mut app);
+    for secs in [12.0, 12.0, 30.0] {
+        advance(&mut app, secs);
+        settle(&mut app);
+    }
+    assert_eq!(count(&app, "lobby.closed"), 0, "about 54 s after the last good answer: still open");
+    advance(&mut app, 8.0);
+    settle(&mut app);
+    assert_eq!(count(&app, "lobby.closed:server"), 1, "about 62 s after it: closed, although the first failure was only about 50 s ago");
+}
+
+#[test]
+fn a_long_request_timeout_does_not_delay_the_trouble_signal_beyond_one_heartbeat_interval() {
+    // The heartbeat is never answered; the designer's timeout is 120 s, the heartbeat deadline is capped at 10 s.
+    let (backend, _) = scripted_with_delay(
+        host_script(|| BackendReply::LobbyLeft, || BackendReply::LobbyLeft),
+        |kind| if matches!(kind, RequestKind::LobbyHeartbeat { .. }) { 100_000 } else { 0 },
+    );
+    let mut app = app_with(backend, true);
+    app.world_mut().resource_mut::<BackendHub>().request_timeout_secs = 120.0;
+    act(&mut app, Action::SignIn);
+    settle(&mut app);
+    act(&mut app, create("Demo lobby", 4));
+    settle(&mut app);
+    clear_seen(&mut app);
+    advance(&mut app, 12.0); // the heartbeat goes out
+    settle(&mut app);
+    assert_eq!(count(&app, "lobby.connection_trouble"), 0);
+    advance(&mut app, 11.0);
+    settle(&mut app);
+    assert_eq!(count(&app, "lobby.connection_trouble"), 1, "after one heartbeat interval, not after 120 s");
+}
+
+#[test]
+fn a_joiner_sees_the_scripted_host_start_the_lobby_and_then_the_heartbeats_stop() {
+    let mut app = signed_in_app();
+    act(&mut app, Action::ListLobbies);
+    settle(&mut app);
+    act(&mut app, Action::JoinLobby { row: 1 }); // Ada's lobby
+    settle(&mut app);
+    clear_seen(&mut app);
+    for _ in 0..4 {
+        advance(&mut app, 12.0);
+        settle(&mut app);
+    }
+    assert_eq!(count(&app, "lobby.started"), 1, "Ada pressed Start on the fourth heartbeat: {:?}", seen(&app));
+    assert_eq!(var(&app, "lobby.current.name").as_deref(), Some("Demo lobby"), "the lobby survives its start");
+    clear_seen(&mut app);
+    for _ in 0..3 {
+        advance(&mut app, 12.0);
+        settle(&mut app);
+    }
+    assert!(seen(&app).is_empty(), "nothing more happens after the start: {:?}", seen(&app));
+    assert_eq!(app.world().resource::<BackendHub>().pending_requests(), 0, "no heartbeat is sent for a started lobby");
 }

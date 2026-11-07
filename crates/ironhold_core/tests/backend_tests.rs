@@ -269,6 +269,8 @@ impl Backend for ReverseBackend {
             RequestKind::ListLeaderboard { leaderboard, .. } => {
                 BackendReply::Leaderboard { leaderboard, rows: vec![LeaderRow { name: "a".into(), score: 1 }], my_rank: None, my_best: None }
             }
+            // This test is about leaderboards; lobbies have their own file (`lobby_tests.rs`).
+            other => other.failure("not used in this test"),
         };
         self.held.push(BackendEvent { request_id: req.id, reply });
     }

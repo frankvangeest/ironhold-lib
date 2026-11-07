@@ -439,8 +439,9 @@ runs; every online action then answers `backend.offline`.
 Rules that matter when you wire them:
 - **Bind the answers in `global_on`.** They arrive seconds later, while the game is paused and after a `LoadScene`, so a binding
   scoped to one state would miss them (the same trap as `EmitEventAfterDelay`).
-- Event names carry only ids you wrote (`score.submitted:best`); the reason for a failure goes to the variable `backend.last_error`,
-  which a `Label` can show.
+- Leaderboard and score events carry the id you wrote (`score.submitted:best`), and the reason for a failure goes to the variable
+  `backend.last_error`, which a `Label` can show. **Lobby failures work the other way round:** the suffix *is* the reason
+  (`lobby.join_failed:full`, a fixed set of words), the reason is also in `lobby.last_error`, and they do not write `backend.last_error`.
 - A real reply is visible the **same frame** it is produced: the backend runs after the delayed events and before the stat events in the
   game stream (item 2.3 of the frame order above), so a rule on `leaderboard.listed:best` already sees the new `leaderboard.best.*`
   variables. A **refusal** (`backend.offline`, `backend.busy`, `score.submit_failed:{lb}` for "not signed in") is emitted by the action
@@ -516,6 +517,21 @@ Give the waiting state an exit for **every** answer the action can produce (succ
 immediate refusals `offline` and `busy`), and clear any hint on the way out. The engine fails every accepted request after
 `request_timeout_secs` (15 by default; `backend.unreachable` for sign-in, the operation's own failure event otherwise), so an accepted
 request never leaves the state machine waiting forever.
+
+**Pattern: browse, wait, start** (`assets/projects/backend_demo_lobby`), the three panels as show/hide rules in `global_on`:
+```ron
+( event: "backend.signed_in",   do_actions: [ SetUiVisible(id: "browse", visible: true), ListLobbies ] ),
+( event: "lobby.row_filled:1",  do_actions: [ SetUiVisible(id: "row_1", visible: true) ] ),   // one pair per row
+( event: "lobby.row_empty:1",   do_actions: [ SetUiVisible(id: "row_1", visible: false) ] ),
+( event: "lobby.created",       do_actions: [ SetUiVisible(id: "browse", visible: false), SetUiVisible(id: "room", visible: true),
+                                              SetUiVisible(id: "start_row", visible: true) ] ),   // the host gets Start
+( event: "lobby.joined",        do_actions: [ SetUiVisible(id: "browse", visible: false), SetUiVisible(id: "room", visible: true),
+                                              SetUiVisible(id: "start_row", visible: false) ] ),  // a joiner does not
+( event: "lobby.closed",        do_actions: [ SetUiVisible(id: "room", visible: false), SetUiVisible(id: "browse", visible: true), ListLobbies ] ),
+// Failures: the generic rule sets a default text, the reason rule (which fires after it) replaces it.
+( event: "lobby.join_failed",       do_actions: [ SetVariable("demo_msg", "Could not join that lobby.") ] ),
+( event: "lobby.join_failed:full",  do_actions: [ SetVariable("demo_msg", "That lobby is full. Pick another.") ] ),
+```
 
 ### The `initial_state` entry-actions gotcha
 **`entry_actions` on the `initial_state` do *not* run at boot.** Entry actions only run when a **transition** enters a state — the state you start in was never "entered" by a transition, so its `entry_actions` are silently skipped. If you follow "start flat, add states later" and move boot-time work (like `PlayMusicLoop` on scene-ready) into your first state's `entry_actions`, expecting it to fire immediately, it won't. Keep boot-time work in a `global_on` `scene.ready:<scene>` binding instead, or restructure so the initial state is only reached via an explicit transition from a dedicated boot state.

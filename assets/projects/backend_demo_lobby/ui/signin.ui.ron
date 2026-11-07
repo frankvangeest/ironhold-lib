@@ -3,7 +3,7 @@
 // (`ui.button_pressed:sign_in` -> SignIn, `ui.button_pressed:sign_out` -> SignOut).
 // `backend.status` is "offline" (no usable backend in this project/build: `backend.last_error` says why), "signed_out",
 // "connecting" or "online". `backend.last_error` also holds the reason after a failure; the label is wide enough for
-// the longest messages (labels do not wrap or clip). "Signed in as:" shows with an empty name while signed out.
+// the longest messages (a Label spills past its box rather than clipping, see "Sizing text to its box" in docs/20_data_formats.md). "Signed in as:" shows with an empty name while signed out.
 // A Button does not grow to fit its text: give it a `size:` wide enough (about 14 px per character at the default font).
 Group((
     id: "account",

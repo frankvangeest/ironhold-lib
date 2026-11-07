@@ -28,9 +28,9 @@ use crate::runtime::messages::GameEvent;
 use crate::runtime::scene_manager::resolve_project_path;
 use crate::runtime::schedule::GameStreamSet;
 use crate::schema::backend::{
-    is_fake_endpoint, parse_fake_endpoint, BackendConfig, BackendFeature, Keep, LeaderboardDef, Ranking, LOBBY_EXPIRY_SECS,
-    LOBBY_HEARTBEAT_SECS, LOBBY_LIST_MIN_SECS, LOBBY_REASONS, MAX_LEADERBOARD_ROWS, MAX_LOBBY_PLAYERS, MAX_LOBBY_ROWS,
-    MIN_LOBBY_PLAYERS,
+    is_fake_endpoint, is_lobby_failure_reason, parse_fake_endpoint, BackendConfig, BackendFeature, Keep, LeaderboardDef, Ranking,
+    LOBBY_CLOSED_REASONS, LOBBY_EXPIRY_SECS, LOBBY_HEARTBEAT_SECS, LOBBY_LIST_MIN_SECS, LOBBY_REASONS, MAX_LEADERBOARD_ROWS,
+    MAX_LOBBY_PLAYERS, MAX_LOBBY_ROWS, MIN_LOBBY_PLAYERS, RESERVED_VARIABLE_PREFIXES,
 };
 use crate::schema::project::{ProjectConfig, ProjectConfigHandle};
 use crate::schema::{Action, ImplicitRonPlugin};
@@ -53,7 +53,8 @@ pub enum RequestKind {
     JoinLobby { lobby_id: String },
     /// Leaves whatever lobby the server has for this user, also when this client lost track of it (a page reload).
     LeaveLobby,
-    StartLobby,
+    /// `lobby_id` is the lobby core believes it is in: the server refuses with `not_in_lobby` when its own view differs.
+    StartLobby { lobby_id: String },
     /// Sent by core on a timer while in a lobby; the reply is the whole lobby.
     LobbyHeartbeat { lobby_id: String },
 }
@@ -72,7 +73,7 @@ impl RequestKind {
             RequestKind::CreateLobby { .. }
             | RequestKind::JoinLobby { .. }
             | RequestKind::LeaveLobby
-            | RequestKind::StartLobby => "lobby".to_string(),
+            | RequestKind::StartLobby { .. } => "lobby".to_string(),
             RequestKind::LobbyHeartbeat { .. } => "lobby_heartbeat".to_string(),
         }
     }
@@ -93,7 +94,7 @@ impl RequestKind {
             RequestKind::JoinLobby { .. } => BackendReply::LobbyJoinFailed { reason: "server".to_string() },
             // A leave that could not be confirmed still leaves: the engine must not stay in a lobby it asked to quit.
             RequestKind::LeaveLobby => BackendReply::LobbyLeft,
-            RequestKind::StartLobby => BackendReply::LobbyStartFailed { reason: "server".to_string() },
+            RequestKind::StartLobby { .. } => BackendReply::LobbyStartFailed { reason: "server".to_string() },
             RequestKind::LobbyHeartbeat { .. } => BackendReply::LobbyHeartbeatFailed { reason: "server".to_string() },
         }
     }
@@ -123,9 +124,13 @@ pub struct LobbyRow {
 }
 
 /// A lobby as the server describes it. `members` are in the server's join order, host first, and include this player.
+/// Members are told apart by name, so names must be unique within a lobby (Nakama usernames are).
 #[derive(Debug, Clone, PartialEq)]
 pub struct LobbyInfo {
     pub id: String,
+    /// Grows with every change the server makes to the lobby. Core drops a reply older than the lobby it already has, so a slow
+    /// heartbeat answer can never undo a start that was already seen.
+    pub version: u64,
     pub name: String,
     pub max: u32,
     pub started: bool,
@@ -165,6 +170,11 @@ pub enum BackendReply {
 }
 
 impl BackendReply {
+    /// A list answer: it belongs to the session, not to a membership (leaving a lobby must not swallow it).
+    fn is_list(&self) -> bool {
+        matches!(self, BackendReply::LobbyListed { .. } | BackendReply::LobbyListFailed { .. })
+    }
+
     /// Replies that belong to a membership (or a list) and must be dropped when the engine has moved on since the request was made.
     fn is_lobby(&self) -> bool {
         matches!(
@@ -193,6 +203,8 @@ pub struct BackendEvent {
 }
 
 /// What an adapter implements. `submit` must not block; `poll` appends whatever arrived since the last call.
+/// Core submits requests in id order but promises nothing about the order they finish in, and an adapter may run them concurrently
+/// with one exception: a `LeaveLobby` submitted before a `SignOut` (sign-out leaves the lobby) must reach the server before the logout.
 /// Never use Bevy's task pools for the I/O behind it (single-threaded on wasm, starved by blocking sockets on native).
 pub trait Backend {
     fn submit(&mut self, req: BackendRequest);
@@ -292,15 +304,19 @@ struct InFlight {
     kind: RequestKind,
     /// Set when the request is handed to the adapter; the timeout counts from here.
     started: Option<f64>,
-    /// `LobbyTracker::gen` when the request was made: a lobby reply for an older membership is dropped.
+    /// `LobbyTracker::gen` when the request was made: a membership reply for an older membership is dropped.
     lobby_gen: u64,
+    /// `LobbyTracker::session_gen` when the request was made: a list reply from an older session is dropped.
+    session_gen: u64,
 }
 
 /// What the engine knows about lobbies (`planning/features/backend_abstraction.md`, v3a).
 #[derive(Default)]
 struct LobbyTracker {
-    /// Bumped whenever the membership ends or the session does; a lobby reply made under an older value is dropped.
+    /// Bumped whenever the membership ends or the session does; a membership reply made under an older value is dropped.
     gen: u64,
+    /// Bumped only when the session ends (a sign-out): the only thing that makes a list answer stale.
+    session_gen: u64,
     current: Option<LobbyInfo>,
     /// The rows of the last list; `JoinLobby(row: n)` resolves against `rows[n - 1]`, never against the variables (a designer can overwrite those).
     rows: Vec<LobbyRow>,
@@ -372,6 +388,15 @@ impl BackendHub {
         self.in_flight.len()
     }
 
+    /// How long a request may stay unanswered. A heartbeat gets at most one heartbeat interval whatever `request_timeout_secs` says:
+    /// a designer's long timeout must not make the engine notice a dead connection after the server dropped the player.
+    fn timeout_for(&self, kind: &RequestKind) -> f64 {
+        match kind {
+            RequestKind::LobbyHeartbeat { .. } => self.request_timeout_secs.min(LOBBY_HEARTBEAT_SECS),
+            _ => self.request_timeout_secs,
+        }
+    }
+
     fn is_busy(&self, kind: &RequestKind) -> bool {
         let key = kind.dedupe_key();
         self.in_flight.values().any(|f| f.kind.dedupe_key() == key)
@@ -380,7 +405,7 @@ impl BackendHub {
     fn enqueue(&mut self, kind: RequestKind) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
-        self.in_flight.insert(id, InFlight { kind: kind.clone(), started: None, lobby_gen: self.lobby.gen });
+        self.in_flight.insert(id, InFlight { kind: kind.clone(), started: None, lobby_gen: self.lobby.gen, session_gen: self.lobby.session_gen });
         self.outbox.push_back(BackendRequest { id, kind });
         id
     }
@@ -435,13 +460,20 @@ pub fn dispatch_backend_action(
             if hub.status == BackendStatus::SignedOut {
                 return emit(events, "backend.signed_out");
             }
-            // Signing out leaves the lobby: the server is told first (requests go out in order), the engine drops its state now, and
-            // every lobby reply still on its way belongs to the old session and is dropped.
-            if hub.lobby.current.is_some() {
+            // Signing out leaves the lobby: the server is told first, also while a create or join is still waiting for its answer
+            // (the engine does not know yet that it is in a lobby, the server may). The Leave is queued BEFORE the generations move,
+            // so its own answer is dropped as stale; the engine drops its state now and every lobby answer still on its way is dropped.
+            let in_lobby = hub.lobby.current.is_some();
+            if in_lobby || hub.is_busy(&RequestKind::LeaveLobby) {
                 hub.enqueue(RequestKind::LeaveLobby);
+            }
+            if in_lobby {
                 drop_lobby(hub, vars, events, None);
             }
             hub.lobby.gen += 1;
+            hub.lobby.session_gen += 1;
+            hub.lobby.listed_at = None;
+            hub.lobby.rows.clear();
             hub.enqueue(RequestKind::SignOut);
         }
         Action::ListLobbies
@@ -526,7 +558,8 @@ fn dispatch_lobby_action(action: &Action, hub: &mut BackendHub, vars: &mut GameV
         warn!("{action:?}: add Lobbies to `features` in backend.ron");
         return lobby_fail(vars, events, op, "not_enabled");
     }
-    if hub.status != BackendStatus::Online {
+    // A sign-out in flight still reads Online: asking the server now would only be answered after the session is gone.
+    if hub.status != BackendStatus::Online || hub.is_busy(&RequestKind::SignOut) {
         return lobby_fail(vars, events, op, "not_signed_in");
     }
     let kind = match action {
@@ -537,8 +570,7 @@ fn dispatch_lobby_action(action: &Action, hub: &mut BackendHub, vars: &mut GameV
             // Refresh faster than the minimum and the last list is shown again: a designer's 1 s refresh loop must not turn into 1 request/s
             // per player (the shared Cloudflare limit would then block everybody behind that address).
             if hub.lobby.listed_at.is_some_and(|at| hub.clock - at < LOBBY_LIST_MIN_SECS) {
-                let rows = hub.lobby.rows.clone();
-                return write_lobby_list(vars, events, &rows);
+                return write_lobby_list(vars, events, &hub.lobby.rows);
             }
             RequestKind::ListLobbies
         }
@@ -574,7 +606,7 @@ fn dispatch_lobby_action(action: &Action, hub: &mut BackendHub, vars: &mut GameV
             if (cur.members.len() as u32) < MIN_LOBBY_PLAYERS {
                 return lobby_fail(vars, events, op, "too_few_players");
             }
-            RequestKind::StartLobby
+            RequestKind::StartLobby { lobby_id: cur.id.clone() }
         }
         _ => return,
     };
@@ -631,7 +663,7 @@ pub fn backend_glue_system(
     let expired: Vec<u64> = hub
         .in_flight
         .iter()
-        .filter(|(id, f)| f.started.is_some_and(|s| now - s >= hub.request_timeout_secs) && !batch.iter().any(|e| e.request_id == **id))
+        .filter(|(id, f)| f.started.is_some_and(|s| now - s >= hub.timeout_for(&f.kind)) && !batch.iter().any(|e| e.request_id == **id))
         .map(|(id, _)| *id)
         .collect();
     if let Some(backend) = slot.as_mut().and_then(|s| s.0.as_mut()) {
@@ -641,7 +673,7 @@ pub fn backend_glue_system(
     }
     for id in expired {
         let kind = hub.in_flight[&id].kind.clone();
-        warn!("backend request {id} ({kind:?}) timed out after {}s", hub.request_timeout_secs);
+        warn!("backend request {id} ({kind:?}) timed out after {}s", hub.timeout_for(&kind));
         batch.push(BackendEvent { request_id: id, reply: kind.failure("timed out") });
     }
 
@@ -657,8 +689,16 @@ pub fn backend_glue_system(
         } else {
             None
         };
-        // A reply made under an older membership (the player left, the lobby closed, they signed out) must not bring it back.
-        if flight.as_ref().is_some_and(|f| f.lobby_gen != hub.lobby.gen) && ev.reply.is_lobby() {
+        // A reply made under an older membership (the player left, the lobby closed, they signed out) must not bring it back; a list
+        // answer only goes stale with the session, so leaving a lobby never swallows the list the designer asked for.
+        let stale = flight.as_ref().is_some_and(|f| {
+            if ev.reply.is_list() {
+                f.session_gen != hub.lobby.session_gen
+            } else {
+                f.lobby_gen != hub.lobby.gen
+            }
+        });
+        if stale && ev.reply.is_lobby() {
             debug!("dropping a stale lobby reply to request {}", ev.request_id);
             continue;
         }
@@ -693,8 +733,15 @@ fn apply_reply(hub: &mut BackendHub, vars: &mut GameVariables, events: &mut Mess
             vars.0.insert("backend.display_name".to_string(), String::new());
             hub.display_name.clear();
             // The previous player's board, rank and lobby must not stay on screen for the next one.
-            vars.0.retain(|k, _| !k.starts_with("leaderboard.") && !k.starts_with("lobby."));
-            hub.lobby = LobbyTracker { gen: hub.lobby.gen + 1, ..Default::default() };
+            // Every engine-owned prefix except `backend.`, which was just written above (`backend.status`, `backend.display_name`).
+            vars.0.retain(|k, _| !RESERVED_VARIABLE_PREFIXES.iter().any(|p| *p != "backend." && k.starts_with(p)));
+            // A session that ended without the player asking (the server dropped it) still ends the lobby: say so. An explicit
+            // SignOut already dropped the lobby when it was dispatched, so `current` is empty here and nothing fires twice.
+            if hub.lobby.current.is_some() {
+                emit(events, "lobby.closed");
+                emit(events, "lobby.closed:server");
+            }
+            hub.lobby = LobbyTracker { gen: hub.lobby.gen + 1, session_gen: hub.lobby.session_gen + 1, ..Default::default() };
             emit(events, "backend.signed_out");
         }
         BackendReply::ScoreSubmitted { leaderboard } => {
@@ -731,9 +778,9 @@ fn apply_reply(hub: &mut BackendHub, vars: &mut GameVariables, events: &mut Mess
         }
         BackendReply::LobbyListed { rows } => {
             let rows: Vec<LobbyRow> = rows.into_iter().take(MAX_LOBBY_ROWS as usize).collect();
-            hub.lobby.rows = rows.clone();
-            hub.lobby.listed_at = Some(now);
             write_lobby_list(vars, events, &rows);
+            hub.lobby.rows = rows;
+            hub.lobby.listed_at = Some(now);
         }
         BackendReply::LobbyListFailed { reason } => lobby_fail(vars, events, "list", &reason),
         BackendReply::LobbyCreateFailed { reason } => lobby_fail(vars, events, "create", &reason),
@@ -742,25 +789,34 @@ fn apply_reply(hub: &mut BackendHub, vars: &mut GameVariables, events: &mut Mess
         BackendReply::LobbyCreated { lobby } => enter_lobby(hub, vars, events, lobby, "lobby.created", now),
         BackendReply::LobbyJoined { lobby } => enter_lobby(hub, vars, events, lobby, "lobby.joined", now),
         BackendReply::LobbyLeft => drop_lobby(hub, vars, events, None),
-        BackendReply::LobbyStarted { lobby } => {
-            if hub.lobby.current.is_none() {
-                return;
+        BackendReply::LobbyStarted { mut lobby } => {
+            let Some(prev) = hub.lobby.current.as_ref() else { return };
+            if prev.id != lobby.id || lobby.version < prev.version {
+                return debug!("ignoring a start answer for {} (version {}) while in {} (version {})", lobby.id, lobby.version, prev.id, prev.version);
             }
+            // The first sighting of the start announces it; a heartbeat answer that got there first already did.
+            let first = !prev.started;
+            lobby.started = true;
             put(vars, "lobby.last_error", String::new());
             write_current_lobby(&hub.display_name, vars, &lobby);
             hub.lobby.current = Some(lobby);
             hub.lobby.last_ok = now;
-            emit(events, "lobby.started");
+            // Members stop checking in after a start, so a failure noticed before it must not close the started lobby later.
+            hub.lobby.trouble = false;
+            if first {
+                emit(events, "lobby.started");
+            }
         }
         BackendReply::LobbyState { lobby } => apply_lobby_state(hub, vars, events, lobby, now),
         BackendReply::LobbyClosed { reason } => {
             if hub.lobby.current.is_some() {
-                drop_lobby(hub, vars, events, Some(fixed_reason(&reason)));
+                drop_lobby(hub, vars, events, Some(closed_reason(&reason)));
             }
         }
         BackendReply::LobbyHeartbeatFailed { reason } => {
             debug!("lobby heartbeat failed: {reason}");
-            if hub.lobby.current.is_some() && !hub.lobby.trouble {
+            // Once started nobody checks in any more, so a late failure from before the start is not trouble.
+            if hub.lobby.current.as_ref().is_some_and(|c| !c.started) && !hub.lobby.trouble {
                 hub.lobby.trouble = true;
                 emit(events, "lobby.connection_trouble");
             }
@@ -770,9 +826,15 @@ fn apply_reply(hub: &mut BackendHub, vars: &mut GameVariables, events: &mut Mess
 
 // ─── Lobbies ─────────────────────────────────────────────────────────────────
 
-/// A reason an adapter reported, as one of the fixed tokens a designer can write (`full`, `gone`, ...); anything else is `server`.
-fn fixed_reason(reason: &str) -> &'static str {
-    LOBBY_REASONS.iter().copied().find(|r| *r == reason).unwrap_or("server")
+/// A failure reason an adapter reported, as one of the fixed tokens a designer can write (`full`, `gone`, ...); anything else is `server`.
+/// `host_left` and `removed` only close a lobby, so they are not failure reasons.
+fn failure_reason(reason: &str) -> &'static str {
+    LOBBY_REASONS.iter().copied().find(|r| *r == reason && is_lobby_failure_reason(r)).unwrap_or("server")
+}
+
+/// The reason of a `lobby.closed:<reason>`: `host_left`, `removed` or `server`; anything else is `server`.
+fn closed_reason(reason: &str) -> &'static str {
+    LOBBY_CLOSED_REASONS.iter().copied().find(|r| *r == reason).unwrap_or("server")
 }
 
 /// Writes a variable only when its value differs, so a heartbeat that changes nothing leaves the variables alone.
@@ -784,7 +846,7 @@ fn put(vars: &mut GameVariables, key: &str, value: String) {
 
 /// `lobby.last_error` first, then the generic failure event, then the reason form.
 fn lobby_fail(vars: &mut GameVariables, events: &mut MessageWriter<GameEvent>, op: &str, reason: &str) {
-    let reason = fixed_reason(reason);
+    let reason = failure_reason(reason);
     put(vars, "lobby.last_error", reason.to_string());
     emit(events, format!("lobby.{op}_failed"));
     emit(events, format!("lobby.{op}_failed:{reason}"));
@@ -868,21 +930,29 @@ fn drop_lobby(hub: &mut BackendHub, vars: &mut GameVariables, events: &mut Messa
 
 /// A heartbeat answer: diff against the lobby we had, so `lobby.member_joined`, `lobby.member_left` and `lobby.started` come from one place
 /// (and the fake gets them for free). The player's own join and leave are not announced; `lobby.created`/`joined`/`left` cover those.
-fn apply_lobby_state(hub: &mut BackendHub, vars: &mut GameVariables, events: &mut MessageWriter<GameEvent>, lobby: LobbyInfo, now: f64) {
-    let Some(prev) = hub.lobby.current.clone() else { return };
-    if prev.id != lobby.id {
-        debug!("ignoring a lobby update for {} while in {}", lobby.id, prev.id);
+/// An answer older than the lobby we already have is dropped, a lobby never goes from started back to not started, and an answer that
+/// no longer lists the player means the server removed them: `lobby.closed:removed`.
+fn apply_lobby_state(hub: &mut BackendHub, vars: &mut GameVariables, events: &mut MessageWriter<GameEvent>, mut lobby: LobbyInfo, now: f64) {
+    let Some(prev) = hub.lobby.current.take() else { return };
+    if prev.id != lobby.id || lobby.version < prev.version {
+        debug!("ignoring a lobby update for {} (version {}) while in {} (version {})", lobby.id, lobby.version, prev.id, prev.version);
+        hub.lobby.current = Some(prev);
         return;
+    }
+    let own = hub.display_name.clone();
+    if !own.is_empty() && !lobby.members.contains(&own) {
+        // `current` was taken above, so dropping the lobby here finishes the job.
+        return drop_lobby(hub, vars, events, Some("removed"));
     }
     hub.lobby.last_ok = now;
     hub.lobby.trouble = false;
-    write_current_lobby(&hub.display_name, vars, &lobby);
-    let own = hub.display_name.as_str();
-    for m in lobby.members.iter().filter(|m| !prev.members.contains(m) && m.as_str() != own) {
+    lobby.started |= prev.started;
+    write_current_lobby(&own, vars, &lobby);
+    for m in lobby.members.iter().filter(|m| !prev.members.contains(m) && **m != own) {
         debug!("{m} joined the lobby");
         emit(events, "lobby.member_joined");
     }
-    for m in prev.members.iter().filter(|m| !lobby.members.contains(m) && m.as_str() != own) {
+    for m in prev.members.iter().filter(|m| !lobby.members.contains(m) && **m != own) {
         debug!("{m} left the lobby");
         emit(events, "lobby.member_left");
     }
@@ -896,22 +966,28 @@ fn apply_lobby_state(hub: &mut BackendHub, vars: &mut GameVariables, events: &mu
 }
 
 /// Per glue frame: send the next heartbeat when it is due. Returns true when the heartbeats have failed for the whole expiry window (the
-/// server has dropped us by then) and the caller must close the lobby. Members stop heartbeating once the lobby has started.
+/// server has dropped us by then) and the caller must close the lobby. Members stop heartbeating once the lobby has started, and a started
+/// lobby never expires on the client: nothing could keep it alive.
 fn lobby_tick(hub: &mut BackendHub, now: f64) -> bool {
     let Some(cur) = hub.lobby.current.as_ref() else { return false };
+    if cur.started {
+        return false;
+    }
     if hub.lobby.trouble && now - hub.lobby.last_ok >= LOBBY_EXPIRY_SECS {
         warn!("lobby heartbeats failed for {LOBBY_EXPIRY_SECS}s: the lobby is closed for this player");
         return true;
     }
-    if cur.started || now < hub.lobby.next_heartbeat {
+    if now < hub.lobby.next_heartbeat {
+        return false;
+    }
+    // A heartbeat that has not been answered yet: wait for it (or its timeout), without building any key strings every frame.
+    if hub.in_flight.values().any(|f| matches!(f.kind, RequestKind::LobbyHeartbeat { .. })) {
         return false;
     }
     let kind = RequestKind::LobbyHeartbeat { lobby_id: cur.id.clone() };
-    if hub.is_busy(&kind) {
-        return false;
-    }
-    // Deterministic jitter (no RNG in core): the request counter spreads players who joined in the same frame by up to a second.
-    hub.lobby.next_heartbeat = now + LOBBY_HEARTBEAT_SECS + (hub.next_id % 5) as f64 * 0.25;
+    // Deterministic jitter (no RNG in core), per player: seeded from the display name so two players in the same lobby do not beat in step.
+    let seed = hub.display_name.bytes().fold(0u64, |a, b| a.wrapping_mul(31).wrapping_add(u64::from(b)));
+    hub.lobby.next_heartbeat = now + LOBBY_HEARTBEAT_SECS + (seed % 5) as f64 * 0.25;
     hub.enqueue(kind);
     false
 }
@@ -961,6 +1037,7 @@ pub struct FakeFailures {
 /// A lobby inside the fake. The other members are scripted rivals, so a demo has someone to wait for.
 struct FakeLobby {
     id: String,
+    version: u64,
     name: String,
     max: u32,
     started: bool,
@@ -972,6 +1049,7 @@ impl FakeLobby {
     fn info(&self) -> LobbyInfo {
         LobbyInfo {
             id: self.id.clone(),
+            version: self.version,
             name: self.name.clone(),
             max: self.max,
             started: self.started,
@@ -1030,6 +1108,7 @@ impl FakeBackend {
         {
             fake.lobbies.push(FakeLobby {
                 id: format!("fake-{}", i + 1),
+                version: 1,
                 name: name(i),
                 max,
                 started: false,
@@ -1081,6 +1160,17 @@ impl FakeBackend {
         self
     }
 
+    /// Takes the player out of the lobby they are in, if any. A host who leaves closes it; an emptied lobby goes away.
+    fn leave_current(&mut self) {
+        let Some(id) = self.mine.take() else { return };
+        let Some(i) = self.lobbies.iter().position(|l| l.id == id) else { return };
+        self.lobbies[i].members.retain(|m| m != Self::PLAYER_NAME);
+        self.lobbies[i].version += 1;
+        if self.lobbies[i].host == Self::PLAYER_NAME || self.lobbies[i].members.is_empty() {
+            self.lobbies.remove(i);
+        }
+    }
+
     fn reply_for(&mut self, kind: RequestKind) -> BackendReply {
         let f = self.failures;
         match kind {
@@ -1095,6 +1185,7 @@ impl FakeBackend {
                 }
             }
             RequestKind::SignOut => {
+                self.leave_current();
                 self.signed_in = false;
                 BackendReply::SignedOut
             }
@@ -1146,7 +1237,7 @@ impl FakeBackend {
                 BackendReply::Leaderboard { leaderboard, rows, my_rank: me.map(|i| i as u32 + 1), my_best }
             }
             RequestKind::ListLobbies => {
-                if f.unreachable {
+                if f.unreachable || f.list {
                     return BackendReply::LobbyListFailed { reason: "server".into() };
                 }
                 if !self.signed_in {
@@ -1167,11 +1258,12 @@ impl FakeBackend {
                 if !self.signed_in {
                     return BackendReply::LobbyCreateFailed { reason: "not_signed_in".into() };
                 }
-                if self.mine.is_some() {
-                    return BackendReply::LobbyCreateFailed { reason: "already_in_lobby".into() };
-                }
+                // Create replaces an old membership, like the server will (a page reload can leave one behind). The `already_in_lobby`
+                // refusal is core's own, for the engine's current lobby.
+                self.leave_current();
                 let lobby = FakeLobby {
                     id: format!("fake-{}", self.next_lobby),
+                    version: 1,
                     name,
                     max: max_players.clamp(MIN_LOBBY_PLAYERS, MAX_LOBBY_PLAYERS),
                     started: false,
@@ -1192,45 +1284,43 @@ impl FakeBackend {
                 if !self.signed_in {
                     return BackendReply::LobbyJoinFailed { reason: "not_signed_in".into() };
                 }
-                if self.mine.is_some() {
-                    return BackendReply::LobbyJoinFailed { reason: "already_in_lobby".into() };
+                // Check the target first: a join that fails must not cost the player their current lobby.
+                let refusal = if f.gone {
+                    Some("gone")
+                } else {
+                    match self.lobbies.iter().find(|l| l.id == lobby_id) {
+                        None => Some("gone"),
+                        Some(l) if l.started => Some("started"),
+                        Some(l) if f.join_full || l.members.len() as u32 >= l.max => Some("full"),
+                        Some(_) => None,
+                    }
+                };
+                if let Some(reason) = refusal {
+                    return BackendReply::LobbyJoinFailed { reason: reason.into() };
                 }
-                if f.gone {
-                    return BackendReply::LobbyJoinFailed { reason: "gone".into() };
-                }
+                self.leave_current();
                 let Some(lobby) = self.lobbies.iter_mut().find(|l| l.id == lobby_id) else {
                     return BackendReply::LobbyJoinFailed { reason: "gone".into() };
                 };
-                if lobby.started {
-                    return BackendReply::LobbyJoinFailed { reason: "started".into() };
-                }
-                if f.join_full || lobby.members.len() as u32 >= lobby.max {
-                    return BackendReply::LobbyJoinFailed { reason: "full".into() };
-                }
                 lobby.members.push(Self::PLAYER_NAME.to_string());
+                lobby.version += 1;
                 let info = lobby.info();
                 self.mine = Some(info.id.clone());
                 self.heartbeats = 0;
                 BackendReply::LobbyJoined { lobby: info }
             }
             RequestKind::LeaveLobby => {
-                if let Some(id) = self.mine.take() {
-                    if let Some(i) = self.lobbies.iter().position(|l| l.id == id) {
-                        self.lobbies[i].members.retain(|m| m != Self::PLAYER_NAME);
-                        // A host who leaves closes the lobby; an emptied one goes away.
-                        if self.lobbies[i].host == Self::PLAYER_NAME || self.lobbies[i].members.is_empty() {
-                            self.lobbies.remove(i);
-                        }
-                    }
-                }
+                self.leave_current();
                 BackendReply::LobbyLeft
             }
-            RequestKind::StartLobby => {
-                let Some(id) = self.mine.clone() else { return BackendReply::LobbyStartFailed { reason: "not_in_lobby".into() } };
+            RequestKind::StartLobby { lobby_id } => {
+                if self.mine.as_deref() != Some(lobby_id.as_str()) {
+                    return BackendReply::LobbyStartFailed { reason: "not_in_lobby".into() };
+                }
                 if f.unreachable || f.start {
                     return BackendReply::LobbyStartFailed { reason: "server".into() };
                 }
-                let Some(lobby) = self.lobbies.iter_mut().find(|l| l.id == id) else {
+                let Some(lobby) = self.lobbies.iter_mut().find(|l| l.id == lobby_id) else {
                     return BackendReply::LobbyStartFailed { reason: "gone".into() };
                 };
                 if lobby.host != Self::PLAYER_NAME {
@@ -1243,6 +1333,7 @@ impl FakeBackend {
                     return BackendReply::LobbyStartFailed { reason: "too_few_players".into() };
                 }
                 lobby.started = true;
+                lobby.version += 1;
                 BackendReply::LobbyStarted { lobby: lobby.info() }
             }
             RequestKind::LobbyHeartbeat { lobby_id } => {
@@ -1258,21 +1349,38 @@ impl FakeBackend {
                     self.mine = None;
                     return BackendReply::LobbyClosed { reason: "host_left".into() };
                 };
-                // The script of the other members, so a demo shows joins, a leave and a host who walks away. Nothing random.
-                if self.lobbies[i].host != Self::PLAYER_NAME && beat == 6 {
-                    self.lobbies.remove(i);
-                    self.mine = None;
-                    return BackendReply::LobbyClosed { reason: "host_left".into() };
+                // The script of the other members, so a demo shows joins, a leave, a host who starts and a host who walks away. Nothing random.
+                // Lobbies the player joined: Ada's (`fake-1`) is started by Ada on beat 4, every other host walks away on beat 6.
+                if self.lobbies[i].host != Self::PLAYER_NAME {
+                    if lobby_id == "fake-1" {
+                        if beat == 4 {
+                            self.lobbies[i].started = true;
+                            self.lobbies[i].version += 1;
+                        }
+                    } else if beat == 6 {
+                        self.lobbies.remove(i);
+                        self.mine = None;
+                        return BackendReply::LobbyClosed { reason: "host_left".into() };
+                    }
                 }
                 let lobby = &mut self.lobbies[i];
                 if !lobby.started {
+                    let mut changed = false;
                     if beat % 2 == 0 && (lobby.members.len() as u32) < lobby.max {
                         if let Some(rival) = FAKE_RIVALS.iter().find(|r| !lobby.members.iter().any(|m| m == *r)) {
                             lobby.members.push((*rival).to_string());
+                            changed = true;
                         }
                     }
-                    if beat == 5 && lobby.members.len() > 2 {
-                        lobby.members.pop();
+                    // On beat 5 the newest rival (never the player, never the host) leaves again.
+                    if beat == 5 {
+                        if let Some(p) = lobby.members.iter().rposition(|m| m != Self::PLAYER_NAME && *m != lobby.host) {
+                            lobby.members.remove(p);
+                            changed = true;
+                        }
+                    }
+                    if changed {
+                        lobby.version += 1;
                     }
                 }
                 BackendReply::LobbyState { lobby: lobby.info() }
@@ -1606,6 +1714,33 @@ mod tests {
         fake
     }
 
+    fn create_lobby(fake: &mut FakeBackend, id: u64, name: &str, max: u32) -> LobbyInfo {
+        let BackendReply::LobbyCreated { lobby } = ask(fake, id, RequestKind::CreateLobby { name: name.into(), max_players: max }) else {
+            panic!("create failed")
+        };
+        lobby
+    }
+
+    fn join(fake: &mut FakeBackend, id: u64, lobby_id: &str) -> BackendReply {
+        ask(fake, id, RequestKind::JoinLobby { lobby_id: lobby_id.into() })
+    }
+
+    fn beat(fake: &mut FakeBackend, id: u64, lobby_id: &str) -> BackendReply {
+        ask(fake, id, RequestKind::LobbyHeartbeat { lobby_id: lobby_id.into() })
+    }
+
+    fn failed_with(reply: &BackendReply, want: &str) -> bool {
+        match reply {
+            BackendReply::LobbyListFailed { reason }
+            | BackendReply::LobbyCreateFailed { reason }
+            | BackendReply::LobbyJoinFailed { reason }
+            | BackendReply::LobbyStartFailed { reason }
+            | BackendReply::LobbyHeartbeatFailed { reason }
+            | BackendReply::LobbyClosed { reason } => reason == want,
+            _ => false,
+        }
+    }
+
     #[test]
     fn the_fake_lists_three_seeded_lobbies_named_from_the_config() {
         let mut fake = lobby_fake();
@@ -1618,52 +1753,100 @@ mod tests {
     #[test]
     fn create_join_leave_and_start_follow_the_rules() {
         let mut fake = lobby_fake();
-        let BackendReply::LobbyCreated { lobby } = ask(&mut fake, 2, RequestKind::CreateLobby { name: "Demo lobby".into(), max_players: 3 }) else {
-            panic!()
-        };
+        let lobby = create_lobby(&mut fake, 2, "Demo lobby", 3);
         assert_eq!((lobby.host.as_str(), lobby.members.clone(), lobby.max), ("Player", vec!["Player".to_string()], 3));
-        assert!(matches!(
-            ask(&mut fake, 3, RequestKind::CreateLobby { name: "Demo lobby".into(), max_players: 3 }),
-            BackendReply::LobbyCreateFailed { reason } if reason == "already_in_lobby"
-        ));
-        assert!(matches!(ask(&mut fake, 4, RequestKind::StartLobby), BackendReply::LobbyStartFailed { reason } if reason == "too_few_players"));
-        assert!(matches!(ask(&mut fake, 5, RequestKind::LeaveLobby), BackendReply::LobbyLeft));
+        let start = |fake: &mut FakeBackend, id: u64, lobby_id: &str| ask(fake, id, RequestKind::StartLobby { lobby_id: lobby_id.into() });
+        assert!(failed_with(&start(&mut fake, 4, &lobby.id), "too_few_players"));
+        assert!(failed_with(&start(&mut fake, 5, "not-my-lobby"), "not_in_lobby"), "the server's view wins over a stale id");
+        assert!(matches!(ask(&mut fake, 6, RequestKind::LeaveLobby), BackendReply::LobbyLeft));
         // Joining: the full lobby refuses, a lobby with room takes the player, a joiner is not the host.
-        assert!(matches!(ask(&mut fake, 6, RequestKind::JoinLobby { lobby_id: "fake-3".into() }), BackendReply::LobbyJoinFailed { reason } if reason == "full"));
-        let BackendReply::LobbyJoined { lobby } = ask(&mut fake, 7, RequestKind::JoinLobby { lobby_id: "fake-1".into() }) else { panic!() };
+        assert!(failed_with(&join(&mut fake, 7, "fake-3"), "full"));
+        let BackendReply::LobbyJoined { lobby } = join(&mut fake, 8, "fake-1") else { panic!() };
         assert_eq!(lobby.members, vec!["Ada".to_string(), "Player".to_string()]);
-        assert!(matches!(ask(&mut fake, 8, RequestKind::StartLobby), BackendReply::LobbyStartFailed { reason } if reason == "not_host"));
-        assert!(matches!(ask(&mut fake, 9, RequestKind::JoinLobby { lobby_id: "fake-2".into() }), BackendReply::LobbyJoinFailed { reason } if reason == "already_in_lobby"));
+        assert!(failed_with(&start(&mut fake, 9, "fake-1"), "not_host"));
+        // Create and join REPLACE an old membership (the fake has no `already_in_lobby`: that refusal is core's own).
+        let BackendReply::LobbyJoined { lobby } = join(&mut fake, 10, "fake-2") else { panic!("join must replace the old membership") };
+        assert!(lobby.members.contains(&"Player".to_string()));
+        let BackendReply::LobbyListed { rows } = ask(&mut fake, 11, RequestKind::ListLobbies) else { panic!() };
+        assert_eq!(rows.iter().find(|r| r.id == "fake-1").map(|r| r.players), Some(1), "the player left fake-1 when joining fake-2");
+        let again = create_lobby(&mut fake, 12, "Quick game", 4);
+        let BackendReply::LobbyListed { rows } = ask(&mut fake, 13, RequestKind::ListLobbies) else { panic!() };
+        assert_eq!(rows.iter().find(|r| r.id == "fake-2").map(|r| r.players), Some(3), "and left fake-2 (back to its own three) when creating");
+        assert!(rows.iter().any(|r| r.id == again.id));
+    }
+
+    #[test]
+    fn a_failed_join_costs_the_player_nothing() {
+        let mut fake = lobby_fake();
+        let _ = join(&mut fake, 2, "fake-1");
+        assert!(failed_with(&join(&mut fake, 3, "fake-3"), "full"));
+        let BackendReply::LobbyState { lobby } = beat(&mut fake, 4, "fake-1") else { panic!("still in fake-1") };
+        assert!(lobby.members.contains(&"Player".to_string()));
     }
 
     #[test]
     fn a_hosted_lobby_fills_up_on_heartbeats_and_can_then_be_started() {
         let mut fake = lobby_fake();
-        let BackendReply::LobbyCreated { lobby } = ask(&mut fake, 2, RequestKind::CreateLobby { name: "Quick game".into(), max_players: 4 }) else {
-            panic!()
-        };
-        let beat = |fake: &mut FakeBackend, id: u64| ask(fake, id, RequestKind::LobbyHeartbeat { lobby_id: lobby.id.clone() });
-        let BackendReply::LobbyState { lobby: l1 } = beat(&mut fake, 3) else { panic!() };
+        let lobby = create_lobby(&mut fake, 2, "Quick game", 4);
+        let BackendReply::LobbyState { lobby: l1 } = beat(&mut fake, 3, &lobby.id) else { panic!() };
         assert_eq!(l1.members.len(), 1, "nobody joins on the first heartbeat");
-        let BackendReply::LobbyState { lobby: l2 } = beat(&mut fake, 4) else { panic!() };
+        let BackendReply::LobbyState { lobby: l2 } = beat(&mut fake, 4, &lobby.id) else { panic!() };
         assert_eq!(l2.members, vec!["Player".to_string(), "Ada".to_string()]);
-        let BackendReply::LobbyStarted { lobby: started } = ask(&mut fake, 5, RequestKind::StartLobby) else { panic!() };
-        assert!(started.started);
-        assert!(matches!(ask(&mut fake, 6, RequestKind::StartLobby), BackendReply::LobbyStartFailed { reason } if reason == "started"));
+        assert!(l2.version > l1.version, "every change to the lobby moves its version");
+        let BackendReply::LobbyStarted { lobby: started } = ask(&mut fake, 5, RequestKind::StartLobby { lobby_id: lobby.id.clone() }) else { panic!() };
+        assert!(started.started && started.version > l2.version);
+        assert!(failed_with(&ask(&mut fake, 6, RequestKind::StartLobby { lobby_id: lobby.id.clone() }), "started"));
         let BackendReply::LobbyListed { rows } = ask(&mut fake, 7, RequestKind::ListLobbies) else { panic!() };
         assert!(rows.iter().all(|r| r.id != started.id), "a started lobby is not listed");
     }
 
     #[test]
-    fn a_joined_lobbys_host_walks_away_on_the_sixth_heartbeat() {
+    fn the_scripted_host_of_adas_lobby_starts_it_on_the_fourth_heartbeat() {
         let mut fake = lobby_fake();
-        let _ = ask(&mut fake, 2, RequestKind::JoinLobby { lobby_id: "fake-1".into() });
-        let hb = RequestKind::LobbyHeartbeat { lobby_id: "fake-1".into() };
-        for id in 3..8 {
-            assert!(matches!(ask(&mut fake, id, hb.clone()), BackendReply::LobbyState { .. }), "beat {}", id - 2);
+        let _ = join(&mut fake, 2, "fake-1");
+        for id in 3..6 {
+            let BackendReply::LobbyState { lobby } = beat(&mut fake, id, "fake-1") else { panic!() };
+            assert!(!lobby.started, "beat {}", id - 2);
         }
-        assert!(matches!(ask(&mut fake, 8, hb.clone()), BackendReply::LobbyClosed { reason } if reason == "host_left"));
-        assert!(matches!(ask(&mut fake, 9, hb), BackendReply::LobbyClosed { reason } if reason == "removed"), "no longer in any lobby");
+        let BackendReply::LobbyState { lobby } = beat(&mut fake, 6, "fake-1") else { panic!() };
+        assert!(lobby.started, "Ada pressed Start on the fourth heartbeat");
+        assert!(failed_with(&join(&mut fake, 7, "fake-1"), "started"), "a started lobby refuses joins, even from a member");
+    }
+
+    #[test]
+    fn another_scripted_host_walks_away_on_the_sixth_heartbeat() {
+        let mut fake = lobby_fake();
+        let BackendReply::LobbyJoined { .. } = join(&mut fake, 2, "fake-2") else { panic!() };
+        for id in 3..8 {
+            assert!(matches!(beat(&mut fake, id, "fake-2"), BackendReply::LobbyState { .. }), "beat {}", id - 2);
+        }
+        assert!(failed_with(&beat(&mut fake, 8, "fake-2"), "host_left"));
+        assert!(failed_with(&beat(&mut fake, 9, "fake-2"), "removed"), "no longer in any lobby");
+    }
+
+    #[test]
+    fn the_script_never_removes_the_player_from_a_full_lobby_they_joined() {
+        let mut fake = lobby_fake();
+        // Grace's lobby has room for exactly one more: the player makes it full (4/4), so no rival is added on top.
+        let BackendReply::LobbyJoined { lobby } = join(&mut fake, 2, "fake-2") else { panic!() };
+        assert_eq!(lobby.members.len(), 4);
+        for id in 3..8 {
+            if let BackendReply::LobbyState { lobby } = beat(&mut fake, id, "fake-2") {
+                assert!(lobby.members.contains(&"Player".to_string()), "beat {}: the player must still be in {:?}", id - 2, lobby.members);
+                assert_eq!(lobby.host, "Grace", "and the host is never the one who leaves on beat 5");
+            }
+        }
+    }
+
+    #[test]
+    fn signing_out_takes_the_player_out_of_their_lobby() {
+        let mut fake = lobby_fake();
+        let hosted = create_lobby(&mut fake, 2, "Demo lobby", 4);
+        assert!(matches!(ask(&mut fake, 3, RequestKind::SignOut), BackendReply::SignedOut));
+        sign_in(&mut fake);
+        let BackendReply::LobbyListed { rows } = ask(&mut fake, 20, RequestKind::ListLobbies) else { panic!() };
+        assert!(rows.iter().all(|r| r.id != hosted.id), "the ghost of a signed-out host's lobby is gone");
+        let _ = create_lobby(&mut fake, 21, "Demo lobby", 4);
     }
 
     #[test]
@@ -1671,29 +1854,40 @@ mod tests {
         let failing = |f: FakeFailures| FakeBackend::from_config(&lobby_config()).with_latency(0).with_failures(f);
         let mut full = failing(FakeFailures { join_full: true, ..Default::default() });
         sign_in(&mut full);
-        assert!(matches!(ask(&mut full, 2, RequestKind::JoinLobby { lobby_id: "fake-1".into() }), BackendReply::LobbyJoinFailed { reason } if reason == "full"));
+        assert!(failed_with(&join(&mut full, 2, "fake-1"), "full"));
         let mut gone = failing(FakeFailures { gone: true, ..Default::default() });
         sign_in(&mut gone);
-        assert!(matches!(ask(&mut gone, 2, RequestKind::JoinLobby { lobby_id: "fake-1".into() }), BackendReply::LobbyJoinFailed { reason } if reason == "gone"));
+        assert!(failed_with(&join(&mut gone, 2, "fake-1"), "gone"));
         let mut start = failing(FakeFailures { start: true, ..Default::default() });
         sign_in(&mut start);
-        let _ = ask(&mut start, 2, RequestKind::CreateLobby { name: "Demo lobby".into(), max_players: 4 });
-        assert!(matches!(ask(&mut start, 3, RequestKind::StartLobby), BackendReply::LobbyStartFailed { reason } if reason == "server"));
-        let mut beat = failing(FakeFailures { heartbeat: true, ..Default::default() });
-        sign_in(&mut beat);
-        assert!(matches!(
-            ask(&mut beat, 2, RequestKind::LobbyHeartbeat { lobby_id: "fake-1".into() }),
-            BackendReply::LobbyHeartbeatFailed { .. }
-        ));
+        let lobby = create_lobby(&mut start, 2, "Demo lobby", 4);
+        assert!(failed_with(&ask(&mut start, 3, RequestKind::StartLobby { lobby_id: lobby.id }), "server"));
+        let mut hb = failing(FakeFailures { heartbeat: true, ..Default::default() });
+        sign_in(&mut hb);
+        assert!(failed_with(&beat(&mut hb, 2, "fake-1"), "server"));
+        // `fail=list` fails the lobby list as well as the leaderboard list.
+        let mut list = failing(FakeFailures { list: true, ..Default::default() });
+        sign_in(&mut list);
+        assert!(failed_with(&ask(&mut list, 2, RequestKind::ListLobbies), "server"));
     }
 
     #[test]
-    fn lobby_requests_before_sign_in_fail_and_reasons_outside_the_fixed_set_become_server() {
+    fn lobby_requests_before_sign_in_fail() {
         let mut fake = FakeBackend::from_config(&lobby_config()).with_latency(0);
-        assert!(matches!(ask(&mut fake, 1, RequestKind::ListLobbies), BackendReply::LobbyListFailed { reason } if reason == "not_signed_in"));
-        assert_eq!(fixed_reason("full"), "full");
-        assert_eq!(fixed_reason("host_left"), "host_left");
-        assert_eq!(fixed_reason("HTTP 500 at /x"), "server");
+        assert!(failed_with(&ask(&mut fake, 1, RequestKind::ListLobbies), "not_signed_in"));
+    }
+
+    #[test]
+    fn failure_reasons_and_closed_reasons_are_narrowed_to_their_own_family() {
+        assert_eq!(failure_reason("full"), "full");
+        assert_eq!(failure_reason("host_left"), "server", "host_left only closes a lobby, it is not a failure reason");
+        assert_eq!(failure_reason("removed"), "server");
+        assert_eq!(failure_reason("list_out_of_date"), "server", "not part of the vocabulary any more");
+        assert_eq!(failure_reason("HTTP 500 at /x"), "server");
+        assert_eq!(closed_reason("host_left"), "host_left");
+        assert_eq!(closed_reason("removed"), "removed");
+        assert_eq!(closed_reason("full"), "server", "full does not close a lobby");
+        assert_eq!(closed_reason("nonsense"), "server");
     }
 
     #[test]
@@ -1703,8 +1897,19 @@ mod tests {
         let hb = RequestKind::LobbyHeartbeat { lobby_id: "x".into() };
         assert!(matches!(hb.failure("timed out"), BackendReply::LobbyHeartbeatFailed { .. }));
         // The heartbeat has its own dedupe key; leave, join, create and start share one.
+        let start = RequestKind::StartLobby { lobby_id: "x".into() };
         assert_ne!(hb.dedupe_key(), RequestKind::LeaveLobby.dedupe_key());
-        assert_eq!(RequestKind::StartLobby.dedupe_key(), RequestKind::LeaveLobby.dedupe_key());
+        assert_eq!(start.dedupe_key(), RequestKind::LeaveLobby.dedupe_key());
+    }
+
+    #[test]
+    fn a_heartbeat_gets_at_most_one_interval_whatever_the_request_timeout_says() {
+        let mut hub = BackendHub::ready(lobby_config());
+        hub.request_timeout_secs = 120.0;
+        assert_eq!(hub.timeout_for(&RequestKind::LobbyHeartbeat { lobby_id: "x".into() }), LOBBY_HEARTBEAT_SECS);
+        assert_eq!(hub.timeout_for(&RequestKind::ListLobbies), 120.0);
+        hub.request_timeout_secs = 3.0;
+        assert_eq!(hub.timeout_for(&RequestKind::LobbyHeartbeat { lobby_id: "x".into() }), 3.0, "a shorter timeout still wins");
     }
 
     #[test]

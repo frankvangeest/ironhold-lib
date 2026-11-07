@@ -176,7 +176,7 @@ pub fn lobby_vocabulary_warnings(events: &[(String, String)], bound_vars: &[(Str
         if event.starts_with("lobby.") && !is_lobby_event(event) && seen.insert((src.clone(), event.clone())) {
             out.push(Finding {
                 source_file: src.clone(),
-                message: format!("bound to the event {event:?}, which the engine never emits for lobbies (a typo? see docs/20_data_formats.md, Lobbies)"),
+                message: format!("bound to the event {event:?}, which the engine never emits for lobbies (a typo? the `lobby.` prefix is reserved for the engine; see docs/20_data_formats.md, Lobbies)"),
                 kind: "unknown_lobby_event",
             });
         }

@@ -299,7 +299,8 @@ module's error masking can never hide a domain reason. The engine fires the gene
 `lobby.join_failed` then `lobby.join_failed:full`; the same for `list`, `create`, `start`, and `lobby.closed` then `lobby.closed:host_left`. `lobby.last_error` stays as
 a detail line (like `backend.last_error`). Fixed reasons: `full`, `gone`, `list_out_of_date`, `no_lobby`, `already_in_lobby`, `limit_reached`, `not_host`,
 `not_signed_in`, `not_in_lobby`, `started`, `too_few_players` (a host needs at least 2 members to start), `not_enabled`, `rate_limited`, `busy`, `server`; `lobby.closed`
-carries `host_left`, `removed`, `server`. A lobby action issued while its own kind is in flight answers `lobby.<op>_failed:busy`, not `backend.busy`.
+carries `host_left`, `removed`, `server` only, and those two never appear as failure reasons (core narrows each family; anything else an adapter reports becomes `server`).
+`list_out_of_date` was dropped (a server cannot tell it from `gone`). A lobby action issued while its own kind is in flight answers `lobby.<op>_failed:busy`, not `backend.busy`.
 
 **Rows and the empty state (decision 24).** State-machine rules cannot test a variable, so a designer cannot hide a row from `lobby.count`. After every list write
 the engine fires `lobby.row_filled:<n>` / `lobby.row_empty:<n>` for n = 1..10 and `lobby.list_empty` when there is nothing; for the waiting room
@@ -364,6 +365,8 @@ v3a-2 adds an explicit deny of the three lobby collections for every client stor
 
 **Gating (decision 22).** `ironhold backend config` emits `features = { lobbies = true }` per game (from `backend.ron`'s `features`) and `lobby_names` into `ironhold_games.lua`;
 a lobby RPC from a game without it answers `not_enabled`. "Not on a public project" is then a server fact, not only a client habit.
+
+**Adapter and trait contract (from the v3a-1 reviews).** (1) On `SignOut` the adapter sends `LeaveLobby` first and the logout only after the leave has completed: today `NakamaBackend` sends every request as its own concurrent fetch and `cancel_all` drops chains in flight, so the leave and the logout race and the leave often loses (a joinable ghost lobby for up to 60 s). Keep an in-flight `LeaveLobby` out of `cancel_all` and send the logout from its completion; the `Backend` trait doc already states the rule. (2) Replies carry the lobby's `version`; the Lua module increments it on every write of the lobby object. (3) `ironhold_lobby_start` takes the lobby id and answers `not_in_lobby` when the caller's lobby differs. (4) A `LeaveLobby` request means "leave whatever I am in" (idempotent), also with no lobby id. (5) A 429 maps to `rate_limited`, and a Cloudflare block that looks like a network error on the web maps to `server`.
 
 **RPC shapes.** Six RPCs registered through `game_rpc`, ids from a table (the id pattern in `game_rpc` is only a self-check): `ironhold_lobby_create`, `_join`, `_list`, `_leave`,
 `_heartbeat`, `_start`. Requests are small JSON objects decoded by one `decode_payload(payload, max_bytes)` that answers `{ok=false, reason="server"}` for malformed or oversized input;
@@ -441,6 +444,15 @@ Round 3 re-reviewed v3a after the `game_rpc` guard, the shared Cloudflare limit 
 25. **Connection:** `lobby.connection_trouble` on the first failed heartbeat, `lobby.closed:server` after the expiry window; v3a does not synthesize `backend.connection_lost`/`reconnected` and does not touch `backend.status`; `fake://?fail=heartbeat` rehearses it.
 26. **Demo wording on `fake://`:** "Practice lobby with pretend players (test backend). No real players, no shared play yet."; after Start "This is where a match would begin. Online play is not built yet."; `multiplayer` leaves the `backend_demo` card keywords. (Replaces the wording of decision 15 for the fake.)
 27. **Phase split:** v3a-1 (core, `FakeBackend`, validate, demo, docs) then v3a-2 (Lua RPCs, contract tests, adapter, staging playtest).
+
+Follow-ups from the v3a-1 review cycle (2026-11-07; the five reviewers' findings were all taken, none contradicts decisions 16-27):
+
+28. **`LobbyInfo.version` and `StartLobby { lobby_id }` are part of the contract now.** The server's lobby object carries a version that grows with every write; core drops a lobby answer older than the one it already has, and a lobby never goes from started back to not started (a slow heartbeat answer must not undo a start). `StartLobby` carries the lobby id core believes it is in; the server refuses with `not_in_lobby` when its own view differs (for example after a reload replaced the membership).
+29. **A heartbeat gets at most one heartbeat interval (10 s) to answer**, whatever `request_timeout_secs` says, so the trouble signal never arrives after the server has already expired the member. Expiry counts from the last good answer; a started lobby never expires on the client (members stop checking in, so nothing could keep it alive).
+30. **Lists follow the session, memberships follow a generation.** A list answer is dropped only when the session ended; leaving or losing a lobby never swallows it. A sign-out forgets the cached list, and a `ListLobbies` while a sign-out is in flight answers `not_signed_in`.
+31. **Sign-out leaves the lobby, also while a create or join is still waiting** (the engine does not know yet that it is in one, the server may). The adapter must therefore send `LeaveLobby` BEFORE the logout and must not cancel it (see v3a-2). A session the server ends by itself closes the lobby with `lobby.closed:server`.
+32. **Members are told apart by name.** `LobbyInfo.members` are names (Nakama usernames are unique, so the host check, the self-filter and the join/leave diff work by name). If names ever stop being unique, `LobbyInfo` needs member ids first. An answer that no longer lists the player means the server removed them: `lobby.closed:removed`.
+33. **The `lobby.` prefix is the engine's** (events and variables); `ironhold validate --strict` treats any other name under it as a typo. The fake gives a joiner a visible start (Ada's lobby starts on check-in 4) and a host who walks away (Grace's, check-in 6), and create/join replace an old membership the way the server will.
 
 ### Form 2 coverage check (done 2026-10-27)
 

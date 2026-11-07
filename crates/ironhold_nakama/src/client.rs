@@ -182,7 +182,7 @@ impl NakamaBackend {
             | RequestKind::CreateLobby { .. }
             | RequestKind::JoinLobby { .. }
             | RequestKind::LeaveLobby
-            | RequestKind::StartLobby
+            | RequestKind::StartLobby { .. }
             | RequestKind::LobbyHeartbeat { .. } => Err(kind.failure("lobbies are not supported by this adapter yet")),
         }
     }
@@ -315,7 +315,7 @@ impl NakamaBackend {
                     | RequestKind::CreateLobby { .. }
                     | RequestKind::JoinLobby { .. }
                     | RequestKind::LeaveLobby
-                    | RequestKind::StartLobby
+                    | RequestKind::StartLobby { .. }
                     | RequestKind::LobbyHeartbeat { .. } => return,
                 };
                 match result {
