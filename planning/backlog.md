@@ -12,6 +12,12 @@
 ## Active
 
 - [ ] **Backend abstraction (`ironhold_backend` + Nakama adapter)** _(2026-10-25, Frank)_ - RON-declared online features (`backend.ron`), online Actions and `backend.*` events in core, a fake in-memory backend, then the Nakama adapter (sign-in, cloud saves, leaderboards, lobbies, matchmaker, relay transport), namespaced by `game_id` so one Nakama can serve several games. Phases v1-v5 and open questions: `planning/features/backend_abstraction.md` (Status: In progress, v1 Done (8745ef9, 2026-10-27; contract, FakeBackend, sign-in and leaderboard actions, `backend_demo`), v2 Done (e97da79, 2026-10-28; Nakama adapter on native and web, server module, `ironhold backend config`, deployed to the homelab and playtested), v3 (lobbies, matchmaker) next, split into v3a (lobbies over REST) and v3b (realtime socket + matchmaker) after the 2026-11-05 plan-review: see the Queued items "Backend v3a" and "Backend v3b"; plan-review round 1 done 2026-10-25, seven decisions answered 2026-10-27).
+- [ ] **Backend v3a prerequisite: reopen the closed server APIs one by one** _(2026-11-05, lifted from "Backend v2 follow-ups" (2))_ - the Lua **Active: branch `feature/lobby_rpc_allowlist` (2026-11-07).**
+  module (`crates/ironhold_nakama/server/ironhold.lua`) is deny-by-default (RPCs, matchmaker add/remove, matches, parties, groups,
+  realtime). Reopen only what v3a needs, each with its own `game_id` guard and an adversarial contract case in
+  `crates/ironhold_nakama/tests/contract/run.sh`: an allowlist of `ironhold_lobby_*` RPCs (v3a); matchmaker add with a ticket rewrite
+  and remove (v3b). Keep `MatchJoin`/`MatchCreate`/`Party*` closed. Blocks "Backend v3a"; the `backend/` folder is done (the module stayed in
+  `crates/ironhold_nakama/server/`).
 
 
 
@@ -206,12 +212,6 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.5 (deterministic
   and the same prerequisites. Ships behind the fake backend and a contract test only; it must not reach the public demo until a relay
   transport exists (players would be matched into nothing). Also relates to v4 (`wss://` from an https page) in
   `planning/features/backend_abstraction.md`.
-- [ ] **Backend v3a prerequisite: reopen the closed server APIs one by one** _(2026-11-05, lifted from "Backend v2 follow-ups" (2))_ - the Lua
-  module (`crates/ironhold_nakama/server/ironhold.lua`) is deny-by-default (RPCs, matchmaker add/remove, matches, parties, groups,
-  realtime). Reopen only what v3a needs, each with its own `game_id` guard and an adversarial contract case in
-  `crates/ironhold_nakama/tests/contract/run.sh`: an allowlist of `ironhold_lobby_*` RPCs (v3a); matchmaker add with a ticket rewrite
-  and remove (v3b). Keep `MatchJoin`/`MatchCreate`/`Party*` closed. Blocks "Backend v3a"; the `backend/` folder is done (the module stayed in
-  `crates/ironhold_nakama/server/`).
 - [ ] **Bind the device id to the game** _(2026-11-05, lifted from "Backend v2 follow-ups" (5))_ - a game's anonymous device id sits in
   `localStorage` under the Pages origin, so one leaked id could be replayed on another game of the same server (finding from
   `public_backend_demo`, 2026-11-03; also noted in "Investigation: multi-tenant game hosting on Nakama"). Bind the id to the
