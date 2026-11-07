@@ -104,5 +104,20 @@ Plan re-review of v3a (f8c83c8, 2026-11-07), verdict Needs more design work (one
 - No generic "action's feature not declared" check exists in backend_checks.rs; v3a must add it (v1 task text implied it existed).
 - Cloudflare: one counter 30 req/10 s/IP for sign-up + /v2/rpc; staging is reached over LAN, so dev playtests never exercise it.
 
+Code review of v3a-1 (`feature/backend_v3a_1`, 7ce2f5d..a06cdfc, 2026-11-07), facts that outlive it:
+- Core's "SignOut enqueues LeaveLobby first, adapters process in order" is NOT guaranteed by the `Backend` trait: the Nakama adapter
+  fires each request as its own concurrent ehttp fetch, and its SignOut does `cancel_all` (kills the Leave chain, no 401 refresh) +
+  fire-and-forget logout in the same submit loop. v3a-2 must defer logout until an in-flight LeaveLobby finishes (or state the contract).
+- `FakeBackend::reply_for` mutates state at SUBMIT time and never expires members; with Create/Join refusing `already_in_lobby` when
+  `mine` is set it contradicts decision 20 (create/join REPLACE the old membership). Any core-side forget (heartbeat-expiry close,
+  SignOut with Create/Join in flight, Create/Join timeout) leaves the fake "in a lobby" forever: `?fail=heartbeat` demo dead-ends.
+- `LobbyStarted` (host's own Start reply) does not clear `LobbyTracker::trouble`, and `lobby_tick` checks expiry BEFORE the started
+  early-return: one earlier failed heartbeat -> `lobby.closed:server` 60 s after a successful start.
+- `LobbyInfo` has no server version/gen (plan reply shape has `gen`): a heartbeat sent before StartLobby whose reply lands a frame
+  after `LobbyStarted` un-starts the lobby, resumes heartbeats, and fires `lobby.started` twice (Nakama only; fake is synchronous).
+- `GameVariables` has no change-detection consumer today (labels poll by value), so the `put()` changed-only writes are forward-compat only.
+- Runtime sign-out clearing still uses literals, not `RESERVED_VARIABLE_PREFIXES` (it can't use the whole const: `backend.` would wipe
+  the status it just set). `fixed_reason` is not op-specific: an adapter `host_left` on a join failure emits an event validate rejects.
+
 **Why:** these were the load-bearing gaps; recurring if lobby/multiplayer plans are revised.
 **How to apply:** any review of backend, lobby, cloud-save or Form 2 networking plans. See [[nakama-spike-facts]], [[determinism-networking]].

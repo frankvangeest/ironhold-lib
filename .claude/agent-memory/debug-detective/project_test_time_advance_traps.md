@@ -26,6 +26,11 @@ this way silently asserts nothing about any timer-driven state change.
    `update_with_instant` only records `first_update` when `last_update` is `None`). So a harness test that inserts a
    hold before its first update genuinely reproduces "held from boot": virtual elapsed stays 0 and no fixed tick runs.
 
+4. **`Time<Real>` is the exception to trap 1** (read from bevy_time 0.18 `real.rs`, 2026-11-07 lobby review): its
+   `update_with_instant` does `advance_by(instant - last_update)`, never `advance_to`, and `advance_by` does not touch
+   `last_update`, so a test's `resource_mut::<Time<Real>>().advance_by(12s)` persists and is not clamped by max_delta.
+   The backend glue (heartbeat/expiry/timeouts on `Time<Real>`) tests in `lobby_tests.rs` rely on this legitimately.
+
 **How to apply:** to advance N seconds, set
 `TimeUpdateStrategy::ManualDuration(Duration::from_millis(250))` once and run `ceil(N / 0.25)`
 updates. Always print `DelayedEventQueue.0` after the loop — if the remaining values didn't move

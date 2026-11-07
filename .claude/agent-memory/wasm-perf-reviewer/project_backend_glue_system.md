@@ -18,5 +18,13 @@ so idle frames are alloc-free (~tens of ns). Do not re-flag the batch Vec.
 - Replies are emitted while paused -> lands in the paused-Messages growth issue ([[real-pause]]), but
   volume is bounded by user-issued requests.
 - Zero new deps; FakeBackend ships in release (needed for `fake://`). Size impact est. <50 KB.
+Lobbies v3a-1 (reviewed 2026-11-07, feature/backend_v3a_1): `lobby_tick` is O(1)/alloc-free with no lobby (Option None
+early-return) and between heartbeats. Only per-frame alloc: when a heartbeat is still in flight past its 10 s due time
+(server hang, until request timeout 15 s default / up to 120 s configurable) it clones the lobby id + builds dedupe_key
+Strings EVERY frame (is_busy before advancing next_heartbeat). Fault-only. GameVariables: glue only DerefMuts vars on
+reply/expiry (deliberate); NO system gates on GameVariables change detection (update_dynamic_labels_system allocs a
+String per bind label per frame regardless). A list emits ~12 GameEvents (listed + 10 row_filled/empty); cost multiplier
+is entity_fsm's per-event x per-entity x per-binding `{self}` replace. Action enum size unchanged (SubmitScore has 2
+Strings > CreateLobby String+u32). is_lobby_event/variable are CLI/validate-only (DCE'd from wasm).
 **How to apply:** when the Nakama adapter lands, re-check poll() for per-frame JS interop/allocation
 (e.g. draining a JS queue each frame) -- that is where real per-frame cost would appear.

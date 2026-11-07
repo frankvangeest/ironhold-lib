@@ -50,5 +50,13 @@ No ActionQueue push from the backend — correct pattern. Refusals (busy/offline
   surface. Gaps seen: "ironhold.lua must be the only module" lives only in a Lua comment + plan, not in docs/20 "Server admin step";
   header still says "reopens `RpcFunc`" though RpcFunc was dropped from the closed list. Future lobby RPCs: check each namespaces
   storage by the passed game_id (wrapper can't enforce that).
+- backend v3a-1 lobbies (reviewed 2026-11-07, NEEDS WORK minor): heartbeat 10 s / expiry 60 s / list-min 5 s are protocol+rate-limit
+  constants in schema/backend.rs (decision 18) — accept as engine constants (precedent: FIXED_TICK_RATE). Closed vocabulary
+  `is_lobby_event`/`is_lobby_variable`/`LOBBY_REASONS` is the designer contract (+ --strict typo check). Traps seen: FakeBackend never
+  starts a lobby as a non-host (joiner `lobby.started` unrehearsable); `list_out_of_date` in vocab but never emitted/undocumented;
+  `fixed_reason` lets an adapter emit `lobby.closed:full` (outside vocab); runtime sign-out clear hardcodes prefixes instead of
+  `RESERVED_VARIABLE_PREFIXES`; LeaveLobby during a pending join answers `backend.busy` and the join then lands; no recovery event after
+  `lobby.connection_trouble`; designer-tunable `request_timeout_secs` (to 120) delays heartbeat failure past the fixed 60 s expiry.
+  Check these in v3a-2 / v3b reviews.
 
 Related: [[audio-state-pattern]] (engine-written variable precedent), [[real-pause-pattern]], [[diagnostic-only-feature-pattern]], [[web-host-page-contract]].
