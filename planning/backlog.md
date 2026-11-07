@@ -12,12 +12,6 @@
 ## Active
 
 - [ ] **Backend abstraction (`ironhold_backend` + Nakama adapter)** _(2026-10-25, Frank)_ - RON-declared online features (`backend.ron`), online Actions and `backend.*` events in core, a fake in-memory backend, then the Nakama adapter (sign-in, cloud saves, leaderboards, lobbies, matchmaker, relay transport), namespaced by `game_id` so one Nakama can serve several games. Phases v1-v5 and open questions: `planning/features/backend_abstraction.md` (Status: In progress, v1 Done (8745ef9, 2026-10-27; contract, FakeBackend, sign-in and leaderboard actions, `backend_demo`), v2 Done (e97da79, 2026-10-28; Nakama adapter on native and web, server module, `ironhold backend config`, deployed to the homelab and playtested), v3 (lobbies, matchmaker) next, split into v3a (lobbies over REST) and v3b (realtime socket + matchmaker) after the 2026-11-05 plan-review: see the Queued items "Backend v3a" and "Backend v3b"; plan-review round 1 done 2026-10-25, seven decisions answered 2026-10-27).
-- [ ] **Backend v3a-1: lobbies without a server (core, `FakeBackend`, validate, `backend_demo_lobby` on `fake://`, docs)** _(2026-11-05, split 2026-11-07 by plan-review round 3)_ -
-  `ListLobbies`, `CreateLobby(name:, max_players:)` (name from a new `lobby_names` list in `backend.ron`), `JoinLobby(row:)`, `LeaveLobby`, `StartLobby`; core drives a
-  10 s heartbeat and diffs the replies into `lobby.*` events; per-row events (`lobby.row_filled:<n>`, `lobby.list_empty`) and reason events (`lobby.join_failed:full`);
-  `lobby.*` variables; validate checks (incl. the missing feature-declared check); shared `RESERVED_VARIABLE_PREFIXES`; demo wording honest for the fake. **Status: plan
-  Ready (2026-11-07, decisions 16-27 in `planning/features/backend_abstraction.md`)**; needs no server and no Docker. The prerequisites (local Nakama, staging, `game_rpc`
-  guard, Cloudflare rule) are all **done 2026-11-07**; they gate v3a-2 and any public use, not this half. **Active: branch `feature/backend_v3a_1` (2026-11-07).**
 
 
 
@@ -57,6 +51,7 @@
 ## Queued
 
 ### Engine / Runtime
+- [ ] **`backend_demo_lobby` is cut off at phone width** _(found at `93ff7d3` 2026-11-07, v3a-1 playtest)_ - at 376x835 (DPR 1) the title, the two honesty lines and the right edge of the panels run off-screen. The browser console says why: `ui_scale: window 200x396 needs scale 0.16 but ui_scale.min_scale is 0.50; the UI will overflow the window (portrait layouts are not supported yet)`. So this is the engine's known portrait limit, not a lobby bug; every fixed-width demo does the same. Decide with the portrait-layout work whether the demos get a narrow variant.
 - [ ] **Static scene mode follow-ups** _(2026-10-23, `static_scene_mode` review cycle, none blocks)_ — (1) some scenes in `NON_DETERMINISTIC_SCENES` may now be deterministic under static mode and could leave that set; (2) a readiness signal in the debug JSON (no pending spawns, warmup 0, no `awaiting_reveal`) to wait on instead of `SCREENSHOT_SETTLE_FRAMES`; (3) if spawn-height poses become a problem again, the "settle N fixed ticks, then re-freeze" mode (`Time<Fixed>::accumulate_overstep` while held); (4) decide deliberately whether a future `FocusLoss`/`Session` hold announces `game.paused` (a non-announcing hold plus `Menu` makes `ResumeGame` emit `game.resumed` while the game stays frozen); (5) `AppOptions` has public fields built with a struct literal, so a new field breaks outside callers: consider `#[non_exhaustive]` or `..Default::default()`; (6) the boot seeding in `start_app_with` has no unit test (needs a window), only the `test_web.py` `run_mode` assertion.
 
 - [ ] **`AnimationController.awaiting_reveal`/`Visibility` hide-until-posed mechanism is written from five separate sites across two files, with no structural guarantee they stay in sync** — `capabilities/animation.rs` and `runtime/scene_manager/entity_spawner.rs` each independently set/clear `awaiting_reveal`, `awaiting_reveal_since`, and `Visibility` (reveal-on-pose-confirmed, reveal-on-no-override, the 5s failsafe reveal, and two re-hide branches for a GLTF-hierarchy respawn/lost `AnimationPlayer`). "Reveal implies emit the right state" currently rests on each of the five call sites independently remembering to do it right, not on any single owning system or shared helper — a future edit to any one of them can silently reintroduce either a permanently-hidden entity or a bind-pose flash. Extract a single `fn reveal_entity(...)`/`fn hide_entity_pending_pose(...)` helper (or a dedicated marker component one system exclusively owns) so the invariant is structural. Surfaced during `dynamic_animation_control.md`'s round-3/4 corpse-pose fixes (system-architect review, 2026-08-28) — see `planning/claude_suggestions.md` ▸ Animation.
@@ -385,6 +380,12 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 ## Done (reference)
 
 ### November 2026
+- [x] **Backend v3a-1: lobbies without a server (core, `FakeBackend`, validate, `backend_demo_lobby` on `fake://`, docs)** _(2026-11-05, split 2026-11-07 by plan-review round 3)_ -
+  `ListLobbies`, `CreateLobby(name:, max_players:)` (name from a new `lobby_names` list in `backend.ron`), `JoinLobby(row:)`, `LeaveLobby`, `StartLobby`; core drives a
+  10 s heartbeat and diffs the replies into `lobby.*` events; per-row events (`lobby.row_filled:<n>`, `lobby.list_empty`) and reason events (`lobby.join_failed:full`);
+  `lobby.*` variables; validate checks (incl. the missing feature-declared check); shared `RESERVED_VARIABLE_PREFIXES`; demo wording honest for the fake. **Status: plan
+  Ready (2026-11-07, decisions 16-27 in `planning/features/backend_abstraction.md`)**; needs no server and no Docker. The prerequisites (local Nakama, staging, `game_rpc`
+  guard, Cloudflare rule) are all **done 2026-11-07**; they gate v3a-2 and any public use, not this half. **Done 2026-11-07** (dev playtest confirmed; five-agent review findings all fixed; 35 `lobby_tests`). Not caught by the playtest: portrait phone widths (see the Queued item on the lobby demo layout).
 - [x] **Backend v3a prerequisite: reopen the closed server APIs one by one** _(2026-11-05, lifted from "Backend v2 follow-ups" (2))_ - the Lua
   module (`crates/ironhold_nakama/server/ironhold.lua`) is deny-by-default (RPCs, matchmaker add/remove, matches, parties, groups,
   realtime). Reopen only what v3a needs, each with its own `game_id` guard and an adversarial contract case in

@@ -9,7 +9,7 @@ _Planned at: `cd90a12` (2026-10-25)_
 |---|---|---|---|
 | v1 | Contract in core (Actions, events, engine-written variables, poll trait, glue system) + `FakeBackend`; sign-in and leaderboard only; nothing networked | Done | 8745ef9 (2026-10-27) |
 | v2 | `ironhold_nakama` adapter, **native and wasm32 on the LAN**: sign-in, leaderboards, server module with `game_id` enforcement; cloud save once local save exists | Done | e97da79 (2026-10-28) |
-| v3a-1 | Lobbies, no server: core actions/events/variables, core-driven heartbeat, `FakeBackend`, validate checks, `backend_demo_lobby` on `fake://`, designer docs | Ready | — |
+| v3a-1 | Lobbies, no server: core actions/events/variables, core-driven heartbeat, `FakeBackend`, validate checks, `backend_demo_lobby` on `fake://`, designer docs | Done | 891cf8b (2026-11-07) |
 | v3a-2 | Lobbies, server side: six `ironhold_lobby_*` RPCs behind `game_rpc`, storage guard, features gate, contract tests, adapter, staging playtest | Ready (needs v3a-1) | — |
 | v3b | Realtime socket and matchmaker (`FindMatch`, `CancelMatch`), "transport preview": fake and contract test only, not on the public demo | Queued | — |
 | v4 | Stage 2: `wss://` from an `https` page, tunnel latency and idle sockets, half-open drop | Queued | — |
@@ -344,11 +344,11 @@ clearing, the `reserved_variable_write` validate check and the later `SaveState`
 - **Docs.** `docs/20_data_formats.md` (actions, events, reasons, variables, the snapshot and row-event rules, limits, `lobby_names`, `fake://?fail=` options in the `endpoint` row, and the
   `features` row that today says "nothing reads them yet"), `docs/30_runtime_events_and_logic.md` (action list; empty list, full lobby, server down; browse - waiting room - started as states; why
   a refresh loop faster than 5 s is answered from the snapshot), `docs/15_authoring_tools.md` (one row per new validate check), `docs/STATUS.md`, README row, `index.html` card.
-- [ ] Core: actions, request kinds, heartbeat timer, diff, stale-reply drop, row events, changed-only writes, shared reserved-prefix const, tests
-- [ ] `FakeBackend` lobbies and `?fail=` options
-- [ ] Validate checks (errors and `--strict`) and the schema field `lobby_names`, with CLI tests
-- [ ] `backend_demo_lobby` project, `lobby.ui.ron`, baseline (own commit), card, `backend_demo` keyword fix
-- [ ] Docs as listed; the RPC request and reply field lists (below) written into this plan before v3a-2 starts
+- [x] Core: actions, request kinds, heartbeat timer, diff, stale-reply drop, row events, changed-only writes, shared reserved-prefix const, tests
+- [x] `FakeBackend` lobbies and `?fail=` options
+- [x] Validate checks (errors and `--strict`) and the schema field `lobby_names`, with CLI tests
+- [x] `backend_demo_lobby` project, `lobby.ui.ron`, baseline (own commit), card, `backend_demo` keyword fix
+- [x] Docs as listed; the RPC request and reply field lists (below) written into this plan before v3a-2 starts
 
 #### v3a-2 — Lua RPCs, contract tests, adapter, staging playtest (needs v3a-1)
 
