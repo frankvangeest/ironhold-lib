@@ -25,6 +25,7 @@ See `tests/support/mod.rs` for the `setup_test_app()` helper. Each test file dec
 | `audio_tests.rs` | PlaySound, PlayMusicLoop, StopMusic, SetVolume | 16 |
 | `stats_tests.rs` | StatMap, modifiers, resolve_stat | 22 |
 | `particle_tests.rs` | SpawnEffect, layers, visual effects (particles + decals + fading lights), quality tiers, budget gating | 27 |
+| `lobby_tests.rs` | Backend v3a-1 lobbies through the glue system and `FakeBackend`: list and per-row events, reason events (generic then `:<reason>`), the waiting room and its diff (other players only), the core-driven heartbeat on `Time<Real>`, stale-reply drop (create after sign-out; a mutation of the check fails two tests), sign-out leaving the lobby, expiry after failing heartbeats, the 5 s list minimum, and a tour proving every emitted event/variable is in the closed vocabulary `validate --strict` checks against | 23 |
 | `ron_validation.rs` | RON schema round-trips | 191 |
 | `assets_schema_version_regression.rs` | Schema version regression guard | 1 |
 | `ron_lint.rs` | RON style invariants (e.g. no explicit `Some(...)` wrappers) | 1 |

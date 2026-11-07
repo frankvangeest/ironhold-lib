@@ -102,8 +102,16 @@ Sample `watch` output (each save prints the changed file and a result):
 | an `endpoint` using plain `http://` to a host outside localhost/LAN | `backend_endpoint_http` | a hosted `https` page cannot reach it, and traffic is unencrypted | use `https://` |
 | `SubmitScore`/`FetchLeaderboard` naming a leaderboard that `backend.ron` does not declare | `undeclared_leaderboard` | the action always answers its failure event | declare it in `backend.ron` or fix the name |
 | `FetchLeaderboard` with `count` 0 or above 10 | `leaderboard_count_range` | the engine clamps it to 1-10 | use 1-10 |
-| `--strict`: a rule that writes an engine-owned variable (`SetVariable`/`IncrementVariable` on a key starting `backend.` or `leaderboard.`) | `reserved_variable_write` | the engine overwrites it at the next backend reply | read it with a `Label` instead of writing it |
+| `JoinLobby` with `row` outside 1-10 | `lobby_row_range` | the action always answers `lobby.join_failed:no_lobby` | use 1-10 |
+| `CreateLobby` with `max_players` outside 2-8 | `lobby_max_players_range` | the engine clamps it to 2-8 | use 2-8 |
+| `CreateLobby` with a `name` that is not in `lobby_names` of `backend.ron` | `lobby_name_not_declared` | the action always fails (`lobby.create_failed:server`); a server refuses any other name | add the name to `lobby_names` or use a declared one |
+| a lobby action in a project whose `backend.ron` does not list `Lobbies` in `features` (reported once per file) | `lobby_feature_not_declared` | every lobby action answers `lobby.<op>_failed:not_enabled` | add `Lobbies` to `features` |
+| `--strict`: a rule that writes an engine-owned variable (`SetVariable`/`IncrementVariable` on a key starting `backend.`, `leaderboard.` or `lobby.`) | `reserved_variable_write` | the engine overwrites it at the next backend reply | read it with a `Label` instead of writing it |
 | `--strict`: an online action in a project with no `backend_path` | `online_action_without_backend` | it only ever answers `backend.offline` | add `backend_path` or remove the action |
+| `--strict`: `JoinLobby` when no rule in the project runs `ListLobbies` | `join_without_list` | no row is ever filled, so every join answers `lobby.join_failed:no_lobby` | run `ListLobbies` first (e.g. on `backend.signed_in`) |
+| `--strict`: a rule bound to a `lobby.` event the engine never emits (a typo such as `lobby.joind` or `lobby.join_failed:fulll`) | `unknown_lobby_event` | the rule never fires | fix the name (see the event table in [Lobbies](20_data_formats.md#lobbies)) |
+| `--strict`: a Label bound to a `lobby.` variable the engine never writes (`lobby.current.nmae`) | `unknown_lobby_variable` | the label stays empty | fix the name |
+| `--strict`: a Label bound to a lobby row past the end (`lobby.11.name`, `lobby.member.9.name`) | `lobby_row_binding_out_of_range` | the list shows at most 10 rows and a lobby holds at most 8 players, so it is always empty | use a row in range |
 | `--strict`: `SubmitScore` whose `score_var` nothing in the project writes | `score_var_never_written` | the submit fails or sends a stale value | write it with `SetVariable`/`IncrementVariable` |
 | `--strict`: a `game_id` also used by another project in the same folder | `duplicate_game_id` | both games would share leaderboards on one server | give each project its own `game_id` |
 | `--strict`: a local-network `http://` endpoint | `backend_plain_http` | fine on a LAN, unusable from a hosted page | use `https://` before publishing |

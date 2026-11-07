@@ -4049,6 +4049,11 @@ column.
 | `SignOut` | End the online session. Answers `backend.signed_out`. |
 | `SubmitScore(leaderboard: "id", score_var: "var")` | Send the whole number held in the variable `score_var` to a leaderboard declared in `backend.ron`. Answers `score.submitted:{leaderboard}` or `score.submit_failed:{leaderboard}` (reason in `backend.last_error`). Fails rather than sending 0 if the variable is not a whole number or the leaderboard is not declared. Example: `SubmitScore(leaderboard: "best", score_var: "score")` |
 | `FetchLeaderboard(leaderboard: "id", count: u32)` | Fetch the top rows of a leaderboard into the `leaderboard.<name>.*` variables. `count` is optional, `1`-`10`, default `10` (larger values are capped at 10). Answers `leaderboard.listed:{leaderboard}` or `leaderboard.list_failed:{leaderboard}`. Example: `FetchLeaderboard(leaderboard: "best", count: 5)` |
+| `ListLobbies` | Ask for the open lobbies (needs `Lobbies` in `features`). Writes `lobby.count` and `lobby.<n>.*` (n = 1-10), then answers `lobby.listed`, one `lobby.row_filled:<n>` / `lobby.row_empty:<n>` per row (n = 1-10) and `lobby.list_empty` when there is nothing; or `lobby.list_failed` then `lobby.list_failed:<reason>`. A second call within 5 seconds shows the last list again without asking the server. |
+| `CreateLobby(name: "Demo lobby", max_players: 4)` | Open a lobby and join it as host. `name` must be one of `lobby_names` in `backend.ron`; `max_players` is 2-8. Answers `lobby.created` or `lobby.create_failed` then `lobby.create_failed:<reason>`. |
+| `JoinLobby(row: 3)` | Join the lobby in row `row` (1-10) of the last `ListLobbies`. Answers `lobby.joined` or `lobby.join_failed` then `lobby.join_failed:<reason>` (an empty row answers `no_lobby`). |
+| `LeaveLobby` | Leave the current lobby (also when the game has lost track of it, for example after a page reload). Answers `lobby.left`. `SignOut` leaves too; `LoadScene` does not. |
+| `StartLobby` | Host only, with at least 2 players. Marks the lobby started: answers `lobby.started` (the other members get it on their next heartbeat) or `lobby.start_failed` then `lobby.start_failed:<reason>`. |
 
 #### `SetUiVisible` <a id="setuivisible"></a>
 
@@ -5050,7 +5055,7 @@ only surfaced as a runtime no-op the first time a player opened the shop.
 
 ## `backend.ron` — BackendConfig ✅
 
-Online features for a project: sign-in and leaderboards (v1). Referenced via `backend_path` in `{name}.project.ron`. Optional — a project without one runs fully offline, and the online actions (`SignIn`, `SignOut`, `SubmitScore`, `FetchLeaderboard`) answer `backend.offline` instead of doing anything. There is no convention-path fallback: the file is only read when `backend_path` is set. A worked example is `assets/projects/backend_demo`.
+Online features for a project: sign-in, leaderboards and lobbies. Referenced via `backend_path` in `{name}.project.ron`. Optional — a project without one runs fully offline, and the online actions (`SignIn`, `SignOut`, `SubmitScore`, `FetchLeaderboard`) answer `backend.offline` instead of doing anything. There is no convention-path fallback: the file is only read when `backend_path` is set. A worked example is `assets/projects/backend_demo`.
 
 **Fields:**
 
@@ -5058,9 +5063,10 @@ Online features for a project: sign-in and leaderboards (v1). Referenced via `ba
 |---|---|---|---|
 | `schema_version` | `u32` | required | Must be `1`. |
 | `game_id` | `Option<String>` | `None` | Your game's name on a shared server (1-32 characters of `a-z`, `0-9`, `_` only). Omit to use the project's `project_id`, which must then match the same rule. |
-| `endpoint` | `Option<String>` | `None` | Where the server lives. Omit for an offline project. `"fake://"` is an in-memory test backend (needs no server; sign-in always works, four fixed rivals fill each leaderboard, nothing is saved between runs). To rehearse failure screens, add options: `"fake://?fail=sign_in"` (rejected), `unreachable`, `submit`, `list` (comma list), `silent` (never answers, so the request times out) and `latency=N` (frames before an answer, about 60 per second). Otherwise `"https://..."`; plain `"http://..."` is only meant for a server on your own machine or LAN. A real server needs a build that includes that server's adapter (the Nakama adapter is built into the native and web runners; see [Running against a Nakama server](#running-against-a-nakama-server)); without one, or without its server key (`server_key` here or one supplied from outside), the project runs offline and `backend.last_error` says so. |
+| `endpoint` | `Option<String>` | `None` | Where the server lives. Omit for an offline project. `"fake://"` is an in-memory test backend (needs no server; sign-in always works, four fixed rivals fill each leaderboard, nothing is saved between runs). To rehearse failure screens, add options: `"fake://?fail=sign_in"` (rejected), `unreachable`, `submit`, `list` (comma list), `silent` (never answers, so the request times out) and `latency=N` (frames before an answer, about 60 per second). Otherwise `"https://..."`; plain `"http://..."` is only meant for a server on your own machine or LAN. A real server needs a build that includes that server's adapter (the Nakama adapter is built into the native and web runners; see [Running against a Nakama server](#running-against-a-nakama-server)); without one, or without its server key (`server_key` here or one supplied from outside), the project runs offline and `backend.last_error` says so. Lobby switches for `fake://`: `join_full` (every join answers `full`), `gone` (every join answers `gone`), `start` (a start fails) and `heartbeat` (the waiting room loses contact: `lobby.connection_trouble`, then `lobby.closed:server` after a minute); the fake lists three seeded lobbies and scripts the other members. |
 | `server_key` | `Option<String>` | `None` | Nakama's `socket.server_key` for the server named by `endpoint` (1-64 printable characters, no spaces, no `:`); ignored by `fake://`. **It is public**: it ships with the build and anyone can read it, so never put `runtime.http_key` or console credentials here. It is used only with this file's own `endpoint`; a key supplied from outside (`?nakama_key=`, `NAKAMA_SERVER_KEY`) only fills in when this is omitted. See [Running against a Nakama server](#running-against-a-nakama-server). |
-| `features` | `Vec<BackendFeature>` | `[]` | Extra capabilities you plan to use, so a server can be set up for them: `CloudSave`, `Lobbies`, `Matchmaker`. Declared only in v1 — **nothing reads them yet, and they do nothing**. |
+| `features` | `Vec<BackendFeature>` | `[]` | Extra capabilities you plan to use, so a server can be set up for them: `CloudSave`, `Lobbies`, `Matchmaker`. `Lobbies` is read: the lobby actions need it (without it they answer `lobby.<op>_failed:not_enabled`, and `ironhold validate` reports the action). `CloudSave` and `Matchmaker` are declared only for now — **nothing reads them yet, and they do nothing**. |
+| `lobby_names` | `Vec<String>` | `[]` | The names `CreateLobby(name: ...)` may use (needs `Lobbies`): a closed list, not free text, because a server refuses any other name. Each is 1-32 printable ASCII characters (no accents, no dashes like the em-dash) and may be listed once. See [Lobbies](#lobbies). |
 | `leaderboards` | `Vec<Leaderboard>` | `[]` | The leaderboards this game uses. Every `SubmitScore`/`FetchLeaderboard` must name one of these. On a real server, adding or renaming one needs the server-admin step in [Running against a Nakama server](#running-against-a-nakama-server). |
 | `request_timeout_secs` | `Option<f32>` | `15` | How long a request may stay unanswered before the engine fails it (1-120). |
 
@@ -5093,6 +5099,7 @@ Wire it up in the project config with `backend_path: "backend.ron"`.
 - `game_id` and every leaderboard `name` must be 1-32 characters of `a-z`, `0-9`, `_` (no capitals, dots, colons or spaces).
 - A leaderboard name may not be declared twice.
 - `endpoint` must start with `fake://`, `https://` or `http://`.
+- Every `lobby_names` entry must be 1-32 printable ASCII characters and appear once.
 - `server_key`, if set, must be 1-64 printable ASCII characters with no spaces and no `:` (it is Nakama's `socket.server_key`; a key that does not fit makes the whole file invalid, even next to a `fake://` endpoint).
 - Unknown field names are errors, like everywhere else in RON.
 
@@ -5162,6 +5169,43 @@ Two browser-console messages that are expected:
 - **`401 (Unauthorized)` on a `/v2/leaderboard/...` or score call, followed by a `/v2/account/session/refresh` call and the same call again.** Nakama session tokens expire after 60 seconds by default. The adapter renews the session and retries once, so the player sees nothing. If the renewal itself fails, `backend.last_error` gives that reason (for example `the server rejected the sign-in` or `server unreachable`) and the call fails; `the session expired, sign in again` means the renewed session was refused as well.
 - **A CORS error plus `net::ERR_FAILED` when the server is down.** A gateway error page has no CORS headers, so the browser hides the real status. The game sees `backend.unreachable`, `backend.last_error` is `server unreachable`, and the friendly-message recipe in [docs/30](30_runtime_events_and_logic.md) shows your own text (observed on the live demo with the server stopped).
 
+### Lobbies
+
+Lobbies let players find each other: browse open lobbies, create or join one, wait in a waiting room, and start. Declare `features: [Lobbies]` and a `lobby_names: [...]` list in `backend.ron`, then use `ListLobbies`, `CreateLobby`, `JoinLobby`, `LeaveLobby` and `StartLobby`.
+
+> **Today a lobby is a rehearsal.** Only the in-memory `fake://` test backend serves lobbies, with three seeded lobbies and *pretend* members who join and leave on a fixed script. A real server follows in the next step, and even then starting a lobby only tells its members it started: nothing carries players into a shared game yet (that needs the networking work). The demo `backend_demo_lobby` says so on screen.
+
+**The list.** `ListLobbies` fills at most 10 rows. `JoinLobby(row: n)` joins what row `n` showed *when the list was last written* (rows shift when the list refreshes, so a lobby can be gone by the time a player clicks: that answers `lobby.join_failed:gone`). An empty or out-of-range row answers `lobby.join_failed:no_lobby` and logs a warning. Full lobbies are listed (joining one answers `full`); started lobbies are not.
+
+**Showing and hiding rows.** A rule cannot test a variable, so the engine tells you which rows have content: after every list it fires `lobby.row_filled:<n>` or `lobby.row_empty:<n>` for each of the 10 rows, plus `lobby.list_empty` when there are none. Bind each to a `SetUiVisible` on that row's `Group` (the demo does this). The waiting room works the same way with `lobby.member_row_filled:<n>` / `lobby.member_row_empty:<n>` (n = 1-8).
+
+**Failures.** Every refusal fires the generic event first and then a reason form, so a specific message wins: `lobby.join_failed` then `lobby.join_failed:full`. The reason is also in `lobby.last_error`. The reasons are a fixed set; `lobby.closed` has its own three.
+
+| Reason | Meaning |
+|---|---|
+| `full` | the lobby has no room left |
+| `gone` | the lobby no longer exists |
+| `no_lobby` | the row is empty or outside 1-10 (call `ListLobbies` first) |
+| `already_in_lobby` | you are already in one (leave first) |
+| `not_signed_in` | no session yet (bind `backend.signed_in` before the first call) |
+| `not_in_lobby` | `StartLobby` while in no lobby |
+| `not_host` | only the host can start |
+| `too_few_players` | a lobby needs at least 2 players to start |
+| `started` | the lobby already started (joining or starting it again) |
+| `not_enabled` | `Lobbies` is not in `features` (validate reports it) |
+| `limit_reached`, `rate_limited` | the server's limits (one lobby per player, at most 50 per game; too many requests from one address) |
+| `busy` | another lobby request is still waiting for its answer (a second `ListLobbies`, or create/join/start together) |
+| `server` | anything else: the server refused or could not be reached, or a `CreateLobby` name that is not in `lobby_names` (validate reports it) |
+| `host_left`, `removed`, `server` | `lobby.closed:<reason>` only: the host left, you were dropped (no contact for a minute), or the connection was lost |
+
+**The waiting room.** `lobby.member.<n>.name` lists the members in the order they joined, host first, and includes the player. `lobby.member_joined` and `lobby.member_left` fire for *other* players only (your own join and leave are `lobby.created`/`lobby.joined` and `lobby.left`); the rows compact when someone leaves. The engine asks the server for the current members every 10 seconds on its own. Show the Start button on `lobby.created` and hide it on `lobby.joined` (`lobby.current.is_host` is for display only, a rule cannot test it).
+
+**Leaving and closing.** `LeaveLobby` or `SignOut` leave; `LoadScene` does not (a lobby survives scene changes, so bind its events in `global_on`). When the host leaves, or the server drops the player, the engine fires `lobby.closed` then `lobby.closed:host_left` / `:removed`. After a start the members stop checking in and the lobby is gone from the list.
+
+**A dropped connection.** On the first failed check-in the engine fires `lobby.connection_trouble` (show "Reconnecting..."). If nothing gets through for a minute it gives up: `lobby.closed` then `lobby.closed:server`. It never rejoins by itself, and v3a does not fire `backend.connection_lost` for this. Rehearse it with `fake://?fail=heartbeat`.
+
+**Limits.** One lobby per player; `max_players` 2-8; names come only from `lobby_names` (1-32 printable ASCII characters each, no accents or dashes like the em-dash). Refresh from a Refresh button or a delayed event no faster than about every 5 seconds: a faster `ListLobbies` is answered from the last list, so the rows will not change.
+
 ### Online events
 
 Replies arrive a moment after the action, while the game is paused, and survive `LoadScene` — bind them in the top-level `global_on:`, not inside a state's `on:` list. Every refused request still answers with an event (read by the rules one frame after the action), so a state machine never waits on silence. Retry-on-start-up: a sign-in fired before `backend.ron` finished loading answers `backend.busy`; bind `backend.ready` (or `backend.offline`) to know when it is safe.
@@ -5181,6 +5225,14 @@ Replies arrive a moment after the action, while the game is paused, and survive 
 | `score.submit_failed:{leaderboard}` | `SubmitScore` failed (not signed in or still signing in, undeclared leaderboard, variable not a whole number, server refused); the reason is in `backend.last_error` |
 | `leaderboard.listed:{leaderboard}` | `FetchLeaderboard` finished; the variables below are up to date |
 | `leaderboard.list_failed:{leaderboard}` | `FetchLeaderboard` failed (not signed in or still signing in, undeclared leaderboard, server refused) |
+| `lobby.listed` | `ListLobbies` finished; `lobby.count` and `lobby.<n>.*` are up to date (then one `lobby.row_filled:<n>` / `lobby.row_empty:<n>` per row n = 1-10, and `lobby.list_empty` if there are none) |
+| `lobby.created` / `lobby.joined` | `CreateLobby` / `JoinLobby` succeeded; `lobby.current.*` and `lobby.member.<n>.*` are written (then one `lobby.member_row_filled:<n>` / `lobby.member_row_empty:<n>` per member row n = 1-8) |
+| `lobby.left` | `LeaveLobby` (or a sign-out) finished; `lobby.current.*` and `lobby.member.*` are gone |
+| `lobby.started` | the lobby was started (the host's `StartLobby` answered, or another member's check-in saw it) |
+| `lobby.member_joined` / `lobby.member_left` | another player joined or left the waiting room |
+| `lobby.closed` then `lobby.closed:host_left` / `:removed` / `:server` | the lobby ended for this player without a `LeaveLobby` |
+| `lobby.list_failed`, `lobby.create_failed`, `lobby.join_failed`, `lobby.start_failed` | the operation failed; each is followed by the same name plus `:<reason>` (see the reason table in [Lobbies](#lobbies)) |
+| `lobby.connection_trouble` | a check-in with the server failed; the lobby is closed with `lobby.closed:server` if it stays that way for a minute |
 
 ### Engine-written variables
 
@@ -5196,10 +5248,15 @@ These are written by the engine; bind a `Label` to them (`bind: "backend.status"
 | `leaderboard.<name>.<n>.score` | Score at rank `n`; absent beyond `count` |
 | `leaderboard.<name>.my_rank` | The signed-in player's rank; empty when they have no score |
 | `leaderboard.<name>.my_best` | The signed-in player's score on that board; empty when they have none |
+| `lobby.count` | Rows in the last list (0-10) |
+| `lobby.<n>.name`, `.players` ("2/4"), `.host` | Lobby name, member count over capacity, and the host's name in row `n` (1-10); absent beyond `lobby.count`. `lobby.<n>.id` also exists but is for the engine, not for the screen |
+| `lobby.current.name`, `.players` ("2/4"), `.is_host` ("yes"/"no") | The lobby you are in; absent when in none. `lobby.current.id` is the engine's |
+| `lobby.member.<n>.name` | Member `n` of the lobby you are in (n = 1-8, host first); absent beyond the member count |
+| `lobby.last_error` | One of the fixed reasons above for the most recent lobby failure; empty after a success |
 
-Signing out removes every `leaderboard.*` variable, so the next player never sees the previous player's board or rank. An unset variable renders as empty text (with a `format:`, the text around `{}` still shows).
+Signing out removes every `leaderboard.*` and `lobby.*` variable, so the next player never sees the previous player's board, rank or lobby. An unset variable renders as empty text (with a `format:`, the text around `{}` still shows).
 
-`assets/projects/backend_demo/ui/signin.ui.ron` and `ui/leaderboard.ui.ron` are copy-and-edit UI snippets (not loaded by the engine) showing sign-in status/buttons and a top-5 board; paste them into a scene's `ui:` list.
+`assets/projects/backend_demo/ui/signin.ui.ron` and `ui/leaderboard.ui.ron` are copy-and-edit UI snippets (not loaded by the engine) showing sign-in status/buttons and a top-5 board; paste them into a scene's `ui:` list. `assets/projects/backend_demo_lobby/ui/lobby.ui.ron` is the same for lobbies: a browser with 5 rows, a waiting room with 4 member rows and a "started" panel (see [Lobbies](#lobbies)).
 
 ---
 

@@ -56,6 +56,16 @@ only against pads **not** claimed by a live player's `BoundGamepad`, by an undra
 - The online `Action`s only push onto `BackendHub`'s outbox (a resource, never a `Message`: a message buffer drops entries while a
   reader is gated or paused). `backend_glue_system` (`GameStreamSet::Backend`) is the one place that submits, polls, sorts the
   batch by `request_id`, times requests out on `Time<Real>` and writes events plus the `backend.*`/`leaderboard.*` variables.
+- **Lobbies (v3a-1).** Core drives the heartbeat: `lobby_tick` (in the glue system) queues a `LobbyHeartbeat` every `LOBBY_HEARTBEAT_SECS` on
+  `Time<Real>` (a normal request with its own dedupe key; no clock in the `Backend` trait, and `Instant` panics on wasm32), and
+  `apply_lobby_state` diffs each reply into `lobby.member_joined`/`member_left`/`started` (the fake gets them for free). Every request
+  stores `LobbyTracker::gen`; a lobby reply from an older generation is dropped (the membership ended or the session did), so a late
+  heartbeat can never bring `lobby.current.*` back. `drop_lobby` is the only way a membership ends (bumps `gen`, clears `lobby.current.*`
+  and `lobby.member.*`). Failure reasons are the fixed `LOBBY_REASONS` (anything else from an adapter becomes `server`) and fire as the
+  generic event then the `:<reason>` form. `JoinLobby(row:)` resolves against core's own row snapshot, never the variables. The names of the
+  engine's lobby events and variables are a closed vocabulary (`is_lobby_event`/`is_lobby_variable` in `schema/backend.rs`) that
+  `ironhold validate --strict` checks designers' bindings against: add a new one there too (a test in `tests/lobby_tests.rs` fails when the
+  engine emits a name the vocabulary does not know). Variables are written only when changed (`put`).
 - Event names carry only designer-writable ids, never JSON or error text (the interpreter matches names exactly); reasons go to
   `backend.last_error`. Every failure is per operation (`score.submit_failed:{lb}`), never one generic error.
 - The runner hands the engine a `BackendFactory` through `AppOptions` (`backend_factory`, plus `backend_endpoint` to override `backend.ron`'s endpoint);

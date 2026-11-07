@@ -414,7 +414,7 @@ See also: [Per-event evaluation order](#per-event-evaluation-order), [Pausing th
 
 ### Online events (backend)
 
-The online actions (`SignIn`, `SignOut`, `SubmitScore`, `FetchLeaderboard`; see `docs/20_data_formats.md`, `backend.ron`) are
+The online actions (`SignIn`, `SignOut`, `SubmitScore`, `FetchLeaderboard`, and the lobby actions below; see `docs/20_data_formats.md`, `backend.ron`) are
 **requests**: the answer arrives later, as an event plus engine-written variables. A project without a `backend.ron` still
 runs; every online action then answers `backend.offline`.
 
@@ -429,6 +429,12 @@ runs; every online action then answers `backend.offline`.
 | `backend.connection_lost` / `backend.reconnected` | a live connection dropped / came back (only with a real server; `backend.status` follows) |
 | `score.submitted:{leaderboard}` / `score.submit_failed:{leaderboard}` | `SubmitScore` result; also the answer when you submit before signing in or while still signing in (the reason is in `backend.last_error`) |
 | `leaderboard.listed:{leaderboard}` / `leaderboard.list_failed:{leaderboard}` | `FetchLeaderboard` result (rows are in `leaderboard.<name>.*` variables first) |
+| `lobby.listed`, then `lobby.row_filled:<n>` / `lobby.row_empty:<n>` (n = 1-10) and `lobby.list_empty` | `ListLobbies` finished; the rows are in `lobby.<n>.*` first. A rule cannot test a variable, so these row events are how you show or hide a row |
+| `lobby.created` / `lobby.joined` / `lobby.left` / `lobby.started` | you made a lobby, joined one, left (also on `SignOut`), or the lobby was started |
+| `lobby.member_joined` / `lobby.member_left`, `lobby.member_row_filled:<n>` / `lobby.member_row_empty:<n>` (n = 1-8) | another player came or went; the rows compact |
+| `lobby.closed`, then `lobby.closed:host_left` / `:removed` / `:server` | the lobby ended without a `LeaveLobby` |
+| `lobby.list_failed` / `lobby.create_failed` / `lobby.join_failed` / `lobby.start_failed`, then the same with `:<reason>` | the generic event first, then the reason (`full`, `gone`, `no_lobby`, ...; see [Lobbies](20_data_formats.md#lobbies)), so a specific message wins |
+| `lobby.connection_trouble` | a check-in with the server failed (the waiting room closes with `lobby.closed:server` after a minute of that) |
 
 Rules that matter when you wire them:
 - **Bind the answers in `global_on`.** They arrive seconds later, while the game is paused and after a `LoadScene`, so a binding
@@ -442,7 +448,15 @@ Rules that matter when you wire them:
 - Replies are per-player input from outside the game. They never change shared game state by themselves; a rule that reacts to
   one runs on that player's machine only.
 - Requests with the same kind (`SignIn` twice, two `SubmitScore` to one leaderboard) never run in parallel: the second answers
-  `backend.busy`.
+  `backend.busy`. A lobby request that overlaps another answers its own failure event with the reason `busy` instead
+  (`lobby.join_failed:busy`); only `LeaveLobby`, which has no failure event, answers `backend.busy` while a create, join, start or another leave is waiting.
+- **Lobbies are a flow, not a screen.** Browse (`lobby.listed`, rows), waiting room (`lobby.created`/`lobby.joined`), started
+  (`lobby.started`); the exits are `lobby.left` and `lobby.closed`, so a state machine always has a way back to browsing, even
+  when the server goes away (`lobby.closed:server`). `assets/projects/backend_demo_lobby` shows each as a show/hide of three panels. The
+  failures bind in two layers: the generic event sets a default message, the `:<reason>` form overrides it.
+- An empty list is `lobby.list_empty`; a full lobby is `lobby.join_failed:full`; the server being down is `backend.unreachable` before
+  sign-in and `lobby.connection_trouble` / `lobby.closed:server` inside a lobby. A refresh faster than about 5 s is answered from the
+  last list (so a 1-second refresh loop shows old data, it does not hammer the server).
 
 **Pattern: sign in, then show the board** (`assets/projects/backend_demo`):
 
@@ -623,6 +637,7 @@ Applies actions to the world. Key design points:
 - `SignIn` / `SignOut` — start or end the online session (`backend.ron`); answers `backend.signed_in` / `backend.signed_out`, or `backend.sign_in_failed` / `backend.unreachable` / `backend.offline` / `backend.busy`. Keeps `backend.status`, `backend.display_name` and `backend.last_error` up to date (see [Online events](#online-events-backend))
 - `SubmitScore { leaderboard, score_var }` — submits the whole number held in the variable `score_var` to a leaderboard declared in `backend.ron`; answers `score.submitted:{leaderboard}` or `score.submit_failed:{leaderboard}`. A variable that is not a whole number fails instead of submitting 0
 - `FetchLeaderboard { leaderboard, count? }` — fetches the top `count` (1-10, default 10) rows into `leaderboard.<name>.count`, `.<n>.name`, `.<n>.score`, `.my_rank`, `.my_best`; answers `leaderboard.listed:{leaderboard}` or `leaderboard.list_failed:{leaderboard}`
+- `ListLobbies` / `CreateLobby { name, max_players }` / `JoinLobby { row }` / `LeaveLobby` / `StartLobby` — the lobby flow (`features: [Lobbies]` and `lobby_names` in `backend.ron`); `JoinLobby` joins the row the last list showed (1-10), `StartLobby` is host only. Answers are the `lobby.*` events (a failure is the generic event, then the same with `:<reason>`) and the `lobby.*` variables; see [Lobbies](20_data_formats.md#lobbies)
 
 ### Infrastructure ✅
 - `ActionQueue` — FIFO queue processed each frame by `action_executor_system` (push order equals execution order)
