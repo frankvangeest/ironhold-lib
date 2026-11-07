@@ -12,12 +12,6 @@
 ## Active
 
 - [ ] **Backend abstraction (`ironhold_backend` + Nakama adapter)** _(2026-10-25, Frank)_ - RON-declared online features (`backend.ron`), online Actions and `backend.*` events in core, a fake in-memory backend, then the Nakama adapter (sign-in, cloud saves, leaderboards, lobbies, matchmaker, relay transport), namespaced by `game_id` so one Nakama can serve several games. Phases v1-v5 and open questions: `planning/features/backend_abstraction.md` (Status: In progress, v1 Done (8745ef9, 2026-10-27; contract, FakeBackend, sign-in and leaderboard actions, `backend_demo`), v2 Done (e97da79, 2026-10-28; Nakama adapter on native and web, server module, `ironhold backend config`, deployed to the homelab and playtested), v3 (lobbies, matchmaker) next, split into v3a (lobbies over REST) and v3b (realtime socket + matchmaker) after the 2026-11-05 plan-review: see the Queued items "Backend v3a" and "Backend v3b"; plan-review round 1 done 2026-10-25, seven decisions answered 2026-10-27).
-- [ ] **Backend v3a prerequisite: reopen the closed server APIs one by one** _(2026-11-05, lifted from "Backend v2 follow-ups" (2))_ - the Lua
-  module (`crates/ironhold_nakama/server/ironhold.lua`) is deny-by-default (RPCs, matchmaker add/remove, matches, parties, groups,
-  realtime). Reopen only what v3a needs, each with its own `game_id` guard and an adversarial contract case in
-  `crates/ironhold_nakama/tests/contract/run.sh`: an allowlist of `ironhold_lobby_*` RPCs (v3a); matchmaker add with a ticket rewrite
-  and remove (v3b). Keep `MatchJoin`/`MatchCreate`/`Party*` closed. Blocks "Backend v3a"; the `backend/` folder is done (the module stayed in
-  `crates/ironhold_nakama/server/`).
 
 
 
@@ -202,7 +196,7 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.5 (deterministic
   (on `fake://` first). **Status: plan Ready (2026-11-05; the eight plan-review decisions were accepted by Frank and the plan's v3 section
   is rewritten as v3a/v3b, see `planning/features/backend_abstraction.md`)**; blocked only by the prerequisites below. **Prerequisites (all must be
   done or explicitly waived before v3a reaches `integration`):** (1) "`backend/` folder: a local Nakama for development" (**done 2026-11-06**, see
-  Done); (2) "Backend v3a prerequisite: reopen the closed server APIs one by one" (this list); (3) the homelab
+  Done); (2) "Backend v3a prerequisite: reopen the closed server APIs one by one" (**done 2026-11-07**, see Done: the `game_rpc` guard; the lobby RPCs themselves are v3a's own work); (3) the homelab
   item "Staging Nakama for Ironhold's `integration` tier" (**done 2026-11-07**, see the homelab Done list: LXC 113 on demand, reached with a native `--backend`); (4) the homelab item "Cloudflare rate rule for `/v2/rpc`" (lobby spam through the
   open sign-up). **Before lobbies are enabled in `backend_demo_online` or any public project:** "Bind the device id to the game" (this list).
 - [ ] **Backend v3b: realtime socket and matchmaker ("transport preview")** _(2026-11-05, plan-review of v3)_ - `FindMatch`, `CancelMatch`,
@@ -383,6 +377,12 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.8 (internet list
 ## Done (reference)
 
 ### November 2026
+- [x] **Backend v3a prerequisite: reopen the closed server APIs one by one** _(2026-11-05, lifted from "Backend v2 follow-ups" (2))_ - the Lua
+  module (`crates/ironhold_nakama/server/ironhold.lua`) is deny-by-default (RPCs, matchmaker add/remove, matches, parties, groups,
+  realtime). Reopen only what v3a needs, each with its own `game_id` guard and an adversarial contract case in
+  `crates/ironhold_nakama/tests/contract/run.sh`: an allowlist of `ironhold_lobby_*` RPCs (v3a); matchmaker add with a ticket rewrite
+  and remove (v3b). Keep `MatchJoin`/`MatchCreate`/`Party*` closed. Blocks "Backend v3a"; the `backend/` folder is done (the module stayed in
+  `crates/ironhold_nakama/server/`).
 - [x] **`backend/` folder: a local Nakama for development** _(requested 2026-11-03, done 2026-11-06)_ - `backend/up.sh [project...]` generates the
   server module and game list with `ironhold backend config` and starts Nakama + Postgres on 127.0.0.1 (default keys, banner, one stack per machine);
   `backend/down.sh [-v]` stops it. One compose file with the versions pinned in `backend/.env`, reused by the contract test under its own project name
