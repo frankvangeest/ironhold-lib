@@ -124,6 +124,17 @@ fn ask(b: &mut NakamaBackend, id: u64, kind: RequestKind) -> BackendEvent {
     panic!("no reply for request {id}");
 }
 
+const SECRET: &str = "0123456789abcdef0123456789abcdef";
+
+/// Records every device sign-in body that does not carry the per-game hash, or that carries the secret itself. The handler runs on
+/// the server thread, so a violation is collected and asserted by the test.
+fn check_wire_id(body: &str, violations: &Mutex<Vec<String>>) {
+    let expected = ironhold_nakama::ns::GameNs::new("my_game").unwrap().device_id(SECRET).unwrap();
+    if !body.contains(&format!("\"{expected}\"")) || body.contains(SECRET) {
+        violations.lock().unwrap().push(body.to_string());
+    }
+}
+
 fn submit_kind(score: i64) -> RequestKind {
     RequestKind::SubmitScore { leaderboard: "best".into(), score }
 }
@@ -249,8 +260,11 @@ fn poll_for(b: &mut NakamaBackend, ms: u64) -> Vec<BackendEvent> {
 fn a_refused_refresh_signs_in_again_with_the_device_id_and_the_call_succeeds() {
     let auths = Arc::new(AtomicUsize::new(0));
     let (a2, calls) = (auths.clone(), Arc::new(AtomicUsize::new(0)));
-    let (url, _seen, stop) = serve(move |method, path, _auth, _body| match (method, path) {
+    let violations: Arc<Mutex<Vec<String>>> = Arc::default();
+    let v2 = violations.clone();
+    let (url, _seen, stop) = serve(move |method, path, _auth, body| match (method, path) {
         ("POST", p) if p.starts_with("/v2/account/authenticate/device") => {
+            check_wire_id(body, &v2);
             a2.fetch_add(1, Ordering::Relaxed);
             (200, format!(r#"{{"token":"{}","refresh_token":"r"}}"#, jwt("u1", "A")))
         }
@@ -269,6 +283,7 @@ fn a_refused_refresh_signs_in_again_with_the_device_id_and_the_call_succeeds() {
     ask(&mut b, 1, RequestKind::SignIn);
     assert_eq!(ask(&mut b, 2, submit_kind(1)).reply, BackendReply::ScoreSubmitted { leaderboard: "best".into() });
     assert_eq!(auths.load(Ordering::Relaxed), 2, "one sign-in, one re-authentication");
+    assert!(violations.lock().unwrap().is_empty(), "the sign-in and the re-authentication both send the per-game hash and never the secret: {:?}", violations.lock().unwrap());
     stop.store(true, Ordering::Relaxed);
 }
 

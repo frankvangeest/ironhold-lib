@@ -39,8 +39,14 @@ fn device_secret() -> Option<String> {
     getrandom::fill(&mut bytes).ok()?;
     let secret = ironhold_nakama::ns::device_secret_from_bytes(&bytes);
     std::fs::create_dir_all(&dir).ok()?;
-    std::fs::write(&path, &secret).ok()?;
-    Some(secret)
+    // Through a temp file and a rename, so a crash or power loss cannot leave an empty or half-written secret (which would be
+    // replaced by a new one: a new account).
+    let temp = dir.join("device_secret.tmp");
+    std::fs::write(&temp, &secret).ok()?;
+    std::fs::rename(&temp, &path).ok()?;
+    // Two instances starting at once on a fresh install can both make one; the last rename wins, so use what is actually stored.
+    let stored = std::fs::read_to_string(&path).ok().map(|s| s.trim().to_string()).filter(|s| ironhold_nakama::ns::is_valid_device_secret(s));
+    Some(stored.unwrap_or(secret))
 }
 
 /// Always a factory, so a project with a real endpoint says what is missing (`backend.last_error`) instead of blaming the build.

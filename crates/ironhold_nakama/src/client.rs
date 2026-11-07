@@ -55,6 +55,12 @@ pub fn resolve_server_key(file_key: Option<&str>, runner_key: Option<&str>) -> O
 /// The checks that need neither the network nor storage, so a config that can never connect does not get as far as creating a
 /// device id.
 fn precheck(resolved: &ResolvedBackendConfig) -> Result<(), String> {
+    // Same rule as `NakamaBackend::new`, checked here too so a config that can never connect does not make the runner create
+    // a device secret (and delete the old id) first.
+    let base = resolved.endpoint.trim_end_matches('/');
+    if !(base.starts_with("http://") || base.starts_with("https://")) {
+        return Err(format!("endpoint {base:?} is not an http(s) URL"));
+    }
     let ns = GameNs::new(&resolved.game_id)?;
     for lb in &resolved.leaderboards {
         ns.leaderboard(&lb.name)?;

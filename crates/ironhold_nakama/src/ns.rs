@@ -13,6 +13,7 @@ pub const DEVICE_SECRET_LEN: usize = 32;
 /// golden vector in the tests).
 const DEVICE_ID_CONTEXT: &str = "ironhold device id v1";
 
+/// True for exactly the values [`device_secret_from_bytes`] makes: 32 lowercase hex characters.
 pub fn is_valid_device_secret(secret: &str) -> bool {
     secret.len() == DEVICE_SECRET_LEN && secret.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
 }

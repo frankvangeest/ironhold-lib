@@ -45,8 +45,10 @@ fn ask(b: &mut NakamaBackend, id: u64, kind: RequestKind) -> BackendEvent {
 
 /// A device secret in the format the adapter requires (32 lowercase hex characters), unique per call.
 fn fresh_secret() -> String {
-    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
-    format!("{nanos:032x}")
+    // A counter next to the clock: parallel tests can land in the same clock tick.
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64;
+    format!("{nanos:016x}{:016x}", COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
 }
 
 /// A wire id in the format the server now requires: `{game}:` plus 32 lowercase hex characters, unique per call.
@@ -216,9 +218,10 @@ fn a_device_id_must_be_a_game_and_a_32_hex_hash() {
 fn one_secret_gives_two_unrelated_accounts_in_two_games() {
     let secret = fresh_secret();
     let (mut a, mut b) = (adapter("alpha", &secret), adapter("beta", &secret));
-    let BackendReply::SignedIn { .. } = ask(&mut a, 1, RequestKind::SignIn).reply else { panic!("alpha signs in") };
-    let BackendReply::SignedIn { .. } = ask(&mut b, 1, RequestKind::SignIn).reply else { panic!("beta signs in") };
-    // The ids differ beyond the prefix, so the server cannot link the two accounts.
+    let BackendReply::SignedIn { display_name: name_a } = ask(&mut a, 1, RequestKind::SignIn).reply else { panic!("alpha signs in") };
+    let BackendReply::SignedIn { display_name: name_b } = ask(&mut b, 1, RequestKind::SignIn).reply else { panic!("beta signs in") };
+    // The server made two accounts (each gets its own random name), and the ids differ beyond the prefix, so it cannot link them.
+    assert_ne!(name_a, name_b, "two games, one secret: two accounts");
     let id = |game: &str| ironhold_nakama::ns::GameNs::new(game).unwrap().device_id(&secret).unwrap();
     assert_ne!(id("alpha").split(':').nth(1), id("beta").split(':').nth(1));
 }
