@@ -71,10 +71,22 @@ Plan review of v3 lobbies/matchmaker (9bc30b0, 2026-11-05), verdict Needs more d
 - No v3 Action/RequestKind exists yet (only `BackendFeature::Lobbies/Matchmaker` in schema/backend.rs); v3 is 3 bullets.
 - Public-read storage objects are owner-write only: joiners cannot bump "2/4", max_players is unenforceable, and a vanished
   host leaves the object forever. Needs a server RPC (server-owned objects, OCC version) or an authoritative labelled match.
-  `RpcFunc` and realtime `Rpc` are in the Lua closed list.
+  (Later found: a `register_req_before` on `RpcFunc` is accepted but NEVER runs in Nakama 3.41.0 - see below.)
 - Engine `request_timeout_secs` default 15 s == Nakama matchmaker interval 15 s: FindMatch would time out. Needs a per-kind deadline.
 - Engine-written vars clear only `leaderboard.` (backend.rs ~467); `lobby.`/`matchmaker.` are not under the reserved `backend.` prefix.
 - MatchmakerAdd guard should REWRITE query/properties (prepend `+properties.game:{gid}`), not validate them.
+
+Code review of `feature/lobby_rpc_allowlist` (931f207..53887d3, 2026-11-07), facts that outlive it:
+- Nakama 3.41.0 has no working before-hook for REST RPCs; the only guard is wrapping the function at registration (`game_rpc`
+  in ironhold.lua: id must match `^ironhold_lobby_[a-z_]+$`, needs `context.vars.game_id` in `games`, passes game_id to fn).
+  The id allowlist is a self-lint (same author controls both sides); the session wrapper is the actual security boundary.
+- Realtime `Rpc` stays in the `register_rt_before` closed list, so lobby RPCs are REST-only until v3b reopens it.
+- Server-side `nk.storage_*` inside an RPC bypasses `collections_guard` (req_before hooks only see client APIs): game namespacing
+  inside lobby RPCs is convention unless a helper builds the collection name.
+- Nakama loads each module via `require(name)` per Lua VM, so a module required by another (ironhold_games precedent, now
+  ironhold via test_rpcs.lua) executes once per VM; modules re-run in every pooled VM (leaderboard_create logs repeat - pre-existing).
+- The CLI embeds ironhold.lua at build time: `ironhold backend config --out` from a stale tools/bin binary ships the OLD module.
+- docs/20 server-admin text says "copy both" but not "and no other module" - the operator rule lives only in a Lua comment.
 
 **Why:** these were the load-bearing gaps; recurring if lobby/multiplayer plans are revised.
 **How to apply:** any review of backend, lobby, cloud-save or Form 2 networking plans. See [[nakama-spike-facts]], [[determinism-networking]].

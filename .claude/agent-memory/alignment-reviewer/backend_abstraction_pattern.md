@@ -45,5 +45,10 @@ No ActionQueue push from the backend — correct pattern. Refusals (busy/offline
   via `ironhold backend config` (no hardcoded game ids). Doc trap: "the web build cannot use a local server" is overstated — web
   `?backend=` is fake://-only (ironhold_web lib.rs), but `BackendConfig::problems()` accepts `http://` endpoints, so a locally served
   web build with an edited backend.ron (`http://127.0.0.1:7350` + key) CAN reach it; only the *hosted* build can't.
+- lobby_rpc_allowlist (reviewed 2026-11-07, server-only, ALIGNED): Nakama 3.41 has no REST `RpcFunc` before-hook, so the guard is
+  `game_rpc(id, fn)` in ironhold.lua (regex `^ironhold_lobby_[a-z_]+$`, session game_id required + passed to fn). No RON/Action/CLI
+  surface. Gaps seen: "ironhold.lua must be the only module" lives only in a Lua comment + plan, not in docs/20 "Server admin step";
+  header still says "reopens `RpcFunc`" though RpcFunc was dropped from the closed list. Future lobby RPCs: check each namespaces
+  storage by the passed game_id (wrapper can't enforce that).
 
 Related: [[audio-state-pattern]] (engine-written variable precedent), [[real-pause-pattern]], [[diagnostic-only-feature-pattern]], [[web-host-page-contract]].
