@@ -5124,6 +5124,8 @@ ironhold backend config assets/projects/game_a assets/projects/game_b --out depl
 
 writes `ironhold_games.lua` (generated from the `backend.ron` files you name) and `ironhold.lua` (the generic module). Copy both into Nakama's modules folder (`data/modules`, `/nakama/data/modules` in the Docker image) and restart Nakama.
 
+- **These two files must be the only Lua modules in that folder.** An RPC that any other module registers answers every signed-in player of every game on the server, so it would bypass the per-game guard.
+
 - **Always name every project the server hosts.** `ironhold_games.lua` is the complete list of games: a game left out can no longer sign in (`unknown game`, `backend.sign_in_failed`).
 - Adding, renaming or removing a leaderboard needs this again. Renaming leaves the old scores behind under the old name. **Changing `ranking` or `keep` of an existing leaderboard has no effect**: Nakama keeps the settings it created the board with, so give the board a new name instead.
 - A `SubmitScore` that times out may still have reached the server. For a `keep: Total` leaderboard a retry can therefore count twice.

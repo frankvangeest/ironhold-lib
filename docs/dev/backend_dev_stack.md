@@ -49,6 +49,8 @@ name `ironhold-contract` and ports 7360/7361, with the fixture folder `tests/con
 can run while your dev stack is up and its cleanup (`down -v`) deletes only its own volume. The fixture `tests/contract/modules/ironhold_games.lua` stays where
 it is: a unit test in `server_config.rs` embeds it.
 
+`tests/contract/modules/test_rpcs.lua` is a test-only fixture: it registers probe RPCs through the module's `game_rpc` guard. It lives only in that mounted folder and is never part of `ironhold backend config` output or a deploy.
+
 ## Bumping the Nakama version
 
 Change `NAKAMA_IMAGE` in `backend/.env`, run `crates/ironhold_nakama/tests/contract/run.sh`, then update the homelab's own pin and redeploy there.

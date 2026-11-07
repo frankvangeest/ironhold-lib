@@ -200,7 +200,22 @@ fn lobby_rpcs_go_through_the_game_guard() {
 
     // No session (HTTP key only): the wrapper refuses before the function runs.
     let (status, body) = rpc("ironhold_lobby_probe", None);
-    assert_ne!(status, 200, "an RPC without a game session must be refused: {body}");
+    assert!(status == 403 && body.contains("needs a signed-in game session"), "the guard's own refusal, not a 401 or 500: {status} {body}");
+
+    // A refreshed session that asks for another game's vars still belongs to its own game.
+    let (_, refresh) = raw_session(&format!("alpha:{}", unique("rpc")), "").expect("alpha signs in");
+    let (status, text) = raw("POST", "/v2/account/session/refresh", &basic(), &format!(r#"{{"token":"{refresh}","vars":{{"game_id":"beta"}}}}"#));
+    assert_eq!(status, 200, "{text}");
+    let marker = "\"token\":\"";
+    let start = text.find(marker).expect("a token") + marker.len();
+    let refreshed = &text[start..start + text[start..].find('"').unwrap()];
+    let (status, body) = rpc("ironhold_lobby_probe", Some(refreshed));
+    assert!(status == 200 && body.contains(r#"\"game_id\":\"alpha\""#), "refreshed session: {status} {body}");
+
+    // A function that errors answers with a fixed message: no module path, no Lua error text.
+    let (status, body) = rpc("ironhold_lobby_boom", Some(&alpha));
+    assert!(status == 403 && body.contains("the request failed"), "{status} {body}");
+    assert!(!body.contains("secret internal detail") && !body.contains(".lua"), "internal detail leaked: {body}");
 
     // Registration outside the allowlist is refused by `game_rpc` itself (reported by the fixture: one `true` per bad id).
     let (status, body) = rpc("test_registration_report", Some(&alpha));

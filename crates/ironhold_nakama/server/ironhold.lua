@@ -9,8 +9,8 @@
 --      key could otherwise read or write another game's data.
 --
 --   3. closes every API the engine does not use (matches, chat, groups, friends, tournaments, account linking), because those
---      share ids across games. v3 (lobbies, matchmaker) opens its own APIs again, each with a guard: v3a reopens `RpcFunc`
---      for the `ironhold_lobby_*` RPCs only, through `game_rpc` (section 2c); v3b will reopen the matchmaker.
+--      share ids across games. v3 (lobbies, matchmaker) opens its own APIs again, each with a guard: v3a registers
+--      `ironhold_lobby_*` RPCs, only through `game_rpc` (section 2c); v3b will reopen the matchmaker.
 --
 -- Pinned and tested against Nakama 3.41.0.
 local nk = require("nakama")
@@ -138,9 +138,21 @@ local function game_rpc(id, fn)
     if not game_id or not games[game_id] then
       reject("this API needs a signed-in game session")
     end
-    return fn(context, payload, game_id)
+    local ok, result = pcall(fn, context, payload, game_id)
+    if ok then
+      return result
+    end
+    -- A deliberate refusal (`reject`, an error table) goes to the client as it is. Anything else is a bug or a storage failure:
+    -- Nakama would send its text, with the module's file path, to the caller. Log it here, answer with a fixed message.
+    if type(result) == "table" then
+      error(result)
+    end
+    nk.logger_error(string.format("ironhold: RPC %s (game %s) failed: %s", id, game_id, tostring(result)))
+    reject("the request failed")
   end, id)
 end
+-- Realtime `Rpc` stays closed below (v3a is REST only). If v3b reopens it, no second guard is needed: this wrapper guards the
+-- function itself, and a socket session carries the same `vars`.
 
 -- 3. everything the engine does not use is closed ------------------------------------------------------------------------
 -- Nothing below is needed by sign-in and leaderboards, and each of these takes ids or names that are shared across games
