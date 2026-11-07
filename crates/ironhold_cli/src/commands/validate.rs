@@ -4408,6 +4408,40 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
             .map(|f| StrictWarning { source_file: f.source_file, message: f.message, kind: f.kind }),
     );
 
+    // The lobby vocabulary is closed: an event a rule is bound to, or a variable a Label shows, that the engine never produces is a typo.
+    // Skipped when a logic file or a scene failed to parse (it would report against an incomplete picture, like the orphan check).
+    if orphan_binding_prereqs_clean {
+        let mut events: Vec<(String, String)> = Vec::new();
+        let mut fsm_events = |src: &str, fsm: &StateMachineAsset| {
+            let mut found = HashSet::new();
+            collect_fsm_events(fsm, &mut found);
+            let mut found: Vec<String> = found.into_iter().collect();
+            found.sort();
+            events.extend(found.into_iter().map(|e| (src.to_string(), e)));
+        };
+        if let Some((src, fsm)) = state_machine {
+            fsm_events(src, fsm);
+        }
+        for (src, fsm) in behaviors {
+            fsm_events(src, fsm);
+        }
+        let mut bound: Vec<(String, String)> = Vec::new();
+        for (src, scene) in scenes {
+            for node in walk_ui_nodes(&scene.ui) {
+                if let UiNodeDef::Label(l) = node {
+                    if let Some(var) = &l.bind {
+                        bound.push((src.clone(), var.clone()));
+                    }
+                }
+            }
+        }
+        warnings.extend(
+            super::backend_checks::lobby_vocabulary_warnings(&events, &bound)
+                .into_iter()
+                .map(|f| StrictWarning { source_file: f.source_file, message: f.message, kind: f.kind }),
+        );
+    }
+
     warnings
 }
 

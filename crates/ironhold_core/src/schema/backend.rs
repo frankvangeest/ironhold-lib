@@ -41,6 +41,44 @@ pub const LOBBY_REASONS: [&str; 17] = [
     "not_in_lobby", "started", "too_few_players", "not_enabled", "rate_limited", "busy", "server", "host_left", "removed",
 ];
 
+/// True for every event name the engine can emit for lobbies (`lobby.joined`, `lobby.join_failed:full`, `lobby.row_filled:3`, ...). The
+/// vocabulary is closed, so `ironhold validate --strict` can report a binding on a name no action can ever produce (a typo).
+pub fn is_lobby_event(name: &str) -> bool {
+    const PLAIN: [&str; 14] = [
+        "lobby.listed", "lobby.created", "lobby.joined", "lobby.left", "lobby.started", "lobby.member_joined", "lobby.member_left",
+        "lobby.closed", "lobby.list_failed", "lobby.create_failed", "lobby.join_failed", "lobby.start_failed", "lobby.connection_trouble",
+        "lobby.list_empty",
+    ];
+    if PLAIN.contains(&name) {
+        return true;
+    }
+    let Some((head, tail)) = name.split_once(':') else { return false };
+    let row = |max: u32| tail.parse::<u32>().is_ok_and(|n| (1..=max).contains(&n));
+    match head {
+        "lobby.row_filled" | "lobby.row_empty" => row(MAX_LOBBY_ROWS),
+        "lobby.member_row_filled" | "lobby.member_row_empty" => row(MAX_LOBBY_PLAYERS),
+        "lobby.closed" => matches!(tail, "host_left" | "removed" | "server"),
+        "lobby.list_failed" | "lobby.create_failed" | "lobby.join_failed" | "lobby.start_failed" => {
+            LOBBY_REASONS.contains(&tail) && !matches!(tail, "host_left" | "removed")
+        }
+        _ => false,
+    }
+}
+
+/// True for every variable name the engine writes for lobbies. `lobby.<n>.*` with n above `MAX_LOBBY_ROWS` is not one of them.
+pub fn is_lobby_variable(name: &str) -> bool {
+    let Some(rest) = name.strip_prefix("lobby.") else { return false };
+    let parts: Vec<&str> = rest.split('.').collect();
+    let index = |s: &str, max: u32| s.parse::<u32>().is_ok_and(|n| (1..=max).contains(&n));
+    match parts.as_slice() {
+        ["count"] | ["last_error"] => true,
+        ["current", f] => matches!(*f, "name" | "players" | "is_host" | "id"),
+        ["member", n, "name"] => index(n, MAX_LOBBY_PLAYERS),
+        [n, f] => index(n, MAX_LOBBY_ROWS) && matches!(*f, "name" | "players" | "host" | "id"),
+        _ => false,
+    }
+}
+
 /// Printable ASCII, 1-`MAX_LOBBY_NAME_LEN` characters, not blank.
 pub fn is_valid_lobby_name(name: &str) -> bool {
     !name.trim().is_empty() && name.len() <= MAX_LOBBY_NAME_LEN && name.bytes().all(|b| (0x20..0x7f).contains(&b))
@@ -354,6 +392,28 @@ mod tests {
         let o = parse_fake_endpoint("fake://?fail=join_full,gone,start,heartbeat").unwrap();
         assert!(o.join_full && o.gone && o.start && o.heartbeat && !o.silent);
         assert!(parse_fake_endpoint("fake://?fail=joinfull").is_err());
+    }
+
+    #[test]
+    fn the_lobby_vocabulary_is_closed() {
+        for ok in [
+            "lobby.listed", "lobby.joined", "lobby.closed", "lobby.closed:host_left", "lobby.join_failed:full", "lobby.start_failed:too_few_players",
+            "lobby.row_filled:1", "lobby.row_empty:10", "lobby.member_row_filled:8", "lobby.list_empty", "lobby.connection_trouble",
+        ] {
+            assert!(is_lobby_event(ok), "{ok}");
+        }
+        for bad in [
+            "lobby.joind", "lobby.join_failed:", "lobby.join_failed:host_left", "lobby.closed:full", "lobby.row_filled:0", "lobby.row_filled:11",
+            "lobby.member_row_empty:9", "lobby.row_filled", "backend.ready", "lobby.created:x",
+        ] {
+            assert!(!is_lobby_event(bad), "{bad}");
+        }
+        for ok in ["lobby.count", "lobby.last_error", "lobby.1.name", "lobby.10.id", "lobby.3.players", "lobby.2.host", "lobby.current.is_host", "lobby.member.8.name"] {
+            assert!(is_lobby_variable(ok), "{ok}");
+        }
+        for bad in ["lobby.11.name", "lobby.0.name", "lobby.1.score", "lobby.current.nmae", "lobby.member.9.name", "lobby.member.1.host", "lobby.", "lobby", "leaderboard.x.count"] {
+            assert!(!is_lobby_variable(bad), "{bad}");
+        }
     }
 
     #[test]

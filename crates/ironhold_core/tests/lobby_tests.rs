@@ -591,3 +591,51 @@ fn the_lobby_actions_parse_from_ron() {
     // Unlike `Some(...)` style rules, a typo in a field name is an error, not a silent default.
     assert!(ron::from_str::<Action>("JoinLobby(rows: 3)").is_err());
 }
+
+#[test]
+fn every_lobby_event_and_variable_the_engine_produces_is_in_the_closed_vocabulary() {
+    use ironhold_core::schema::backend::{is_lobby_event, is_lobby_variable};
+    let mut app = signed_in_app();
+    // A tour through everything: refusals, list, create, heartbeats (joins, a leave), start, leave, a join and the host walking away.
+    let first = [Action::JoinLobby { row: 1 }, Action::ListLobbies, Action::JoinLobby { row: 3 }, create("Nope", 4), create("Demo lobby", 4), Action::StartLobby];
+    for a in first {
+        act(&mut app, a);
+        settle(&mut app);
+    }
+    for _ in 0..5 {
+        advance(&mut app, 12.0);
+        settle(&mut app);
+    }
+    for a in [Action::StartLobby, Action::LeaveLobby, Action::StartLobby, Action::JoinLobby { row: 1 }] {
+        act(&mut app, a);
+        settle(&mut app);
+    }
+    for _ in 0..7 {
+        advance(&mut app, 12.0);
+        settle(&mut app);
+    }
+    act(&mut app, Action::LeaveLobby);
+    settle(&mut app);
+    let lobby_events: Vec<String> = seen(&app).into_iter().filter(|e| e.starts_with("lobby.")).collect();
+    assert!(lobby_events.len() > 40, "the tour should produce plenty of events, got {}", lobby_events.len());
+    for e in &lobby_events {
+        assert!(is_lobby_event(e), "the engine emitted {e:?}, which validate would call a typo");
+    }
+    // Every variable of a shorter tour, looked at after each step, is also known.
+    let mut app = signed_in_app();
+    let known_variables = |app: &App| {
+        for k in app.world().resource::<GameVariables>().0.keys().filter(|k| k.starts_with("lobby.")) {
+            assert!(is_lobby_variable(k), "the engine wrote {k:?}, which validate would call a typo");
+        }
+    };
+    for a in [Action::ListLobbies, create("Quick game", 4)] {
+        act(&mut app, a);
+        settle(&mut app);
+        known_variables(&app);
+    }
+    for _ in 0..3 {
+        advance(&mut app, 12.0);
+        settle(&mut app);
+        known_variables(&app);
+    }
+}

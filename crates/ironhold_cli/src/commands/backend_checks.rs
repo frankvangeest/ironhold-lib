@@ -6,7 +6,10 @@
 use std::collections::HashSet;
 use std::path::Path;
 
-use ironhold_core::schema::backend::{is_fake_endpoint, is_valid_backend_id, BackendConfig, MAX_LEADERBOARD_ROWS};
+use ironhold_core::schema::backend::{
+    is_fake_endpoint, is_lobby_event, is_lobby_variable, is_valid_backend_id, BackendConfig, BackendFeature, MAX_LEADERBOARD_ROWS,
+    MAX_LOBBY_PLAYERS, MAX_LOBBY_ROWS, MIN_LOBBY_PLAYERS, RESERVED_VARIABLE_PREFIXES,
+};
 use ironhold_core::schema::{Action, ProjectConfig};
 
 use super::utils::{find_project_ron, ron_from_str};
@@ -18,7 +21,11 @@ pub struct Finding {
 }
 
 fn is_online_action(a: &Action) -> bool {
-    matches!(a, Action::SignIn | Action::SignOut | Action::SubmitScore { .. } | Action::FetchLeaderboard { .. })
+    matches!(a, Action::SignIn | Action::SignOut | Action::SubmitScore { .. } | Action::FetchLeaderboard { .. }) || is_lobby_action(a)
+}
+
+fn is_lobby_action(a: &Action) -> bool {
+    matches!(a, Action::ListLobbies | Action::CreateLobby { .. } | Action::JoinLobby { .. } | Action::LeaveLobby | Action::StartLobby)
 }
 
 /// `http://` is only acceptable for a machine on the developer's own network.
@@ -84,6 +91,7 @@ pub fn errors(
             }
         }
     }
+    out.extend(lobby_errors(backend_source, backend, actions));
     for (src, action) in actions {
         let leaderboard = match action {
             Action::SubmitScore { leaderboard, .. } | Action::FetchLeaderboard { leaderboard, .. } => leaderboard,
@@ -117,6 +125,84 @@ pub fn errors(
         }
     }
     out
+}
+
+/// Lobby actions that can never work: a row or a size outside the engine's range, a name the server would refuse, or a project that
+/// never declared the `Lobbies` feature (the runtime answers `lobby.<op>_failed:not_enabled` for those).
+fn lobby_errors(backend_source: &str, backend: Option<&BackendConfig>, actions: &[(String, Action)]) -> Vec<Finding> {
+    let mut out = Vec::new();
+    let mut undeclared_reported = HashSet::new();
+    for (src, action) in actions.iter().filter(|(_, a)| is_lobby_action(a)) {
+        let mut push = |message: String, kind: &'static str| out.push(Finding { source_file: src.clone(), message, kind });
+        if let Action::JoinLobby { row } = action {
+            if !(1..=MAX_LOBBY_ROWS).contains(row) {
+                push(format!("JoinLobby(row: {row}): row must be 1-{MAX_LOBBY_ROWS} (the list shows at most {MAX_LOBBY_ROWS} rows)"), "lobby_row_range");
+            }
+        }
+        if let Action::CreateLobby { name, max_players } = action {
+            if !(MIN_LOBBY_PLAYERS..=MAX_LOBBY_PLAYERS).contains(max_players) {
+                push(format!("CreateLobby(max_players: {max_players}): must be {MIN_LOBBY_PLAYERS}-{MAX_LOBBY_PLAYERS} players"), "lobby_max_players_range");
+            }
+            if let Some(cfg) = backend {
+                if !cfg.lobby_names.contains(name) {
+                    let declared = if cfg.lobby_names.is_empty() { "none".to_string() } else { cfg.lobby_names.join(", ") };
+                    push(
+                        format!("CreateLobby(name: {name:?}) is not in lobby_names of {backend_source} (declared: {declared}); the server refuses any other name"),
+                        "lobby_name_not_declared",
+                    );
+                }
+            }
+        }
+        // Without a backend.ron the strict `online_action_without_backend` warning covers it; here the file exists.
+        if let Some(cfg) = backend {
+            if !cfg.features.contains(&BackendFeature::Lobbies) && undeclared_reported.insert(src.clone()) {
+                out.push(Finding {
+                    source_file: src.clone(),
+                    message: format!("{action:?} needs `Lobbies` in `features` of {backend_source}; without it every lobby action answers lobby.<op>_failed:not_enabled"),
+                    kind: "lobby_feature_not_declared",
+                });
+            }
+        }
+    }
+    out
+}
+
+/// `--strict` warnings about the lobby vocabulary. `events` are the event names rules are bound to and `bound_vars` the variables Labels
+/// are bound to, each with the file they came from. The vocabulary is closed, so a name outside it is a typo, or a row the list never shows.
+pub fn lobby_vocabulary_warnings(events: &[(String, String)], bound_vars: &[(String, String)]) -> Vec<Finding> {
+    let mut out = Vec::new();
+    let mut seen = HashSet::new();
+    for (src, event) in events {
+        if event.starts_with("lobby.") && !is_lobby_event(event) && seen.insert((src.clone(), event.clone())) {
+            out.push(Finding {
+                source_file: src.clone(),
+                message: format!("bound to the event {event:?}, which the engine never emits for lobbies (a typo? see docs/20_data_formats.md, Lobbies)"),
+                kind: "unknown_lobby_event",
+            });
+        }
+    }
+    for (src, var) in bound_vars {
+        if var.starts_with("lobby.") && !is_lobby_variable(var) && seen.insert((src.clone(), var.clone())) {
+            let kind = if is_row_beyond_the_list(var) { "lobby_row_binding_out_of_range" } else { "unknown_lobby_variable" };
+            let why = if kind == "unknown_lobby_variable" {
+                "the engine never writes it (a typo?)"
+            } else {
+                "the list shows at most 10 rows and a lobby holds at most 8 players, so it is always empty"
+            };
+            out.push(Finding { source_file: src.clone(), message: format!("a Label is bound to {var:?}, but {why}"), kind });
+        }
+    }
+    out
+}
+
+/// `lobby.11.name`, `lobby.member.9.name`: the right shape with an index past the end.
+fn is_row_beyond_the_list(var: &str) -> bool {
+    let parts: Vec<&str> = var.trim_start_matches("lobby.").split('.').collect();
+    match parts.as_slice() {
+        ["member", n, "name"] => n.parse::<u32>().is_ok_and(|n| n > MAX_LOBBY_PLAYERS),
+        [n, _] => n.parse::<u32>().is_ok_and(|n| n > MAX_LOBBY_ROWS),
+        _ => false,
+    }
 }
 
 /// `--strict` warnings: things that work but are probably not what the designer meant.
@@ -174,11 +260,25 @@ pub fn strict_warnings(
         }
     }
 
-    // `backend.*` and `leaderboard.*` belong to the engine: a rule writing them is overwritten at the next reply.
+    // A join resolves against the last list: with no `ListLobbies` anywhere, every `JoinLobby` answers `lobby.join_failed:no_lobby`.
+    if !actions.iter().any(|(_, a)| matches!(a, Action::ListLobbies)) {
+        let mut seen = HashSet::new();
+        for (src, _) in actions.iter().filter(|(_, a)| matches!(a, Action::JoinLobby { .. })) {
+            if seen.insert(src.clone()) {
+                out.push(Finding {
+                    source_file: src.clone(),
+                    message: "uses JoinLobby but no rule in this project runs ListLobbies, so no row is ever filled".into(),
+                    kind: "join_without_list",
+                });
+            }
+        }
+    }
+
+    // `backend.*`, `leaderboard.*` and `lobby.*` belong to the engine: a rule writing them is overwritten at the next reply.
     let mut reserved_seen = HashSet::new();
     for (src, action) in actions {
         if let Action::SetVariable(k, _) | Action::IncrementVariable(k, _) = action {
-            if (k.starts_with("backend.") || k.starts_with("leaderboard.")) && reserved_seen.insert((src.clone(), k.clone())) {
+            if RESERVED_VARIABLE_PREFIXES.iter().any(|p| k.starts_with(p)) && reserved_seen.insert((src.clone(), k.clone())) {
                 out.push(Finding {
                     source_file: src.clone(),
                     message: format!("writes the engine-owned variable {k:?}; the engine overwrites it at the next backend reply"),
@@ -267,6 +367,81 @@ mod tests {
         for bad in ["http://example.org", "http://8.8.8.8:7350", "http://172.32.0.1"] {
             assert!(!is_local_host(bad), "{bad}");
         }
+    }
+
+    fn lobby_config(extra: &str) -> BackendConfig {
+        ron::from_str(&format!(r#"BackendConfig(schema_version: 1, endpoint: Some("fake://"), {extra})"#)).unwrap()
+    }
+
+    fn kinds(findings: Vec<Finding>) -> Vec<&'static str> {
+        findings.into_iter().map(|f| f.kind).collect()
+    }
+
+    fn acts(actions: Vec<Action>) -> Vec<(String, Action)> {
+        actions.into_iter().map(|a| ("logic/state_machine.ron".to_string(), a)).collect()
+    }
+
+    #[test]
+    fn lobby_actions_need_the_feature_valid_numbers_and_a_declared_name() {
+        let ok = lobby_config(r#"features: [Lobbies], lobby_names: ["Demo lobby"]"#);
+        let good = acts(vec![
+            Action::ListLobbies,
+            Action::CreateLobby { name: "Demo lobby".into(), max_players: 4 },
+            Action::JoinLobby { row: 10 },
+            Action::LeaveLobby,
+            Action::StartLobby,
+        ]);
+        assert!(kinds(errors("backend.ron", Some(&ok), Some("p"), &good)).is_empty());
+
+        let bad = acts(vec![
+            Action::JoinLobby { row: 0 },
+            Action::JoinLobby { row: 11 },
+            Action::CreateLobby { name: "Demo lobby".into(), max_players: 1 },
+            Action::CreateLobby { name: "Demo lobby".into(), max_players: 9 },
+            Action::CreateLobby { name: "Other room".into(), max_players: 4 },
+        ]);
+        assert_eq!(
+            kinds(errors("backend.ron", Some(&ok), Some("p"), &bad)),
+            ["lobby_row_range", "lobby_row_range", "lobby_max_players_range", "lobby_max_players_range", "lobby_name_not_declared"]
+        );
+        // Both problems of one action are reported, not only the first.
+        let both = acts(vec![Action::CreateLobby { name: "Nope".into(), max_players: 20 }]);
+        assert_eq!(kinds(errors("backend.ron", Some(&ok), Some("p"), &both)), ["lobby_max_players_range", "lobby_name_not_declared"]);
+
+        // A backend.ron that never declared `Lobbies`: one report per file, however many lobby actions it holds.
+        let no_feature = lobby_config(r#"lobby_names: ["Demo lobby"]"#);
+        assert_eq!(kinds(errors("backend.ron", Some(&no_feature), Some("p"), &good)), ["lobby_feature_not_declared"]);
+    }
+
+    #[test]
+    fn a_join_without_any_list_and_a_rule_writing_a_lobby_variable_are_flagged() {
+        let cfg = lobby_config(r#"features: [Lobbies], lobby_names: ["Demo lobby"]"#);
+        let warn = |actions: Vec<Action>| kinds(strict_warnings(Path::new("."), None, "backend.ron", Some(&cfg), &acts(actions)));
+        assert_eq!(warn(vec![Action::JoinLobby { row: 1 }]), ["join_without_list"]);
+        assert!(warn(vec![Action::ListLobbies, Action::JoinLobby { row: 1 }]).is_empty());
+        assert_eq!(warn(vec![Action::SetVariable("lobby.count".into(), "5".into())]), ["reserved_variable_write"]);
+        assert_eq!(warn(vec![Action::SetVariable("backend.status".into(), "x".into())]), ["reserved_variable_write"]);
+        assert!(warn(vec![Action::SetVariable("lobbying".into(), "x".into())]).is_empty(), "only the `lobby.` prefix is reserved");
+    }
+
+    #[test]
+    fn a_typo_in_the_lobby_vocabulary_and_a_row_past_the_end_are_flagged() {
+        let ev = |names: &[&str]| -> Vec<(String, String)> {
+            names.iter().map(|n| ("logic/state_machine.ron".to_string(), n.to_string())).collect()
+        };
+        let var = |names: &[&str]| -> Vec<(String, String)> {
+            names.iter().map(|n| ("scenes/main.scene.ron".to_string(), n.to_string())).collect()
+        };
+        // Fine: every name the engine emits, and events outside the lobby prefix are not this check's business.
+        let fine_events = ev(&["lobby.joined", "lobby.join_failed:full", "lobby.row_filled:3", "ui.button_pressed:x"]);
+        assert!(lobby_vocabulary_warnings(&fine_events, &var(&["lobby.1.name", "lobby.current.players"])).is_empty());
+        assert_eq!(kinds(lobby_vocabulary_warnings(&ev(&["lobby.joind", "lobby.joind"]), &[])), ["unknown_lobby_event"], "one report per file and name");
+        assert_eq!(kinds(lobby_vocabulary_warnings(&ev(&["lobby.join_failed:fulll"]), &[])), ["unknown_lobby_event"]);
+        assert_eq!(kinds(lobby_vocabulary_warnings(&[], &var(&["lobby.current.nmae"]))), ["unknown_lobby_variable"]);
+        assert_eq!(
+            kinds(lobby_vocabulary_warnings(&[], &var(&["lobby.11.name", "lobby.member.9.name"]))),
+            ["lobby_row_binding_out_of_range", "lobby_row_binding_out_of_range"]
+        );
     }
 
     #[test]
