@@ -176,6 +176,14 @@ impl NakamaBackend {
                 Ok(protocol::list_leaderboard(&self.base, &session.token, &board, *count, &session.user_id))
             }
             RequestKind::SignIn | RequestKind::SignOut => Err(kind.failure("not a call")),
+            // Lobbies over the server's RPCs are v3a-2 (`planning/features/backend_abstraction.md`); until then this adapter answers with the
+            // fixed `server` reason (and a leave simply leaves), so a project that declares `Lobbies` fails visibly instead of waiting.
+            RequestKind::ListLobbies
+            | RequestKind::CreateLobby { .. }
+            | RequestKind::JoinLobby { .. }
+            | RequestKind::LeaveLobby
+            | RequestKind::StartLobby
+            | RequestKind::LobbyHeartbeat { .. } => Err(kind.failure("lobbies are not supported by this adapter yet")),
         }
     }
 
@@ -300,7 +308,15 @@ impl NakamaBackend {
                             Err(f) => Err(f),
                         }
                     }
-                    RequestKind::SignIn | RequestKind::SignOut => return,
+                    // `call` already answered these (v3a-2 adds the real lobby calls), so a request of this kind never reaches here.
+                    RequestKind::SignIn
+                    | RequestKind::SignOut
+                    | RequestKind::ListLobbies
+                    | RequestKind::CreateLobby { .. }
+                    | RequestKind::JoinLobby { .. }
+                    | RequestKind::LeaveLobby
+                    | RequestKind::StartLobby
+                    | RequestKind::LobbyHeartbeat { .. } => return,
                 };
                 match result {
                     Ok(reply) => self.reply(id, reply),
