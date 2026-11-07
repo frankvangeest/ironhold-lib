@@ -198,7 +198,7 @@ See `planning/features/networking_multiplayer.md`. Gate: Beta 0.5 (deterministic
   is rewritten as v3a/v3b, see `planning/features/backend_abstraction.md`)**; blocked only by the prerequisites below. **Prerequisites (all must be
   done or explicitly waived before v3a reaches `integration`):** (1) "`backend/` folder: a local Nakama for development" (**done 2026-11-06**, see
   Done); (2) "Backend v3a prerequisite: reopen the closed server APIs one by one" (this list); (3) the homelab
-  item "Staging Nakama for Ironhold's `integration` tier"; (4) the homelab item "Cloudflare rate rule for `/v2/rpc`" (lobby spam through the
+  item "Staging Nakama for Ironhold's `integration` tier" (**done 2026-11-07**, see the homelab Done list: LXC 113 on demand, reached with a native `--backend`); (4) the homelab item "Cloudflare rate rule for `/v2/rpc`" (lobby spam through the
   open sign-up). **Before lobbies are enabled in `backend_demo_online` or any public project:** "Bind the device id to the game" (this list).
 - [ ] **Backend v3b: realtime socket and matchmaker ("transport preview")** _(2026-11-05, plan-review of v3)_ - `FindMatch`, `CancelMatch`,
   `matchmaker.*` events; native dedicated thread with blocking `tungstenite`, wasm32 `web_sys::WebSocket`, socket opened only during a
