@@ -132,6 +132,7 @@ destination state's `entry_actions` and the source state's `exit_actions` along 
 | `ui_demo` | Nestable flexbox `Group` UI layouts: rows in columns, `SpaceBetween`, spacers, and screen-edge anchoring with no pixel coordinates |
 | `backend_demo` | Online features without code: sign in, submit a score and read a top-5 leaderboard through `backend.ron` (an in-memory `fake://` test backend that needs no server), with copy-and-edit UI snippets in `ui/` |
 | `backend_demo_online` | The same demo against a real Nakama server over https (`endpoint` + `server_key` in `backend.ron`); only works with the public demo server it points at |
+| `backend_demo_lobby` | Lobbies without code: list, create, join, leave and start through `backend.ron` (`features: [Lobbies]`, `lobby_names`), a waiting room, and the failure reasons, against the in-memory `fake://` test backend with pretend players (no real players, no shared play yet); copy-and-edit UI snippets in `ui/` |
 | `first_person_starter` | A first-person starting point for a shooter: the male character seen through a `FirstPerson` camera, keyboard + mouse and gamepad controls (`controls: FirstPerson`, sprint on the left trigger), mouse capture, a crosshair and a small test arena |
 
 ---

@@ -639,3 +639,22 @@ fn every_lobby_event_and_variable_the_engine_produces_is_in_the_closed_vocabular
         known_variables(&app);
     }
 }
+
+/// `ui/*.ui.ron` of the lobby demo are the copy-and-edit snippets the docs point designers at: they must parse as a UI node and appear
+/// verbatim in the demo scene, so the playable demo and the snippet can never drift apart.
+#[test]
+fn the_lobby_demos_snippets_parse_and_are_embedded_in_its_scene() {
+    use ironhold_core::schema::UiNodeDef;
+    let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/projects/backend_demo_lobby");
+    let scene = std::fs::read_to_string(format!("{root}/scenes/main.scene.ron")).unwrap().replace("\r\n", "\n");
+    for name in ["signin", "lobby"] {
+        let text = std::fs::read_to_string(format!("{root}/ui/{name}.ui.ron")).unwrap().replace("\r\n", "\n");
+        ron::Options::default()
+            .with_default_extension(ron::extensions::Extensions::IMPLICIT_SOME)
+            .from_str::<UiNodeDef>(&text)
+            .unwrap_or_else(|e| panic!("ui/{name}.ui.ron must parse as a UI node: {e}"));
+        for line in text.lines().filter(|l| !l.trim().is_empty() && !l.starts_with("//")) {
+            assert!(scene.contains(line.trim()), "ui/{name}.ui.ron line {line:?} is missing from scenes/main.scene.ron");
+        }
+    }
+}

@@ -1,0 +1,17 @@
+// backend_demo_lobby: lobbies against the in-memory test backend (`fake://`). Nobody real is on the other side: three lobbies are
+// seeded (one with room, one half full, one full) and the other members of a lobby you join or create are scripted, so you can see
+// every event. Nothing is saved between runs and no two browsers ever meet.
+// Try the failure paths: "fake://?fail=join_full" (every join answers `full`), "fake://?fail=gone", "fake://?fail=start" (Start fails),
+// "fake://?fail=heartbeat" (the waiting room shows "Reconnecting..." and closes after a minute), "fake://?fail=sign_in",
+// "fake://?fail=unreachable" and "fake://?latency=120" (about two seconds to answer).
+// A real server is the next step (planning/features/backend_abstraction.md, v3a-2): this file only needs the endpoint to change then.
+BackendConfig(
+    schema_version: 1,
+    // Namespace on a shared server: [a-z0-9_], 1-32 characters. Defaults to project_id when omitted.
+    game_id: "backend_demo_lobby",
+    endpoint: "fake://",
+    // Lobbies must be declared, like leaderboards: a server is provisioned for what a project says it uses.
+    features: [Lobbies],
+    // The only names `CreateLobby(name: ...)` may use (1-32 printable ASCII characters). A closed list, not free text.
+    lobby_names: ["Demo lobby", "Quick game"],
+)
