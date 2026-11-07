@@ -1,0 +1,10 @@
+(
+    schema_version: 2,
+    prefabs: {
+        "box": (
+            kind: Primitive,
+            model: "",
+            shape: Cuboid,
+        ),
+    },
+)

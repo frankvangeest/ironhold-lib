@@ -2667,3 +2667,27 @@ fn spawn_of_primitive_prefab_exits_1() {
     assert_eq!(code, 1, "expected exit 1, got {code}:\n{stdout}");
     assert!(stdout.contains("kind: Primitive") && stdout.contains("crate"), "{stdout}");
 }
+
+// ── Lobbies (backend v3a-1) ───────────────────────────────────────────────────
+
+#[test]
+fn lobby_actions_outside_the_range_or_the_declared_names_exit_1() {
+    let (code, out) = validate("bad_lobby_actions");
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("JoinLobby(row: 11): row must be 1-10"), "{out}");
+    assert!(out.contains("CreateLobby(max_players: 1): must be 2-8 players"), "{out}");
+    assert!(out.contains("\"Other room\") is not in lobby_names"), "{out}");
+    assert!(!out.contains("ListLobbies"), "a valid ListLobbies is not reported: {out}");
+}
+
+#[test]
+fn lobby_vocabulary_typos_are_strict_warnings_not_errors() {
+    let (code, out) = validate("lobby_vocabulary_typos");
+    assert_eq!(code, 0, "without --strict the typos are not errors: {out}");
+    let (code, out) = validate_strict("lobby_vocabulary_typos");
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("the event \"lobby.joind\", which the engine never emits"), "{out}");
+    assert!(out.contains("\"lobby.11.name\", but the list shows at most 10 rows"), "{out}");
+    assert!(out.contains("\"lobby.current.nmae\", but the engine never writes it"), "{out}");
+    assert!(!out.contains("lobby.join_failed:full") && !out.contains("\"lobby.1.name\""), "names the engine does produce must not be reported: {out}");
+}

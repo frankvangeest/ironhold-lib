@@ -1,0 +1,8 @@
+(
+    schema_version: 1,
+    global_on: [
+        ( event: "scene.ready:main", do_actions: [ SignIn, ListLobbies ] ),
+        ( event: "lobby.joind", do_actions: [ Log("a typo: this never fires") ] ),
+        ( event: "lobby.join_failed:full", do_actions: [ Log("fine") ] ),
+    ],
+)

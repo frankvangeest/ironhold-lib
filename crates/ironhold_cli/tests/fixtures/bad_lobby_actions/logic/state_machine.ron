@@ -1,0 +1,7 @@
+(
+    schema_version: 1,
+    global_on: [
+        ( event: "scene.ready:main", do_actions: [ SignIn, ListLobbies ] ),
+        ( event: "backend.signed_in", do_actions: [ JoinLobby(row: 11), CreateLobby(name: "Other room", max_players: 1) ] ),
+    ],
+)

@@ -1,0 +1,10 @@
+(
+    schema_version: 3,
+    project_id: "bad_lobby_actions",
+    display_name: "Lobby fixture",
+    initial_scene: "scenes/main.scene.ron",
+    asset_catalog: "assets.ron",
+    prefab_catalog: "prefabs/prefabs.ron",
+    state_machine_path: "logic/state_machine.ron",
+    backend_path: "backend.ron",
+)

@@ -1,0 +1,15 @@
+(
+    schema_version: 2,
+    name: "main",
+    entities: [],
+    ui: [
+        Group((
+            id: "root",
+            children: [
+                Label((id: "ok_row", text: "", bind: "lobby.1.name", format: "{}", size: (200.0, 26.0))),
+                Label((id: "past_the_end", text: "", bind: "lobby.11.name", format: "{}", size: (200.0, 26.0))),
+                Label((id: "typo", text: "", bind: "lobby.current.nmae", format: "{}", size: (200.0, 26.0))),
+            ],
+        )),
+    ],
+)

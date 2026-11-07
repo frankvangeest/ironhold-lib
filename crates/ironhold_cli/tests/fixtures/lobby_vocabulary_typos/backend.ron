@@ -1,0 +1,7 @@
+BackendConfig(
+    schema_version: 1,
+    game_id: "lobby_typos",
+    endpoint: "fake://",
+    features: [Lobbies],
+    lobby_names: ["Demo lobby"],
+)
