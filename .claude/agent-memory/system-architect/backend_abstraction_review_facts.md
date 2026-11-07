@@ -88,5 +88,21 @@ Code review of `feature/lobby_rpc_allowlist` (931f207..53887d3, 2026-11-07), fac
 - The CLI embeds ironhold.lua at build time: `ironhold backend config --out` from a stale tools/bin binary ships the OLD module.
 - docs/20 server-admin text says "copy both" but not "and no other module" - the operator rule lives only in a Lua comment.
 
+Plan re-review of v3a (f8c83c8, 2026-11-07), verdict Needs more design work (one short round, no new primitive):
+- The `Backend` trait has no clock (`poll(&mut self, out)`), and `std::time::Instant` panics on wasm32-unknown-unknown: an
+  adapter-driven heartbeat needs a time source. Recommended: core issues heartbeat as a normal `RequestKind` on `Time<Real>`
+  from the glue system (own dedupe key, real request id, timeout/cancel apply, Fake stays deterministic); id 0 then stays
+  for ConnectionLost/Reconnected only. `Vec::sort_by_key` is already stable, so "id-0 tie-break" is a non-issue.
+- REST adapter never emits ConnectionLost/Reconnected; synthesizing `backend.connection_lost` in v3a leaves status stuck
+  "connecting" (hub.reconnecting waits for a Reconnected nothing sends).
+- Hidden web tabs stop requestAnimationFrame -> Bevy Update stops -> no heartbeats -> 30 s expiry drops alt-tabbed players.
+- `owns()` prefix check ACCEPTS client storage ops on `{game}.lobbies`; "clients never touch the collection" needs an explicit deny.
+- Generated `ironhold_games.lua` carries no `features`: lobby RPCs answer every hosted game (incl. backend_demo_online).
+- `game_rpc` masks non-table errors: an OCC version-conflict from `nk.storage_write` becomes "the request failed" unless the
+  RPC fn pcalls/retries it itself.
+- Reserved prefixes are string literals in 2 places (runtime retain `leaderboard.`, CLI `backend.`/`leaderboard.`): no shared const.
+- No generic "action's feature not declared" check exists in backend_checks.rs; v3a must add it (v1 task text implied it existed).
+- Cloudflare: one counter 30 req/10 s/IP for sign-up + /v2/rpc; staging is reached over LAN, so dev playtests never exercise it.
+
 **Why:** these were the load-bearing gaps; recurring if lobby/multiplayer plans are revised.
 **How to apply:** any review of backend, lobby, cloud-save or Form 2 networking plans. See [[nakama-spike-facts]], [[determinism-networking]].

@@ -1,20 +1,15 @@
 ---
 name: backend-v3-lobby-plan-review
-description: backend_abstraction v3 (lobbies + matchmaker) plan review 2026-11-05; verdict Needs more design work; missing "current lobby" vars, empty-row Join, full/stale/gone reasons
+description: backend_abstraction v3/v3a lobby plan reviews (2026-11-05, 2026-11-07); both Needs more design work; core gap = RON rules cannot branch on variable values
 metadata:
   type: project
 ---
 
-v3 plan (planning/features/backend_abstraction.md "### v3", table ~99-100) reviewed 2026-11-05: Needs more design work.
+Round 1 (2026-11-05, v3 three bullets): Needs more design work. Led to v3a (lobby.current.*, member.<n>, StartLobby, lobby.last_error reasons).
 
-Gaps raised (re-check when v3 is implemented):
-- No "my lobby" variables (lobby.current.name/players/is_host, member list) and no host/ready/start signal -> a waiting room cannot be built.
-- Unset vars render empty but buttons stay clickable (see leaderboard.ui.ron comment): JoinLobby(row: 7) on an empty row needs a defined answer.
-- lobby.join_failed is one event for full / gone / stale snapshot / server down; designer needs a reason var (lobby.last_error) not new event names.
-- lobby.list_failed and join_failed lack the {id} pattern other areas use; unscoped is OK only because there is one list.
-- No lobby.<n>.* clearing on SignOut/empty list; lobby.count = 0 "No lobbies yet" recipe needed.
-- Event naming: matchmaker.matched vs lobby.joined; no remote-leave/host-left/kicked events; connection_lost behaviour inside a lobby unspecified.
-- "matching only" must be on-screen in the demo, not only in docs; recommended a new backend_demo_lobby project.
+Round 2 (2026-11-07, v3a "Ready" section ~260-325): Needs more design work. Key finding:
+- **State-machine rules have no variable conditions** (only dialogue `condition: HasVariable`). So the plan's "rows hidden with SetUiVisible keyed on lobby.count", an empty-state label, and "designers word messages from lobby.last_error (demo_msg pattern)" are all impossible in RON. demo_msg in backend_demo_online works only because each failure is a DIFFERENT EVENT. I wrongly recommended reason-in-variable in round 1; correct fix is reason-suffixed events (`lobby.join_failed:full`, emitted after the generic one) plus per-row events (`lobby.row_filled:<n>`/`lobby.row_empty:<n>`) or a `lobby.list_empty` event, or ship backlog's Label/Group hide-when-empty.
+- Other open items: member.<n> cleared on SignOut/empty LIST instead of left/closed; no `not_signed_in`/`not_in_lobby`/`started`/`name_invalid` reasons; backend.busy vs lobby.*_failed; identical designer-constant lobby names (suggest `lobby.<n>.host`); fake:// demo card "Finds and joins players" untrue (bots); `fake://?fail=` lobby options + heartbeat-drop rehearsal missing; docs plan omits docs/15 validate rows and the docs/20 `features` row ("nothing reads them"); `query events` lists only used events, so lobby vocabulary not discoverable; deferred result-event --strict check should land for closed `lobby.` vocabulary; Cloudflare /v2/rpc rate rule vs designer refresh loops.
 
-**Why:** v3 is the first feature where the designer expects a multiplayer game and gets none.
-**How to apply:** at v3 impl review check the five doc surfaces (docs/20 actions+vars+last_error table, docs/30 recipe, demo RON comments, STATUS, index card). Related: [[backend-abstraction-plan-review]], [[public-backend-demo-plan-review]].
+**Why:** v3 is the first feature where the designer expects multiplayer; any feature promising "SetUiVisible keyed on a variable" must be checked against the no-conditions rule.
+**How to apply:** for ANY future plan saying "designer branches on / words messages from variable X", verify an event exists per value. Related: [[backend-abstraction-plan-review]], [[public-backend-demo-plan-review]], [[ui-set-visible-plan-review]].
