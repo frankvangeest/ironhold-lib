@@ -60,8 +60,9 @@ fn read_url_params() -> AppOptions {
     options.scene_override = params.get("scene");
     // A page link must never choose which server receives a player's device id (it is their account credential), so the page
     // can only pick the test backend; a real endpoint comes from the project's own backend.ron.
+    // `is_fake_endpoint` is load-bearing for credential safety (see its doc comment and its test in ironhold_core).
     options.backend_endpoint = params.get("backend").filter(|e| !e.trim().is_empty()).filter(|e| {
-        let ok = e.starts_with("fake://");
+        let ok = ironhold_core::schema::backend::is_fake_endpoint(e);
         if !ok {
             web_sys::console::warn_1(&"ignoring ?backend=: the page address can only select a fake:// backend".into());
         }

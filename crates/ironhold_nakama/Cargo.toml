@@ -9,6 +9,8 @@ authors = ["Frank van Geest"]
 
 [dependencies]
 ironhold_core = { path = "../ironhold_core" }
+# Hashes the stored device secret into the per-game wire id (see ns.rs). Already in the tree through bevy, native and wasm32.
+blake3 = "1.8"
 ehttp = { version = "0.7", optional = true }
 serde_json = { version = "1", optional = true }
 base64 = { version = "0.22", optional = true }

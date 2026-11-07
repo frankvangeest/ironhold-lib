@@ -142,7 +142,7 @@ BackendConfig(
 ### Several games on one Nakama
 
 - `game_id` prefixes storage collections (`{game_id}.saves`, `.lobbies`), leaderboard ids, match labels and the matchmaker query;
-  device ids are `{game_id}:{device_uuid}` (separate account per game by default).
+  wire device ids are `{game_id}:` plus 32 hex characters of a hash of the game and a stored secret (separate, unlinkable account per game; `planning/features/device_id_binding.md`).
 - **Separator safety:** `game_id`, leaderboard names and slots are limited to `[a-z0-9_]` (length caps); no `.`, `:` or spaces, so
   `"a" + "b.c"` and `"a.b" + "c"` can never collide. Enforced in the loader and `ironhold validate`; `game_id` must also be unique
   across the repo's projects (`--strict`). Nakama's device-id charset/length for the `:` is checked in v2.

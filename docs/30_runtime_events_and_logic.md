@@ -475,7 +475,7 @@ engine (`ironhold validate --strict` warns about a rule that writes them, `reser
 variable and show that in a `Label`. A server being down is not `backend.offline` (that means there is no usable backend configured at
 all). The first time a `SignIn` runs (here: when the player presses Sign in) a stopped server or tunnel arrives as `backend.unreachable`;
 so does a gateway error page in a browser, while a native run gets `backend.sign_in_failed` with `server answered HTTP <n>`. A refused
-sign-in (wrong key, a game the server does not host) is also `backend.sign_in_failed`, and retrying will not fix it, so give it its own
+sign-in (wrong key, a game the server does not host, an out-of-date page or build) is also `backend.sign_in_failed`, and retrying will not fix it, so give it its own
 wording and let the detail line say why. Once signed in, a server that stops answering shows up as `score.submit_failed:{lb}` and
 `leaderboard.list_failed:{lb}` instead. Clear the message on every success and on `backend.signed_out` (pressing Sign out during a
 sign-in also answers that sign-in as `backend.sign_in_failed`):

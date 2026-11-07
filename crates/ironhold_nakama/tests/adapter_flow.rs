@@ -107,7 +107,7 @@ fn config(endpoint: &str) -> ResolvedBackendConfig {
 }
 
 fn adapter(endpoint: &str) -> NakamaBackend {
-    NakamaBackend::new(&config(endpoint), &NakamaOptions { server_key: "k".into(), device_uuid: "0123-abcd-4567".into() }).unwrap()
+    NakamaBackend::new(&config(endpoint), &NakamaOptions { server_key: "k".into(), device_secret: "0123456789abcdef0123456789abcdef".into() }).unwrap()
 }
 
 fn ask(b: &mut NakamaBackend, id: u64, kind: RequestKind) -> BackendEvent {
@@ -226,9 +226,9 @@ fn sign_out_drops_the_session_and_an_unreachable_server_says_so() {
 
 #[test]
 fn bad_configuration_is_refused_at_startup() {
-    let opts = NakamaOptions { server_key: "k".into(), device_uuid: "0123-abcd-4567".into() };
+    let opts = NakamaOptions { server_key: "k".into(), device_secret: "0123456789abcdef0123456789abcdef".into() };
     assert!(NakamaBackend::new(&config("ftp://x"), &opts).is_err());
-    let no_key = NakamaOptions { server_key: " ".into(), device_uuid: opts.device_uuid.clone() };
+    let no_key = NakamaOptions { server_key: " ".into(), device_secret: opts.device_secret.clone() };
     assert!(NakamaBackend::new(&config("http://x"), &no_key).is_err());
     let mut bad_game = config("http://x");
     bad_game.game_id = "Bad Game".into();
@@ -364,7 +364,7 @@ fn a_cancelled_request_makes_no_retry() {
 }
 
 #[test]
-fn the_key_goes_with_the_files_endpoint_and_the_device_uuid_is_only_made_when_a_server_is_used() {
+fn the_key_goes_with_the_files_endpoint_and_the_device_secret_is_only_made_when_a_server_is_used() {
     use ironhold_nakama::{factory, resolve_server_key, RunnerOptions};
     use std::sync::atomic::AtomicUsize;
     use std::sync::Arc;
@@ -379,9 +379,9 @@ fn the_key_goes_with_the_files_endpoint_and_the_device_uuid_is_only_made_when_a_
     let f = factory(RunnerOptions {
         runner_key: None,
         missing_key_hint: "hint".into(),
-        device_uuid: Arc::new(move || {
+        device_secret: Arc::new(move || {
             counter.fetch_add(1, Ordering::Relaxed);
-            Ok("0123-abcd-4567".to_string())
+            Ok("0123456789abcdef0123456789abcdef".to_string())
         }),
     });
     let mut c = config("http://127.0.0.1:1");
@@ -394,7 +394,7 @@ fn the_key_goes_with_the_files_endpoint_and_the_device_uuid_is_only_made_when_a_
     let failing = factory(RunnerOptions {
         runner_key: Some("runner".into()),
         missing_key_hint: String::new(),
-        device_uuid: Arc::new(|| Err("no storage".to_string())),
+        device_secret: Arc::new(|| Err("no storage".to_string())),
     });
     assert_eq!((failing.0)(&config("http://127.0.0.1:1")).err().as_deref(), Some("no storage"));
 
@@ -402,7 +402,7 @@ fn the_key_goes_with_the_files_endpoint_and_the_device_uuid_is_only_made_when_a_
     let runner_only = factory(RunnerOptions {
         runner_key: Some("runner".into()),
         missing_key_hint: String::new(),
-        device_uuid: Arc::new(|| Ok("0123-abcd-4567".to_string())),
+        device_secret: Arc::new(|| Ok("0123456789abcdef0123456789abcdef".to_string())),
     });
     let c = config("http://127.0.0.1:1");
     assert_eq!(c.server_key, None);
@@ -415,7 +415,7 @@ fn the_key_goes_with_the_files_endpoint_and_the_device_uuid_is_only_made_when_a_
     let bad_key = factory(RunnerOptions {
         runner_key: Some("a:b".into()),
         missing_key_hint: "hint".into(),
-        device_uuid: Arc::new(|| Ok("0123-abcd-4567".to_string())),
+        device_secret: Arc::new(|| Ok("0123456789abcdef0123456789abcdef".to_string())),
     });
     assert!((bad_key.0)(&c).err().unwrap().contains("not valid"));
 
@@ -425,9 +425,9 @@ fn the_key_goes_with_the_files_endpoint_and_the_device_uuid_is_only_made_when_a_
     let counting = factory(RunnerOptions {
         runner_key: Some("runner".into()),
         missing_key_hint: String::new(),
-        device_uuid: Arc::new(move || {
+        device_secret: Arc::new(move || {
             counter.fetch_add(1, Ordering::Relaxed);
-            Ok("0123-abcd-4567".to_string())
+            Ok("0123456789abcdef0123456789abcdef".to_string())
         }),
     });
     let mut no_game = config("http://127.0.0.1:1");
