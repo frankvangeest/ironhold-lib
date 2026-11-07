@@ -260,7 +260,7 @@ latency, higher ceiling, +34 KB wasm).
 ### v3a — lobbies over REST (Ready)
 
 **Prerequisites** (backlog items, all done or explicitly waived before v3a reaches `integration`): the `backend/` folder (local Nakama,
-module moved there); the homelab staging Nakama (**done 2026-11-07**: reached with a native `--backend`, a built web `pkg/` cannot be re-pointed); the homelab Cloudflare rate rule for `/v2/rpc`; "Backend v3a prerequisite: reopen the
+module moved there); the homelab staging Nakama (**done 2026-11-07**: reached with a native `--backend`, a built web `pkg/` cannot be re-pointed); the homelab Cloudflare rate rule for `/v2/rpc` (**done 2026-11-07**); "Backend v3a prerequisite: reopen the
 closed server APIs one by one". **Before lobbies are enabled on any public project** (including `backend_demo_online`): "Bind the device
 id to the game". Lobbies are not turned on in `backend_demo_online` by this plan; the new project `backend_demo_lobby` carries them.
 
