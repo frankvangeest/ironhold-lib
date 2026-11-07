@@ -177,3 +177,33 @@ fn unknown_games_and_other_sign_in_methods_are_refused() {
     let (status, _) = raw("POST", "/v2/account/authenticate/email?create=true", &basic(), r#"{"email":"a@b.example","password":"password123"}"#);
     assert_ne!(status, 200, "email sign-in would give a session with no game");
 }
+
+/// Calls `POST /v2/rpc/{id}` with a session token (`bearer`) or with the HTTP key alone (`None`, no session).
+fn rpc(id: &str, bearer: Option<&str>) -> (u16, String) {
+    match bearer {
+        Some(t) => raw("POST", &format!("/v2/rpc/{id}"), &format!("Bearer {t}"), r#""{}""#),
+        None => raw("POST", &format!("/v2/rpc/{id}?http_key=defaulthttpkey"), "", r#""{}""#),
+    }
+}
+
+#[test]
+#[ignore = "needs the local contract Nakama (tests/contract/run.sh)"]
+fn lobby_rpcs_go_through_the_game_guard() {
+    let (alpha, _) = raw_session(&format!("alpha:{}", unique("rpc")), "").expect("alpha signs in");
+    let (beta, _) = raw_session(&format!("beta:{}", unique("rpc")), "").expect("beta signs in");
+
+    // A guarded RPC gets the game of the session, never one the client names.
+    let (status, body) = rpc("ironhold_lobby_probe", Some(&alpha));
+    assert!(status == 200 && body.contains(r#"\"game_id\":\"alpha\""#), "alpha session: {status} {body}");
+    let (status, body) = rpc("ironhold_lobby_probe", Some(&beta));
+    assert!(status == 200 && body.contains(r#"\"game_id\":\"beta\""#), "beta session: {status} {body}");
+
+    // No session (HTTP key only): the wrapper refuses before the function runs.
+    let (status, body) = rpc("ironhold_lobby_probe", None);
+    assert_ne!(status, 200, "an RPC without a game session must be refused: {body}");
+
+    // Registration outside the allowlist is refused by `game_rpc` itself (reported by the fixture: one `true` per bad id).
+    let (status, body) = rpc("test_registration_report", Some(&alpha));
+    assert_eq!(status, 200, "{body}");
+    assert!(body.matches("true").count() == 6 && !body.contains("false"), "bad ids must all be refused at registration: {body}");
+}

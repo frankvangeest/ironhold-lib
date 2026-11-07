@@ -301,7 +301,7 @@ glue system's sort needs a stable tie-break; the reserved and save-excluded pref
 `reserved_variable_write` strict warning covers them. `FakeBackend` simulates lobbies including a few other members. Adapter code stays in
 `ironhold_nakama`; the CLI stays network-free.
 
-**Server module.** Reopen `RpcFunc` with an allowlist of the `ironhold_lobby_*` RPCs only; keep matches, parties, groups, friends, chat and
+**Server module.** Lobby RPCs are registered only through `game_rpc` in `ironhold.lua` (done on `feature/lobby_rpc_allowlist`, 2026-11-07: Nakama 3.41.0 has no before-hook for REST RPC calls, so a hook on `RpcFunc` never runs; the wrapper accepts only `ironhold_lobby_<name>` ids, refuses a call without a game session and passes the session's game id; an RPC that another module registers is not covered, so `ironhold.lua` must be the only module installed); keep matches, parties, groups, friends, chat and
 realtime closed ("matching only"). Adversarial contract cases in `tests/contract/run.sh`: another game's lobby list/join/heartbeat, an oversized
 or non-ASCII name, joining a full lobby, a second lobby by one user, a direct storage read/write of the lobbies collection.
 
@@ -318,7 +318,7 @@ down, the browse - waiting room - started flow as states), `docs/STATUS.md`, REA
 - [ ] Prerequisites done (see above)
 - [ ] Core: actions, events, variables, `RequestKind`s, request-id-0 ordering, reserved prefixes, `FakeBackend` lobbies, validate checks, tests
 - [ ] `ironhold_nakama`: lobby client over the generic RPCs, heartbeat loop, match handle kept in the adapter
-- [ ] Lua module: `ironhold_lobby_*` RPCs, `RpcFunc` allowlist, storage guard, limits, adversarial contract tests
+- [ ] Lua module: `ironhold_lobby_*` RPCs (through `game_rpc`), storage guard, limits, adversarial contract tests
 - [ ] `backend_demo_lobby` project, `lobby.ui.ron`, baseline (own commit), card
 - [ ] Docs as listed above; dev playtest against the staging Nakama
 

@@ -9,7 +9,8 @@
 --      key could otherwise read or write another game's data.
 --
 --   3. closes every API the engine does not use (matches, chat, groups, friends, tournaments, account linking), because those
---      share ids across games. v3 (lobbies, matchmaker) opens its own APIs again, each with a guard.
+--      share ids across games. v3 (lobbies, matchmaker) opens its own APIs again, each with a guard: v3a reopens `RpcFunc`
+--      for the `ironhold_lobby_*` RPCs only, through `game_rpc` (section 2c); v3b will reopen the matchmaker.
 --
 -- Pinned and tested against Nakama 3.41.0.
 local nk = require("nakama")
@@ -120,6 +121,27 @@ nk.register_req_before(collections_guard("object_ids"), "ReadStorageObjects")
 nk.register_req_before(collections_guard("object_ids"), "DeleteStorageObjects")
 nk.register_req_before(collections_guard(nil), "ListStorageObjects")
 
+-- 2c. RPCs: a guarded registration, only for the lobby family ----------------------------------------------------------
+-- Nakama has no before-hook for REST RPC calls (verified against 3.41.0: a hook on "RpcFunc" is accepted and never runs), so
+-- the door cannot be closed from outside. Instead every RPC of this module is registered through `game_rpc`, which only accepts
+-- ids of the form `ironhold_lobby_<name>` (lowercase letters and underscores) and wraps the function so that it never runs
+-- without a game session (a call made with the HTTP key alone has none) and hands it the session's game id. The function must
+-- namespace everything it touches with that game id, like the storage guard above.
+-- What this does NOT cover: an RPC that some other module on the same server registers with `nk.register_rpc` answers any
+-- signed-in session of any game. The operator decides which modules are installed; `ironhold.lua` is meant to be the only one.
+local function game_rpc(id, fn)
+  if type(id) ~= "string" or not string.match(id, "^ironhold_lobby_[a-z_]+$") then
+    error("ironhold: RPC id " .. tostring(id) .. " is outside the ironhold_lobby_* allowlist")
+  end
+  nk.register_rpc(function(context, payload)
+    local game_id = context.vars and context.vars.game_id
+    if not game_id or not games[game_id] then
+      reject("this API needs a signed-in game session")
+    end
+    return fn(context, payload, game_id)
+  end, id)
+end
+
 -- 3. everything the engine does not use is closed ------------------------------------------------------------------------
 -- Nothing below is needed by sign-in and leaderboards, and each of these takes ids or names that are shared across games
 -- (matches, chat rooms, groups, friends, tournaments) or would give one account two games (LinkDevice). Open an API again
@@ -136,7 +158,6 @@ for _, rpc in ipairs({
   "ListTournamentRecordsAroundOwner", "CreateGroup", "ListGroups", "JoinGroup", "AddGroupUsers", "ListUserGroups",
   "ListGroupUsers", "AddFriends", "ListFriends", "DeleteFriends", "BlockFriends", "ImportFacebookFriends",
   "ImportSteamFriends", "ListNotifications", "DeleteNotifications", "ListChannelMessages", "GetUsers", "Event",
-  "RpcFunc",
 }) do
   local ok, err = pcall(nk.register_req_before, closed, rpc)
   if not ok then
@@ -155,3 +176,6 @@ for _, rpc in ipairs({
     nk.logger_warn(string.format("ironhold: could not close realtime %s: %s", rpc, tostring(err)))
   end
 end
+
+-- Exposed so the contract test fixture can register through the same guard.
+return { game_rpc = game_rpc }
