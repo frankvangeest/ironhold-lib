@@ -1,6 +1,6 @@
 # Feature: Backend abstraction (core contract + Nakama adapter)
 
-_Status: In Progress (v1 and v2 Done, v3a Ready, v3b and v4 Queued; the public demo `backend_demo_online` with the optional `server_key` shipped through `planning/features/done/public_backend_demo.md`, 2026-11-03). Plan-review round 1 done 2026-10-25; all seven decisions answered 2026-10-27, see "Decisions (answered)"._
+_Status: In Progress (v1 and v2 Done, v3a Ready and split into v3a-1/v3a-2 by plan-review round 3 on 2026-11-07, v3b and v4 Queued; the public demo `backend_demo_online` with the optional `server_key` shipped through `planning/features/done/public_backend_demo.md`, 2026-11-03). Plan-review round 1 done 2026-10-25; all seven decisions answered 2026-10-27, see "Decisions (answered)"._
 _Planned at: `cd90a12` (2026-10-25)_
 
 ## Phases
@@ -9,7 +9,8 @@ _Planned at: `cd90a12` (2026-10-25)_
 |---|---|---|---|
 | v1 | Contract in core (Actions, events, engine-written variables, poll trait, glue system) + `FakeBackend`; sign-in and leaderboard only; nothing networked | Done | 8745ef9 (2026-10-27) |
 | v2 | `ironhold_nakama` adapter, **native and wasm32 on the LAN**: sign-in, leaderboards, server module with `game_id` enforcement; cloud save once local save exists | Done | e97da79 (2026-10-28) |
-| v3a | Lobbies over REST: server-owned lobby objects behind generic Lua RPCs, waiting-room variables and events, `StartLobby`, `backend_demo_lobby` (fake first) | Ready | — |
+| v3a-1 | Lobbies, no server: core actions/events/variables, core-driven heartbeat, `FakeBackend`, validate checks, `backend_demo_lobby` on `fake://`, designer docs | Ready | — |
+| v3a-2 | Lobbies, server side: six `ironhold_lobby_*` RPCs behind `game_rpc`, storage guard, features gate, contract tests, adapter, staging playtest | Ready (needs v3a-1) | — |
 | v3b | Realtime socket and matchmaker (`FindMatch`, `CancelMatch`), "transport preview": fake and contract test only, not on the public demo | Queued | — |
 | v4 | Stage 2: `wss://` from an `https` page, tunnel latency and idle sockets, half-open drop | Queued | — |
 | later | Relay transport: only after the sync library is chosen (see "Relay seam") | Icebox | — |
@@ -105,7 +106,7 @@ Failure events exist **per operation** and carry that operation's id. Data goes 
 | Account | `SignIn`, `SignOut` | `backend.signed_in`, `backend.signed_out`, `backend.sign_in_failed`, `backend.offline` (nothing configured), `backend.unreachable` (server down), `backend.busy`, `backend.connection_lost`, `backend.reconnected` | `backend.status` (`offline`/`connecting`/`online`), `backend.display_name`, `backend.last_error` (text, for a Label) |
 | Leaderboard | `SubmitScore(leaderboard:, score_var:)`, `FetchLeaderboard(leaderboard:, count:)` | `score.submitted:{leaderboard}`, `score.submit_failed:{leaderboard}`, `leaderboard.listed:{leaderboard}`, `leaderboard.list_failed:{leaderboard}` | `leaderboard.<name>.count`, `leaderboard.<name>.<n>.name`, `.<n>.score`, `.my_rank`, `.my_best` (n = 1..count, fixed max 10) |
 | Cloud save (after local save) | `SaveToCloud(slot:)`, `LoadFromCloud(slot:)`, `DeleteCloudSave(slot:)` | `cloud.written:{slot}`, `cloud.loaded:{slot}`, `cloud.empty:{slot}`, `cloud.save_failed:{slot}`, `cloud.load_failed:{slot}`, `cloud.conflict:{slot}` | — |
-| Lobbies (v3a) | `ListLobbies`, `CreateLobby(name:, max_players:)`, `JoinLobby(row:)`, `LeaveLobby`, `StartLobby` (host only) | `lobby.listed`, `lobby.created`, `lobby.joined`, `lobby.left`, `lobby.started`, `lobby.member_joined`, `lobby.member_left`, `lobby.closed`, `lobby.list_failed`, `lobby.create_failed`, `lobby.join_failed`, `lobby.start_failed` | reserved `lobby.` prefix, excluded from `SaveState`: `lobby.count`, `lobby.<n>.name`, `.players` ("2/4"), `.id` (n = 1..10); `lobby.current.name`, `.players`, `.is_host` ("yes"/"no"), `.id`; `lobby.member.<n>.name` (n = 1..8); `lobby.last_error` (fixed reasons, see v3a) |
+| Lobbies (v3a) | `ListLobbies`, `CreateLobby(name:, max_players:)` (name from `lobby_names`), `JoinLobby(row:)`, `LeaveLobby`, `StartLobby` (host only) | `lobby.listed`, `lobby.created`, `lobby.joined`, `lobby.left`, `lobby.started`, `lobby.member_joined`, `lobby.member_left`, `lobby.closed` (+ `:<reason>`), `lobby.list_failed`, `lobby.create_failed`, `lobby.join_failed`, `lobby.start_failed` (each + `:<reason>`), `lobby.connection_trouble`, `lobby.row_filled:<n>`, `lobby.row_empty:<n>`, `lobby.list_empty`, `lobby.member_row_filled:<n>`, `lobby.member_row_empty:<n>` | reserved `lobby.` prefix, excluded from `SaveState`: `lobby.count`, `lobby.<n>.name`, `.players` ("2/4"), `.host`, `.id` (internal) (n = 1..10); `lobby.current.name`, `.players`, `.is_host` ("yes"/"no", display only), `.id` (internal); `lobby.member.<n>.name` (n = 1..8, host first); `lobby.last_error` (detail line, see v3a) |
 | Matchmaker (v3b) | `FindMatch(min:, max:, timeout_secs:)`, `CancelMatch` | `matchmaker.searching`, `matchmaker.matched`, `matchmaker.cancelled`, `matchmaker.timed_out`, `matchmaker.failed` | `matchmaker.status` |
 
 - **Lists reach the UI as indexed variables plus row actions** (`JoinLobby(row: 3)`): a designer builds a list from N Labels and N
@@ -257,70 +258,126 @@ latency, higher ceiling, +34 KB wasm).
   strips a client's per-write operator. Verified by `crates/ironhold_nakama/tests/contract/run.sh` against a local container (not the homelab yet).
 - Deferred: see the backlog item "Backend v2 follow-ups".
 
-### v3a — lobbies over REST (Ready)
+### v3a — lobbies over REST (Ready, split into v3a-1 and v3a-2 on 2026-11-07)
 
-**Prerequisites** (backlog items, all done or explicitly waived before v3a reaches `integration`): the `backend/` folder (local Nakama,
-module moved there); the homelab staging Nakama (**done 2026-11-07**: reached with a native `--backend`, a built web `pkg/` cannot be re-pointed); the homelab Cloudflare rate rule for `/v2/rpc` (**done 2026-11-07**); "Backend v3a prerequisite: reopen the
-closed server APIs one by one". **Before lobbies are enabled on any public project** (including `backend_demo_online`): "Bind the device
-id to the game". Lobbies are not turned on in `backend_demo_online` by this plan; the new project `backend_demo_lobby` carries them.
+Plan-review round 3 (2026-11-07, system-architect and ux-gamedesigner-reviewer; Frank accepted every recommendation, decisions 16-27 below) split v3a
+like v1/v2 were split: **v3a-1** is everything that needs no server (core, `FakeBackend`, validate, the demo on `fake://`, designer docs); **v3a-2** is the
+server side (Lua RPCs, contract tests, adapter, staging playtest). v3a-1 can be built and playtested without Docker or the homelab.
 
-**Storage model (decision 8).** A lobby is a **server-owned** storage object (system user, collection `{game_id}.lobbies`; no client has read
-or write permission on it), created and changed only by generic Lua RPCs that take the game from the `game_id` session variable:
-`ironhold_lobby_create`, `_join`, `_list`, `_leave`, `_heartbeat`, `_start`. Clients never touch the collection (the module's storage
-before-hook rejects it). Why not public-read objects a client writes: Nakama storage is writable only by its owner, so a joiner could not
-change "2/4", `max_players` could not be enforced, and a vanished host would leave the object behind forever. Nakama groups (no expiry) and
-parties (no listing) are not used; authoritative labelled matches are the later alternative, once a relay exists.
-- **Expiry.** Each lobby and each member carries `expires_at`; `_heartbeat` extends it and returns the current lobby (members, started flag), so
-  one call both keeps the lobby alive and delivers changes. Defaults, tunable: expiry 30 s, engine heartbeat every 5 s while in a lobby.
-  `_list` drops expired lobbies and members. A closed tab or a vanished host is therefore covered without any cleanup job.
-- **Limits.** One lobby per user, at most 50 per game, `max_players` 2..8, a lobby name of at most 32 printable ASCII characters (validated
-  by the server; names are designer constants, there is no text input widget). A user's id and device id are never put in lobby data;
-  members appear by display name only.
-- **`StartLobby` (decision 3).** Host only. `_start` marks the lobby started; every member learns it on its next heartbeat and gets
-  `lobby.started`. The **match handle** (lobby id plus a server-issued token) stays inside the adapter and is never written to
-  `GameVariables`, so it cannot end up in a save. Nothing consumes it until a relay exists; it is the seam into the relay transport.
-- **Leaving (decision 4).** `SignOut` leaves the current lobby; `LoadScene` does not (a lobby survives scene changes like any backend reply);
-  a closed tab is covered by expiry. `CreateLobby` while already in a lobby answers `lobby.create_failed` (reason `already_in_lobby`).
+**Prerequisites.** Done: the `backend/` folder (local Nakama; the module stayed in `crates/ironhold_nakama/server/`); the homelab staging Nakama
+(2026-11-07, reached with a native `--backend`, a built web `pkg/` cannot be re-pointed); the guarded `game_rpc` registration in `ironhold.lua`
+("reopen the closed server APIs", 2026-11-07: Nakama 3.41.0 has no before-hook for REST RPC calls, so the guard lives at registration; it passes the
+session's game id to the function and cannot protect another module's RPCs, so `ironhold.lua` must be the only module installed); the homelab Cloudflare rate
+rule (2026-11-07: sign-up and `/v2/rpc/` share one counter, 30 requests per 10 s per IP, Block). Open, **before lobbies are enabled on any public project**
+(including `backend_demo_online`): "Bind the device id to the game". Lobbies are not turned on in `backend_demo_online`; `backend_demo_lobby` carries them.
 
-**Vocabulary** (see the table above). Rules a designer can rely on, to go into `docs/20_data_formats.md` and `docs/30_runtime_events_and_logic.md`:
-- `JoinLobby(row: n)` resolves against the snapshot taken when the list was last written (rows shift on refresh); `lobby.<n>.id` is exposed.
-  An empty or out-of-range row answers `lobby.join_failed` (reason `no_lobby`) plus a warning in the log, never silently. A joiner whose list is
-  stale gets reason `list_out_of_date` or `gone`.
-- `lobby.last_error` holds one fixed reason, set before the matching `*_failed` event: `full`, `gone`, `list_out_of_date`, `no_lobby`,
-  `already_in_lobby`, `limit_reached`, `not_host`, `server`. Designers word their own messages from it (the `demo_msg` pattern of
-  `backend_demo_online`); no error codes in event names. `lobby.closed` carries `host_left`, `removed` or `server`.
-- `lobby.<n>.*` and `lobby.member.<n>.*` are cleared by `SignOut` and when a list comes back empty; `lobby.current.*` is cleared by `lobby.left` and `lobby.closed`.
-- The designer drives list refresh (a Refresh button or an `EmitEventAfterDelay` loop); document a minimum of about 5 s.
-- **Connection drops (v3a, no socket):** when heartbeats keep failing past the expiry window, the engine drops its local lobby state and emits
-  `lobby.closed` (reason `server`) **before** `backend.connection_lost`, so a designer's state machine always has an exit from the waiting state.
-- Failure events: `lobby.list_failed`, `lobby.create_failed`, `lobby.join_failed`, `lobby.start_failed`; each has one id-less form because there is
-  exactly one list and one current lobby (stated in the docs).
+#### Rules both halves share (decisions 16-27)
 
-**Core and adapter.** New `RequestKind` variants with dedupe keys and failure mapping; unsolicited replies from heartbeats use request id 0, so the
-glue system's sort needs a stable tie-break; the reserved and save-excluded prefixes grow to `lobby.` (and `matchmaker.` for v3b), and the
-`reserved_variable_write` strict warning covers them. `FakeBackend` simulates lobbies including a few other members. Adapter code stays in
-`ironhold_nakama`; the CLI stays network-free.
+**Who drives what (decisions 16, 17).** Core drives the heartbeat, not the adapter: the `Backend` trait has no clock and `Instant` panics on wasm32. While in a
+lobby, the glue system issues a `LobbyHeartbeat` request every 10 s (plus a little jitter) on `Time<Real>`, as a normal request with its own dedupe key and a
+real request id; the existing timeout and `cancel` machinery applies and `FakeBackend` stays deterministic. The reply is the whole lobby. **Core diffs it**
+against the previous one and emits `lobby.member_joined`, `lobby.member_left`, `lobby.started` and `lobby.closed` in one place, so the fake gets them for free.
+Request id 0 stays reserved for `ConnectionLost`/`Reconnected`, which v3a does not emit (decision 25). Every lobby reply carries the lobby id and a membership
+generation; core drops a reply that does not match the current membership, so a late heartbeat can never bring `lobby.current.*` back after `lobby.left`,
+`lobby.closed` or `SignOut`. The heartbeat's dedupe key differs from create/join/leave/start, so `LeaveLobby` never answers `backend.busy` because a heartbeat
+is in flight. Core keeps the lobby-id snapshot behind `JoinLobby(row:)` itself and never reads `lobby.<n>.id` back from `GameVariables` (a designer can overwrite it).
 
-**Server module.** Lobby RPCs are registered only through `game_rpc` in `ironhold.lua` (done on `feature/lobby_rpc_allowlist`, 2026-11-07: Nakama 3.41.0 has no before-hook for REST RPC calls, so a hook on `RpcFunc` never runs; the wrapper accepts only `ironhold_lobby_<name>` ids, refuses a call without a game session and passes the session's game id; an RPC that another module registers is not covered, so `ironhold.lua` must be the only module installed); keep matches, parties, groups, friends, chat and
-realtime closed ("matching only"). Adversarial contract cases in `tests/contract/run.sh`: another game's lobby list/join/heartbeat, an oversized
-or non-ASCII name, joining a full lobby, a second lobby by one user, a direct storage read/write of the lobbies collection.
+**Timing (decision 18).** Heartbeat every 10 s with jitter; a member and a lobby expire after **60 s** without one. Both are fixed constants shared by the engine
+and the generated Lua, not designer-tunable (two sides that drift would drop players). Why: the shared Cloudflare counter allows 30 requests per 10 s per IP and
+a full 8-player lobby at 5 s would use 16 of them; a hidden browser tab stops Bevy's `Update` (and so the heartbeat), and 60 s survives a short alt-tab (a player
+who stays away longer comes back to `lobby.closed:removed`). The engine enforces the 5 s minimum between `ListLobbies` (a call inside that window is answered
+from the last snapshot). A native 429 maps to the fixed reason `rate_limited` with no retry; on the web a Cloudflare block looks like a network error. Before any
+public lobby, test through the Cloudflare path with N clients (staging is on the LAN and never meets the limit).
 
-**Validate (`ironhold validate`).** Error: `row` outside 1..10; `CreateLobby` `max_players` outside 2..8; an action whose feature (`Lobbies`) is not declared. `--strict` warning:
-`JoinLobby` with no `ListLobbies` anywhere in the project; a Label bound to `lobby.11.*`.
+**Lifecycle (decision 20).** A started lobby is no longer listed and refuses joins (`started`); members stop heartbeating once they have seen
+`lobby.started`; the server object expires on its own; `lobby.current.*` survives `lobby.started` until `LeaveLobby`/`SignOut`. After a page reload the user is
+the same but the client has no lobby state: `CreateLobby` and `JoinLobby` **replace** the old membership on the server, and `LeaveLobby` without local state still
+calls the server's leave ("leave whatever I am in"). `SignOut` calls leave first, then the fire-and-forget logout. `LoadScene` does not leave.
 
-**Demo and docs.** New project `backend_demo_lobby` (created with `/new-project`, on `fake://` first; a live-server variant only after the
-prerequisites): list, create, join, leave, start, a waiting room built from `lobby.current.*` and `lobby.member.<n>.*`, rows hidden with
-`SetUiVisible` keyed on `lobby.count`, friendly messages from `lobby.last_error`. Its card and on-screen text say **"Finds and joins players;
-nobody can play together yet"**; it ends on "Started: N players. Shared play arrives with networking". Default UI snippet `lobby.ui.ron` in its
-`ui/` folder. Docs: `docs/20` (action, event, variable and reason tables, the snapshot rule, limits), `docs/30` (empty list, full lobby, server
-down, the browse - waiting room - started flow as states), `docs/STATUS.md`, README row, `index.html` card.
+**Failures (decision 21).** The server answers a business outcome as `{"ok":false,"reason":"full"}` (HTTP 200); `error()` is only for auth problems and bugs, so the
+module's error masking can never hide a domain reason. The engine fires the generic failure event and **then** the reason form, so the specific message wins:
+`lobby.join_failed` then `lobby.join_failed:full`; the same for `list`, `create`, `start`, and `lobby.closed` then `lobby.closed:host_left`. `lobby.last_error` stays as
+a detail line (like `backend.last_error`). Fixed reasons: `full`, `gone`, `list_out_of_date`, `no_lobby`, `already_in_lobby`, `limit_reached`, `not_host`,
+`not_signed_in`, `not_in_lobby`, `started`, `too_few_players` (a host needs at least 2 members to start), `not_enabled`, `rate_limited`, `busy`, `server`; `lobby.closed`
+carries `host_left`, `removed`, `server`. A lobby action issued while its own kind is in flight answers `lobby.<op>_failed:busy`, not `backend.busy`.
 
-- [ ] Prerequisites done (see above)
-- [ ] Core: actions, events, variables, `RequestKind`s, request-id-0 ordering, reserved prefixes, `FakeBackend` lobbies, validate checks, tests
-- [ ] `ironhold_nakama`: lobby client over the generic RPCs, heartbeat loop, match handle kept in the adapter
-- [ ] Lua module: `ironhold_lobby_*` RPCs (through `game_rpc`), storage guard, limits, adversarial contract tests
-- [ ] `backend_demo_lobby` project, `lobby.ui.ron`, baseline (own commit), card
-- [ ] Docs as listed above; dev playtest against the staging Nakama
+**Rows and the empty state (decision 24).** State-machine rules cannot test a variable, so a designer cannot hide a row from `lobby.count`. After every list write
+the engine fires `lobby.row_filled:<n>` / `lobby.row_empty:<n>` for n = 1..10 and `lobby.list_empty` when there is nothing; for the waiting room
+`lobby.member_row_filled:<n>` / `lobby.member_row_empty:<n>` for n = 1..8. A designer writes one `SetUiVisible` rule per row Group. (The general "hide a bound Label
+or Group when empty" UI feature stays its own backlog item; it would let a later version drop these events.)
+
+**Waiting room (decisions 9, 25).** `lobby.member.<n>.name`: the host is member 1, the player's own name is in the list, members are ordered by server join order and
+compacted when one leaves; `lobby.member_joined`/`member_left` fire only for other players. `lobby.<n>.host` (the host's display name) is exposed so rows can be
+told apart. All `lobby.member.<n>.*` and `lobby.current.*` are cleared together by `lobby.left`/`lobby.closed`; `lobby.<n>.*` by `SignOut` and when a list comes back
+empty. Variables are written only when the value changed (a heartbeat reply must not rewrite about 20 `GameVariables` every few seconds). Host gating: show Start on
+`lobby.created`, hide it on `lobby.joined`; `lobby.current.is_host` is for display only. `lobby.<n>.id` / `lobby.current.id` are documented as engine-internal, not for the screen.
+
+**Connection (decision 25).** The first failed heartbeat fires `lobby.connection_trouble` (a designer shows "Reconnecting..."); a success afterwards fires nothing; past the
+expiry window the engine drops its lobby state and fires `lobby.closed:server`. v3a does **not** synthesize `backend.connection_lost`/`reconnected` and does not touch
+`backend.status`: the REST adapter never sends `Reconnected`, so a synthesized loss would leave `backend.status` on `connecting` for good. Coming back never rejoins.
+`fake://?fail=` gains `join_full`, `gone`, `start`, `heartbeat` to rehearse each of these.
+
+**Names and limits (decision 23).** `CreateLobby(name:)` takes one of the names the project **declares** in `backend.ron` (`lobby_names: ["Demo lobby", ...]`, an additive field with a
+serde default, `schema_version` stays 1), 1-32 printable ASCII characters each; the generated `ironhold_games.lua` carries the list and the server refuses any other name
+(a key holder could otherwise send arbitrary text). One lobby per user, at most 50 per game (soft under concurrent creates), `max_players` 2..8.
+
+**Reserved prefixes.** One `RESERVED_VARIABLE_PREFIXES` const in `schema/backend.rs` (`backend.`, `leaderboard.`, `lobby.`; `matchmaker.` for v3b), used by the runtime sign-out
+clearing, the `reserved_variable_write` validate check and the later `SaveState` exclusion (today the prefixes are hard-coded in `runtime/backend.rs` and
+`ironhold_cli/src/commands/backend_checks.rs`, and `SaveState` has no exclusion yet).
+
+#### v3a-1 — core, `FakeBackend`, validate, demo on `fake://`, docs (no server)
+
+- **Core.** New `Action`s (`ListLobbies`, `CreateLobby`, `JoinLobby(row:)`, `LeaveLobby`, `StartLobby`) and `RequestKind`s (including `LobbyHeartbeat`) with dedupe keys and
+  failure mapping; the glue system's heartbeat timer, the diff, the stale-reply drop, the row events, the changed-only variable writes; `is_online_action` learns the lobby
+  actions. The match handle (lobby id plus a server-issued token) stays inside the adapter, never in `GameVariables`.
+- **`FakeBackend`.** Simulates lobbies including a few other members who join, leave, and one that starts; `?fail=` options as above; deterministic.
+- **Validate.** Errors: `row` outside 1..10; `max_players` outside 2..8; a lobby action whose feature (`Lobbies`) is not declared (**new**: no feature-declared check exists
+  today, `backend_checks.rs` only checks leaderboards); a `CreateLobby` name that is not in `lobby_names`; a declared name that is empty, over 32 characters or not printable ASCII
+  (so no em-dash). `--strict`: `JoinLobby` with no `ListLobbies` anywhere; a Label bound to `lobby.11.*`; a binding on a `lobby.*` event or variable the engine cannot produce (a
+  typo such as `lobby.joind` or `lobby.current.nmae`; a closed vocabulary, so cheap); `reserved_variable_write` widened to `lobby.`.
+- **Demo.** New project `backend_demo_lobby` (`/new-project`, `fake://`): list (5 rows, a comment on extending to 10, like `leaderboard.ui.ron`), create, join, leave, start, a waiting room
+  from `lobby.current.*` and `lobby.member.<n>.name`, rows shown or hidden from the row events, friendly messages from the reason events, "Reconnecting..." from `lobby.connection_trouble`.
+  Default UI snippet `lobby.ui.ron` in its `ui/` folder. **Honest wording** (the fake finds simulated members, not people): card and on-screen text say **"Practice lobby with
+  pretend players (test backend). No real players, no shared play yet."**; after Start: **"This is where a match would begin. Online play is not built yet."** Remove
+  `multiplayer` from the `backend_demo` card's `data-keywords` in `index.html`. The "finds real players" wording is for a later live variant only.
+- **Docs.** `docs/20_data_formats.md` (actions, events, reasons, variables, the snapshot and row-event rules, limits, `lobby_names`, `fake://?fail=` options in the `endpoint` row, and the
+  `features` row that today says "nothing reads them yet"), `docs/30_runtime_events_and_logic.md` (action list; empty list, full lobby, server down; browse - waiting room - started as states; why
+  a refresh loop faster than 5 s is answered from the snapshot), `docs/15_authoring_tools.md` (one row per new validate check), `docs/STATUS.md`, README row, `index.html` card.
+- [ ] Core: actions, request kinds, heartbeat timer, diff, stale-reply drop, row events, changed-only writes, shared reserved-prefix const, tests
+- [ ] `FakeBackend` lobbies and `?fail=` options
+- [ ] Validate checks (errors and `--strict`) and the schema field `lobby_names`, with CLI tests
+- [ ] `backend_demo_lobby` project, `lobby.ui.ron`, baseline (own commit), card, `backend_demo` keyword fix
+- [ ] Docs as listed; the RPC request and reply field lists (below) written into this plan before v3a-2 starts
+
+#### v3a-2 — Lua RPCs, contract tests, adapter, staging playtest (needs v3a-1)
+
+**Storage model (decisions 8, 19).** A lobby is **server-owned** storage (system user; no client permission) in collections named from `lobby_collection(game_id)` (one helper in
+`ironhold.lua`; no RPC builds a collection name by hand): `{game_id}.lobbies` (the lobby: members, `max_players`, `started`, `host`, a version), `{game_id}.lobby_hb` (one row per
+member, written only by that member's heartbeat, so heartbeats never contend with joins) and `{game_id}.lobby_of` (a per-user index, written **together with the lobby in one
+multi-object `storage_write`** so both change or neither). The lobby object is rewritten only on create, join, leave, start and an expiry sweep, with a version check; a join that
+loses the race for the last slot re-reads, re-checks capacity, retries up to 3 times, then answers `full`. A listing reads the lobbies with `nk.storage_list` and the **system user id
+explicitly** (never nil or empty, which would list client-owned objects), drops expired lobbies and members, and deletes an expired lobby only with a versioned delete so a sweep
+cannot remove one a heartbeat just extended. No module-level state (Lua VMs are pooled). The display name comes from `context.username`, never from the payload.
+
+**Storage guard (corrects an earlier plan line).** `ironhold.lua`'s storage before-hook only checks the `{game_id}.` prefix, so today a client could read and write `{game}.lobbies`.
+v3a-2 adds an explicit deny of the three lobby collections for every client storage call (read, write, delete, list), with a contract case for each.
+
+**Gating (decision 22).** `ironhold backend config` emits `features = { lobbies = true }` per game (from `backend.ron`'s `features`) and `lobby_names` into `ironhold_games.lua`;
+a lobby RPC from a game without it answers `not_enabled`. "Not on a public project" is then a server fact, not only a client habit.
+
+**RPC shapes.** Six RPCs registered through `game_rpc`, ids from a table (the id pattern in `game_rpc` is only a self-check): `ironhold_lobby_create`, `_join`, `_list`, `_leave`,
+`_heartbeat`, `_start`. Requests are small JSON objects decoded by one `decode_payload(payload, max_bytes)` that answers `{ok=false, reason="server"}` for malformed or oversized input;
+a REST RPC body is a JSON-encoded string (or use `?unwrap`). Replies: `{ok=true, lobby={id, gen, name, players, max, started, host, members={{name=...}, ...}}}` or `{ok=false, reason=...}`.
+The exact request and reply field lists are written into this section before the first Lua line.
+
+- **Contract tests** (`tests/contract/run.sh`, adversarial, one per cross-game call): another game's list/join/heartbeat/leave/start; a name outside the declared list; a non-ASCII or oversized name;
+  a join of a full lobby; **two simultaneous joins of the last slot** (exactly one wins); a second lobby by one user; the **reload** case (create after losing local state replaces the old
+  membership); a started lobby refusing joins; expiry (members and lobby); a direct client read, write and list of each lobby collection; a game without `lobbies`.
+- **Adapter** (`ironhold_nakama`): lobby client over the six RPCs, maps the fixed reasons (and 429 to `rate_limited`), keeps the match handle; no heartbeat loop in the adapter (core drives it).
+- [ ] Module: `lobby_collection`, `decode_payload`, six RPCs, storage guard, features gate, `lobby_names`; `ironhold backend config` output
+- [ ] Contract tests as listed
+- [ ] Adapter lobby client
+- [ ] Dev playtest against the staging Nakama (native `--backend`), then a Cloudflare-path test with N clients before any public project
 
 ### v3b — realtime socket and matchmaker ("transport preview", Queued, depends on v3a)
 
@@ -363,10 +420,27 @@ Split: v3a lobbies over REST (Ready), v3b socket and matchmaker ("transport prev
 12. **Matchmaker timeout:** `FindMatch` has its own deadline, exempt from the global request timeout.
 13. **Realtime socket:** native dedicated thread with blocking `tungstenite` (no tokio); wasm32 `web_sys::WebSocket`; opened only during a search; JSON; no reconnect in v3.
 14. **Lua module:** reopen only an allowlist of `ironhold_lobby_*` RPCs (v3a) and a ticket-rewriting matchmaker guard (v3b); adversarial contract tests for each.
-15. **Demo:** new `backend_demo_lobby` on `fake://` first, labelled "finds and joins players; nobody can play together yet"; `backend_demo_online` is unchanged.
+15. **Demo:** new `backend_demo_lobby` on `fake://` first, labelled "finds and joins players; nobody can play together yet"; `backend_demo_online` is unchanged. (Wording for the fake replaced by decision 26.)
 
 Also adopted from the two reviews: fixed failure reasons in `lobby.last_error` instead of error codes in event names, a visible failure for `JoinLobby` on an
 empty or out-of-range row, designer-driven refresh with a documented minimum of about 5 s, and the validate checks listed in v3a.
+
+### Decisions (answered 2026-11-07, plan-review round 3; Frank accepted every recommendation)
+
+Round 3 re-reviewed v3a after the `game_rpc` guard, the shared Cloudflare limit and the first real look at the code. Verdict was "needs more design work"; these decisions close it. v3a is split into v3a-1 (no server) and v3a-2 (server).
+
+16. **Heartbeat owner:** core, on `Time<Real>`, as a normal request with its own dedupe key and a real request id; core diffs the returned lobby into `member_joined`/`member_left`/`started`/`closed`. Request id 0 stays for `ConnectionLost`/`Reconnected` only.
+17. **Stale replies:** every lobby reply carries the lobby id and a membership generation; core drops a mismatch; the heartbeat's dedupe key differs from the other lobby actions.
+18. **Timing:** heartbeat 10 s with jitter, expiry 60 s, both fixed constants shared by engine and Lua; the engine answers a `ListLobbies` inside 5 s from the last snapshot; native 429 maps to `rate_limited`; a Cloudflare-path test with N clients before any public lobby.
+19. **Storage layout:** lobby object (versioned, written only on create/join/leave/start/sweep), one heartbeat row per member, a per-user index written together with the lobby in one multi-object write; retry the last-slot race up to 3 times, then `full`; system user id explicit on every list; versioned deletes; explicit client deny of the three lobby collections (the earlier plan line claiming the module already did this was wrong).
+20. **Lifecycle:** a started lobby is not listed and refuses joins; members stop heartbeating after `lobby.started`; `lobby.current.*` survives until leave; `CreateLobby`/`JoinLobby` replace an old membership (page reload); `LeaveLobby` without local state still calls the server.
+21. **Failures:** business outcomes are `{ok=false, reason}` (HTTP 200), errors only for auth and bugs; the engine fires `lobby.<op>_failed` then `lobby.<op>_failed:<reason>` (and `lobby.closed` then `lobby.closed:<reason>`); `lobby.last_error` stays as a detail line; the reason list above is the fixed set; `busy` is `lobby.<op>_failed:busy`.
+22. **Server gating:** `ironhold_games.lua` carries `features = { lobbies = true }` per game and the lobby RPCs answer `not_enabled` without it.
+23. **Lobby names:** a declared list `lobby_names` in `backend.ron` (additive, `schema_version` stays 1), checked by validate and by the server.
+24. **Rows and empty state:** per-row events `lobby.row_filled:<n>`/`lobby.row_empty:<n>` (1..10), `lobby.list_empty`, and `lobby.member_row_filled:<n>`/`lobby.member_row_empty:<n>` (1..8); the general hide-when-empty UI feature stays a separate backlog item.
+25. **Connection:** `lobby.connection_trouble` on the first failed heartbeat, `lobby.closed:server` after the expiry window; v3a does not synthesize `backend.connection_lost`/`reconnected` and does not touch `backend.status`; `fake://?fail=heartbeat` rehearses it.
+26. **Demo wording on `fake://`:** "Practice lobby with pretend players (test backend). No real players, no shared play yet."; after Start "This is where a match would begin. Online play is not built yet."; `multiplayer` leaves the `backend_demo` card keywords. (Replaces the wording of decision 15 for the fake.)
+27. **Phase split:** v3a-1 (core, `FakeBackend`, validate, demo, docs) then v3a-2 (Lua RPCs, contract tests, adapter, staging playtest).
 
 ### Form 2 coverage check (done 2026-10-27)
 
