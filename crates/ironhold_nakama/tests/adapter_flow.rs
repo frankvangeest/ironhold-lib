@@ -770,7 +770,9 @@ fn a_leave_waits_for_a_join_parked_behind_a_session_renewal() {
     let early_leave = Arc::new(AtomicBool::new(false));
     let (e2, joined) = (early_leave.clone(), Arc::new(AtomicBool::new(false)));
     let j3 = joined.clone();
-    let (url, seen, stop) = serve(move |method, path, _auth, _body| match (method, path) {
+    let wrong_token = Arc::new(AtomicBool::new(false));
+    let wrong = wrong_token.clone();
+    let (url, seen, stop) = serve(move |method, path, auth, _body| match (method, path) {
         ("POST", p) if p.starts_with("/v2/account/authenticate/device") => device_auth("Old", "r1"),
         ("POST", "/v2/account/session/refresh") => {
             std::thread::sleep(Duration::from_millis(300));
@@ -780,6 +782,9 @@ fn a_leave_waits_for_a_join_parked_behind_a_session_renewal() {
             if j2.fetch_add(1, Ordering::SeqCst) == 0 {
                 (401, "{}".to_string())
             } else {
+                if !auth.contains(&jwt("u1", "Renewed")) {
+                    wrong.store(true, Ordering::SeqCst);
+                }
                 j3.store(true, Ordering::SeqCst);
                 rpc_reply(lobby_json("L1", 2, &["Ada", "Bo"], false))
             }
@@ -805,5 +810,66 @@ fn a_leave_waits_for_a_join_parked_behind_a_session_renewal() {
     assert!(!early_leave.load(Ordering::SeqCst), "the leave must come after the parked join finished");
     wait_for_path(&mut b, &seen, "/v2/session/logout");
     assert_eq!(joins.load(Ordering::SeqCst), 2, "the parked join was retried, not dropped");
+    assert!(!wrong_token.load(Ordering::SeqCst), "the retry used the renewed token of the old session");
+    // The renewal never became the adapter's own session.
+    assert!(matches!(ask(&mut b, 5, submit_kind(1)).reply, BackendReply::ScoreFailed { .. }));
+    stop.store(true, Ordering::Relaxed);
+}
+
+#[test]
+fn the_logout_still_goes_out_when_the_old_sessions_leave_fails() {
+    let (url, seen, stop) = serve(|method, path, _auth, _body| match (method, path) {
+        ("POST", p) if p.starts_with("/v2/account/authenticate/device") => device_auth("Old", "r"),
+        ("POST", "/v2/rpc/ironhold_lobby_join") => {
+            std::thread::sleep(Duration::from_millis(200));
+            rpc_reply(lobby_json("L1", 2, &["Ada", "Bo"], false))
+        }
+        ("POST", "/v2/rpc/ironhold_lobby_leave") => (500, "<html>".to_string()),
+        _ => (200, "{}".to_string()),
+    });
+    let mut b = adapter(&url);
+    ask(&mut b, 1, RequestKind::SignIn);
+    b.submit(BackendRequest { id: 2, kind: RequestKind::JoinLobby { lobby_id: "L1".into() } });
+    b.submit(BackendRequest { id: 3, kind: RequestKind::LeaveLobby });
+    b.submit(BackendRequest { id: 4, kind: RequestKind::SignOut });
+    let mut got = wait_for_path(&mut b, &seen, "/v2/session/logout");
+    got.extend(poll_for(&mut b, 200));
+    assert!(got.iter().any(|e| e.request_id == 3 && e.reply == BackendReply::LobbyLeft), "a failed leave still answers LobbyLeft: {got:?}");
+    stop.store(true, Ordering::Relaxed);
+}
+
+#[test]
+fn a_renewal_that_never_answers_does_not_hold_the_logout_or_the_next_sign_in() {
+    let joins = Arc::new(AtomicUsize::new(0));
+    let j2 = joins.clone();
+    let (url, seen, stop) = serve(move |method, path, _auth, _body| match (method, path) {
+        ("POST", p) if p.starts_with("/v2/account/authenticate/device") => device_auth("Old", "r1"),
+        // Nothing comes back from a refresh for a long while (a hung connection).
+        ("POST", "/v2/account/session/refresh") => {
+            std::thread::sleep(Duration::from_secs(4));
+            device_auth("Renewed", "r2")
+        }
+        ("POST", "/v2/rpc/ironhold_lobby_join") => {
+            j2.fetch_add(1, Ordering::SeqCst);
+            (401, "{}".to_string())
+        }
+        _ => (200, "{}".to_string()),
+    });
+    let mut b = adapter(&url);
+    ask(&mut b, 1, RequestKind::SignIn);
+    b.submit(BackendRequest { id: 2, kind: RequestKind::JoinLobby { lobby_id: "L1".into() } });
+    // The join got its 401 and is parked behind the (hanging) renewal; now core signs out and then signs in again.
+    wait_for_path(&mut b, &seen, "/v2/account/session/refresh");
+    b.submit(BackendRequest { id: 3, kind: RequestKind::LeaveLobby });
+    b.submit(BackendRequest { id: 4, kind: RequestKind::SignOut });
+    b.submit(BackendRequest { id: 5, kind: RequestKind::SignIn });
+    let started = Instant::now();
+    // Core's timeout fires for the join and the leave: the adapter must not keep waiting for the hung refresh.
+    b.cancel(2);
+    b.cancel(3);
+    let mut got = wait_for_path(&mut b, &seen, "/v2/session/logout");
+    got.extend(poll_for(&mut b, 500));
+    assert!(started.elapsed() < Duration::from_millis(3000), "the teardown waited for the hung refresh: {:?}", started.elapsed());
+    assert!(got.iter().any(|e| e.request_id == 5 && matches!(e.reply, BackendReply::SignedIn { .. })), "the held sign-in proceeds: {got:?}");
     stop.store(true, Ordering::Relaxed);
 }

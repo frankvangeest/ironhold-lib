@@ -16,7 +16,7 @@
 use std::collections::BTreeMap;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
-use ironhold_core::schema::backend::is_valid_server_key;
+use ironhold_core::schema::backend::{is_lobby_failure_reason, is_valid_server_key};
 use ironhold_core::runtime::backend::{
     Backend, BackendEvent, BackendFactory, BackendReply, BackendRequest, LeaderRow, RequestKind, ResolvedBackendConfig,
 };
@@ -154,7 +154,8 @@ fn is_lobby_kind(kind: &RequestKind) -> bool {
 /// The failure reply of a lobby request with the given fixed reason (core's own helper always writes `server`). A leave that could not
 /// be confirmed still leaves, so it never fails.
 fn lobby_failure(kind: &RequestKind, reason: &str) -> BackendReply {
-    let reason = reason.to_string();
+    // Only reasons a designer can bind (`host_left` and `removed` belong to `lobby.closed` alone): anything else is `server`.
+    let reason = if is_lobby_failure_reason(reason) { reason } else { "server" }.to_string();
     match kind {
         RequestKind::ListLobbies => BackendReply::LobbyListFailed { reason },
         RequestKind::CreateLobby { .. } => BackendReply::LobbyCreateFailed { reason },
@@ -390,13 +391,17 @@ impl NakamaBackend {
     /// Sends the logout of the old session once every lobby request of it has ended (answered or cancelled by the engine), then
     /// starts the `SignIn` that was held meanwhile.
     fn finish_teardown(&mut self) {
+        // The teardown's own renewal has no engine request id, so the engine can never cancel it: it counts only while a request
+        // is parked behind it, otherwise a hung refresh would hold the logout and every later sign-in.
         let busy = self.held_leave.is_some()
-            || self.pending.values().any(|p| p.legacy)
+            || self.pending.iter().any(|(id, p)| p.legacy && *id != LEGACY_RENEWAL_ID)
             || self.teardown.as_ref().is_some_and(|t| !t.parked.is_empty());
         if busy {
             return;
         }
         let Some(t) = self.teardown.take() else { return };
+        // A refresh still on the wire is forgotten: its late answer finds no pending entry and is ignored.
+        self.pending.remove(&LEGACY_RENEWAL_ID);
         ehttp::fetch(protocol::logout(&self.base, &t.session), |_| {});
         if let Some(id) = self.held_sign_in.take() {
             self.authenticate(id, RequestKind::SignIn, Stage::SignIn);

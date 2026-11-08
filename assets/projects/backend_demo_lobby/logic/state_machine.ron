@@ -73,7 +73,7 @@
         ( event: "lobby.join_failed:started", do_actions: [ SetVariable("demo_msg", "That lobby already started.") ] ),
         ( event: "lobby.join_failed:no_lobby", do_actions: [ SetVariable("demo_msg", "That row is empty. Press Refresh.") ] ),
         ( event: "lobby.create_failed", do_actions: [ SetVariable("demo_msg", "Could not create a lobby. Try again.") ] ),
-        // The engine refuses a second Create while it knows it is in a lobby (the button is hidden then). After a page reload it does not
+        // The engine refuses a second Create while it knows it is in a lobby (the button is hidden then). After a page reload or a restart it does not
         // know, and a real server replaces the old membership instead of refusing.
         ( event: "lobby.create_failed:already_in_lobby", do_actions: [ SetVariable("demo_msg", "You are already in a lobby. Leave it first.") ] ),
         ( event: "lobby.create_failed:limit_reached", do_actions: [ SetVariable("demo_msg", "Too many open lobbies. Try again later.") ] ),

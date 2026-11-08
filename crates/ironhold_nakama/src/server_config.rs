@@ -66,7 +66,8 @@ pub fn generate_games_lua(games: &[GameServerConfig]) -> Result<String, String> 
         if !seen.insert(g.game_id) {
             return Err(format!("game_id {:?} is used by more than one project", g.game_id));
         }
-        out.push_str(&format!("    {} = {{\n      leaderboards = {{\n", g.game_id));
+        // A bracketed string key: a bare Lua name cannot start with a digit (`3rd_person_game_demo`) or be a keyword (`end`).
+        out.push_str(&format!("    [{}] = {{\n      leaderboards = {{\n", lua_string(g.game_id)));
         for lb in g.leaderboards {
             if !is_valid_backend_id(&lb.name) {
                 return Err(format!("leaderboard {:?} is not a valid id", lb.name));
@@ -166,6 +167,7 @@ mod tests {
         let lua = generate_games_lua(&[
             plain("beta", &beta.leaderboards),
             GameServerConfig { game_id: "alpha", leaderboards: &c.leaderboards, lobbies: true, lobby_names: &names },
+            with_lobbies("epsilon", &gamma_names),
             with_lobbies("gamma", &gamma_names),
         ])
         .unwrap();
@@ -217,6 +219,15 @@ mod tests {
         assert!(!lua.contains("lobby_names") && !lua.contains("features"), "{lua}");
         let on = generate_games_lua(&[with_lobbies("alpha", &names)]).unwrap();
         assert!(on.contains("features = { lobbies = true },"), "{on}");
+    }
+
+    #[test]
+    fn a_game_id_that_starts_with_a_digit_or_is_a_lua_keyword_is_a_valid_key() {
+        let lua = generate_games_lua(&[plain("3rd_game", &[]), plain("end", &[]), plain("ordinary", &[])]).unwrap();
+        for id in ["3rd_game", "end", "ordinary"] {
+            assert!(lua.contains(&format!("[\"{id}\"] = {{")), "{id}: {lua}");
+        }
+        assert!(!lua.contains("\n    end = {") && !lua.contains("\n    3rd_game = {"), "a bare name would not parse: {lua}");
     }
 
     #[test]

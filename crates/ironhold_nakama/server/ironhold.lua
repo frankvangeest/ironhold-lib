@@ -595,7 +595,18 @@ local function rpc_create(context, payload, game_id)
   end
   local uid, now = context.user_id, now_secs()
   local live, truncated = live_lobbies(game_id, now)
-  if #live >= MAX_LOBBIES_PER_GAME or truncated then
+  -- The caller's own open lobby is replaced by this create, so it does not count against the cap.
+  local _, own = open_membership(game_id, uid)
+  local counted = #live
+  if own then
+    for _, candidate in ipairs(live) do
+      if candidate.id == own.id then
+        counted = counted - 1
+        break
+      end
+    end
+  end
+  if counted >= MAX_LOBBIES_PER_GAME or truncated then
     return fail("limit_reached")
   end
   for _ = 1, RETRIES do
@@ -629,6 +640,11 @@ local function rpc_join(context, payload, game_id)
       return fail("gone")
     end
     local lobby = row.value
+    if lobby.started then
+      -- Before the member check: a member of a started lobby must not move its check-in back to it (the check-in row is one per
+      -- user and may now belong to the lobby the player is in).
+      return fail("started")
+    end
     local hb = read_one(hb_collection, uid)
     if member_index(lobby, uid) then
       -- Already a member (a reload, then a join of the same lobby): the lobby is unchanged, only the check-in is refreshed.
@@ -636,9 +652,6 @@ local function rpc_join(context, payload, game_id)
         return lobby_reply(id, lobby)
       end
     else
-      if lobby.started then
-        return fail("started")
-      end
       if #lobby.members >= lobby.max then
         return fail("full")
       end
@@ -711,8 +724,9 @@ local function rpc_heartbeat(context, payload, game_id)
   local uid, now = context.user_id, now_secs()
   local hb_collection = lobby_collection(game_id, "lobby_hb")
   for _ = 1, RETRIES do
-    -- Checks first, check-in second: a heartbeat that raced a leave must not bring the leaver back (its versioned write
-    -- conflicts once the leave deleted the row, and the retry then finds the membership gone).
+    -- Checks first, check-in second. A heartbeat that raced a leave cannot bring the leaver back: membership is checked here, and
+    -- liveness (the check-in) only counts for a member. If the leave deleted the check-in after it was read, this versioned write
+    -- conflicts and the retry finds the membership gone; if before, the write recreates an orphan row that nothing reads.
     local of = read_one(lobby_collection(game_id, "lobby_of"), uid)
     if not of or of.value.lobby ~= id then
       return fail("removed")

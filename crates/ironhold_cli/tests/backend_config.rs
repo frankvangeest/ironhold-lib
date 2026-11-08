@@ -90,10 +90,10 @@ fn a_lobby_project_on_fake_and_the_online_demo_become_one_server_with_lobbies_on
     let out = ironhold(&["backend", "config", lobby.to_str().unwrap(), online.to_str().unwrap()]);
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     let text = String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n");
-    let lobby_block = &text[text.find("backend_demo_lobby = {").expect("the lobby game")..text.find("backend_demo_online = {").expect("the online game")];
+    let lobby_block = &text[text.find("[\"backend_demo_lobby\"] = {").expect("the lobby game")..text.find("[\"backend_demo_online\"] = {").expect("the online game")];
     assert!(lobby_block.contains("features = { lobbies = true },"), "{text}");
     assert!(lobby_block.contains("\"Demo lobby\",") && lobby_block.contains("\"Quick game\","), "{text}");
-    let online_block = &text[text.find("backend_demo_online = {").unwrap()..];
+    let online_block = &text[text.find("[\"backend_demo_online\"] = {").unwrap()..];
     assert!(!online_block.contains("lobbies") && !online_block.contains("lobby_names"), "a game without Lobbies gets no lobby config: {text}");
     assert!(!text.contains("expiry"), "the generator never writes a test-only field");
 }

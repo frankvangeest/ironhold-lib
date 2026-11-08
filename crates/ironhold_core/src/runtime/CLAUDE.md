@@ -78,5 +78,8 @@ only against pads **not** claimed by a live player's `BoundGamepad`, by an undra
   is request/response over `ehttp` and channels, with no thread or runtime of its own of ours (ehttp on native spawns one OS thread per request,
   so a request is not free); its pure server-config generator is behind `default-features = false` so `-p ironhold_cli` alone never links
   an HTTP stack (a workspace-wide build unifies the feature on). `Backend::cancel` is how a timed-out request stops its retry chain; an
-  adapter must forget a cancelled request and drop its late answer.
+  adapter must forget a cancelled request and drop its late answer. The Nakama adapter answers `SignOut` with `SignedOut` at once, but a
+  lobby create, join or leave still in flight finishes with the old session (kept in its `Teardown`, never in `self.session`): a leave waits
+  for an unanswered create or join, the logout goes out last, a `SignIn` is held until then, and every step also ends on `cancel` (the
+  teardown's own session renewal has no engine id, so it never holds anything up).
 - Never use Bevy task pools for adapter I/O. `FakeBackend` latency counts polls, never wall-clock time.

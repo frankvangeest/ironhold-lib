@@ -332,9 +332,17 @@ fn lobby_a_finished_lobby_is_cleaned_up_without_touching_a_newer_one() {
         assert_eq!(heartbeat(&a, &y)["ok"], true);
     }
     assert!(is_listed(&c, &y), "Y stays listed while X is deleted");
-    assert!(is_listed(&c, &y));
-    assert_eq!(join(&c, &x)["reason"], "gone", "X is gone");
-    assert!(is_listed(&c, &y), "and still listed after the cleanup ran");
+    // Cleanup deletes at most 5 dead lobbies per call and earlier cases left some: ask until X is gone (a bounded number of times).
+    let mut gone = false;
+    for _ in 0..15 {
+        list(&c);
+        if join(&c, &x)["reason"] == "gone" {
+            gone = true;
+            break;
+        }
+    }
+    assert!(gone, "X is deleted once it has been over for a while");
+    assert!(is_listed(&c, &y), "and Y is still listed after the cleanup ran");
     assert_eq!(heartbeat(&a, &y)["ok"], true);
 }
 
@@ -347,6 +355,8 @@ fn lobby_limit_reached_counts_only_live_lobbies() {
         assert_eq!(create(p, "Casual", 2)["ok"], true);
     }
     assert_eq!(create(&players[50], "Casual", 2)["reason"], "limit_reached");
+    // A host at the cap replaces their own lobby: the old one is closed, so the total does not grow.
+    assert_eq!(create(&players[0], "Casual", 2)["ok"], true, "a create that replaces the caller's own lobby is not refused");
     // Nobody checks in: the hosts expire, the abandoned lobbies stop counting, and a new lobby can be made.
     wait(EXPIRY + 2);
     let v = create(&players[50], "Casual", 2);
@@ -447,4 +457,96 @@ fn signing_out_right_after_a_create_leaves_no_ghost_lobby_on_the_real_server() {
         std::thread::sleep(Duration::from_millis(100));
     }
     assert!(!ghost, "the signed-out player's lobby is still listed");
+}
+
+#[test]
+#[ignore = "needs the local contract Nakama (tests/contract/run.sh)"]
+fn lobby_a_reloaded_member_stays_by_joining_the_same_lobby_again() {
+    let (a, b) = (player("alpha"), player("alpha"));
+    let id = id_of(&create(&a, "Casual", 4));
+    join(&b, &id);
+    // B goes quiet for most of the window, then "reloads" and joins the same lobby again: that refreshes its check-in.
+    for _ in 0..2 {
+        wait(2);
+        assert_eq!(heartbeat(&a, &id)["ok"], true);
+    }
+    let before = heartbeat(&a, &id)["lobby"]["version"].as_u64().unwrap();
+    let again = join(&b, &id);
+    assert_eq!(again["ok"], true, "{again}");
+    assert_eq!(again["lobby"]["version"].as_u64().unwrap(), before, "the lobby itself is unchanged");
+    // More than EXPIRY seconds after B's first join, but not after the refresh: B must still be a member.
+    for _ in 0..2 {
+        wait(2);
+        assert_eq!(heartbeat(&a, &id)["ok"], true);
+    }
+    assert_eq!(members(&heartbeat(&a, &id)).len(), 2, "the refreshed check-in kept B in the lobby");
+}
+
+#[test]
+#[ignore = "needs the local contract Nakama (tests/contract/run.sh)"]
+fn lobby_a_started_lobby_refuses_a_rejoin_and_does_not_move_the_check_in() {
+    let (a, b) = (player("alpha"), player("alpha"));
+    let x = id_of(&create(&a, "Casual", 4));
+    join(&b, &x);
+    assert_eq!(start(&a, &x)["ok"], true);
+    // B reloads and hosts a new lobby; an old list row then offers the started one again.
+    let y = id_of(&create(&b, "Casual", 4));
+    assert_eq!(join(&b, &x)["reason"], "started");
+    assert_eq!(heartbeat(&b, &y)["ok"], true, "B is still in Y");
+    assert!(is_listed(&a, &y), "and Y's host check-in still points at Y");
+}
+
+#[test]
+#[ignore = "needs the local contract Nakama (tests/contract/run.sh)"]
+fn lobby_a_leave_and_a_join_by_one_user_at_once_end_consistent() {
+    for round in 0..12 {
+        let (a, c) = (player("alpha"), player("alpha"));
+        let _x = id_of(&create(&a, "Casual", 4));
+        let y = id_of(&create(&c, "Casual", 4));
+        std::thread::scope(|s| {
+            let leave_a = s.spawn(|| leave(&a));
+            let join_a = s.spawn(|| join(&a, &y));
+            let _ = (leave_a.join().unwrap(), join_a.join().unwrap());
+        });
+        // Whatever order they ran in, the member list of Y and A's own view agree: no member without an index row.
+        let in_list = members(&heartbeat(&c, &y)).contains(&a.name);
+        let own_view = heartbeat(&a, &y)["ok"] == true;
+        assert_eq!(in_list, own_view, "round {round}: A in Y's list = {in_list}, A's own heartbeat ok = {own_view}");
+    }
+}
+
+#[test]
+#[ignore = "needs the local contract Nakama (tests/contract/run.sh)"]
+fn lobby_more_than_one_page_of_objects_still_enforces_the_cap() {
+    // Game epsilon has its own 50-lobby cap in this run. Two batches of 50 lobbies leave more than 100 lobby objects behind
+    // (abandoned ones are only closed or deleted a few at a time), so the list has to follow the storage cursor.
+    let batch = |n: usize| -> Vec<Player> { (0..n).map(|_| player("epsilon")).collect() };
+    let first = batch(50);
+    for p in &first {
+        assert_eq!(create(p, "Casual", 2)["ok"], true);
+    }
+    wait(EXPIRY + 1);
+    let second = batch(51);
+    for p in &second[..50] {
+        let v = create(p, "Casual", 2);
+        assert_eq!(v["ok"], true, "{v}");
+    }
+    // 50 live lobbies (the second batch) and more than 100 objects: the cap still holds.
+    assert_eq!(create(&second[50], "Casual", 2)["reason"], "limit_reached");
+    assert_eq!(list(&second[50]).len(), 10, "the list is capped at 10 rows");
+    // Nobody checks in: the second batch expires too and creating works again.
+    wait(EXPIRY + 2);
+    assert_eq!(create(&second[50], "Casual", 2)["ok"], true);
+}
+
+#[test]
+#[ignore = "needs the local contract Nakama (tests/contract/run.sh)"]
+fn a_refresh_token_can_be_used_twice() {
+    // The adapter may refresh a session twice with one refresh token (a shared renewal dropped at sign-out, then the old
+    // session's own): both must work, or the second refresh would leave a late leave with an expired token.
+    let (_, refresh) = raw_session(&fresh_device_id("alpha"), "").expect("signs in");
+    let body = format!(r#"{{"token":"{refresh}"}}"#);
+    let first = raw("POST", "/v2/account/session/refresh", &basic(), &body);
+    let second = raw("POST", "/v2/account/session/refresh", &basic(), &body);
+    assert_eq!((first.0, second.0), (200, 200), "{} / {}", first.1, second.1);
 }
