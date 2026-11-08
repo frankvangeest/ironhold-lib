@@ -1,7 +1,7 @@
 # Memory Index
 
 - [backend_abstraction plan+v1+v2 review](project_backend_abstraction_plan_review.md) — v2 Nakama: no-key says "no adapter", config regen drops games, no key source/troubleshooting
-- [backend v3/v3a lobby plan+impl review](project_backend_v3_lobby_plan_review.md) — v3a-2: USERPROFILE beats HOME; post-Start playtest steps dead; already_in_lobby is core-only
+- [backend v3/v3a lobby plan+impl review](project_backend_v3_lobby_plan_review.md) — v3a-2 impl: retention is lazy (list/create only); same-PC = same account; host_left/reload wording
 - [backend_dev_stack plan-review](project_backend_dev_stack_plan_review.md) — up.sh default set excludes fake:// demos; hosted web can't reach local; needs Rust
 - [device_id_binding plan+impl review](project_device_id_binding_plan_review.md) — secret is per web ORIGIN (move host = new accounts); game_id rename = new accounts; stale-pkg out-of-date cause
 - [public_backend_demo plan+P3 review](project_public_backend_demo_plan_review.md) — sign_in_failed overloaded (rejected vs 5xx); gateway-error doc contradiction; snippet drift; visitor privacy copy

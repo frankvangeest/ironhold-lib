@@ -64,5 +64,11 @@ No ActionQueue push from the backend — correct pattern. Refusals (busy/offline
   verbatim on purpose (docs/20 last_error row quotes them by prefix). `?backend=` filter is `schema::backend::is_fake_endpoint` (plan's
   `page_may_override_endpoint` name was not used). Gaps seen: docs/STATUS.md and backlog multi-tenant item ("or the per-game device id
   binding" as alternative to per-game origins) not updated; the dated index.html reset line is a release-day task.
+- backend v3a-2 lobbies server (reviewed 2026-11-08, ALIGNED, no new RON surface): six Lua RPCs + generated `features`/`lobby_names`
+  in ironhold_games.lua; Lua shared consts checked against Rust by a text-parse unit test (server_config.rs); MAX_LOBBIES_PER_GAME=50
+  is server-only (docs quote "50" literally in 2 places). Traps seen: adapter `known_reason` accepts ANY LOBBY_REASONS word for any op
+  (could emit `lobby.create_failed:host_left`, outside `is_lobby_failure_reason`); docs/20 `rate_limited` row omits that a browser sees
+  a Cloudflare 429 as a CORS transport failure -> `server`; heartbeat `not_enabled` (config redeployed without the game) becomes
+  connection_trouble -> closed:server; CLI `backend config` help/println still say only "Leaderboard changes need this redeploy".
 
 Related: [[audio-state-pattern]] (engine-written variable precedent), [[real-pause-pattern]], [[diagnostic-only-feature-pattern]], [[web-host-page-contract]].

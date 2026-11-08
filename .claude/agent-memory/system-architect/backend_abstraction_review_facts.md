@@ -154,5 +154,17 @@ Plan re-review round 3 of v3a-2 (aae24e1, 2026-11-08), verdict Ready with text f
   the leave must cover the waiting list, and a renewal landing after SignOut must not repopulate `self.session`.
 - The sweep never touches other users' `lobby_of`, so docs must not say a swept player's index row is deleted.
 
+Code review of v3a-2 (`feature/backend_lobbies_server`, ae45cb7..4e739da, 2026-11-08), nothing blocking; facts that outlive it:
+- `LEGACY_RENEWAL_ID` (u64::MAX) has no core id, so nothing can cancel it, yet `finish_teardown` counts it as busy even when nothing is parked
+  behind it anymore: a hung refresh holds every later SignIn (each times out). The "every step ends on reply or cancel" invariant needs the
+  renewal dropped once `parked` is empty (plus a generation so a late answer can't feed a later teardown).
+- Sign-out with a join parked behind the shared renewal fires a SECOND refresh with the same refresh token (shared one dropped, legacy one
+  sent); if Nakama rotates refresh tokens the legacy one 401s. Mock servers don't rotate, so tests can't see it.
+- `RequestKind::LeaveLobby` has no lobby id, so the server's stale-leave rule (`request.lobby_id ~= id`) is never exercised by a real client:
+  a core-timed-out `{}` leave that lands late can still evict the player from a lobby joined after it.
+- The contract suite runs `--test-threads=1` in alphabetical order on one shared DB per run; the 5-per-call cleanup budget is shared by
+  every dead lobby in the game, so a retention assertion in a busy game (alpha) passes only by margin. Isolate such cases in their own game.
+- No contract case crosses one `storage_list` page (100), so the cursor-follow + `truncated` fail-closed path is unverified against 3.41.
+
 **Why:** these were the load-bearing gaps; recurring if lobby/multiplayer plans are revised.
 **How to apply:** any review of backend, lobby, cloud-save or Form 2 networking plans. See [[nakama-spike-facts]], [[determinism-networking]].
