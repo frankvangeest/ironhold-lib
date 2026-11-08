@@ -190,7 +190,7 @@ fn a_client_for_game_a_cannot_touch_game_b() {
 #[test]
 #[ignore = "needs the local contract Nakama (tests/contract/run.sh)"]
 fn unknown_games_and_other_sign_in_methods_are_refused() {
-    assert!(raw_session(&fresh_device_id("gamma"), "").is_none(), "a game the server does not list");
+    assert!(raw_session(&fresh_device_id("delta"), "").is_none(), "a game the server does not list");
     assert!(raw_session(&unique("no-prefix-device-id"), "").is_none(), "a device id without a game prefix");
     let (status, _) = raw("POST", "/v2/account/authenticate/email?create=true", &basic(), r#"{"email":"a@b.example","password":"password123"}"#);
     assert_ne!(status, 200, "email sign-in would give a session with no game");
@@ -208,7 +208,7 @@ fn a_device_id_must_be_a_game_and_a_32_hex_hash() {
         assert!(text.contains("out of date"), "{legacy}: {text}");
     }
     // The game is checked first, so an unknown game still says so, and the format never decides which game is unknown.
-    let (status, text) = raw_signin("gamma:0123456789abcdef0123");
+    let (status, text) = raw_signin("delta:0123456789abcdef0123");
     assert_ne!(status, 200);
     assert!(text.contains("unknown game"), "{text}");
 }
@@ -270,3 +270,6 @@ fn lobby_rpcs_go_through_the_game_guard() {
     assert_eq!(status, 200, "{body}");
     assert!(body.matches("true").count() == 6 && !body.contains("false"), "bad ids must all be refused at registration: {body}");
 }
+
+#[path = "contract/lobbies.rs"]
+mod lobbies;

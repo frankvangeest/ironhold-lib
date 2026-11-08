@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use clap::Subcommand;
-use ironhold_core::schema::backend::BackendConfig;
+use ironhold_core::schema::backend::{BackendConfig, BackendFeature};
 use ironhold_core::schema::ProjectConfig;
 use ironhold_nakama::server_config::{generate_games_lua, GameServerConfig, GAMES_FILE, MODULE_LUA};
 
@@ -59,7 +59,15 @@ fn load(dir: &Path) -> Result<Loaded, String> {
 fn config(dirs: &[PathBuf], out: Option<&Path>, mode: &OutputMode) -> Result<(), String> {
     let loaded: Vec<Loaded> = dirs.iter().map(|d| load(d)).collect::<Result<_, _>>()?;
     let games: Vec<GameServerConfig> =
-        loaded.iter().map(|l| GameServerConfig { game_id: &l.game_id, leaderboards: &l.config.leaderboards }).collect();
+        loaded
+            .iter()
+            .map(|l| GameServerConfig {
+                game_id: &l.game_id,
+                leaderboards: &l.config.leaderboards,
+                lobbies: l.config.features.contains(&BackendFeature::Lobbies),
+                lobby_names: &l.config.lobby_names,
+            })
+            .collect();
     let lua = generate_games_lua(&games)?;
     match out {
         None => {
