@@ -119,5 +119,20 @@ Code review of v3a-1 (`feature/backend_v3a_1`, 7ce2f5d..a06cdfc, 2026-11-07), fa
 - Runtime sign-out clearing still uses literals, not `RESERVED_VARIABLE_PREFIXES` (it can't use the whole const: `backend.` would wipe
   the status it just set). `fixed_reason` is not op-specific: an adapter `host_left` on a join failure emits an event validate rejects.
 
+Plan review of v3a-2 `backend_lobbies_server.md` (01fded1, 2026-11-08), verdict Needs more design work (one round):
+- Core ALREADY enqueues `LeaveLobby` before `SignOut` (dispatch, when in a lobby or a create/join/leave is in flight): an adapter that
+  originates its own leave duplicates it. The adapter's real job: hold the leave until an in-flight Create/Join has finished (concurrent
+  fetches let the leave hit the server first = ghost), then logout.
+- The adapter has no clock, so "cap the deferred logout at the request timeout" is unimplementable in the adapter; Leave and SignOut start
+  the same frame with equal timeouts, and a timed-out SignOut maps to `Unreachable` (`backend.unreachable`, no var cleanup, no
+  `backend.signed_out`). Needs a tiny core change (SignOut failure -> SignedOut) or reply SignedOut at once and hold the next SignIn.
+- `UpdateAccount` is NOT in ironhold.lua's closed list: a key holder can rename itself; lobby/leaderboard names are not "server-made".
+- `is_valid_lobby_name` allows `"` and `\`: the games.lua generator must escape (Lua injection into server config otherwise).
+- `the_contract_fixture_is_what_the_generator_writes` pins fixture == generator output, so a "fixture-only" field must either be
+  generator-emittable (a production path) or live in a separate test-only module (test_rpcs.lua precedent).
+- Listing the whole `{game}.lobby_hb` collection grows with every user who ever played (rows never deleted); batch-read host keys instead.
+- `nk.time()` is documented as milliseconds (plan says seconds); math.random in pooled VMs is a collision risk, use nk.uuid_v4 + `"*"`.
+- Every `lobby_of` write must be versioned too (a sweep clearing another user's index races that user's own create/join).
+
 **Why:** these were the load-bearing gaps; recurring if lobby/multiplayer plans are revised.
 **How to apply:** any review of backend, lobby, cloud-save or Form 2 networking plans. See [[nakama-spike-facts]], [[determinism-networking]].
