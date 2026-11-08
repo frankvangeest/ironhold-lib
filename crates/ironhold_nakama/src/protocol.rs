@@ -3,6 +3,8 @@
 
 use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
 use base64::Engine;
+use ironhold_core::runtime::backend::{LobbyInfo, LobbyRow};
+use ironhold_core::schema::backend::LOBBY_REASONS;
 use serde_json::{json, Value};
 
 use crate::ns::NsLeaderboardId;
@@ -55,6 +57,12 @@ pub fn logout(base: &str, session: &Session) -> ehttp::Request {
     )
 }
 
+/// One of the server's `ironhold_lobby_*` RPCs. Nakama's REST gateway wants the body as a JSON **string** (a string holding the JSON
+/// object), and answers `{"payload":"<json string>"}`.
+pub fn rpc(base: &str, token: &str, id: &str, body: Value) -> ehttp::Request {
+    post(format!("{base}/v2/rpc/{id}"), format!("Bearer {token}"), Value::String(body.to_string()))
+}
+
 pub fn submit_score(base: &str, token: &str, board: &NsLeaderboardId, score: i64) -> ehttp::Request {
     // The JSON API takes an int64 as a string.
     post(format!("{base}/v2/leaderboard/{}", board.as_str()), format!("Bearer {token}"), json!({ "score": score.to_string() }))
@@ -71,6 +79,69 @@ pub fn rank_around_owner(base: &str, token: &str, board: &NsLeaderboardId, user_
     let mut req = ehttp::Request::get(format!("{base}/v2/leaderboard/{}/owner/{user_id}?limit=1", board.as_str()));
     req.headers.insert("Authorization", format!("Bearer {token}"));
     req
+}
+
+/// What a lobby RPC answered: the reply object (`ok = true`), or the fixed reason the server refused with.
+#[derive(Debug, PartialEq)]
+pub enum RpcOutcome {
+    Reply(Value),
+    Refused(String),
+}
+
+/// A reason the server may refuse with, as the engine's fixed vocabulary (anything else is `server`).
+fn known_reason(reason: &str) -> String {
+    if LOBBY_REASONS.contains(&reason) { reason.to_string() } else { "server".to_string() }
+}
+
+/// An RPC answer. 401 is a session to renew; 429 (the rate limit in front of the server) is `rate_limited`; any other non-2xx
+/// answer (the module's own 403 "the request failed" included) is `server`; a 200 carries `{ok, reason}` in its payload.
+pub fn parse_rpc(resp: &ehttp::Response) -> Result<RpcOutcome, Failure> {
+    match resp.status {
+        401 => return Err(Failure::Unauthorized),
+        429 => return Ok(RpcOutcome::Refused("rate_limited".to_string())),
+        s if !(200..300).contains(&s) => return Ok(RpcOutcome::Refused("server".to_string())),
+        _ => {}
+    }
+    let unreadable = || Failure::Other("the server sent an unreadable answer".to_string());
+    let outer: Value = serde_json::from_str(resp.text().unwrap_or("")).map_err(|_| unreadable())?;
+    let inner: Value = serde_json::from_str(outer.get("payload").and_then(Value::as_str).ok_or_else(unreadable)?).map_err(|_| unreadable())?;
+    if inner.get("ok").and_then(Value::as_bool) == Some(true) {
+        return Ok(RpcOutcome::Reply(inner));
+    }
+    Ok(RpcOutcome::Refused(known_reason(inner.get("reason").and_then(Value::as_str).unwrap_or("server"))))
+}
+
+/// The `lobby` object of a reply. `None` for anything the engine could not use (a missing field is a server bug: the caller answers
+/// `server`).
+pub fn parse_lobby_info(reply: &Value) -> Option<LobbyInfo> {
+    let l = reply.get("lobby")?;
+    let text = |k: &str| l.get(k).and_then(Value::as_str).map(str::to_string);
+    Some(LobbyInfo {
+        id: text("id")?,
+        version: l.get("version").and_then(Value::as_u64)?,
+        name: text("name")?,
+        max: u32::try_from(l.get("max").and_then(Value::as_u64)?).ok()?,
+        started: l.get("started").and_then(Value::as_bool)?,
+        host: text("host")?,
+        members: l.get("members")?.as_array()?.iter().map(|m| m.as_str().map(str::to_string)).collect::<Option<Vec<_>>>()?,
+    })
+}
+
+/// The rows of a list reply. An empty Lua table may arrive as `{}` or `[]`, and both mean "no rows".
+pub fn parse_lobby_rows(reply: &Value) -> Option<Vec<LobbyRow>> {
+    let Some(rows) = reply.get("rows").and_then(Value::as_array) else { return Some(Vec::new()) };
+    rows.iter()
+        .map(|r| {
+            let text = |k: &str| r.get(k).and_then(Value::as_str).map(str::to_string);
+            Some(LobbyRow {
+                id: text("id")?,
+                name: text("name")?,
+                players: u32::try_from(r.get("players").and_then(Value::as_u64)?).ok()?,
+                max: u32::try_from(r.get("max").and_then(Value::as_u64)?).ok()?,
+                host: text("host")?,
+            })
+        })
+        .collect()
 }
 
 /// A server answer, boiled down to what the adapter acts on.
@@ -219,6 +290,56 @@ mod tests {
         assert_eq!((l.my_rank, l.my_best, l.needs_rank), (Some(1), Some(900), false));
         let empty = parse_listing(&resp(200, "{}"), "me").unwrap();
         assert_eq!((empty.rows.len(), empty.my_rank, empty.my_best, empty.needs_rank), (0, None, None, false));
+    }
+
+    fn payload(inner: Value) -> ehttp::Response {
+        resp(200, &json!({ "payload": inner.to_string() }).to_string())
+    }
+
+    #[test]
+    fn an_rpc_body_is_a_json_string_holding_the_object() {
+        let r = rpc("http://s", "tok", "ironhold_lobby_join", json!({ "lobby_id": "abc" }));
+        assert_eq!(r.url, "http://s/v2/rpc/ironhold_lobby_join");
+        let body: Value = serde_json::from_slice(&r.body).unwrap();
+        assert_eq!(body, Value::String(r#"{"lobby_id":"abc"}"#.to_string()));
+    }
+
+    #[test]
+    fn rpc_answers_map_to_a_reply_or_a_fixed_reason() {
+        let ok = parse_rpc(&payload(json!({ "ok": true, "rows": [] }))).unwrap();
+        assert!(matches!(ok, RpcOutcome::Reply(_)));
+        for (inner, want) in [(json!({ "ok": false, "reason": "full" }), "full"), (json!({ "ok": false, "reason": "made_up" }), "server"), (json!({ "ok": false }), "server")] {
+            assert_eq!(parse_rpc(&payload(inner)).unwrap(), RpcOutcome::Refused(want.to_string()));
+        }
+        assert_eq!(parse_rpc(&resp(429, "")).unwrap(), RpcOutcome::Refused("rate_limited".into()));
+        assert_eq!(parse_rpc(&resp(403, r#"{"message":"the request failed"}"#)).unwrap(), RpcOutcome::Refused("server".into()));
+        assert_eq!(parse_rpc(&resp(500, "<html>")).unwrap(), RpcOutcome::Refused("server".into()));
+        assert_eq!(parse_rpc(&resp(401, "{}")).unwrap_err(), Failure::Unauthorized);
+        assert!(matches!(parse_rpc(&resp(200, "not json")), Err(Failure::Other(_))));
+        assert!(matches!(parse_rpc(&resp(200, r#"{"payload":"not json"}"#)), Err(Failure::Other(_))));
+    }
+
+    #[test]
+    fn a_lobby_reply_becomes_the_engines_lobby_info() {
+        let good = json!({ "ok": true, "lobby": { "id": "i", "version": 3, "name": "Casual", "max": 4, "started": false, "host": "Ada", "players": 2, "members": ["Ada", "Bo"] } });
+        let info = parse_lobby_info(&good).unwrap();
+        assert_eq!((info.id.as_str(), info.version, info.max, info.started, info.host.as_str()), ("i", 3, 4, false, "Ada"));
+        assert_eq!(info.members, vec!["Ada".to_string(), "Bo".to_string()]);
+        // A field the engine needs is missing or the wrong type: refuse the whole reply.
+        let mut bad = good.clone();
+        bad["lobby"]["members"] = json!(["Ada", 7]);
+        assert!(parse_lobby_info(&bad).is_none());
+        assert!(parse_lobby_info(&json!({ "ok": true })).is_none());
+    }
+
+    #[test]
+    fn lobby_rows_accept_an_empty_list_in_either_shape() {
+        let row = json!({ "id": "i", "name": "Casual", "players": 1, "max": 4, "host": "Ada" });
+        let rows = parse_lobby_rows(&json!({ "ok": true, "rows": [row] })).unwrap();
+        assert_eq!((rows.len(), rows[0].players, rows[0].host.as_str()), (1, 1, "Ada"));
+        assert!(parse_lobby_rows(&json!({ "ok": true, "rows": {} })).unwrap().is_empty());
+        assert!(parse_lobby_rows(&json!({ "ok": true })).unwrap().is_empty());
+        assert!(parse_lobby_rows(&json!({ "rows": [{ "id": "i" }] })).is_none());
     }
 
     #[test]
