@@ -134,5 +134,16 @@ Plan review of v3a-2 `backend_lobbies_server.md` (01fded1, 2026-11-08), verdict 
 - `nk.time()` is documented as milliseconds (plan says seconds); math.random in pooled VMs is a collision risk, use nk.uuid_v4 + `"*"`.
 - Every `lobby_of` write must be versioned too (a sweep clearing another user's index races that user's own create/join).
 
+Plan re-review round 2 of v3a-2 (1eb5e9f, 2026-11-08), verdict Ready with fixes in plan text (no new primitive):
+- `lobby_hb` is ONE row per user (key = user_id), so any delete of another user's hb row (sweep, retention delete of a started/closed
+  lobby) must first check `hb.lobby == that lobby`, or it kills the user's liveness in the NEW lobby they moved to (host -> host_left).
+- Core's sign-out outbox order is Leave THEN SignOut in the same submit loop: the adapter sees the Leave before it knows about the
+  sign-out, so "hold the leave behind an in-flight create/join" must be a submit-time rule, and cancel_all must spare the Leave too.
+- ehttp web fetch has no timeout and core's cancel() removes adapter `pending`: an adapter teardown that waits on wire completion
+  must treat core's cancel as "done" (and never wait on the reply-less logout), or every later held SignIn times out.
+- AuthenticateDevice `?username=` (create=true) lets a client choose its username at account creation; "server-made names" needs
+  the before-hook to strip `payload.username`, not only UpdateAccount closed.
+- `lobby_of` is tombstoned, never deleted: one row per player ever (docs must not say "deleted").
+
 **Why:** these were the load-bearing gaps; recurring if lobby/multiplayer plans are revised.
 **How to apply:** any review of backend, lobby, cloud-save or Form 2 networking plans. See [[nakama-spike-facts]], [[determinism-networking]].
