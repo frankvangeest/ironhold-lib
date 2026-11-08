@@ -58,5 +58,11 @@ No ActionQueue push from the backend — correct pattern. Refusals (busy/offline
   `RESERVED_VARIABLE_PREFIXES`; LeaveLobby during a pending join answers `backend.busy` and the join then lands; no recovery event after
   `lobby.connection_trouble`; designer-tunable `request_timeout_secs` (to 120) delays heartbeat failure past the fixed 60 s expiry.
   Check these in v3a-2 / v3b reviews.
+- device_id_binding (reviewed 2026-11-08, ALIGNED, no RON surface confirmed): wire id `{game_id}:` + blake3 hash of game+stored
+  secret (`ns::device_id`, golden vector in ns.rs tests); storage key `ironhold.device_secret` / `~/.ironhold/device_secret`; old keys
+  deleted only when the factory runs (real endpoint + key), so docs saying "first run deletes" overstate it. Storage-failure texts kept
+  verbatim on purpose (docs/20 last_error row quotes them by prefix). `?backend=` filter is `schema::backend::is_fake_endpoint` (plan's
+  `page_may_override_endpoint` name was not used). Gaps seen: docs/STATUS.md and backlog multi-tenant item ("or the per-game device id
+  binding" as alternative to per-game origins) not updated; the dated index.html reset line is a release-day task.
 
 Related: [[audio-state-pattern]] (engine-written variable precedent), [[real-pause-pattern]], [[diagnostic-only-feature-pattern]], [[web-host-page-contract]].

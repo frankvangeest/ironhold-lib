@@ -31,6 +31,17 @@ Plan reviews of `planning/features/device_id_binding.md`: round 1 at `fd6ce9b` (
   not `backend.sign_in_failed`.
 - Nakama JWT carries uid/usn/vars, not the device id; leaderboard rows carry owner_id/username only.
 
+
+Code review of `c445b6e` (2026-11-08, feature/device_id_binding):
+- Golden vector `my_game` + `00112233445566778899aabbccddeeff` -> `my_game:7f4e484e070f15ac68effb5c23d7fb8f` independently
+  re-derived with a standalone blake3 =1.8.3 crate (no Python blake3 on this machine). blake3 as a direct dep is a zero
+  feature delta: bevy_asset uses default-features=false but bevy_animation already turns on `default`/`std`.
+- `is_fake_endpoint` is ALSO what `choose_backend` (runtime/backend.rs) uses to pick the fake backend, so the web `?backend=`
+  filter is correct by construction (a page can only pick endpoints that never touch a network) - reusing it beat a new fn.
+- adapter_flow's mock `serve()` handler receives the request body, so "the wire carries the hash, not the secret" is cheaply
+  assertable at adapter level; the shipped diff only unit-tests it in ns.rs.
+- Homelab probe still sent the 20-hex id on 2026-11-08 (not yet changed).
+
 **Why:** these decide whether the binding is honest about what it closes and whether release day works.
 **How to apply:** any review of device-id, account-migration, multi-tenant hosting, cloud-save identity, or Nakama module-deploy plans.
 See [[backend-abstraction-review-facts]].

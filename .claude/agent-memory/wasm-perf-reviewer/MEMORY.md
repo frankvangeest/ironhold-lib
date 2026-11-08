@@ -50,3 +50,4 @@
 - [Backend glue system](project_backend_glue_system.md) — glue every frame, idle alloc-free; lobby_tick O(1); hung-heartbeat per-frame alloc window; no GameVariables change gate
 - [Debug-state DOM sync](project_debug_state_dom_sync.md) — per-frame JSON+set_text_content in release; ~6 tiny allocs/frame; CANNOT gate out (play.html readiness) or dirty-skip (frame counter)
 - [Nakama adapter (backend v2)](project_nakama_adapter.md) — ehttp gates ureq/rustls off wasm (cargo tree verified); poll idle alloc-free; localStorage only with ?nakama_key
+- [blake3 device id](project_blake3_device_id.md) — direct dep turns on blake3 `std` (bevy uses no-default); wasm32-inert, no SIMD/rayon/mmap; hash once per sign-in

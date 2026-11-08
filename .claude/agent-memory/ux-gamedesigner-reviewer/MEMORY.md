@@ -3,7 +3,7 @@
 - [backend_abstraction plan+v1+v2 review](project_backend_abstraction_plan_review.md) — v2 Nakama: no-key says "no adapter", config regen drops games, no key source/troubleshooting
 - [backend v3/v3a lobby plan+impl review](project_backend_v3_lobby_plan_review.md) — per-value events shipped in v3a-1; open: fake_note overflow, docs/30 ~442 contradiction, SignOut/left order
 - [backend_dev_stack plan-review](project_backend_dev_stack_plan_review.md) — up.sh default set excludes fake:// demos; hosted web can't reach local; needs Rust
-- [device_id_binding plan-review](project_device_id_binding_plan_review.md) — r2 Ready; open: docs/30 ~477 cause list, native-neutral reject text, card "device id saved" wording
+- [device_id_binding plan+impl review](project_device_id_binding_plan_review.md) — secret is per web ORIGIN (move host = new accounts); game_id rename = new accounts; stale-pkg out-of-date cause
 - [public_backend_demo plan+P3 review](project_public_backend_demo_plan_review.md) — sign_in_failed overloaded (rejected vs 5xx); gateway-error doc contradiction; snippet drift; visitor privacy copy
 
 - [entity.attacked co-op attribution](project_npc_attacked_coop_attribution.md) — nearest-player rule documented only in docs/30 ~109; docs/20 NPC section silent

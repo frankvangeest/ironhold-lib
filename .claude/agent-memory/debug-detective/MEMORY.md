@@ -100,4 +100,5 @@
 - [npc_id vs SpawnId](project_npc_id_vs_spawn_id.md) — equal for scene/Spawn NPCs; composite-child NPCs get the prefab key as npc_id and no SpawnId (collide across instances)
 - [Backend failure-event semantics](project_backend_failure_event_semantics.md) — SignOut mid-sign-in = sign_in_failed("signed out"); failed renewal never says "session expired"; down-while-online no unreachable
 - [Backend dev stack singleton + grep scan](project_backend_dev_stack_singleton_and_scan.md) — `name: ironhold-dev` shared by all worktrees; up.sh grep matches `backend_path: None`
+- [Device secret off-wire is untested](project_device_secret_wire_leak_untested.md) — secret and hash are both 32 hex; server/contract can't tell `{game}:{secret}` from `{game}:{hash}`
 - [Nakama RPC hook/error facts](project_nakama_rpc_error_and_hook_facts.md) — RpcFunc before-hook never runs; error({m,7})=403, plain error()=500 leaking module path; probe recipe
