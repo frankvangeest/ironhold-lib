@@ -4,7 +4,8 @@
 -- It does three things:
 --   1. creates every declared leaderboard (clients cannot create leaderboards), and
 --   2. enforces the game namespace on the server: a session belongs to exactly one game (the `game_id` session variable,
---      taken from the device id `{game_id}:{uuid}` at sign-in), and every leaderboard id and storage collection a request
+--      taken from the device id `{game_id}:{hash}` at sign-in, where hash is 32 lowercase hex characters the client derives from the
+--      game and its stored secret, see `ironhold_nakama::ns`), and every leaderboard id and storage collection a request
 --      names must start with `{game_id}.`. Client-side prefixing only stops honest bugs; anyone holding the shared server
 --      key could otherwise read or write another game's data.
 --
@@ -46,9 +47,15 @@ end
 -- 2a. a session belongs to one game ------------------------------------------------------------------------------------
 local function before_authenticate_device(_, payload)
   local id = payload.account and payload.account.id or ""
-  local game_id = string.match(id, "^([a-z0-9_]+):")
+  local game_id, rest = string.match(id, "^([a-z0-9_]+):(.*)$")
   if not game_id or not games[game_id] then
     reject("unknown game")
+  end
+  -- The game is checked first, so an unknown game still says so. A suffix that is not 32 lowercase hex characters is the
+  -- old `{game_id}:{uuid}` format (a stale page or an old native build): refuse it, so it cannot write a raw uuid into the
+  -- database again, and say what to do.
+  if #rest ~= 32 or string.find(rest, "[^0-9a-f]") then
+    reject("out of date: reload the page or update the game")
   end
   -- Overwrites anything the client sent: the game comes from the device id and nowhere else.
   payload.account.vars = { game_id = game_id }

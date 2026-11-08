@@ -107,7 +107,7 @@ fn config(endpoint: &str) -> ResolvedBackendConfig {
 }
 
 fn adapter(endpoint: &str) -> NakamaBackend {
-    NakamaBackend::new(&config(endpoint), &NakamaOptions { server_key: "k".into(), device_uuid: "0123-abcd-4567".into() }).unwrap()
+    NakamaBackend::new(&config(endpoint), &NakamaOptions { server_key: "k".into(), device_secret: "0123456789abcdef0123456789abcdef".into() }).unwrap()
 }
 
 fn ask(b: &mut NakamaBackend, id: u64, kind: RequestKind) -> BackendEvent {
@@ -122,6 +122,17 @@ fn ask(b: &mut NakamaBackend, id: u64, kind: RequestKind) -> BackendEvent {
         std::thread::sleep(Duration::from_millis(5));
     }
     panic!("no reply for request {id}");
+}
+
+const SECRET: &str = "0123456789abcdef0123456789abcdef";
+
+/// Records every device sign-in body that does not carry the per-game hash, or that carries the secret itself. The handler runs on
+/// the server thread, so a violation is collected and asserted by the test.
+fn check_wire_id(body: &str, violations: &Mutex<Vec<String>>) {
+    let expected = ironhold_nakama::ns::GameNs::new("my_game").unwrap().device_id(SECRET).unwrap();
+    if !body.contains(&format!("\"{expected}\"")) || body.contains(SECRET) {
+        violations.lock().unwrap().push(body.to_string());
+    }
 }
 
 fn submit_kind(score: i64) -> RequestKind {
@@ -226,9 +237,9 @@ fn sign_out_drops_the_session_and_an_unreachable_server_says_so() {
 
 #[test]
 fn bad_configuration_is_refused_at_startup() {
-    let opts = NakamaOptions { server_key: "k".into(), device_uuid: "0123-abcd-4567".into() };
+    let opts = NakamaOptions { server_key: "k".into(), device_secret: "0123456789abcdef0123456789abcdef".into() };
     assert!(NakamaBackend::new(&config("ftp://x"), &opts).is_err());
-    let no_key = NakamaOptions { server_key: " ".into(), device_uuid: opts.device_uuid.clone() };
+    let no_key = NakamaOptions { server_key: " ".into(), device_secret: opts.device_secret.clone() };
     assert!(NakamaBackend::new(&config("http://x"), &no_key).is_err());
     let mut bad_game = config("http://x");
     bad_game.game_id = "Bad Game".into();
@@ -249,8 +260,11 @@ fn poll_for(b: &mut NakamaBackend, ms: u64) -> Vec<BackendEvent> {
 fn a_refused_refresh_signs_in_again_with_the_device_id_and_the_call_succeeds() {
     let auths = Arc::new(AtomicUsize::new(0));
     let (a2, calls) = (auths.clone(), Arc::new(AtomicUsize::new(0)));
-    let (url, _seen, stop) = serve(move |method, path, _auth, _body| match (method, path) {
+    let violations: Arc<Mutex<Vec<String>>> = Arc::default();
+    let v2 = violations.clone();
+    let (url, _seen, stop) = serve(move |method, path, _auth, body| match (method, path) {
         ("POST", p) if p.starts_with("/v2/account/authenticate/device") => {
+            check_wire_id(body, &v2);
             a2.fetch_add(1, Ordering::Relaxed);
             (200, format!(r#"{{"token":"{}","refresh_token":"r"}}"#, jwt("u1", "A")))
         }
@@ -269,6 +283,7 @@ fn a_refused_refresh_signs_in_again_with_the_device_id_and_the_call_succeeds() {
     ask(&mut b, 1, RequestKind::SignIn);
     assert_eq!(ask(&mut b, 2, submit_kind(1)).reply, BackendReply::ScoreSubmitted { leaderboard: "best".into() });
     assert_eq!(auths.load(Ordering::Relaxed), 2, "one sign-in, one re-authentication");
+    assert!(violations.lock().unwrap().is_empty(), "the sign-in and the re-authentication both send the per-game hash and never the secret: {:?}", violations.lock().unwrap());
     stop.store(true, Ordering::Relaxed);
 }
 
@@ -364,7 +379,7 @@ fn a_cancelled_request_makes_no_retry() {
 }
 
 #[test]
-fn the_key_goes_with_the_files_endpoint_and_the_device_uuid_is_only_made_when_a_server_is_used() {
+fn the_key_goes_with_the_files_endpoint_and_the_device_secret_is_only_made_when_a_server_is_used() {
     use ironhold_nakama::{factory, resolve_server_key, RunnerOptions};
     use std::sync::atomic::AtomicUsize;
     use std::sync::Arc;
@@ -379,9 +394,9 @@ fn the_key_goes_with_the_files_endpoint_and_the_device_uuid_is_only_made_when_a_
     let f = factory(RunnerOptions {
         runner_key: None,
         missing_key_hint: "hint".into(),
-        device_uuid: Arc::new(move || {
+        device_secret: Arc::new(move || {
             counter.fetch_add(1, Ordering::Relaxed);
-            Ok("0123-abcd-4567".to_string())
+            Ok("0123456789abcdef0123456789abcdef".to_string())
         }),
     });
     let mut c = config("http://127.0.0.1:1");
@@ -394,7 +409,7 @@ fn the_key_goes_with_the_files_endpoint_and_the_device_uuid_is_only_made_when_a_
     let failing = factory(RunnerOptions {
         runner_key: Some("runner".into()),
         missing_key_hint: String::new(),
-        device_uuid: Arc::new(|| Err("no storage".to_string())),
+        device_secret: Arc::new(|| Err("no storage".to_string())),
     });
     assert_eq!((failing.0)(&config("http://127.0.0.1:1")).err().as_deref(), Some("no storage"));
 
@@ -402,7 +417,7 @@ fn the_key_goes_with_the_files_endpoint_and_the_device_uuid_is_only_made_when_a_
     let runner_only = factory(RunnerOptions {
         runner_key: Some("runner".into()),
         missing_key_hint: String::new(),
-        device_uuid: Arc::new(|| Ok("0123-abcd-4567".to_string())),
+        device_secret: Arc::new(|| Ok("0123456789abcdef0123456789abcdef".to_string())),
     });
     let c = config("http://127.0.0.1:1");
     assert_eq!(c.server_key, None);
@@ -415,7 +430,7 @@ fn the_key_goes_with_the_files_endpoint_and_the_device_uuid_is_only_made_when_a_
     let bad_key = factory(RunnerOptions {
         runner_key: Some("a:b".into()),
         missing_key_hint: "hint".into(),
-        device_uuid: Arc::new(|| Ok("0123-abcd-4567".to_string())),
+        device_secret: Arc::new(|| Ok("0123456789abcdef0123456789abcdef".to_string())),
     });
     assert!((bad_key.0)(&c).err().unwrap().contains("not valid"));
 
@@ -425,9 +440,9 @@ fn the_key_goes_with_the_files_endpoint_and_the_device_uuid_is_only_made_when_a_
     let counting = factory(RunnerOptions {
         runner_key: Some("runner".into()),
         missing_key_hint: String::new(),
-        device_uuid: Arc::new(move || {
+        device_secret: Arc::new(move || {
             counter.fetch_add(1, Ordering::Relaxed);
-            Ok("0123-abcd-4567".to_string())
+            Ok("0123456789abcdef0123456789abcdef".to_string())
         }),
     });
     let mut no_game = config("http://127.0.0.1:1");

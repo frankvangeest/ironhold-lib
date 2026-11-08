@@ -25,8 +25,8 @@ fn resolved(game: &str) -> ResolvedBackendConfig {
     ResolvedBackendConfig { endpoint: url(), game_id: game.to_string(), server_key: None, leaderboards: c.leaderboards }
 }
 
-fn adapter(game: &str, uuid: &str) -> NakamaBackend {
-    NakamaBackend::new(&resolved(game), &NakamaOptions { server_key: key(), device_uuid: uuid.to_string() }).unwrap()
+fn adapter(game: &str, secret: &str) -> NakamaBackend {
+    NakamaBackend::new(&resolved(game), &NakamaOptions { server_key: key(), device_secret: secret.to_string() }).unwrap()
 }
 
 fn ask(b: &mut NakamaBackend, id: u64, kind: RequestKind) -> BackendEvent {
@@ -41,6 +41,19 @@ fn ask(b: &mut NakamaBackend, id: u64, kind: RequestKind) -> BackendEvent {
         std::thread::sleep(Duration::from_millis(10));
     }
     panic!("no reply for request {id}");
+}
+
+/// A device secret in the format the adapter requires (32 lowercase hex characters), unique per call.
+fn fresh_secret() -> String {
+    // A counter next to the clock: parallel tests can land in the same clock tick.
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64;
+    format!("{nanos:016x}{:016x}", COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+}
+
+/// A wire id in the format the server now requires: `{game}:` plus 32 lowercase hex characters, unique per call.
+fn fresh_device_id(game: &str) -> String {
+    format!("{game}:{}", fresh_secret())
 }
 
 fn unique(prefix: &str) -> String {
@@ -76,6 +89,11 @@ fn basic() -> String {
     format!("Basic {out}")
 }
 
+/// Status and body of a raw device sign-in (`create=true`), for the refusals whose message matters.
+fn raw_signin(device_id: &str) -> (u16, String) {
+    raw("POST", "/v2/account/authenticate/device?create=true", &basic(), &format!(r#"{{"id":"{device_id}"}}"#))
+}
+
 /// `(token, refresh_token)` of a raw device sign-in, with whatever extra body the test wants to try.
 fn raw_session(device_id: &str, extra_vars: &str) -> Option<(String, String)> {
     let body = format!(r#"{{"id":"{device_id}"{extra_vars}}}"#);
@@ -94,8 +112,8 @@ fn raw_session(device_id: &str, extra_vars: &str) -> Option<(String, String)> {
 #[test]
 #[ignore = "needs the local contract Nakama (tests/contract/run.sh)"]
 fn the_adapter_signs_in_submits_and_lists_with_keep_best() {
-    let uuid = unique("contract-a");
-    let mut b = adapter("alpha", &uuid);
+    let secret = fresh_secret();
+    let mut b = adapter("alpha", &secret);
     assert!(matches!(ask(&mut b, 1, RequestKind::SignIn).reply, BackendReply::SignedIn { .. }));
     let submit = |score| RequestKind::SubmitScore { leaderboard: "best".into(), score };
     assert!(matches!(ask(&mut b, 2, submit(50)).reply, BackendReply::ScoreSubmitted { .. }));
@@ -124,7 +142,7 @@ fn the_adapter_signs_in_submits_and_lists_with_keep_best() {
 #[test]
 #[ignore = "needs the local contract Nakama (tests/contract/run.sh)"]
 fn a_client_for_game_a_cannot_touch_game_b() {
-    let (token, refresh) = raw_session(&format!("alpha:{}", unique("adv")), "").expect("an alpha device signs in");
+    let (token, refresh) = raw_session(&fresh_device_id("alpha"), "").expect("an alpha device signs in");
     let bearer = format!("Bearer {token}");
     let write = |auth: &str, board: &str| raw("POST", &format!("/v2/leaderboard/{board}"), auth, r#"{"score":"5"}"#).0;
     assert_eq!(write(&bearer, "alpha.best"), 200, "own leaderboard works");
@@ -155,7 +173,7 @@ fn a_client_for_game_a_cannot_touch_game_b() {
     assert_eq!(status, 403, "LinkDevice is closed");
     assert_eq!(raw("GET", "/v2/match?limit=5", &bearer, "").0, 403, "match listing is closed");
     // The client cannot choose its game through session vars at sign-in...
-    let (spoof, _) = raw_session(&format!("alpha:{}", unique("spoof")), r#","vars":{"game_id":"beta"}"#).expect("signs in");
+    let (spoof, _) = raw_session(&fresh_device_id("alpha"), r#","vars":{"game_id":"beta"}"#).expect("signs in");
     assert_eq!(write(&format!("Bearer {spoof}"), "beta.best"), 403, "vars from the client must be ignored");
     // ...nor through a refresh, which must also keep the game (fail closed if it did not).
     let (status, text) = raw("POST", "/v2/account/session/refresh", &basic(), &format!(r#"{{"token":"{refresh}","vars":{{"game_id":"beta"}}}}"#));
@@ -172,10 +190,40 @@ fn a_client_for_game_a_cannot_touch_game_b() {
 #[test]
 #[ignore = "needs the local contract Nakama (tests/contract/run.sh)"]
 fn unknown_games_and_other_sign_in_methods_are_refused() {
-    assert!(raw_session(&format!("gamma:{}", unique("x")), "").is_none(), "a game the server does not list");
+    assert!(raw_session(&fresh_device_id("gamma"), "").is_none(), "a game the server does not list");
     assert!(raw_session(&unique("no-prefix-device-id"), "").is_none(), "a device id without a game prefix");
     let (status, _) = raw("POST", "/v2/account/authenticate/email?create=true", &basic(), r#"{"email":"a@b.example","password":"password123"}"#);
     assert_ne!(status, 200, "email sign-in would give a session with no game");
+}
+
+#[test]
+#[ignore = "needs the local contract Nakama (tests/contract/run.sh)"]
+fn a_device_id_must_be_a_game_and_a_32_hex_hash() {
+    // The format the adapter sends works.
+    assert!(raw_session(&fresh_device_id("alpha"), "").is_some());
+    // The old format `{game}:{uuid}` is refused with its own message, so a stale tab or an old build knows what to do.
+    for legacy in ["alpha:0123456789abcdef0123", "alpha:6f1c2b9e-0000-4a11-9a00-ironholdv2a", "alpha:00112233445566778899AABBCCDDEEFF", "alpha:00112233445566778899aabbccddeeff0", "alpha:"] {
+        let (status, text) = raw_signin(legacy);
+        assert_ne!(status, 200, "{legacy}");
+        assert!(text.contains("out of date"), "{legacy}: {text}");
+    }
+    // The game is checked first, so an unknown game still says so, and the format never decides which game is unknown.
+    let (status, text) = raw_signin("gamma:0123456789abcdef0123");
+    assert_ne!(status, 200);
+    assert!(text.contains("unknown game"), "{text}");
+}
+
+#[test]
+#[ignore = "needs the local contract Nakama (tests/contract/run.sh)"]
+fn one_secret_gives_two_unrelated_accounts_in_two_games() {
+    let secret = fresh_secret();
+    let (mut a, mut b) = (adapter("alpha", &secret), adapter("beta", &secret));
+    let BackendReply::SignedIn { display_name: name_a } = ask(&mut a, 1, RequestKind::SignIn).reply else { panic!("alpha signs in") };
+    let BackendReply::SignedIn { display_name: name_b } = ask(&mut b, 1, RequestKind::SignIn).reply else { panic!("beta signs in") };
+    // The server made two accounts (each gets its own random name), and the ids differ beyond the prefix, so it cannot link them.
+    assert_ne!(name_a, name_b, "two games, one secret: two accounts");
+    let id = |game: &str| ironhold_nakama::ns::GameNs::new(game).unwrap().device_id(&secret).unwrap();
+    assert_ne!(id("alpha").split(':').nth(1), id("beta").split(':').nth(1));
 }
 
 /// Calls `POST /v2/rpc/{id}` with a session token (`bearer`) or with the HTTP key alone (`None`, no session).
@@ -189,8 +237,8 @@ fn rpc(id: &str, bearer: Option<&str>) -> (u16, String) {
 #[test]
 #[ignore = "needs the local contract Nakama (tests/contract/run.sh)"]
 fn lobby_rpcs_go_through_the_game_guard() {
-    let (alpha, _) = raw_session(&format!("alpha:{}", unique("rpc")), "").expect("alpha signs in");
-    let (beta, _) = raw_session(&format!("beta:{}", unique("rpc")), "").expect("beta signs in");
+    let (alpha, _) = raw_session(&fresh_device_id("alpha"), "").expect("alpha signs in");
+    let (beta, _) = raw_session(&fresh_device_id("beta"), "").expect("beta signs in");
 
     // A guarded RPC gets the game of the session, never one the client names.
     let (status, body) = rpc("ironhold_lobby_probe", Some(&alpha));
@@ -203,7 +251,7 @@ fn lobby_rpcs_go_through_the_game_guard() {
     assert!(status == 403 && body.contains("needs a signed-in game session"), "the guard's own refusal, not a 401 or 500: {status} {body}");
 
     // A refreshed session that asks for another game's vars still belongs to its own game.
-    let (_, refresh) = raw_session(&format!("alpha:{}", unique("rpc")), "").expect("alpha signs in");
+    let (_, refresh) = raw_session(&fresh_device_id("alpha"), "").expect("alpha signs in");
     let (status, text) = raw("POST", "/v2/account/session/refresh", &basic(), &format!(r#"{{"token":"{refresh}","vars":{{"game_id":"beta"}}}}"#));
     assert_eq!(status, 200, "{text}");
     let marker = "\"token\":\"";

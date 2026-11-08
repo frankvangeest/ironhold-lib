@@ -20,17 +20,18 @@ use ironhold_core::runtime::backend::{
 use crate::ns::GameNs;
 use crate::protocol::{self, Failure, Session};
 
-/// What the adapter needs to talk to one server: the (public) server key and this install's device uuid.
+/// What the adapter needs to talk to one server: the (public) server key and this install's device secret.
 #[derive(Debug, Clone)]
 pub struct NakamaOptions {
     pub server_key: String,
-    /// A stable uuid for this install; the adapter derives the per-game device id `{game_id}:{uuid}` from it.
-    pub device_uuid: String,
+    /// A stable secret for this install (32 lowercase hex characters, see `ns::is_valid_device_secret`). It is never sent: the
+    /// adapter derives the per-game wire id `{game_id}:{hash}` from it and the game id.
+    pub device_secret: String,
 }
 
-/// Produces this install's device uuid, or the reason it cannot (shown on screen). Called only when a real server is about to
+/// Produces this install's device secret, or the reason it cannot (shown on screen). Called only when a real server is about to
 /// be used, so a project that runs offline never creates or stores one.
-pub type DeviceUuidSource = std::sync::Arc<dyn Fn() -> Result<String, String> + Send + Sync>;
+pub type DeviceSecretSource = std::sync::Arc<dyn Fn() -> Result<String, String> + Send + Sync>;
 
 /// What a runner supplies to [`factory`]; the rest comes from `backend.ron` once it resolves.
 #[derive(Clone)]
@@ -40,7 +41,7 @@ pub struct RunnerOptions {
     pub runner_key: Option<String>,
     /// Shown as `backend.last_error` when no key is found anywhere.
     pub missing_key_hint: String,
-    pub device_uuid: DeviceUuidSource,
+    pub device_secret: DeviceSecretSource,
 }
 
 /// Which server key to use. The file's key belongs to the file's own endpoint, so it wins; `file_key` is `None` when a
@@ -54,6 +55,12 @@ pub fn resolve_server_key(file_key: Option<&str>, runner_key: Option<&str>) -> O
 /// The checks that need neither the network nor storage, so a config that can never connect does not get as far as creating a
 /// device id.
 fn precheck(resolved: &ResolvedBackendConfig) -> Result<(), String> {
+    // Same rule as `NakamaBackend::new`, checked here too so a config that can never connect does not make the runner create
+    // a device secret (and delete the old id) first.
+    let base = resolved.endpoint.trim_end_matches('/');
+    if !(base.starts_with("http://") || base.starts_with("https://")) {
+        return Err(format!("endpoint {base:?} is not an http(s) URL"));
+    }
     let ns = GameNs::new(&resolved.game_id)?;
     for lb in &resolved.leaderboards {
         ns.leaderboard(&lb.name)?;
@@ -61,7 +68,7 @@ fn precheck(resolved: &ResolvedBackendConfig) -> Result<(), String> {
     Ok(())
 }
 
-/// The factory a runner puts in `AppOptions::backend_factory`. It resolves the key and the device uuid itself, so the runner
+/// The factory a runner puts in `AppOptions::backend_factory`. It resolves the key and the device secret itself, so the runner
 /// does not need `backend.ron` to be loaded.
 pub fn factory(options: RunnerOptions) -> BackendFactory {
     BackendFactory::new(move |resolved| {
@@ -74,8 +81,8 @@ pub fn factory(options: RunnerOptions) -> BackendFactory {
             });
         };
         precheck(resolved)?;
-        let device_uuid = (options.device_uuid)()?;
-        NakamaBackend::new(resolved, &NakamaOptions { server_key, device_uuid }).map(|b| Box::new(b) as Box<dyn Backend>)
+        let device_secret = (options.device_secret)()?;
+        NakamaBackend::new(resolved, &NakamaOptions { server_key, device_secret }).map(|b| Box::new(b) as Box<dyn Backend>)
     })
 }
 
@@ -134,7 +141,7 @@ impl NakamaBackend {
         for lb in &resolved.leaderboards {
             ns.leaderboard(&lb.name)?;
         }
-        let device_id = ns.device_id(&options.device_uuid)?;
+        let device_id = ns.device_id(&options.device_secret)?;
         let (tx, rx) = channel();
         Ok(Self {
             base,

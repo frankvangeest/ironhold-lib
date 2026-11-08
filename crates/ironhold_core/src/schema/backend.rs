@@ -171,6 +171,9 @@ pub fn is_valid_server_key(key: &str) -> bool {
 }
 
 /// True for `endpoint` values that name the in-memory test backend.
+///
+/// **Load-bearing for credential safety:** the web runner lets a page address (`?backend=`) pick only an endpoint for which this
+/// is true, so a link can never send a player's device id to a server of the link author's choosing. Loosening it loosens that.
 pub fn is_fake_endpoint(endpoint: &str) -> bool {
     endpoint.starts_with("fake://")
 }
@@ -315,6 +318,17 @@ mod tests {
             .with_default_extension(ron::extensions::Extensions::IMPLICIT_SOME)
             .from_str(s)
             .unwrap()
+    }
+
+    #[test]
+    fn only_the_fake_scheme_counts_as_a_fake_endpoint() {
+        // The web runner trusts this to keep `?backend=` from redirecting a player's device id (see the doc comment).
+        for ok in ["fake://", "fake://?latency=30"] {
+            assert!(is_fake_endpoint(ok), "{ok}");
+        }
+        for bad in ["", "http://x", "https://nakama.example", "https://fake://", " fake://", "FAKE://", "fake:/", "xfake://", "http://fake://", "//fake://"] {
+            assert!(!is_fake_endpoint(bad), "{bad:?}");
+        }
     }
 
     #[test]

@@ -1,4 +1,4 @@
-//! Wires the Nakama adapter into the native runner. Everything machine-specific stays out of the project: the device uuid is
+//! Wires the Nakama adapter into the native runner. Everything machine-specific stays out of the project: the device secret is
 //! generated once and kept in the user's home folder (only when a project connects to a real server), and a server key from
 //! `NAKAMA_SERVER_KEY` or a key file fills in when the project's `backend.ron` names none (or when `--backend` points the
 //! project at another server, where the file's key must not follow).
@@ -20,32 +20,41 @@ fn server_key() -> Option<String> {
     std::fs::read_to_string(path).ok().map(|k| k.trim().to_string()).filter(|k| !k.is_empty())
 }
 
-/// A random uuid-shaped id, created on first use and then stable for this install. It is a credential for the player's
-/// account on the server, so it comes from the OS random source.
-fn device_uuid() -> Option<String> {
-    let path = home().join(".ironhold").join("device_id");
+/// A random secret (32 hex characters), created on first use and then stable for this install. The server never sees it: the
+/// adapter sends a per-game hash of it. It comes from the OS random source.
+fn device_secret() -> Option<String> {
+    let dir = home().join(".ironhold");
+    // The file the id lived in before the wire id became a per-game hash. Removed on every call (NotFound is fine), so a crash
+    // between creating the new secret and deleting the old id cannot leave the raw old id on disk.
+    let _ = std::fs::remove_file(dir.join("device_id"));
+    let path = dir.join("device_secret");
     if let Ok(existing) = std::fs::read_to_string(&path) {
         // A hand-edited or damaged file must not take the game offline for good: anything unusable is replaced.
         let existing = existing.trim_start_matches('\u{feff}').trim().to_string();
-        if (16..=100).contains(&existing.len()) && existing.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        if ironhold_nakama::ns::is_valid_device_secret(&existing) {
             return Some(existing);
         }
     }
     let mut bytes = [0u8; 16];
     getrandom::fill(&mut bytes).ok()?;
-    let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
-    let id = format!("{}-{}-{}-{}-{}", &hex[0..8], &hex[8..12], &hex[12..16], &hex[16..20], &hex[20..32]);
-    std::fs::create_dir_all(path.parent()?).ok()?;
-    std::fs::write(&path, &id).ok()?;
-    Some(id)
+    let secret = ironhold_nakama::ns::device_secret_from_bytes(&bytes);
+    std::fs::create_dir_all(&dir).ok()?;
+    // Through a temp file and a rename, so a crash or power loss cannot leave an empty or half-written secret (which would be
+    // replaced by a new one: a new account).
+    let temp = dir.join("device_secret.tmp");
+    std::fs::write(&temp, &secret).ok()?;
+    std::fs::rename(&temp, &path).ok()?;
+    // Two instances starting at once on a fresh install can both make one; the last rename wins, so use what is actually stored.
+    let stored = std::fs::read_to_string(&path).ok().map(|s| s.trim().to_string()).filter(|s| ironhold_nakama::ns::is_valid_device_secret(s));
+    Some(stored.unwrap_or(secret))
 }
 
 /// Always a factory, so a project with a real endpoint says what is missing (`backend.last_error`) instead of blaming the build.
-/// The key and the device uuid are resolved when the factory runs (after `backend.ron` has loaded), not here.
+/// The key and the device secret are resolved when the factory runs (after `backend.ron` has loaded), not here.
 pub fn backend_factory() -> Option<BackendFactory> {
     Some(ironhold_nakama::factory(RunnerOptions {
         runner_key: server_key(),
         missing_key_hint: "no Nakama server key: set server_key in backend.ron (not sent to a --backend server) or NAKAMA_SERVER_KEY (or ~/.nakama_server_key)".to_string(),
-        device_uuid: std::sync::Arc::new(|| device_uuid().ok_or_else(|| "the device id could not be saved: is your home folder writable?".to_string())),
+        device_secret: std::sync::Arc::new(|| device_secret().ok_or_else(|| "the device id could not be saved: is your home folder writable?".to_string())),
     }))
 }

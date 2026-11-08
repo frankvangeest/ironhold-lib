@@ -5,7 +5,7 @@
 //! The realtime socket (matchmaker, reconnect) is v3.
 //!
 //! The runner builds a [`RunnerOptions`] (an optional server key from outside the project, and a source for the per-install
-//! device uuid, which only the runner can persist) and hands [`factory`] to `AppOptions::backend_factory`; the engine calls
+//! device secret, which only the runner can persist) and hands [`factory`] to `AppOptions::backend_factory`; the engine calls
 //! it once `backend.ron` resolves, and the server key then comes from `backend.ron`'s `server_key` first.
 
 pub mod ns;
@@ -18,4 +18,4 @@ mod protocol;
 
 pub use ns::{GameNs, NsLeaderboardId};
 #[cfg(feature = "client")]
-pub use client::{factory, resolve_server_key, DeviceUuidSource, NakamaBackend, NakamaOptions, RunnerOptions};
+pub use client::{factory, resolve_server_key, DeviceSecretSource, NakamaBackend, NakamaOptions, RunnerOptions};
