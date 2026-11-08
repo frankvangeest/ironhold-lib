@@ -12,6 +12,12 @@
 ## Active
 
 - [ ] **Backend abstraction (`ironhold_backend` + Nakama adapter)** _(2026-10-25, Frank)_ - RON-declared online features (`backend.ron`), online Actions and `backend.*` events in core, a fake in-memory backend, then the Nakama adapter (sign-in, cloud saves, leaderboards, lobbies, matchmaker, relay transport), namespaced by `game_id` so one Nakama can serve several games. Phases v1-v5 and open questions: `planning/features/backend_abstraction.md` (Status: In progress, v1 Done (8745ef9, 2026-10-27; contract, FakeBackend, sign-in and leaderboard actions, `backend_demo`), v2 Done (e97da79, 2026-10-28; Nakama adapter on native and web, server module, `ironhold backend config`, deployed to the homelab and playtested), v3 (lobbies, matchmaker) next, split into v3a (lobbies over REST) and v3b (realtime socket + matchmaker) after the 2026-11-05 plan-review: see the Queued items "Backend v3a" and "Backend v3b"; plan-review round 1 done 2026-10-25, seven decisions answered 2026-10-27).
+- [ ] **Backend v3a-2: lobbies on the server (six Lua RPCs, contract tests, adapter, staging playtest)** _(2026-11-07, split from v3a; **Active 2026-11-08**, branch `feature/backend_lobbies_server`, plan Ready in `planning/features/backend_lobbies_server.md` after plan-review round 3; the plan supersedes the details below)_ - `ironhold_lobby_create/_join/_list/_leave/_heartbeat/_start`
+  through `game_rpc` (storage: a versioned lobby object, one heartbeat row per member, a per-user index; retry the last-slot race; explicit client deny of the three lobby collections;
+  `features = { lobbies = true }` gate in `ironhold_games.lua`; `{ok=false, reason}` business replies), the adversarial contract cases listed in the plan, the `ironhold_nakama` lobby
+  client, a staging playtest, then a Cloudflare-path test with N clients. Findings carried in from the `lobby_rpc_allowlist` review: a `lobby_collection(game_id)` helper, a
+  `decode_payload(payload, max_bytes)` helper, the six exact RPC ids in a table. **Depends on** "Backend v3a-1". **Before lobbies are enabled in `backend_demo_online` or any public
+  project:** "Bind the device id to the game" (this list).
 
 
 
@@ -199,12 +205,6 @@ Goal: a fully designer-controllable ocean scene where every environmental variab
 ### Beta 0.6 — Multiplayer Form 1: LAN Co-op
 See `planning/features/networking_multiplayer.md`. Gate: Beta 0.5 (deterministic tick) must ship first.
 - [ ] **Backend spike: Nakama in the homelab** _(2026-10-23, Frank)_ — 1-2 day throwaway spike before any networking plan commits to a backend: run Nakama + Postgres behind `wss://`, a standalone Rust (native + wasm32) test binary doing device-id auth, a storage read/write, a leaderboard score and a relayed match between a native and a browser instance; measure latency and bandwidth at 20-30 Hz and the client size. Plan: `planning/features/nakama_backend_spike.md` (hosting is tracked in the homelab repo: `C:/workspace/frank/homelab/planning/features/nakama-deployment.md`). Go/no-go criteria and the build-vs-adopt analysis (recommendation: both, layered; do not use Nakama authoritative matches for simulation, do not build our own account/storage service) are in `planning/investigations/nakama_backend_viability.md`. Open items there: which Rust sync library supports our Bevy version (and 0.19), Nakama benchmark numbers, Enterprise/Cloud pricing. **Spike run 2026-10-25 (LAN, Wi-Fi): result in section 8c of the investigation: go for Nakama as the meta backend, conditional go for the relay (snapshot-style state); open: stage 2 public hostname, a wired run, the one 352 ms stall.**
-- [ ] **Backend v3a-2: lobbies on the server (six Lua RPCs, contract tests, adapter, staging playtest)** _(2026-11-07, split from v3a)_ - `ironhold_lobby_create/_join/_list/_leave/_heartbeat/_start`
-  through `game_rpc` (storage: a versioned lobby object, one heartbeat row per member, a per-user index; retry the last-slot race; explicit client deny of the three lobby collections;
-  `features = { lobbies = true }` gate in `ironhold_games.lua`; `{ok=false, reason}` business replies), the adversarial contract cases listed in the plan, the `ironhold_nakama` lobby
-  client, a staging playtest, then a Cloudflare-path test with N clients. Findings carried in from the `lobby_rpc_allowlist` review: a `lobby_collection(game_id)` helper, a
-  `decode_payload(payload, max_bytes)` helper, the six exact RPC ids in a table. **Depends on** "Backend v3a-1". **Before lobbies are enabled in `backend_demo_online` or any public
-  project:** "Bind the device id to the game" (this list).
 - [ ] **Backend v3b: realtime socket and matchmaker ("transport preview")** _(2026-11-05, plan-review of v3)_ - `FindMatch`, `CancelMatch`,
   `matchmaker.*` events; native dedicated thread with blocking `tungstenite`, wasm32 `web_sys::WebSocket`, socket opened only during a
   search, per-kind request deadline (the engine's 15 s timeout equals Nakama's 15 s matchmaker interval). **Depends on** "Backend v3a-1" and "v3a-2"
