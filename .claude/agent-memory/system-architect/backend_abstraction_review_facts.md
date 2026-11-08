@@ -145,5 +145,14 @@ Plan re-review round 2 of v3a-2 (1eb5e9f, 2026-11-08), verdict Ready with fixes 
   the before-hook to strip `payload.username`, not only UpdateAccount closed.
 - `lobby_of` is tombstoned, never deleted: one row per player ever (docs must not say "deleted").
 
+Plan re-review round 3 of v3a-2 (aae24e1, 2026-11-08), verdict Ready with text fixes:
+- A generic "on conflict re-read and retry" rule is WRONG for a cleanup delete of the caller's own `lobby_of`: the re-read sees a
+  concurrent create/join's new row and deletes it (heartbeat then answers `removed`). Cleanup deletes must be conditional on the row
+  still being the tombstone and must NOT retry. Same-user concurrency is real: a core-cancelled (timed-out) leave still runs server-side
+  while the user signs in again and joins; two native windows sharing USERPROFILE share the device id.
+- Nakama adapter `cancel_all` also runs `fail_waiting` (requests parked behind an in-flight 401 renewal) and skips RENEWAL_ID: sparing
+  the leave must cover the waiting list, and a renewal landing after SignOut must not repopulate `self.session`.
+- The sweep never touches other users' `lobby_of`, so docs must not say a swept player's index row is deleted.
+
 **Why:** these were the load-bearing gaps; recurring if lobby/multiplayer plans are revised.
 **How to apply:** any review of backend, lobby, cloud-save or Form 2 networking plans. See [[nakama-spike-facts]], [[determinism-networking]].
