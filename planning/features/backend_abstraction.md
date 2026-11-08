@@ -10,7 +10,7 @@ _Planned at: `cd90a12` (2026-10-25)_
 | v1 | Contract in core (Actions, events, engine-written variables, poll trait, glue system) + `FakeBackend`; sign-in and leaderboard only; nothing networked | Done | 8745ef9 (2026-10-27) |
 | v2 | `ironhold_nakama` adapter, **native and wasm32 on the LAN**: sign-in, leaderboards, server module with `game_id` enforcement; cloud save once local save exists | Done | e97da79 (2026-10-28) |
 | v3a-1 | Lobbies, no server: core actions/events/variables, core-driven heartbeat, `FakeBackend`, validate checks, `backend_demo_lobby` on `fake://`, designer docs | Done | 891cf8b (2026-11-07) |
-| v3a-2 | Lobbies, server side: six `ironhold_lobby_*` RPCs behind `game_rpc`, storage guard, features gate, contract tests, adapter, staging playtest | Ready (needs v3a-1) | — |
+| v3a-2 | Lobbies, server side: six `ironhold_lobby_*` RPCs behind `game_rpc`, storage guard, features gate, contract tests, adapter, staging playtest | Detailed plan `backend_lobbies_server.md` Draft, needs plan-review | — |
 | v3b | Realtime socket and matchmaker (`FindMatch`, `CancelMatch`), "transport preview": fake and contract test only, not on the public demo | Queued | — |
 | v4 | Stage 2: `wss://` from an `https` page, tunnel latency and idle sockets, half-open drop | Queued | — |
 | later | Relay transport: only after the sync library is chosen (see "Relay seam") | Icebox | — |
@@ -371,7 +371,7 @@ a lobby RPC from a game without it answers `not_enabled`. "Not on a public proje
 **RPC shapes.** Six RPCs registered through `game_rpc`, ids from a table (the id pattern in `game_rpc` is only a self-check): `ironhold_lobby_create`, `_join`, `_list`, `_leave`,
 `_heartbeat`, `_start`. Requests are small JSON objects decoded by one `decode_payload(payload, max_bytes)` that answers `{ok=false, reason="server"}` for malformed or oversized input;
 a REST RPC body is a JSON-encoded string (or use `?unwrap`). Replies: `{ok=true, lobby={id, gen, name, players, max, started, host, members={{name=...}, ...}}}` or `{ok=false, reason=...}`.
-The exact request and reply field lists are written into this section before the first Lua line.
+The exact request and reply field lists, the storage algorithms, the adapter changes and the test list are in `planning/features/backend_lobbies_server.md` (Draft 2026-11-08; it supersedes this section where they differ, e.g. the match token is dropped).
 
 - **Contract tests** (`tests/contract/run.sh`, adversarial, one per cross-game call): another game's list/join/heartbeat/leave/start; a name outside the declared list; a non-ASCII or oversized name;
   a join of a full lobby; **two simultaneous joins of the last slot** (exactly one wins); a second lobby by one user; the **reload** case (create after losing local state replaces the old
