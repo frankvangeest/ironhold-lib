@@ -81,3 +81,19 @@ fn a_project_without_a_backend_an_invalid_one_and_a_duplicate_game_are_refused()
     assert!(String::from_utf8_lossy(&out.stderr).contains("more than one project"));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn a_lobby_project_on_fake_and_the_online_demo_become_one_server_with_lobbies_only_where_declared() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/projects");
+    let (lobby, online) = (root.join("backend_demo_lobby"), root.join("backend_demo_online"));
+    // `backend_demo_lobby` runs on `fake://`: the command only needs its declarations, never a real endpoint.
+    let out = ironhold(&["backend", "config", lobby.to_str().unwrap(), online.to_str().unwrap()]);
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let text = String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n");
+    let lobby_block = &text[text.find("backend_demo_lobby = {").expect("the lobby game")..text.find("backend_demo_online = {").expect("the online game")];
+    assert!(lobby_block.contains("features = { lobbies = true },"), "{text}");
+    assert!(lobby_block.contains("\"Demo lobby\",") && lobby_block.contains("\"Quick game\","), "{text}");
+    let online_block = &text[text.find("backend_demo_online = {").unwrap()..];
+    assert!(!online_block.contains("lobbies") && !online_block.contains("lobby_names"), "a game without Lobbies gets no lobby config: {text}");
+    assert!(!text.contains("expiry"), "the generator never writes a test-only field");
+}

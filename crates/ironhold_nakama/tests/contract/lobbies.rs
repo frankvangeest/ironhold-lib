@@ -7,7 +7,9 @@ use std::time::Duration;
 
 use serde_json::{json, Value};
 
-use super::{basic, fresh_device_id, raw, raw_session};
+use ironhold_core::runtime::backend::{Backend, BackendReply, BackendRequest, RequestKind};
+
+use super::{adapter, ask, basic, fresh_device_id, fresh_secret, raw, raw_session};
 
 /// The lobby expiry the test module runs with (`modules/ironhold_test_overrides.lua`).
 const EXPIRY: u64 = 6;
@@ -387,4 +389,62 @@ fn a_player_cannot_choose_their_display_name() {
     let start = text.find(marker).unwrap() + marker.len();
     let token = &text[start..start + text[start..].find('"').unwrap()];
     assert_ne!(account(token).name, "Ada", "the sign-in's username must be ignored");
+}
+
+fn signed_in(game: &str) -> (ironhold_nakama::NakamaBackend, String) {
+    let mut b = adapter(game, &fresh_secret());
+    let BackendReply::SignedIn { display_name } = ask(&mut b, 1, RequestKind::SignIn).reply else { panic!("signs in") };
+    (b, display_name)
+}
+
+#[test]
+#[ignore = "needs the local contract Nakama (tests/contract/run.sh)"]
+fn the_adapter_runs_a_whole_lobby_against_the_real_server() {
+    let ((mut a, a_name), (mut b, b_name)) = (signed_in("alpha"), signed_in("alpha"));
+    let create = RequestKind::CreateLobby { name: "Casual".into(), max_players: 4 };
+    let BackendReply::LobbyCreated { lobby } = ask(&mut a, 2, create).reply else { panic!("created") };
+    assert_eq!((lobby.host.as_str(), lobby.members.clone()), (a_name.as_str(), vec![a_name.clone()]));
+    let BackendReply::LobbyListed { rows } = ask(&mut b, 2, RequestKind::ListLobbies).reply else { panic!("listed") };
+    let row = rows.iter().find(|r| r.id == lobby.id).expect("the new lobby is listed");
+    assert_eq!((row.players, row.max, row.host.as_str()), (1, 4, a_name.as_str()));
+    let BackendReply::LobbyJoined { lobby: joined } = ask(&mut b, 3, RequestKind::JoinLobby { lobby_id: lobby.id.clone() }).reply else { panic!("joined") };
+    assert_eq!(joined.members, vec![a_name.clone(), b_name.clone()]);
+    let BackendReply::LobbyState { lobby: seen } = ask(&mut a, 3, RequestKind::LobbyHeartbeat { lobby_id: lobby.id.clone() }).reply else { panic!("state") };
+    assert_eq!(seen.members.len(), 2);
+    assert_eq!(ask(&mut b, 4, RequestKind::StartLobby { lobby_id: lobby.id.clone() }).reply, BackendReply::LobbyStartFailed { reason: "not_host".into() });
+    let BackendReply::LobbyStarted { lobby: started } = ask(&mut a, 4, RequestKind::StartLobby { lobby_id: lobby.id.clone() }).reply else { panic!("started") };
+    assert!(started.started && started.version > seen.version);
+    let BackendReply::LobbyState { lobby: told } = ask(&mut b, 5, RequestKind::LobbyHeartbeat { lobby_id: lobby.id.clone() }).reply else { panic!("state") };
+    assert!(told.started, "a member learns of the start from its next heartbeat");
+    assert_eq!(ask(&mut a, 5, RequestKind::LeaveLobby).reply, BackendReply::LobbyLeft);
+    // A heartbeat for a lobby the player is not in answers closed, not trouble.
+    let reply = ask(&mut a, 6, RequestKind::LobbyHeartbeat { lobby_id: lobby.id.clone() }).reply;
+    assert_eq!(reply, BackendReply::LobbyClosed { reason: "removed".into() });
+}
+
+#[test]
+#[ignore = "needs the local contract Nakama (tests/contract/run.sh)"]
+fn signing_out_right_after_a_create_leaves_no_ghost_lobby_on_the_real_server() {
+    let ((mut a, a_name), (mut observer, _)) = (signed_in("alpha"), signed_in("alpha"));
+    // Core's order for a sign-out while the create is still unanswered: the create, then the leave, then the sign-out.
+    a.submit(BackendRequest { id: 2, kind: RequestKind::CreateLobby { name: "Casual".into(), max_players: 4 } });
+    a.submit(BackendRequest { id: 3, kind: RequestKind::LeaveLobby });
+    a.submit(BackendRequest { id: 4, kind: RequestKind::SignOut });
+    let until = std::time::Instant::now() + Duration::from_secs(10);
+    let mut out = Vec::new();
+    while std::time::Instant::now() < until && !(out.iter().any(|e: &ironhold_core::runtime::backend::BackendEvent| e.request_id == 4)) {
+        a.poll(&mut out);
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(out.iter().any(|e| e.request_id == 4 && e.reply == BackendReply::SignedOut), "{out:?}");
+    // The teardown (create, leave, logout) finishes in the background: keep polling, then look at the server.
+    let until = std::time::Instant::now() + Duration::from_secs(5);
+    let mut ghost = true;
+    while std::time::Instant::now() < until && ghost {
+        a.poll(&mut out);
+        let BackendReply::LobbyListed { rows } = ask(&mut observer, 9, RequestKind::ListLobbies).reply else { panic!("listed") };
+        ghost = rows.iter().any(|r| r.host == a_name);
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    assert!(!ghost, "the signed-out player's lobby is still listed");
 }

@@ -16,8 +16,8 @@
             height: Percent(100.0),
             children: [
                 Label((id: "title", text: "backend_demo_lobby - lobbies", size: (640.0, 32.0), align: Left)),
-                Label((id: "fake_note", text: "Practice lobby: pretend players, test backend.", size: (600.0, 22.0), align: Left, font_size: 18.0)),
-                Label((id: "fake_note_2", text: "No real players. No shared play yet.", size: (600.0, 22.0), align: Left, font_size: 18.0)),
+                Label((id: "fake_note", text: "Lobby demo. On fake:// the players are pretend.", size: (600.0, 22.0), align: Left, font_size: 18.0)),
+                Label((id: "fake_note_2", text: "No shared play yet.", size: (600.0, 22.0), align: Left, font_size: 18.0)),
                 Group((
                     id: "account",
                     flex_direction: Column,
