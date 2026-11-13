@@ -1,6 +1,6 @@
 # Feature: Backend v3a-2 - lobbies on the Nakama server
 
-_Status: Ready (2026-11-08), plan-review round 3 passed (UX round 2 Ready, architect round 3 Ready with text fixes, folded in)_
+_Status: Done (2026-11-13). Ready 2026-11-08 after plan-review round 3 (UX round 2 Ready, architect round 3 Ready with text fixes, folded in); playtested on the LAN staging server with 5 players._
 _Planned at: `3c788d5` (2026-11-08)_
 
 Second half of v3a in `planning/features/backend_abstraction.md` (decisions 8, 16-33 there stay the rules; this file only adds what v3a-2 needs to build:
@@ -148,7 +148,7 @@ of a multi-object write is unverified: the race test includes a two-thread cross
   - re-check `docs/30_runtime_events_and_logic.md` (about lines 458 and 521-533) after the above;
   - `docs/15_authoring_tools.md` only if a new validate check appears; `crates/ironhold_core/src/runtime/CLAUDE.md` (adapter line); the `NakamaBackend` doc comment.
 - [x] Demo `backend_demo_lobby` (text boxes hold about 55 characters, box width / (font size x 0.6)): `fake_note` "Lobby demo. On fake:// the players are pretend." and `fake_note_2` "No shared play yet."; keep the retry hint ("Backend unreachable. Press Sign in to retry."); a `lobby.list_failed:not_enabled` rule ("Lobbies are off for this game on the server."); the host-left message "The host left or lost connection, so the lobby closed."; `state_machine.ron:74-75`: the comment **and the rule** change (today it says "Leaving your old lobby. Try again." and fires `LeaveLobby`; `already_in_lobby` is now core's own refusal while it holds a lobby, so make it a plain message "You are already in a lobby. Leave it first." or remove it). Check `ironhold backend config` accepts a project whose `endpoint` is `fake://`.
-- [ ] Dev playtest against the staging Nakama (native `--backend`, two clients), checklist below
+- [x] Dev playtest against the staging Nakama (native `--backend`; Frank played with 5 players on the LAN, 2026-11-13, all as expected)
 - [x] Backlog: item "enable lobbies on the first public project" (Cloudflare path, N clients through `play.frankcreates.com`, device-id cutover, the two limits below). **Not part of this Done.**
 
 ## Implementation notes (2026-11-08)

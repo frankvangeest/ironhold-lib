@@ -1,4 +1,4 @@
-//! Contract cases for the six `ironhold_lobby_*` RPCs (planning/features/backend_lobbies_server.md). Lua is only exercised here, so
+//! Contract cases for the six `ironhold_lobby_*` RPCs (planning/features/done/backend_lobbies_server.md). Lua is only exercised here, so
 //! this file is the real gate for `ironhold.lua`'s lobby section. Raw HTTP, so the cases can send what an honest adapter never would.
 //! The module under test runs with `ironhold_test_overrides.lua` (lobby expiry 6 s); games `alpha` and `gamma` have lobbies, `beta` has
 //! none.
