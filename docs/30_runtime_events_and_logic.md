@@ -456,7 +456,7 @@ Rules that matter when you wire them:
   when the server goes away (`lobby.closed:server`). `assets/projects/backend_demo_lobby` shows each as a show/hide of three panels. The
   failures bind in two layers: the generic event sets a default message, the `:<reason>` form overrides it.
 - An empty list is `lobby.list_empty`; a full lobby is `lobby.join_failed:full`; the server being down is `backend.unreachable` before
-  sign-in and `lobby.connection_trouble` / `lobby.closed:server` inside a lobby. A refresh faster than about 5 s is answered from the
+  sign-in and `lobby.connection_trouble` / `lobby.closed:server` inside a lobby, and `lobby.list_failed:server` / `lobby.join_failed:server` while browsing. A refresh faster than about 5 s is answered from the
   last list (so a 1-second refresh loop shows old data, it does not hammer the server).
 
 **Pattern: sign in, then show the board** (`assets/projects/backend_demo`):

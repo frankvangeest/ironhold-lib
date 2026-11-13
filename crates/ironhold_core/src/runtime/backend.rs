@@ -204,7 +204,10 @@ pub struct BackendEvent {
 
 /// What an adapter implements. `submit` must not block; `poll` appends whatever arrived since the last call.
 /// Core submits requests in id order but promises nothing about the order they finish in, and an adapter may run them concurrently
-/// with one exception: a `LeaveLobby` submitted before a `SignOut` (sign-out leaves the lobby) must reach the server before the logout.
+/// with one exception: a `LeaveLobby` submitted before a `SignOut` (sign-out leaves the lobby) must reach the server before the logout,
+/// also when a create or join is still unanswered (the leave then waits for it). An adapter still answers `SignedOut` at once; it may
+/// finish that leave and the logout in the background with the old session, and hold a `SignIn` submitted meanwhile until the logout is
+/// sent (core's timeout and `cancel` end any step that never answers).
 /// Never use Bevy's task pools for the I/O behind it (single-threaded on wasm, starved by blocking sockets on native).
 pub trait Backend {
     fn submit(&mut self, req: BackendRequest);

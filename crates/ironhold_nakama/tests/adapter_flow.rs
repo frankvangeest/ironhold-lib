@@ -450,3 +450,426 @@ fn the_key_goes_with_the_files_endpoint_and_the_device_secret_is_only_made_when_
     assert!((counting.0)(&no_game).is_err());
     assert_eq!(made.load(Ordering::Relaxed), 0, "no device id for a config that can never connect");
 }
+
+// ---- lobbies (v3a-2) ---------------------------------------------------------------------------------------------------------
+
+use ironhold_core::runtime::backend::{LobbyInfo, LobbyRow};
+use serde_json::{json, Value};
+
+/// A 200 answer of an RPC: Nakama wraps the module's JSON string in `{"payload": "<json>"}`.
+fn rpc_reply(inner: Value) -> (u16, String) {
+    (200, json!({ "payload": inner.to_string() }).to_string())
+}
+
+fn lobby_json(id: &str, version: u64, members: &[&str], started: bool) -> Value {
+    json!({ "ok": true, "lobby": { "id": id, "version": version, "name": "Casual", "max": 4, "started": started, "host": members[0], "players": members.len(), "members": members } })
+}
+
+fn info(id: &str, version: u64, members: &[&str], started: bool) -> LobbyInfo {
+    LobbyInfo {
+        id: id.into(), version, name: "Casual".into(), max: 4, started, host: members[0].into(),
+        members: members.iter().map(|m| m.to_string()).collect(),
+    }
+}
+
+/// The JSON object a request sent: the body is a JSON string holding the object.
+fn sent(body: &str) -> Value {
+    let inner: String = serde_json::from_str(body).expect("the RPC body is a JSON string");
+    serde_json::from_str(&inner).expect("holding a JSON object")
+}
+
+fn device_auth(usn: &str, refresh: &str) -> (u16, String) {
+    (200, format!(r#"{{"token":"{}","refresh_token":"{refresh}"}}"#, jwt("u1", usn)))
+}
+
+#[test]
+fn lobby_calls_become_rpcs_and_their_answers_become_replies_and_fixed_reasons() {
+    let bodies: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
+    let seen_bodies = bodies.clone();
+    let (url, _seen, stop) = serve(move |method, path, _auth, body| {
+        if method == "POST" && path.starts_with("/v2/account/authenticate/device") {
+            return device_auth("Ada", "r");
+        }
+        let Some(rpc) = path.strip_prefix("/v2/rpc/") else { return (404, "{}".to_string()) };
+        let request = sent(body);
+        seen_bodies.lock().unwrap().push((rpc.to_string(), request.clone()));
+        let id = request.get("lobby_id").and_then(Value::as_str).unwrap_or("");
+        match (rpc, id) {
+            ("ironhold_lobby_list", _) => rpc_reply(json!({ "ok": true, "rows": [{ "id": "L1", "name": "Casual", "players": 1, "max": 4, "host": "Ada" }] })),
+            ("ironhold_lobby_create", _) => match request["name"].as_str() {
+                Some("Casual") => rpc_reply(lobby_json("L1", 1, &["Ada"], false)),
+                Some("Cap") => rpc_reply(json!({ "ok": false, "reason": "limit_reached" })),
+                _ => rpc_reply(json!({ "ok": false, "reason": "made_up_reason" })),
+            },
+            ("ironhold_lobby_join", "ok") => rpc_reply(lobby_json("L1", 2, &["Ada", "Bo"], false)),
+            ("ironhold_lobby_join", _) => rpc_reply(json!({ "ok": false, "reason": "full" })),
+            ("ironhold_lobby_start", "ok") => rpc_reply(lobby_json("L1", 3, &["Ada", "Bo"], true)),
+            ("ironhold_lobby_start", _) => rpc_reply(json!({ "ok": false, "reason": "not_host" })),
+            ("ironhold_lobby_heartbeat", "ok") => rpc_reply(lobby_json("L1", 4, &["Ada", "Bo"], false)),
+            ("ironhold_lobby_heartbeat", "gone_host") => rpc_reply(json!({ "ok": false, "reason": "host_left" })),
+            ("ironhold_lobby_heartbeat", "gone_removed") => rpc_reply(json!({ "ok": false, "reason": "removed" })),
+            ("ironhold_lobby_heartbeat", "limited") => (429, "{}".to_string()),
+            ("ironhold_lobby_heartbeat", "broken") => (403, r#"{"message":"the request failed"}"#.to_string()),
+            ("ironhold_lobby_heartbeat", _) => rpc_reply(json!({ "ok": false, "reason": "not_enabled" })),
+            ("ironhold_lobby_leave", _) => (500, "<html>".to_string()),
+            _ => (404, "{}".to_string()),
+        }
+    });
+    let mut b = adapter(&url);
+    // Not signed in: refused locally with the fixed reason, a leave still leaves.
+    assert_eq!(ask(&mut b, 1, RequestKind::CreateLobby { name: "Casual".into(), max_players: 4 }).reply, BackendReply::LobbyCreateFailed { reason: "not_signed_in".into() });
+    assert_eq!(ask(&mut b, 2, RequestKind::LeaveLobby).reply, BackendReply::LobbyLeft);
+    ask(&mut b, 3, RequestKind::SignIn);
+    let mut next = 10;
+    let mut call = |kind: RequestKind| {
+        next += 1;
+        ask(&mut b, next, kind).reply
+    };
+    let row = LobbyRow { id: "L1".into(), name: "Casual".into(), players: 1, max: 4, host: "Ada".into() };
+    assert_eq!(call(RequestKind::ListLobbies), BackendReply::LobbyListed { rows: vec![row] });
+    assert_eq!(call(RequestKind::CreateLobby { name: "Casual".into(), max_players: 4 }), BackendReply::LobbyCreated { lobby: info("L1", 1, &["Ada"], false) });
+    assert_eq!(call(RequestKind::CreateLobby { name: "Cap".into(), max_players: 4 }), BackendReply::LobbyCreateFailed { reason: "limit_reached".into() });
+    assert_eq!(call(RequestKind::CreateLobby { name: "Other".into(), max_players: 4 }), BackendReply::LobbyCreateFailed { reason: "server".into() }, "an unknown reason is `server`");
+    assert_eq!(call(RequestKind::JoinLobby { lobby_id: "ok".into() }), BackendReply::LobbyJoined { lobby: info("L1", 2, &["Ada", "Bo"], false) });
+    assert_eq!(call(RequestKind::JoinLobby { lobby_id: "x".into() }), BackendReply::LobbyJoinFailed { reason: "full".into() });
+    assert_eq!(call(RequestKind::StartLobby { lobby_id: "ok".into() }), BackendReply::LobbyStarted { lobby: info("L1", 3, &["Ada", "Bo"], true) });
+    assert_eq!(call(RequestKind::StartLobby { lobby_id: "x".into() }), BackendReply::LobbyStartFailed { reason: "not_host".into() });
+    let hb = |id: &str| RequestKind::LobbyHeartbeat { lobby_id: id.into() };
+    assert_eq!(call(hb("ok")), BackendReply::LobbyState { lobby: info("L1", 4, &["Ada", "Bo"], false) });
+    assert_eq!(call(hb("gone_host")), BackendReply::LobbyClosed { reason: "host_left".into() });
+    assert_eq!(call(hb("gone_removed")), BackendReply::LobbyClosed { reason: "removed".into() });
+    assert_eq!(call(hb("limited")), BackendReply::LobbyHeartbeatFailed { reason: "rate_limited".into() }, "a 429 is trouble reaching the server, not a closed lobby");
+    assert_eq!(call(hb("broken")), BackendReply::LobbyHeartbeatFailed { reason: "server".into() });
+    assert_eq!(call(hb("other")), BackendReply::LobbyHeartbeatFailed { reason: "not_enabled".into() });
+    assert_eq!(call(RequestKind::LeaveLobby), BackendReply::LobbyLeft, "a leave that cannot be confirmed still leaves");
+    stop.store(true, Ordering::Relaxed);
+    // The requests carried what core sent, as RPC bodies.
+    let sent_bodies = bodies.lock().unwrap().clone();
+    assert!(sent_bodies.contains(&("ironhold_lobby_create".into(), json!({ "name": "Casual", "max_players": 4 }))), "{sent_bodies:?}");
+    assert!(sent_bodies.contains(&("ironhold_lobby_join".into(), json!({ "lobby_id": "ok" }))), "{sent_bodies:?}");
+}
+
+#[test]
+fn a_lobby_call_with_an_expired_token_refreshes_once_and_retries() {
+    let (creates, refreshes) = (Arc::new(AtomicUsize::new(0)), Arc::new(AtomicUsize::new(0)));
+    let (c2, r2) = (creates.clone(), refreshes.clone());
+    let (url, _seen, stop) = serve(move |method, path, _auth, _body| match (method, path) {
+        ("POST", p) if p.starts_with("/v2/account/authenticate/device") => device_auth("Ada", "r1"),
+        ("POST", "/v2/account/session/refresh") => {
+            r2.fetch_add(1, Ordering::Relaxed);
+            device_auth("Ada", "r2")
+        }
+        ("POST", "/v2/rpc/ironhold_lobby_create") => {
+            if c2.fetch_add(1, Ordering::Relaxed) == 0 {
+                (401, r#"{"message":"Auth token invalid"}"#.to_string())
+            } else {
+                rpc_reply(lobby_json("L1", 1, &["Ada"], false))
+            }
+        }
+        _ => (404, "{}".to_string()),
+    });
+    let mut b = adapter(&url);
+    ask(&mut b, 1, RequestKind::SignIn);
+    let reply = ask(&mut b, 2, RequestKind::CreateLobby { name: "Casual".into(), max_players: 4 }).reply;
+    assert_eq!(reply, BackendReply::LobbyCreated { lobby: info("L1", 1, &["Ada"], false) });
+    assert_eq!((creates.load(Ordering::Relaxed), refreshes.load(Ordering::Relaxed)), (2, 1));
+    stop.store(true, Ordering::Relaxed);
+}
+
+/// What the stub saw, by RPC name or path, in arrival order.
+fn paths(seen: &Seen) -> Vec<String> {
+    seen.lock().unwrap().iter().map(|(_, p, _)| p.split('?').next().unwrap().to_string()).collect()
+}
+
+fn position(log: &[String], suffix: &str) -> Option<usize> {
+    log.iter().position(|p| p.ends_with(suffix))
+}
+
+/// Polls the adapter (it only moves when polled) until the server has seen `suffix`; returns the replies that arrived meanwhile.
+fn wait_for_path(b: &mut NakamaBackend, seen: &Seen, suffix: &str) -> Vec<BackendEvent> {
+    let until = Instant::now() + Duration::from_secs(8);
+    let mut out = Vec::new();
+    while Instant::now() < until {
+        b.poll(&mut out);
+        if position(&paths(seen), suffix).is_some() {
+            return out;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    panic!("the server never saw {suffix}: {:?}", paths(seen));
+}
+
+#[test]
+fn signing_out_during_a_join_lets_the_join_finish_then_leaves_then_logs_out_with_the_old_session() {
+    let join_done = Arc::new(AtomicBool::new(false));
+    let early_leave = Arc::new(AtomicBool::new(false));
+    let (done, early) = (join_done.clone(), early_leave.clone());
+    let (url, seen, stop) = serve(move |method, path, auth, _body| match (method, path) {
+        ("POST", p) if p.starts_with("/v2/account/authenticate/device") => device_auth("Old", "r"),
+        ("POST", "/v2/rpc/ironhold_lobby_join") => {
+            std::thread::sleep(Duration::from_millis(400));
+            done.store(true, Ordering::SeqCst);
+            rpc_reply(lobby_json("L1", 2, &["Ada", "Bo"], false))
+        }
+        ("POST", "/v2/rpc/ironhold_lobby_leave") => {
+            // The leave may only be sent once the join was answered, and with the session the join used.
+            if !done.load(Ordering::SeqCst) || !auth.contains(&jwt("u1", "Old")) {
+                early.store(true, Ordering::SeqCst);
+            }
+            rpc_reply(json!({ "ok": true }))
+        }
+        _ => (200, "{}".to_string()),
+    });
+    let mut b = adapter(&url);
+    ask(&mut b, 1, RequestKind::SignIn);
+    // Core's order: the join is on the wire, the engine signs out: the leave is queued before the sign-out.
+    b.submit(BackendRequest { id: 2, kind: RequestKind::JoinLobby { lobby_id: "L1".into() } });
+    b.submit(BackendRequest { id: 3, kind: RequestKind::LeaveLobby });
+    b.submit(BackendRequest { id: 4, kind: RequestKind::SignOut });
+    let mut got = poll_for(&mut b, 1500);
+    got.sort_by_key(|e| e.request_id);
+    assert_eq!(got.iter().map(|e| e.request_id).collect::<Vec<_>>(), vec![2, 3, 4], "one reply each: {got:?}");
+    assert_eq!(got[2].reply, BackendReply::SignedOut);
+    assert_eq!(got[1].reply, BackendReply::LobbyLeft);
+    assert!(!early_leave.load(Ordering::SeqCst), "the leave went out before the join was answered, or with another session");
+    let log = paths(&seen);
+    let (join, leave, logout) = (position(&log, "lobby_join"), position(&log, "lobby_leave"), position(&log, "/v2/session/logout"));
+    assert!(join < leave && leave < logout && logout.is_some(), "join, then leave, then logout: {log:?}");
+    stop.store(true, Ordering::Relaxed);
+}
+
+#[test]
+fn a_sign_in_during_the_teardown_waits_until_the_logout_is_sent() {
+    let sign_ins = Arc::new(AtomicUsize::new(0));
+    let s2 = sign_ins.clone();
+    let (url, seen, stop) = serve(move |method, path, _auth, _body| match (method, path) {
+        ("POST", p) if p.starts_with("/v2/account/authenticate/device") => {
+            if s2.fetch_add(1, Ordering::SeqCst) == 0 { device_auth("Old", "r") } else { device_auth("New", "r") }
+        }
+        ("POST", "/v2/rpc/ironhold_lobby_join") => {
+            std::thread::sleep(Duration::from_millis(400));
+            rpc_reply(lobby_json("L1", 2, &["Ada", "Bo"], false))
+        }
+        ("POST", "/v2/rpc/ironhold_lobby_leave") => rpc_reply(json!({ "ok": true })),
+        _ => (200, "{}".to_string()),
+    });
+    let mut b = adapter(&url);
+    ask(&mut b, 1, RequestKind::SignIn);
+    b.submit(BackendRequest { id: 2, kind: RequestKind::JoinLobby { lobby_id: "L1".into() } });
+    b.submit(BackendRequest { id: 3, kind: RequestKind::LeaveLobby });
+    b.submit(BackendRequest { id: 4, kind: RequestKind::SignOut });
+    b.submit(BackendRequest { id: 5, kind: RequestKind::SignIn });
+    // While the join is unanswered the second sign-in has not been sent.
+    std::thread::sleep(Duration::from_millis(150));
+    assert_eq!(sign_ins.load(Ordering::SeqCst), 1, "the new sign-in is held: {:?}", paths(&seen));
+    let mut got = poll_for(&mut b, 1500);
+    got.sort_by_key(|e| e.request_id);
+    let ids: Vec<u64> = got.iter().map(|e| e.request_id).collect();
+    assert_eq!(ids, vec![2, 3, 4, 5], "{got:?}");
+    assert_eq!(got[3].reply, BackendReply::SignedIn { display_name: "New".into() });
+    let log = paths(&seen);
+    let second_sign_in = log.iter().enumerate().filter(|(_, p)| p.ends_with("/authenticate/device")).nth(1).map(|(i, _)| i);
+    assert!(position(&log, "lobby_leave") < second_sign_in, "the old session's leave comes before the new sign-in: {log:?}");
+    stop.store(true, Ordering::Relaxed);
+}
+
+#[test]
+fn a_create_that_never_answers_is_ended_by_the_engines_cancel_and_the_teardown_goes_on() {
+    let (url, seen, stop) = serve(|method, path, _auth, _body| match (method, path) {
+        ("POST", p) if p.starts_with("/v2/account/authenticate/device") => device_auth("Ada", "r"),
+        ("POST", "/v2/rpc/ironhold_lobby_create") => {
+            std::thread::sleep(Duration::from_secs(4));
+            rpc_reply(lobby_json("L1", 1, &["Ada"], false))
+        }
+        ("POST", "/v2/rpc/ironhold_lobby_leave") => rpc_reply(json!({ "ok": true })),
+        _ => (200, "{}".to_string()),
+    });
+    let mut b = adapter(&url);
+    ask(&mut b, 1, RequestKind::SignIn);
+    b.submit(BackendRequest { id: 2, kind: RequestKind::CreateLobby { name: "Casual".into(), max_players: 4 } });
+    b.submit(BackendRequest { id: 3, kind: RequestKind::LeaveLobby });
+    b.submit(BackendRequest { id: 4, kind: RequestKind::SignOut });
+    b.submit(BackendRequest { id: 5, kind: RequestKind::SignIn });
+    let early = poll_for(&mut b, 300);
+    assert!(early.iter().any(|e| e.request_id == 4 && e.reply == BackendReply::SignedOut), "SignedOut is answered at once: {early:?}");
+    assert!(early.iter().all(|e| e.request_id != 5), "the sign-in is held: {early:?}");
+    assert_eq!(position(&paths(&seen), "lobby_leave"), None, "the leave waits for the create");
+    // Core's timeout fires for the create (and the leave queued with it): the create is dropped, the leave goes out, then the logout.
+    b.cancel(2);
+    let mut got = wait_for_path(&mut b, &seen, "lobby_leave");
+    got.extend(wait_for_path(&mut b, &seen, "/v2/session/logout"));
+    got.extend(poll_for(&mut b, 800));
+    assert!(got.iter().any(|e| e.request_id == 5 && matches!(e.reply, BackendReply::SignedIn { .. })), "the held sign-in proceeds: {got:?}");
+    assert!(got.iter().all(|e| e.request_id != 2), "no reply after a cancel: {got:?}");
+    stop.store(true, Ordering::Relaxed);
+}
+
+#[test]
+fn the_engine_cancelling_the_held_sign_in_leaves_no_stuck_state() {
+    let (url, seen, stop) = serve(|method, path, _auth, _body| match (method, path) {
+        ("POST", p) if p.starts_with("/v2/account/authenticate/device") => device_auth("Ada", "r"),
+        ("POST", "/v2/rpc/ironhold_lobby_join") => {
+            std::thread::sleep(Duration::from_millis(300));
+            rpc_reply(lobby_json("L1", 2, &["Ada", "Bo"], false))
+        }
+        ("POST", "/v2/rpc/ironhold_lobby_leave") => rpc_reply(json!({ "ok": true })),
+        _ => (200, "{}".to_string()),
+    });
+    let mut b = adapter(&url);
+    ask(&mut b, 1, RequestKind::SignIn);
+    b.submit(BackendRequest { id: 2, kind: RequestKind::JoinLobby { lobby_id: "L1".into() } });
+    b.submit(BackendRequest { id: 3, kind: RequestKind::LeaveLobby });
+    b.submit(BackendRequest { id: 4, kind: RequestKind::SignOut });
+    b.submit(BackendRequest { id: 5, kind: RequestKind::SignIn });
+    b.cancel(5);
+    let got = poll_for(&mut b, 1200);
+    assert!(got.iter().all(|e| e.request_id != 5), "the cancelled sign-in is never answered or sent: {got:?}");
+    wait_for_path(&mut b, &seen, "/v2/session/logout");
+    // The teardown ended: a fresh sign-in works at once.
+    assert!(matches!(ask(&mut b, 6, RequestKind::SignIn).reply, BackendReply::SignedIn { .. }));
+    stop.store(true, Ordering::Relaxed);
+}
+
+#[test]
+fn a_401_during_the_teardown_renews_the_old_session_only_and_the_logout_uses_the_renewed_token() {
+    let leaves = Arc::new(AtomicUsize::new(0));
+    let l2 = leaves.clone();
+    let logout_auth: Arc<Mutex<String>> = Arc::default();
+    let la = logout_auth.clone();
+    let (url, seen, stop) = serve(move |method, path, auth, _body| match (method, path) {
+        ("POST", p) if p.starts_with("/v2/account/authenticate/device") => device_auth("Old", "r1"),
+        ("POST", "/v2/account/session/refresh") => device_auth("Renewed", "r2"),
+        ("POST", "/v2/rpc/ironhold_lobby_leave") => {
+            std::thread::sleep(Duration::from_millis(150));
+            if l2.fetch_add(1, Ordering::SeqCst) == 0 { (401, "{}".to_string()) } else { rpc_reply(json!({ "ok": true })) }
+        }
+        ("POST", "/v2/session/logout") => {
+            *la.lock().unwrap() = auth.to_string();
+            (200, "{}".to_string())
+        }
+        _ => (404, "{}".to_string()),
+    });
+    let mut b = adapter(&url);
+    ask(&mut b, 1, RequestKind::SignIn);
+    b.submit(BackendRequest { id: 2, kind: RequestKind::LeaveLobby });
+    b.submit(BackendRequest { id: 3, kind: RequestKind::SignOut });
+    let mut got = wait_for_path(&mut b, &seen, "/v2/session/logout");
+    assert_eq!(leaves.load(Ordering::SeqCst), 2, "the leave was retried once with the renewed token");
+    assert!(logout_auth.lock().unwrap().contains(&jwt("u1", "Renewed")), "{}", logout_auth.lock().unwrap());
+    got.extend(poll_for(&mut b, 300));
+    assert!(got.iter().any(|e| e.request_id == 3 && e.reply == BackendReply::SignedOut), "{got:?}");
+    // The renewal never became the adapter's own session: the player is signed out.
+    assert!(matches!(ask(&mut b, 4, submit_kind(1)).reply, BackendReply::ScoreFailed { .. }));
+    stop.store(true, Ordering::Relaxed);
+}
+
+#[test]
+fn a_leave_waits_for_a_join_parked_behind_a_session_renewal() {
+    let joins = Arc::new(AtomicUsize::new(0));
+    let j2 = joins.clone();
+    let early_leave = Arc::new(AtomicBool::new(false));
+    let (e2, joined) = (early_leave.clone(), Arc::new(AtomicBool::new(false)));
+    let j3 = joined.clone();
+    let wrong_token = Arc::new(AtomicBool::new(false));
+    let wrong = wrong_token.clone();
+    let (url, seen, stop) = serve(move |method, path, auth, _body| match (method, path) {
+        ("POST", p) if p.starts_with("/v2/account/authenticate/device") => device_auth("Old", "r1"),
+        ("POST", "/v2/account/session/refresh") => {
+            std::thread::sleep(Duration::from_millis(300));
+            device_auth("Renewed", "r2")
+        }
+        ("POST", "/v2/rpc/ironhold_lobby_join") => {
+            if j2.fetch_add(1, Ordering::SeqCst) == 0 {
+                (401, "{}".to_string())
+            } else {
+                if !auth.contains(&jwt("u1", "Renewed")) {
+                    wrong.store(true, Ordering::SeqCst);
+                }
+                j3.store(true, Ordering::SeqCst);
+                rpc_reply(lobby_json("L1", 2, &["Ada", "Bo"], false))
+            }
+        }
+        ("POST", "/v2/rpc/ironhold_lobby_leave") => {
+            if !j3.load(Ordering::SeqCst) {
+                e2.store(true, Ordering::SeqCst);
+            }
+            rpc_reply(json!({ "ok": true }))
+        }
+        _ => (200, "{}".to_string()),
+    });
+    let mut b = adapter(&url);
+    ask(&mut b, 1, RequestKind::SignIn);
+    b.submit(BackendRequest { id: 2, kind: RequestKind::JoinLobby { lobby_id: "L1".into() } });
+    // Wait until the join got its 401 and is parked behind the renewal, then core signs out (leave first).
+    let mut got = wait_for_path(&mut b, &seen, "/v2/account/session/refresh");
+    b.submit(BackendRequest { id: 3, kind: RequestKind::LeaveLobby });
+    b.submit(BackendRequest { id: 4, kind: RequestKind::SignOut });
+    got.extend(poll_for(&mut b, 1500));
+    got.sort_by_key(|e| e.request_id);
+    assert_eq!(got.iter().map(|e| e.request_id).collect::<Vec<_>>(), vec![2, 3, 4], "{got:?}");
+    assert!(!early_leave.load(Ordering::SeqCst), "the leave must come after the parked join finished");
+    wait_for_path(&mut b, &seen, "/v2/session/logout");
+    assert_eq!(joins.load(Ordering::SeqCst), 2, "the parked join was retried, not dropped");
+    assert!(!wrong_token.load(Ordering::SeqCst), "the retry used the renewed token of the old session");
+    // The renewal never became the adapter's own session.
+    assert!(matches!(ask(&mut b, 5, submit_kind(1)).reply, BackendReply::ScoreFailed { .. }));
+    stop.store(true, Ordering::Relaxed);
+}
+
+#[test]
+fn the_logout_still_goes_out_when_the_old_sessions_leave_fails() {
+    let (url, seen, stop) = serve(|method, path, _auth, _body| match (method, path) {
+        ("POST", p) if p.starts_with("/v2/account/authenticate/device") => device_auth("Old", "r"),
+        ("POST", "/v2/rpc/ironhold_lobby_join") => {
+            std::thread::sleep(Duration::from_millis(200));
+            rpc_reply(lobby_json("L1", 2, &["Ada", "Bo"], false))
+        }
+        ("POST", "/v2/rpc/ironhold_lobby_leave") => (500, "<html>".to_string()),
+        _ => (200, "{}".to_string()),
+    });
+    let mut b = adapter(&url);
+    ask(&mut b, 1, RequestKind::SignIn);
+    b.submit(BackendRequest { id: 2, kind: RequestKind::JoinLobby { lobby_id: "L1".into() } });
+    b.submit(BackendRequest { id: 3, kind: RequestKind::LeaveLobby });
+    b.submit(BackendRequest { id: 4, kind: RequestKind::SignOut });
+    let mut got = wait_for_path(&mut b, &seen, "/v2/session/logout");
+    got.extend(poll_for(&mut b, 200));
+    assert!(got.iter().any(|e| e.request_id == 3 && e.reply == BackendReply::LobbyLeft), "a failed leave still answers LobbyLeft: {got:?}");
+    stop.store(true, Ordering::Relaxed);
+}
+
+#[test]
+fn a_renewal_that_never_answers_does_not_hold_the_logout_or_the_next_sign_in() {
+    let joins = Arc::new(AtomicUsize::new(0));
+    let j2 = joins.clone();
+    let (url, seen, stop) = serve(move |method, path, _auth, _body| match (method, path) {
+        ("POST", p) if p.starts_with("/v2/account/authenticate/device") => device_auth("Old", "r1"),
+        // Nothing comes back from a refresh for a long while (a hung connection).
+        ("POST", "/v2/account/session/refresh") => {
+            std::thread::sleep(Duration::from_secs(4));
+            device_auth("Renewed", "r2")
+        }
+        ("POST", "/v2/rpc/ironhold_lobby_join") => {
+            j2.fetch_add(1, Ordering::SeqCst);
+            (401, "{}".to_string())
+        }
+        _ => (200, "{}".to_string()),
+    });
+    let mut b = adapter(&url);
+    ask(&mut b, 1, RequestKind::SignIn);
+    b.submit(BackendRequest { id: 2, kind: RequestKind::JoinLobby { lobby_id: "L1".into() } });
+    // The join got its 401 and is parked behind the (hanging) renewal; now core signs out and then signs in again.
+    wait_for_path(&mut b, &seen, "/v2/account/session/refresh");
+    b.submit(BackendRequest { id: 3, kind: RequestKind::LeaveLobby });
+    b.submit(BackendRequest { id: 4, kind: RequestKind::SignOut });
+    b.submit(BackendRequest { id: 5, kind: RequestKind::SignIn });
+    let started = Instant::now();
+    // Core's timeout fires for the join and the leave: the adapter must not keep waiting for the hung refresh.
+    b.cancel(2);
+    b.cancel(3);
+    let mut got = wait_for_path(&mut b, &seen, "/v2/session/logout");
+    got.extend(poll_for(&mut b, 500));
+    assert!(started.elapsed() < Duration::from_millis(3000), "the teardown waited for the hung refresh: {:?}", started.elapsed());
+    assert!(got.iter().any(|e| e.request_id == 5 && matches!(e.reply, BackendReply::SignedIn { .. })), "the held sign-in proceeds: {got:?}");
+    stop.store(true, Ordering::Relaxed);
+}

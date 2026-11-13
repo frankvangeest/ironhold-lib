@@ -4,14 +4,14 @@
     // Online answers arrive seconds later, while paused and across LoadScene, so they are bound in global_on.
     global_on: [
         // Everything starts hidden: the browser appears after sign-in, the rows after the first list.
-        ( event: "scene.ready:main", do_actions: [ SetVariable("demo_msg", "Signing in to the test backend..."), SetUiVisible(id: "browse", visible: false), SetUiVisible(id: "room", visible: false), SetUiVisible(id: "started", visible: false), SetUiVisible(id: "row_1", visible: false), SetUiVisible(id: "row_2", visible: false), SetUiVisible(id: "row_3", visible: false), SetUiVisible(id: "row_4", visible: false), SetUiVisible(id: "row_5", visible: false) ] ),
+        ( event: "scene.ready:main", do_actions: [ SetVariable("demo_msg", "Signing in..."), SetUiVisible(id: "browse", visible: false), SetUiVisible(id: "room", visible: false), SetUiVisible(id: "started", visible: false), SetUiVisible(id: "row_1", visible: false), SetUiVisible(id: "row_2", visible: false), SetUiVisible(id: "row_3", visible: false), SetUiVisible(id: "row_4", visible: false), SetUiVisible(id: "row_5", visible: false) ] ),
 
         // Signing in automatically: bind `backend.ready` (the backend finished loading), not `scene.ready:main`.
         ( event: "backend.ready", do_actions: [ SignIn ] ),
         ( event: "ui.button_pressed:sign_in", do_actions: [ SignIn ] ),
         ( event: "ui.button_pressed:sign_out", do_actions: [ SignOut ] ),
         ( event: "backend.signed_in", do_actions: [ SetVariable("demo_msg", "Pick a lobby or create one."), SetUiVisible(id: "browse", visible: true), ListLobbies ] ),
-        ( event: "backend.unreachable", do_actions: [ SetVariable("demo_msg", "Test backend unreachable. Press Sign in to retry.") ] ),
+        ( event: "backend.unreachable", do_actions: [ SetVariable("demo_msg", "Backend unreachable. Press Sign in to retry.") ] ),
         ( event: "backend.sign_in_failed", do_actions: [ SetVariable("demo_msg", "Could not sign in. Press Sign in to retry.") ] ),
         ( event: "backend.offline", do_actions: [ SetVariable("demo_msg", "No backend here; see the status above.") ] ),
         ( event: "backend.busy", do_actions: [ SetVariable("demo_msg", "One moment...") ] ),
@@ -44,6 +44,8 @@
         ( event: "lobby.list_failed", do_actions: [ SetVariable("demo_msg", "Could not load the lobbies. Press Refresh.") ] ),
         ( event: "lobby.list_failed:not_signed_in", do_actions: [ SetVariable("demo_msg", "Sign in to see the lobbies.") ] ),
         ( event: "lobby.list_failed:busy", do_actions: [ SetVariable("demo_msg", "Still loading...") ] ),
+        // A real server answers `not_enabled` when its admin has not switched lobbies on for this game (regenerate the config and redeploy).
+        ( event: "lobby.list_failed:not_enabled", do_actions: [ SetVariable("demo_msg", "Lobbies are off for this game on the server.") ] ),
 
         // Entering and leaving the waiting room. The host (who created it) gets the Start button; a joiner does not.
         ( event: "lobby.created", do_actions: [ SetVariable("demo_msg", "Lobby open. Waiting for players..."), SetUiVisible(id: "browse", visible: false), SetUiVisible(id: "room", visible: true), SetUiVisible(id: "started", visible: false), SetUiVisible(id: "start_row", visible: true) ] ),
@@ -71,12 +73,15 @@
         ( event: "lobby.join_failed:started", do_actions: [ SetVariable("demo_msg", "That lobby already started.") ] ),
         ( event: "lobby.join_failed:no_lobby", do_actions: [ SetVariable("demo_msg", "That row is empty. Press Refresh.") ] ),
         ( event: "lobby.create_failed", do_actions: [ SetVariable("demo_msg", "Could not create a lobby. Try again.") ] ),
-        // After a page reload on a real server the player can still be in a lobby the game forgot: leave it, then try again.
-        ( event: "lobby.create_failed:already_in_lobby", do_actions: [ SetVariable("demo_msg", "Leaving your old lobby. Try again."), LeaveLobby ] ),
+        // The engine refuses a second Create while it knows it is in a lobby (the button is hidden then). After a page reload or a restart it does not
+        // know, and a real server replaces the old membership instead of refusing.
+        ( event: "lobby.create_failed:already_in_lobby", do_actions: [ SetVariable("demo_msg", "You are already in a lobby. Leave it first.") ] ),
+        ( event: "lobby.create_failed:limit_reached", do_actions: [ SetVariable("demo_msg", "Too many open lobbies. Try again later.") ] ),
+        ( event: "lobby.create_failed:not_enabled", do_actions: [ SetVariable("demo_msg", "Lobbies are off for this game on the server.") ] ),
         ( event: "lobby.start_failed", do_actions: [ SetVariable("demo_msg", "Could not start the lobby.") ] ),
         ( event: "lobby.start_failed:too_few_players", do_actions: [ SetVariable("demo_msg", "Wait for at least one more player.") ] ),
         ( event: "lobby.start_failed:not_host", do_actions: [ SetVariable("demo_msg", "Only the host can start.") ] ),
-        ( event: "lobby.closed:host_left", do_actions: [ SetVariable("demo_msg", "The host left, so the lobby closed.") ] ),
+        ( event: "lobby.closed:host_left", do_actions: [ SetVariable("demo_msg", "The host left or lost connection, so the lobby closed.") ] ),
         ( event: "lobby.closed:removed", do_actions: [ SetVariable("demo_msg", "Dropped from the lobby (no contact for a minute).") ] ),
         ( event: "lobby.closed:server", do_actions: [ SetVariable("demo_msg", "Lost contact with the server. Lobby closed.") ] ),
         // There is no event when contact comes back: the message is replaced by the next one (a member joining, a list, ...).

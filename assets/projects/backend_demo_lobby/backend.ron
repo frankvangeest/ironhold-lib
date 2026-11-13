@@ -1,5 +1,6 @@
 // backend_demo_lobby: lobbies against the in-memory test backend (`fake://`). Nobody real is on the other side, nothing is saved between
-// runs and no two browsers ever meet. Three lobbies are seeded: row 1 "Demo lobby" (host Ada, 1/4), row 2 "Quick game" (host Grace,
+// runs and no two browsers ever meet (run it natively with `--backend <server>` against a lobby-enabled server to meet real players: see
+// "Lobbies" in docs/20_data_formats.md). Three lobbies are seeded: row 1 "Demo lobby" (host Ada, 1/4), row 2 "Quick game" (host Grace,
 // 3/4) and row 3 "Demo lobby" (host Linus, full 2/2). The other members are scripted, so you can see every event:
 //   - a lobby YOU create: Ada joins on the 2nd check-in (about 20 s), Grace on the 4th, and the newest rival leaves on the 5th;
 //   - Ada's lobby (row 1) when you join it: Grace joins on the 2nd check-in and Ada PRESSES START on the 4th (you get lobby.started);
@@ -8,7 +9,9 @@
 // `full`), "fake://?fail=gone", "fake://?fail=start" (Start fails), "fake://?fail=list" (the list fails), "fake://?fail=heartbeat" (the
 // waiting room loses contact: "Reconnecting...", and after a minute lobby.closed:server), "fake://?fail=sign_in", "fake://?fail=unreachable"
 // and "fake://?latency=120" (about two seconds to answer).
-// A real server needs only another endpoint here once it supports lobbies. See "Lobbies" in docs/20_data_formats.md.
+// A real server also needs its `server_key` (here, or `NAKAMA_SERVER_KEY` for a native `--backend` run, which never uses this file's key),
+// and its admin must list this game and switch lobbies on (`ironhold backend config` writes `Lobbies` and `lobby_names` into the server
+// config; a server that was not regenerated answers `not_enabled`). Each real player needs their own computer or user account.
 BackendConfig(
     schema_version: 1,
     // Namespace on a shared server: [a-z0-9_], 1-32 characters. Defaults to project_id when omitted.

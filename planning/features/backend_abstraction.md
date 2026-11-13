@@ -371,7 +371,7 @@ a lobby RPC from a game without it answers `not_enabled`. "Not on a public proje
 **RPC shapes.** Six RPCs registered through `game_rpc`, ids from a table (the id pattern in `game_rpc` is only a self-check): `ironhold_lobby_create`, `_join`, `_list`, `_leave`,
 `_heartbeat`, `_start`. Requests are small JSON objects decoded by one `decode_payload(payload, max_bytes)` that answers `{ok=false, reason="server"}` for malformed or oversized input;
 a REST RPC body is a JSON-encoded string (or use `?unwrap`). Replies: `{ok=true, lobby={id, gen, name, players, max, started, host, members={{name=...}, ...}}}` or `{ok=false, reason=...}`.
-The exact request and reply field lists, the storage algorithms, the adapter changes and the test list are in `planning/features/backend_lobbies_server.md` (Ready 2026-11-08; it supersedes this section where they differ, e.g. the match token is dropped).
+The exact request and reply field lists, the storage algorithms, the adapter changes and the test list are in `planning/features/done/backend_lobbies_server.md` (Ready 2026-11-08; it supersedes this section where they differ, e.g. the match token is dropped).
 
 - **Contract tests** (`tests/contract/run.sh`, adversarial, one per cross-game call): another game's list/join/heartbeat/leave/start; a name outside the declared list; a non-ASCII or oversized name;
   a join of a full lobby; **two simultaneous joins of the last slot** (exactly one wins); a second lobby by one user; the **reload** case (create after losing local state replaces the old

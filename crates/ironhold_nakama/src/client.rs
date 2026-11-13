@@ -4,7 +4,11 @@
 //! lookup). The chain lives in `pending`, keyed by the engine's request id, and ends in exactly one reply. Three rules keep
 //! the adapter and the engine's view of the session from drifting apart:
 //! - `SignOut` answers every request still in flight with a failure ("signed out") and forgets them, so a late sign-in,
-//!   refresh or leaderboard answer can never bring the old session or the old player's board back;
+//!   refresh or leaderboard answer can never bring the old session or the old player's board back. The one exception is a lobby
+//!   create, join or leave: the server may already have put the player in a lobby, so those finish with the **old session** (kept
+//!   privately in `Teardown`, never in `self.session`), then the logout is sent, and a `SignIn` that arrives meanwhile is held
+//!   until the logout is on the wire. `SignedOut` is still answered at once. Every step ends on its answer or on the engine's
+//!   `cancel`, so a dead server cannot trap the player; a lobby it never heard about expires on the server after a minute;
 //! - the session is only ever dropped by `SignOut`; a failed renewal re-authenticates with the device id, and if that also
 //!   fails the call fails but the next call tries the whole chain again;
 //! - `cancel` (the engine timed the request out) removes the chain, so no retried write happens after `score.submit_failed`.
@@ -12,13 +16,14 @@
 use std::collections::BTreeMap;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
-use ironhold_core::schema::backend::is_valid_server_key;
+use ironhold_core::schema::backend::{is_lobby_failure_reason, is_valid_server_key};
 use ironhold_core::runtime::backend::{
     Backend, BackendEvent, BackendFactory, BackendReply, BackendRequest, LeaderRow, RequestKind, ResolvedBackendConfig,
 };
+use serde_json::json;
 
 use crate::ns::GameNs;
-use crate::protocol::{self, Failure, Session};
+use crate::protocol::{self, Failure, RpcOutcome, Session};
 
 /// What the adapter needs to talk to one server: the (public) server key and this install's device secret.
 #[derive(Debug, Clone)]
@@ -88,6 +93,8 @@ pub fn factory(options: RunnerOptions) -> BackendFactory {
 
 /// Engine request ids start at 1; 0 is the one shared session renewal (refresh, then re-authenticate).
 const RENEWAL_ID: u64 = 0;
+/// The renewal of the old session during a sign-out teardown (one refresh, never a re-authentication, never `self.session`).
+const LEGACY_RENEWAL_ID: u64 = u64::MAX;
 
 /// Where a request stands.
 enum Stage {
@@ -105,6 +112,87 @@ enum Stage {
 struct Pending {
     kind: RequestKind,
     stage: Stage,
+    /// Belongs to a session that was signed out meanwhile: uses `Teardown::session` and never touches `self.session`.
+    legacy: bool,
+}
+
+impl Pending {
+    fn new(kind: RequestKind, stage: Stage) -> Self {
+        Self { kind, stage, legacy: false }
+    }
+}
+
+/// The old session, kept only to finish the lobby requests that were in flight when the player signed out, and then to log out.
+struct Teardown {
+    session: Session,
+    /// Lobby requests parked behind this teardown's own renewal.
+    parked: Vec<(u64, RequestKind)>,
+}
+
+/// Lobby requests that must reach the server before the logout (a leave, and the create/join that may have put the player in).
+fn is_lobby_chain(kind: &RequestKind) -> bool {
+    matches!(kind, RequestKind::CreateLobby { .. } | RequestKind::JoinLobby { .. } | RequestKind::LeaveLobby)
+}
+
+/// A request that puts the player in a lobby: a leave waits for it to finish.
+fn is_entering(kind: &RequestKind) -> bool {
+    matches!(kind, RequestKind::CreateLobby { .. } | RequestKind::JoinLobby { .. })
+}
+
+fn is_lobby_kind(kind: &RequestKind) -> bool {
+    matches!(
+        kind,
+        RequestKind::ListLobbies
+            | RequestKind::CreateLobby { .. }
+            | RequestKind::JoinLobby { .. }
+            | RequestKind::LeaveLobby
+            | RequestKind::StartLobby { .. }
+            | RequestKind::LobbyHeartbeat { .. }
+    )
+}
+
+/// The failure reply of a lobby request with the given fixed reason (core's own helper always writes `server`). A leave that could not
+/// be confirmed still leaves, so it never fails.
+fn lobby_failure(kind: &RequestKind, reason: &str) -> BackendReply {
+    // Only reasons a designer can bind (`host_left` and `removed` belong to `lobby.closed` alone): anything else is `server`.
+    let reason = if is_lobby_failure_reason(reason) { reason } else { "server" }.to_string();
+    match kind {
+        RequestKind::ListLobbies => BackendReply::LobbyListFailed { reason },
+        RequestKind::CreateLobby { .. } => BackendReply::LobbyCreateFailed { reason },
+        RequestKind::JoinLobby { .. } => BackendReply::LobbyJoinFailed { reason },
+        RequestKind::LeaveLobby => BackendReply::LobbyLeft,
+        RequestKind::StartLobby { .. } => BackendReply::LobbyStartFailed { reason },
+        RequestKind::LobbyHeartbeat { .. } => BackendReply::LobbyHeartbeatFailed { reason },
+        other => other.failure(&reason),
+    }
+}
+
+/// A failure that has no fixed reason of its own: lobby requests say `server`, the others carry the short text.
+fn fail_reply(kind: &RequestKind, text: &str) -> BackendReply {
+    if is_lobby_kind(kind) { lobby_failure(kind, "server") } else { kind.failure(text) }
+}
+
+/// What a lobby RPC's answer means for the engine.
+fn lobby_reply(kind: &RequestKind, outcome: RpcOutcome) -> BackendReply {
+    match (kind, outcome) {
+        (RequestKind::LeaveLobby, _) => BackendReply::LobbyLeft,
+        // The two reasons that end the lobby for this player; any other heartbeat refusal is trouble reaching it.
+        (RequestKind::LobbyHeartbeat { .. }, RpcOutcome::Refused(r)) if r == "host_left" || r == "removed" => {
+            BackendReply::LobbyClosed { reason: r }
+        }
+        (_, RpcOutcome::Refused(r)) => lobby_failure(kind, &r),
+        (RequestKind::ListLobbies, RpcOutcome::Reply(v)) => match protocol::parse_lobby_rows(&v) {
+            Some(rows) => BackendReply::LobbyListed { rows },
+            None => lobby_failure(kind, "server"),
+        },
+        (_, RpcOutcome::Reply(v)) => match (kind, protocol::parse_lobby_info(&v)) {
+            (RequestKind::CreateLobby { .. }, Some(lobby)) => BackendReply::LobbyCreated { lobby },
+            (RequestKind::JoinLobby { .. }, Some(lobby)) => BackendReply::LobbyJoined { lobby },
+            (RequestKind::StartLobby { .. }, Some(lobby)) => BackendReply::LobbyStarted { lobby },
+            (RequestKind::LobbyHeartbeat { .. }, Some(lobby)) => BackendReply::LobbyState { lobby },
+            _ => lobby_failure(kind, "server"),
+        },
+    }
 }
 
 struct Answer {
@@ -123,6 +211,13 @@ pub struct NakamaBackend {
     waiting: Vec<(u64, RequestKind)>,
     /// Replies that need no network (sign-out, refusals), delivered by the next `poll`.
     ready: Vec<BackendEvent>,
+    /// A leave that arrived while a create or join was on the wire: sent when none is left (core queues one before a `SignOut`
+    /// even when the engine does not know yet that the join succeeded).
+    held_leave: Option<u64>,
+    /// Set by `SignOut` while lobby requests were still running: the old session and what it still has to finish.
+    teardown: Option<Teardown>,
+    /// A `SignIn` that arrived during the teardown; it starts when the logout is sent.
+    held_sign_in: Option<u64>,
     tx: Sender<Answer>,
     rx: Receiver<Answer>,
 }
@@ -152,6 +247,9 @@ impl NakamaBackend {
             pending: BTreeMap::new(),
             waiting: Vec::new(),
             ready: Vec::new(),
+            held_leave: None,
+            teardown: None,
+            held_sign_in: None,
             tx,
             rx,
         })
@@ -169,10 +267,12 @@ impl NakamaBackend {
     }
 
     /// The authenticated call for a request, or the refusal reply when there is no session or the id is unusable.
-    fn call(&self, kind: &RequestKind) -> Result<ehttp::Request, BackendReply> {
-        let Some(session) = &self.session else {
-            return Err(kind.failure("not signed in"));
+    fn call(&self, kind: &RequestKind, legacy: bool) -> Result<ehttp::Request, BackendReply> {
+        let session = if legacy { self.teardown.as_ref().map(|t| &t.session) } else { self.session.as_ref() };
+        let Some(session) = session else {
+            return Err(if is_lobby_kind(kind) { lobby_failure(kind, "not_signed_in") } else { kind.failure("not signed in") });
         };
+        let rpc = |id: &str, body: serde_json::Value| Ok(protocol::rpc(&self.base, &session.token, id, body));
         match kind {
             RequestKind::SubmitScore { leaderboard, score } => {
                 let board = self.ns.leaderboard(leaderboard).map_err(|e| kind.failure(&e))?;
@@ -183,22 +283,23 @@ impl NakamaBackend {
                 Ok(protocol::list_leaderboard(&self.base, &session.token, &board, *count, &session.user_id))
             }
             RequestKind::SignIn | RequestKind::SignOut => Err(kind.failure("not a call")),
-            // Lobbies over the server's RPCs are v3a-2 (`planning/features/backend_abstraction.md`); until then this adapter answers with the
-            // fixed `server` reason (and a leave simply leaves), so a project that declares `Lobbies` fails visibly instead of waiting.
-            RequestKind::ListLobbies
-            | RequestKind::CreateLobby { .. }
-            | RequestKind::JoinLobby { .. }
-            | RequestKind::LeaveLobby
-            | RequestKind::StartLobby { .. }
-            | RequestKind::LobbyHeartbeat { .. } => Err(kind.failure("lobbies are not supported by this adapter yet")),
+            // The server's lobby RPCs (`ironhold.lua`, section 2d); the reply is read in `lobby_reply`.
+            RequestKind::ListLobbies => rpc("ironhold_lobby_list", json!({})),
+            RequestKind::CreateLobby { name, max_players } => {
+                rpc("ironhold_lobby_create", json!({ "name": name, "max_players": max_players }))
+            }
+            RequestKind::JoinLobby { lobby_id } => rpc("ironhold_lobby_join", json!({ "lobby_id": lobby_id })),
+            RequestKind::LeaveLobby => rpc("ironhold_lobby_leave", json!({})),
+            RequestKind::StartLobby { lobby_id } => rpc("ironhold_lobby_start", json!({ "lobby_id": lobby_id })),
+            RequestKind::LobbyHeartbeat { lobby_id } => rpc("ironhold_lobby_heartbeat", json!({ "lobby_id": lobby_id })),
         }
     }
 
-    fn start_call(&mut self, id: u64, kind: RequestKind, retried: bool) {
-        match self.call(&kind) {
+    fn start_call(&mut self, id: u64, kind: RequestKind, retried: bool, legacy: bool) {
+        match self.call(&kind, legacy) {
             Ok(req) => {
                 self.send(id, req);
-                self.pending.insert(id, Pending { kind, stage: Stage::Call { retried } });
+                self.pending.insert(id, Pending { kind, stage: Stage::Call { retried }, legacy });
             }
             Err(reply) => self.reply(id, reply),
         }
@@ -206,7 +307,7 @@ impl NakamaBackend {
 
     fn authenticate(&mut self, id: u64, kind: RequestKind, stage: Stage) {
         self.send(id, protocol::authenticate_device(&self.base, &self.server_key, &self.device_id));
-        self.pending.insert(id, Pending { kind, stage });
+        self.pending.insert(id, Pending::new(kind, stage));
     }
 
     /// A call needs a fresh session: join the one renewal in flight, or start it (refresh token first, device id if that fails).
@@ -218,7 +319,7 @@ impl NakamaBackend {
         match self.session.as_ref().map(|s| s.refresh_token.clone()) {
             Some(refresh) => {
                 self.send(RENEWAL_ID, protocol::refresh_session(&self.base, &self.server_key, &refresh));
-                self.pending.insert(RENEWAL_ID, Pending { kind: RequestKind::SignIn, stage: Stage::Refresh });
+                self.pending.insert(RENEWAL_ID, Pending::new(RequestKind::SignIn, Stage::Refresh));
             }
             None => self.authenticate(RENEWAL_ID, RequestKind::SignIn, Stage::Reauth),
         }
@@ -226,13 +327,125 @@ impl NakamaBackend {
 
     fn resume_waiting(&mut self) {
         for (id, kind) in std::mem::take(&mut self.waiting) {
-            self.start_call(id, kind, true);
+            self.start_call(id, kind, true, false);
         }
+    }
+
+    /// A lobby request of the signed-out session got a 401: park it behind one refresh of the OLD session (no re-authentication: the
+    /// player signed out, so the device id must not make a new session).
+    fn renew_legacy(&mut self, id: u64, kind: RequestKind) {
+        let Some(t) = self.teardown.as_mut() else { return self.reply(id, fail_reply(&kind, "signed out")) };
+        t.parked.push((id, kind));
+        self.start_legacy_renewal();
+    }
+
+    fn start_legacy_renewal(&mut self) {
+        if self.pending.contains_key(&LEGACY_RENEWAL_ID) {
+            return;
+        }
+        let Some(refresh) = self.teardown.as_ref().map(|t| t.session.refresh_token.clone()) else { return };
+        self.send(LEGACY_RENEWAL_ID, protocol::refresh_session(&self.base, &self.server_key, &refresh));
+        let mut renewal = Pending::new(RequestKind::SignIn, Stage::Refresh);
+        renewal.legacy = true;
+        self.pending.insert(LEGACY_RENEWAL_ID, renewal);
+    }
+
+    fn handle_legacy_renewal(&mut self, result: Result<ehttp::Response, String>) {
+        let parked = self.teardown.as_mut().map(|t| std::mem::take(&mut t.parked)).unwrap_or_default();
+        match result.ok().and_then(|r| protocol::parse_session(&r).ok()) {
+            Some(session) => {
+                if let Some(t) = self.teardown.as_mut() {
+                    t.session = session;
+                }
+                for (id, kind) in parked {
+                    self.start_call(id, kind, true, true);
+                }
+            }
+            // The old session cannot be renewed: the lobby (if any) expires on the server after a minute.
+            None => {
+                for (id, kind) in parked {
+                    self.reply(id, fail_reply(&kind, "server unreachable"));
+                }
+            }
+        }
+    }
+
+    /// True while a create or join is on the wire or parked (the leave waits for them).
+    fn entering_in_progress(&self) -> bool {
+        self.pending.values().any(|p| is_entering(&p.kind))
+            || self.waiting.iter().any(|(_, k)| is_entering(k))
+            || self.teardown.as_ref().is_some_and(|t| t.parked.iter().any(|(_, k)| is_entering(k)))
+    }
+
+    /// Sends the held leave once no create or join is left, as part of the teardown when the player signed out meanwhile.
+    fn release_held_leave(&mut self) {
+        if self.held_leave.is_none() || self.entering_in_progress() {
+            return;
+        }
+        if let Some(id) = self.held_leave.take() {
+            let legacy = self.teardown.is_some();
+            self.start_call(id, RequestKind::LeaveLobby, false, legacy);
+        }
+    }
+
+    /// Sends the logout of the old session once every lobby request of it has ended (answered or cancelled by the engine), then
+    /// starts the `SignIn` that was held meanwhile.
+    fn finish_teardown(&mut self) {
+        // The teardown's own renewal has no engine request id, so the engine can never cancel it: it counts only while a request
+        // is parked behind it, otherwise a hung refresh would hold the logout and every later sign-in.
+        let busy = self.held_leave.is_some()
+            || self.pending.iter().any(|(id, p)| p.legacy && *id != LEGACY_RENEWAL_ID)
+            || self.teardown.as_ref().is_some_and(|t| !t.parked.is_empty());
+        if busy {
+            return;
+        }
+        let Some(t) = self.teardown.take() else { return };
+        // A refresh still on the wire is forgotten: its late answer finds no pending entry and is ignored.
+        self.pending.remove(&LEGACY_RENEWAL_ID);
+        ehttp::fetch(protocol::logout(&self.base, &t.session), |_| {});
+        if let Some(id) = self.held_sign_in.take() {
+            self.authenticate(id, RequestKind::SignIn, Stage::SignIn);
+        }
+    }
+
+    fn sign_out(&mut self, id: u64) {
+        let old = self.session.take();
+        // The lobby requests still running are not cancelled: a create or join may already have put the player in a lobby on the
+        // server, so the leave core queued before this SignOut must still reach it, with the old session, before the logout.
+        let lobby_work = old.is_some()
+            && (self.held_leave.is_some()
+                || self.pending.values().any(|p| is_lobby_chain(&p.kind))
+                || self.waiting.iter().any(|(_, k)| is_lobby_chain(k)));
+        let mut parked = Vec::new();
+        if lobby_work {
+            for p in self.pending.values_mut().filter(|p| is_lobby_chain(&p.kind)) {
+                p.legacy = true;
+            }
+            let (keep, rest): (Vec<_>, Vec<_>) = std::mem::take(&mut self.waiting).into_iter().partition(|(_, k)| is_lobby_chain(k));
+            parked = keep;
+            self.waiting = rest;
+        }
+        self.cancel_all("signed out");
+        match old {
+            Some(session) if lobby_work => {
+                let has_parked = !parked.is_empty();
+                self.teardown = Some(Teardown { session, parked });
+                if has_parked {
+                    self.start_legacy_renewal();
+                }
+            }
+            // Best effort on the server; locally the player is signed out right away.
+            Some(session) => ehttp::fetch(protocol::logout(&self.base, &session), |_| {}),
+            None => {}
+        }
+        self.reply(id, BackendReply::SignedOut);
+        self.release_held_leave();
+        self.finish_teardown();
     }
 
     fn fail_waiting(&mut self, reason: &str) {
         for (id, kind) in std::mem::take(&mut self.waiting) {
-            self.reply(id, kind.failure(reason));
+            self.reply(id, fail_reply(&kind, reason));
         }
     }
 
@@ -254,10 +467,20 @@ impl NakamaBackend {
     }
 
     fn handle(&mut self, answer: Answer) {
+        self.handle_answer(answer);
+        // An answer may have ended the create or join a leave was waiting for, or the last request of a teardown.
+        self.release_held_leave();
+        self.finish_teardown();
+    }
+
+    fn handle_answer(&mut self, answer: Answer) {
         let id = answer.id;
-        let Some(Pending { kind, stage }) = self.pending.remove(&id) else { return };
+        let Some(Pending { kind, stage, legacy }) = self.pending.remove(&id) else { return };
         if id == RENEWAL_ID {
             return self.handle_renewal(stage, answer.result);
+        }
+        if id == LEGACY_RENEWAL_ID {
+            return self.handle_legacy_renewal(answer.result);
         }
         let resp = match answer.result {
             Ok(r) => r,
@@ -306,7 +529,7 @@ impl NakamaBackend {
                                 if l.needs_rank {
                                     if let (Some(s), Ok(board)) = (self.session.clone(), self.ns.leaderboard(leaderboard)) {
                                         self.send(id, protocol::rank_around_owner(&self.base, &s.token, &board, &s.user_id));
-                                        self.pending.insert(id, Pending { kind, stage: Stage::Rank { listing: reply } });
+                                        self.pending.insert(id, Pending::new(kind, Stage::Rank { listing: reply }));
                                         return;
                                     }
                                 }
@@ -315,34 +538,40 @@ impl NakamaBackend {
                             Err(f) => Err(f),
                         }
                     }
-                    // `call` already answered these (v3a-2 adds the real lobby calls), so a request of this kind never reaches here.
-                    RequestKind::SignIn
-                    | RequestKind::SignOut
-                    | RequestKind::ListLobbies
+                    RequestKind::ListLobbies
                     | RequestKind::CreateLobby { .. }
                     | RequestKind::JoinLobby { .. }
                     | RequestKind::LeaveLobby
                     | RequestKind::StartLobby { .. }
-                    | RequestKind::LobbyHeartbeat { .. } => return,
+                    | RequestKind::LobbyHeartbeat { .. } => protocol::parse_rpc(&resp).map(|outcome| lobby_reply(&kind, outcome)),
+                    // `call` refuses these, so a request of this kind never reaches here.
+                    RequestKind::SignIn | RequestKind::SignOut => return,
                 };
                 match result {
                     Ok(reply) => self.reply(id, reply),
+                    Err(Failure::Unauthorized) if !retried && legacy => self.renew_legacy(id, kind),
                     Err(Failure::Unauthorized) if !retried => self.renew_for(id, kind),
-                    Err(f) => self.reply(id, kind.failure(&reason(f))),
+                    Err(f) => self.reply(id, fail_reply(&kind, &reason(f))),
                 }
             }
         }
     }
 
-    /// Answers everything still in flight with a failure and forgets it (sign-out).
+    /// Answers everything still in flight with a failure and forgets it (sign-out), except the lobby requests of the old session
+    /// (`legacy`, see `sign_out`) and their renewal. The shared renewal is dropped: its late answer must not bring a session back.
     fn cancel_all(&mut self, why: &str) {
-        for (id, p) in std::mem::take(&mut self.pending) {
+        let ids: Vec<u64> = self.pending.keys().copied().collect();
+        for id in ids {
+            if self.pending.get(&id).is_some_and(|p| p.legacy) {
+                continue;
+            }
+            let Some(p) = self.pending.remove(&id) else { continue };
             if id == RENEWAL_ID {
                 continue;
             }
             let reply = match p.kind {
                 RequestKind::SignIn => BackendReply::SignInFailed { reason: why.to_string() },
-                other => other.failure(why),
+                other => fail_reply(&other, why),
             };
             self.reply(id, reply);
         }
@@ -361,23 +590,20 @@ fn reason(f: Failure) -> String {
 fn unreachable_reply(kind: &RequestKind) -> BackendReply {
     match kind {
         RequestKind::SignIn | RequestKind::SignOut => BackendReply::Unreachable { reason: "server unreachable".to_string() },
-        other => other.failure("server unreachable"),
+        other => fail_reply(other, "server unreachable"),
     }
 }
 
 impl Backend for NakamaBackend {
     fn submit(&mut self, req: BackendRequest) {
         match req.kind {
+            // Held while the old session finishes its lobby requests: two sessions of one account would race each other.
+            RequestKind::SignIn if self.teardown.is_some() => self.held_sign_in = Some(req.id),
             RequestKind::SignIn => self.authenticate(req.id, RequestKind::SignIn, Stage::SignIn),
-            RequestKind::SignOut => {
-                self.cancel_all("signed out");
-                // Best effort on the server; locally the player is signed out right away.
-                if let Some(session) = self.session.take() {
-                    ehttp::fetch(protocol::logout(&self.base, &session), |_| {});
-                }
-                self.reply(req.id, BackendReply::SignedOut);
-            }
-            kind => self.start_call(req.id, kind, false),
+            RequestKind::SignOut => self.sign_out(req.id),
+            // Core queues a leave before a sign-out also while a create or join is unanswered: the leave must come after it.
+            RequestKind::LeaveLobby if self.entering_in_progress() => self.held_leave = Some(req.id),
+            kind => self.start_call(req.id, kind, false, false),
         }
     }
 
@@ -391,5 +617,17 @@ impl Backend for NakamaBackend {
     fn cancel(&mut self, request_id: u64) {
         self.pending.remove(&request_id);
         self.waiting.retain(|(id, _)| *id != request_id);
+        if let Some(t) = self.teardown.as_mut() {
+            t.parked.retain(|(id, _)| *id != request_id);
+        }
+        if self.held_leave == Some(request_id) {
+            self.held_leave = None;
+        }
+        if self.held_sign_in == Some(request_id) {
+            self.held_sign_in = None;
+        }
+        // A cancelled step is skipped, not waited for.
+        self.release_held_leave();
+        self.finish_teardown();
     }
 }

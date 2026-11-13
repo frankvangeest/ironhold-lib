@@ -5,7 +5,7 @@
 //! Leaderboards can only be created by server code, so adding, renaming or removing one in a `backend.ron` needs a regenerated
 //! config and a redeploy (a server-admin step). Renaming orphans the old scores.
 
-use ironhold_core::schema::backend::{is_valid_backend_id, Keep, LeaderboardDef, Ranking};
+use ironhold_core::schema::backend::{is_valid_backend_id, is_valid_lobby_name, Keep, LeaderboardDef, Ranking};
 
 /// The generic module. Deploy it as `ironhold.lua` next to the generated `ironhold_games.lua`.
 pub const MODULE_LUA: &str = include_str!("../server/ironhold.lua");
@@ -17,6 +17,24 @@ pub const GAMES_FILE: &str = "ironhold_games.lua";
 pub struct GameServerConfig<'a> {
     pub game_id: &'a str,
     pub leaderboards: &'a [LeaderboardDef],
+    /// The game declares the `Lobbies` feature: the six `ironhold_lobby_*` RPCs answer for it (otherwise `not_enabled`).
+    pub lobbies: bool,
+    /// The names `CreateLobby` may use. Written only when `lobbies` is true.
+    pub lobby_names: &'a [String],
+}
+
+/// A Lua string literal for `s`: only `\` and `"` need escaping (lobby names are printable ASCII, `is_valid_lobby_name`).
+fn lua_string(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for c in s.chars() {
+        if c == '\\' || c == '"' {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out.push('"');
+    out
 }
 
 fn sort_order(r: Ranking) -> &'static str {
@@ -48,20 +66,33 @@ pub fn generate_games_lua(games: &[GameServerConfig]) -> Result<String, String> 
         if !seen.insert(g.game_id) {
             return Err(format!("game_id {:?} is used by more than one project", g.game_id));
         }
-        out.push_str(&format!("    {} = {{ leaderboards = {{\n", g.game_id));
+        // A bracketed string key: a bare Lua name cannot start with a digit (`3rd_person_game_demo`) or be a keyword (`end`).
+        out.push_str(&format!("    [{}] = {{\n      leaderboards = {{\n", lua_string(g.game_id)));
         for lb in g.leaderboards {
             if !is_valid_backend_id(&lb.name) {
                 return Err(format!("leaderboard {:?} is not a valid id", lb.name));
             }
             out.push_str(&format!(
-                "      {{ id = \"{}.{}\", sort = \"{}\", operator = \"{}\" }},\n",
+                "        {{ id = \"{}.{}\", sort = \"{}\", operator = \"{}\" }},\n",
                 g.game_id,
                 lb.name,
                 sort_order(lb.ranking),
                 operator(lb.keep)
             ));
         }
-        out.push_str("    } },\n");
+        out.push_str("      },\n");
+        if g.lobbies {
+            // Names end up inside Lua string literals: re-validate, then escape `\` and `"`.
+            out.push_str("      features = { lobbies = true },\n      lobby_names = {\n");
+            for name in g.lobby_names {
+                if !is_valid_lobby_name(name) {
+                    return Err(format!("lobby name {name:?} of game {:?} is not valid", g.game_id));
+                }
+                out.push_str(&format!("        {},\n", lua_string(name)));
+            }
+            out.push_str("      },\n");
+        }
+        out.push_str("    },\n");
     }
     out.push_str("  },\n}\n");
     Ok(out)
@@ -70,7 +101,10 @@ pub fn generate_games_lua(games: &[GameServerConfig]) -> Result<String, String> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ironhold_core::schema::backend::BackendConfig;
+    use ironhold_core::schema::backend::{
+        BackendConfig, LOBBY_EXPIRY_SECS, LOBBY_HEARTBEAT_SECS, MAX_LOBBY_NAME_LEN, MAX_LOBBY_PLAYERS, MAX_LOBBY_ROWS,
+        MIN_LOBBY_PLAYERS,
+    };
 
     fn boards() -> Vec<LeaderboardDef> {
         let c: BackendConfig = ron::from_str(
@@ -83,10 +117,19 @@ mod tests {
         c.leaderboards
     }
 
+    /// A game without lobbies.
+    fn plain<'a>(game_id: &'a str, leaderboards: &'a [LeaderboardDef]) -> GameServerConfig<'a> {
+        GameServerConfig { game_id, leaderboards, lobbies: false, lobby_names: &[] }
+    }
+
+    fn with_lobbies<'a>(game_id: &'a str, lobby_names: &'a [String]) -> GameServerConfig<'a> {
+        GameServerConfig { game_id, leaderboards: &[], lobbies: true, lobby_names }
+    }
+
     #[test]
     fn ranking_and_keep_map_to_nakama_sort_and_operator() {
         let b = boards();
-        let lua = generate_games_lua(&[GameServerConfig { game_id: "my_game", leaderboards: &b }]).unwrap();
+        let lua = generate_games_lua(&[plain("my_game", &b)]).unwrap();
         assert!(lua.contains(r#"{ id = "my_game.best", sort = "desc", operator = "best" }"#), "{lua}");
         assert!(lua.contains(r#"{ id = "my_game.fast", sort = "asc", operator = "set" }"#), "{lua}");
         assert!(lua.contains(r#"{ id = "my_game.total", sort = "desc", operator = "incr" }"#), "{lua}");
@@ -95,18 +138,15 @@ mod tests {
     #[test]
     fn output_is_sorted_and_duplicate_or_bad_games_are_refused() {
         let b = boards();
-        let lua = generate_games_lua(&[
-            GameServerConfig { game_id: "zeta", leaderboards: &b },
-            GameServerConfig { game_id: "alpha", leaderboards: &b },
-        ])
-        .unwrap();
+        let lua = generate_games_lua(&[plain("zeta", &b), plain("alpha", &b)]).unwrap();
         assert!(lua.find("alpha").unwrap() < lua.find("zeta").unwrap());
-        let dup = generate_games_lua(&[
-            GameServerConfig { game_id: "a", leaderboards: &b },
-            GameServerConfig { game_id: "a", leaderboards: &b },
-        ]);
-        assert!(dup.is_err());
-        assert!(generate_games_lua(&[GameServerConfig { game_id: "a\"b", leaderboards: &b }]).is_err());
+        assert!(generate_games_lua(&[plain("a", &b), plain("a", &b)]).is_err());
+        assert!(generate_games_lua(&[plain("a\"b", &b)]).is_err());
+    }
+
+    /// The names the contract fixture declares for `alpha`: the last two carry the two characters that need escaping in a Lua string.
+    fn alpha_names() -> Vec<String> {
+        vec!["Casual".to_string(), "Quote\"d".to_string(), "Back\\slash".to_string()]
     }
 
     #[test]
@@ -122,13 +162,96 @@ mod tests {
                 leaderboards: [Leaderboard(name: "best", ranking: HigherIsBetter, keep: Best)])"#,
         )
         .unwrap();
+        let names = alpha_names();
+        let gamma_names = vec!["Casual".to_string()];
         let lua = generate_games_lua(&[
-            GameServerConfig { game_id: "beta", leaderboards: &beta.leaderboards },
-            GameServerConfig { game_id: "alpha", leaderboards: &c.leaderboards },
+            plain("beta", &beta.leaderboards),
+            GameServerConfig { game_id: "alpha", leaderboards: &c.leaderboards, lobbies: true, lobby_names: &names },
+            with_lobbies("epsilon", &gamma_names),
+            with_lobbies("gamma", &gamma_names),
         ])
         .unwrap();
         let fixture = include_str!("../tests/contract/modules/ironhold_games.lua").replace("\r\n", "\n");
         assert_eq!(lua, fixture);
+    }
+
+    /// Reads back the `lobby_names = { ... }` block of a generated config the way Lua would (only `\\` and `\"` are escapes here).
+    fn parse_names(lua: &str) -> Vec<String> {
+        let start = lua.find("lobby_names = {\n").expect("a lobby_names block") + "lobby_names = {\n".len();
+        let end = start + lua[start..].find("      },").expect("the block closes");
+        lua[start..end]
+            .lines()
+            .map(|line| {
+                let inner = line.trim().strip_suffix(',').and_then(|l| l.strip_prefix('"')).and_then(|l| l.strip_suffix('"')).unwrap();
+                let mut out = String::new();
+                let mut chars = inner.chars();
+                while let Some(c) = chars.next() {
+                    out.push(if c == '\\' { chars.next().unwrap() } else { c });
+                }
+                out
+            })
+            .collect()
+    }
+
+    #[test]
+    fn lobby_names_with_a_quote_and_a_backslash_are_escaped_and_read_back_the_same() {
+        let names = alpha_names();
+        let lua = generate_games_lua(&[with_lobbies("alpha", &names)]).unwrap();
+        assert!(lua.contains(r#""Quote\"d","#), "{lua}");
+        assert!(lua.contains(r#""Back\\slash","#), "{lua}");
+        assert_eq!(parse_names(&lua), names);
+    }
+
+    #[test]
+    fn a_lobby_name_the_engine_would_refuse_is_refused_here_too() {
+        let too_long = "x".repeat(MAX_LOBBY_NAME_LEN + 1);
+        for bad in ["", "   ", "caf\u{e9}", "tab\there", too_long.as_str()] {
+            let names = vec![bad.to_string()];
+            assert!(generate_games_lua(&[with_lobbies("alpha", &names)]).is_err(), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn lobby_config_is_written_only_for_a_game_that_declares_lobbies() {
+        let names = alpha_names();
+        let off = GameServerConfig { game_id: "alpha", leaderboards: &[], lobbies: false, lobby_names: &names };
+        let lua = generate_games_lua(&[off]).unwrap();
+        assert!(!lua.contains("lobby_names") && !lua.contains("features"), "{lua}");
+        let on = generate_games_lua(&[with_lobbies("alpha", &names)]).unwrap();
+        assert!(on.contains("features = { lobbies = true },"), "{on}");
+    }
+
+    #[test]
+    fn a_game_id_that_starts_with_a_digit_or_is_a_lua_keyword_is_a_valid_key() {
+        let lua = generate_games_lua(&[plain("3rd_game", &[]), plain("end", &[]), plain("ordinary", &[])]).unwrap();
+        for id in ["3rd_game", "end", "ordinary"] {
+            assert!(lua.contains(&format!("[\"{id}\"] = {{")), "{id}: {lua}");
+        }
+        assert!(!lua.contains("\n    end = {") && !lua.contains("\n    3rd_game = {"), "a bare name would not parse: {lua}");
+    }
+
+    #[test]
+    fn the_generator_never_writes_a_test_only_field() {
+        let names = alpha_names();
+        let lua = generate_games_lua(&[with_lobbies("alpha", &names)]).unwrap();
+        assert!(!lua.contains("expiry") && !lua.contains("override"), "{lua}");
+    }
+
+    /// `local NAME = <number>` in the module, read as text: a constant in Lua that drifts from the Rust one would drop players.
+    fn lua_number(name: &str) -> f64 {
+        let prefix = format!("local {name} = ");
+        let line = MODULE_LUA.lines().find(|l| l.starts_with(&prefix)).unwrap_or_else(|| panic!("{name} is not defined in ironhold.lua"));
+        line[prefix.len()..].split_whitespace().next().unwrap().parse().unwrap()
+    }
+
+    #[test]
+    fn the_lua_lobby_constants_equal_the_rust_ones() {
+        assert_eq!(lua_number("HEARTBEAT_SECS"), LOBBY_HEARTBEAT_SECS);
+        assert_eq!(lua_number("EXPIRY_SECS"), LOBBY_EXPIRY_SECS);
+        assert_eq!(lua_number("MIN_PLAYERS"), MIN_LOBBY_PLAYERS as f64);
+        assert_eq!(lua_number("MAX_PLAYERS"), MAX_LOBBY_PLAYERS as f64);
+        assert_eq!(lua_number("LIST_LIMIT"), MAX_LOBBY_ROWS as f64);
+        assert_eq!(lua_number("MAX_NAME"), MAX_LOBBY_NAME_LEN as f64);
     }
 
     #[test]
@@ -137,8 +260,18 @@ mod tests {
             "AuthenticateDevice", "WriteLeaderboardRecord", "ListLeaderboardRecords", "WriteStorageObjects",
             // closed by default
             "LinkDevice", "ListMatches", "MatchmakerAdd", "ChannelJoin",
+            // a player never chooses their display name
+            "UpdateAccount",
         ] {
             assert!(MODULE_LUA.contains(name), "{name}");
+        }
+        assert!(MODULE_LUA.contains("payload.username = nil"));
+    }
+
+    #[test]
+    fn the_module_registers_exactly_the_six_lobby_rpcs_through_the_guard() {
+        for id in ["list", "create", "join", "leave", "heartbeat", "start"] {
+            assert!(MODULE_LUA.contains(&format!("ironhold_lobby_{id} = rpc_{id}")), "{id}");
         }
     }
 }
