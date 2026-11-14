@@ -1,5 +1,6 @@
 # Memory Index
 
+- [Item txn S2 plan-review](project_item_txn_s2_plan_review.md) — hardcoded "Bought X!"/"Not enough gold!" texts; docs/30 lacks BuyItem; old_key strand
 - [Panel world-blocking](project_panel_world_blocking.md) — shop/container block interact/pickup/Tab, inventory not; rule only in docs/30 corpse notes; ui.panel_* unnamed+undocumented
 
 - [backend_abstraction plan+v1+v2 review](project_backend_abstraction_plan_review.md) — v2 Nakama: no-key says "no adapter", config regen drops games, no key source/troubleshooting

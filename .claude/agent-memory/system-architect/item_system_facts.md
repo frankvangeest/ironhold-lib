@@ -36,6 +36,18 @@ Non-obvious facts:
 - bevy_ui 0.18 `ui_focus_system` sets Pressed only for Left mouse / touch (focus.rs:176,188): right-click-to-use needs
   its own system; touch needs a menu. Inventory slots have no `Button`.
 
+- S2 plan-review (2026-11-14, at 9fa2ef3) facts: `PlayerInventory.player_spawn_id` is set ONLY by the dynamic
+  `Action::Spawn` arm (`action_executor.rs:299`), so for scene-placed players it is None ("Not enough gold!" text never
+  shows) and it is no basis for "the player's own StatMap" — needs an explicit primary-player rule. Gold footer
+  (`inventory_ui_system`) reads LoadedStats only: must use the same currency resolver. `apply_delta` clamps to
+  `[min,max]`, so coin credit past max silently loses coins. `add_to_slots` treats an unknown item (or no catalog) as
+  max_stack 99 — a `TxnError::UnknownItem` would break catalog-less projects. No existing tests cover BuyItem/
+  TransferItem/AddItem at all (only TakeAll in corpse_loot_interact_tests). CLI already runs `ProjectConfig::validate()`
+  (validate.rs:1577); no closed vocabulary exists for inventory/shop/item events (only lobby). `SceneStateParams` is a
+  derive-SystemParam with ~38 fields (the 16 cap applies to the executor's top-level params only).
+  Container->container transfer needs two `&mut Inventory` from one query: clone-and-swap with sequential write-back
+  sidesteps `get_many_mut`.
+
 **How to apply:** any new item-moving action must go through the primitive (once built) and emit a failure event
 instead of a success event on failure. See [[inventory-panel-triplication]], [[panel-input-blocking]],
 [[event-pipeline-intent-layer]], [[stat-ownership-global-vs-instance]].
