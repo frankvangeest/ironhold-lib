@@ -1,6 +1,6 @@
 # Feature: Panel open-state as a set (item system S1)
 
-_Status: Ready_
+_Status: Done_ (2026-11-14, code `75c248e`)
 _Planned at: `594c702` (2026-11-14)_
 
 Slice S1 of `planning/features/item_system_review.md` (the architect's item system review; Frank's answers to its nine
@@ -33,16 +33,16 @@ foundation for the rest of the item system (S2-S6 add more panel verbs and a con
   keeping the check separate from the pause gate stays true).
 
 ## Tasks
-- [ ] `PanelKind`, `open_panels`, `world_input_blocked()`; remove `panels_open`/`set_panel_open`
-- [ ] Executor arms and the `Despawn` teardown use the set; `LoadScene` clears it
-- [ ] The three gates use `world_input_blocked()` plus a `debug!` each
-- [ ] Update the existing tests that read `panels_open` (`action_tests.rs`, `corpse_loot_interact_tests.rs`)
-- [ ] New tests (written first, red against the counter): OpenInventory twice then one Close leaves it closed; Close of a
+- [x] `PanelKind`, `open_panels`, `world_input_blocked()`; remove `panels_open`/`set_panel_open`
+- [x] Executor arms and the `Despawn` teardown use the set; `LoadScene` clears it
+- [x] The three gates use `world_input_blocked()` plus a `debug!` each
+- [x] Update the existing tests that read `panels_open` (`action_tests.rs`, `corpse_loot_interact_tests.rs`)
+- [x] New tests (written first, red against the counter): OpenInventory twice then one Close leaves it closed; Close of a
       panel that is not open changes nothing; the walk-past case (inventory open, shop opened and closed twice) keeps the
       inventory in the set; inventory open does not block `interactable_system`, shop/container open does
-- [ ] Docs: `crates/ironhold_core/src/CLAUDE.md`, `runtime/scene_manager/CLAUDE.md` (two sections), `tests/CLAUDE.md`,
+- [x] Docs: `crates/ironhold_core/src/CLAUDE.md`, `runtime/scene_manager/CLAUDE.md` (two sections), `tests/CLAUDE.md`,
       `docs/30_runtime_events_and_logic.md` / `docs/20_data_formats.md` wherever the counter or "panel blocks interact" is described
-- [ ] Reviews (alignment, architect, detective), full core test loop, `cargo check -p ironhold_cli`
+- [x] Reviews (alignment, architect, detective), full core test loop, `cargo check -p ironhold_cli`
 
 ## Open questions
 - None blocking. (The inventory-modality question was answered 2026-11-14.)
