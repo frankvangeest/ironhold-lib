@@ -81,5 +81,5 @@ only against pads **not** claimed by a live player's `BoundGamepad`, by an undra
   adapter must forget a cancelled request and drop its late answer. The Nakama adapter answers `SignOut` with `SignedOut` at once, but a
   lobby create, join or leave still in flight finishes with the old session (kept in its `Teardown`, never in `self.session`): a leave waits
   for an unanswered create or join, the logout goes out last, a `SignIn` is held until then, and every step also ends on `cancel` (the
-  teardown's own session renewal has no engine id, so it never holds anything up).
+  teardown's own session renewal has no engine id, so it never holds anything up). A leave names the lobby of the adapter's last answered create or join (`lobby_id`, fixed per request in `leave_ids` so a 401 retry says the same), so the server ignores a late leave after a re-join; a create or join start resets it to unknown (`{}` = leave whatever I am in), because its answer may never arrive.
 - Never use Bevy task pools for adapter I/O. `FakeBackend` latency counts polls, never wall-clock time.

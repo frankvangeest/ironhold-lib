@@ -214,6 +214,11 @@ pub struct NakamaBackend {
     /// A leave that arrived while a create or join was on the wire: sent when none is left (core queues one before a `SignOut`
     /// even when the engine does not know yet that the join succeeded).
     held_leave: Option<u64>,
+    /// The lobby the player is in, from the last create/join reply (ended by a leave of that lobby). A leave names it, so the server
+    /// ignores a late leave that reaches it after the player joined another lobby.
+    lobby_id: Option<String>,
+    /// The lobby each leave in flight names, fixed when it is first sent so a retry after a 401 says the same thing.
+    leave_ids: BTreeMap<u64, Option<String>>,
     /// Set by `SignOut` while lobby requests were still running: the old session and what it still has to finish.
     teardown: Option<Teardown>,
     /// A `SignIn` that arrived during the teardown; it starts when the logout is sent.
@@ -248,6 +253,8 @@ impl NakamaBackend {
             waiting: Vec::new(),
             ready: Vec::new(),
             held_leave: None,
+            lobby_id: None,
+            leave_ids: BTreeMap::new(),
             teardown: None,
             held_sign_in: None,
             tx,
@@ -263,11 +270,23 @@ impl NakamaBackend {
     }
 
     fn reply(&mut self, id: u64, reply: BackendReply) {
+        let left = self.leave_ids.remove(&id);
+        match &reply {
+            BackendReply::LobbyCreated { lobby } | BackendReply::LobbyJoined { lobby } => self.lobby_id = Some(lobby.id.clone()),
+            // A leave ends only the membership it named: a late answer of an older leave must not clear a newer lobby.
+            BackendReply::LobbyLeft => {
+                if left.is_none_or(|named| named.is_none() || named == self.lobby_id) {
+                    self.lobby_id = None;
+                }
+            }
+            BackendReply::LobbyClosed { .. } | BackendReply::SignedIn { .. } => self.lobby_id = None,
+            _ => {}
+        }
         self.ready.push(BackendEvent { request_id: id, reply });
     }
 
     /// The authenticated call for a request, or the refusal reply when there is no session or the id is unusable.
-    fn call(&self, kind: &RequestKind, legacy: bool) -> Result<ehttp::Request, BackendReply> {
+    fn call(&self, id: u64, kind: &RequestKind, legacy: bool) -> Result<ehttp::Request, BackendReply> {
         let session = if legacy { self.teardown.as_ref().map(|t| &t.session) } else { self.session.as_ref() };
         let Some(session) = session else {
             return Err(if is_lobby_kind(kind) { lobby_failure(kind, "not_signed_in") } else { kind.failure("not signed in") });
@@ -289,14 +308,28 @@ impl NakamaBackend {
                 rpc("ironhold_lobby_create", json!({ "name": name, "max_players": max_players }))
             }
             RequestKind::JoinLobby { lobby_id } => rpc("ironhold_lobby_join", json!({ "lobby_id": lobby_id })),
-            RequestKind::LeaveLobby => rpc("ironhold_lobby_leave", json!({})),
+            // Names the lobby the player was in when the leave was first sent; `{}` (leave whatever I am in) only when no create or
+            // join of this session was ever answered.
+            RequestKind::LeaveLobby => match self.leave_ids.get(&id).cloned().flatten() {
+                Some(lobby_id) => rpc("ironhold_lobby_leave", json!({ "lobby_id": lobby_id })),
+                None => rpc("ironhold_lobby_leave", json!({})),
+            },
             RequestKind::StartLobby { lobby_id } => rpc("ironhold_lobby_start", json!({ "lobby_id": lobby_id })),
             RequestKind::LobbyHeartbeat { lobby_id } => rpc("ironhold_lobby_heartbeat", json!({ "lobby_id": lobby_id })),
         }
     }
 
     fn start_call(&mut self, id: u64, kind: RequestKind, retried: bool, legacy: bool) {
-        match self.call(&kind, legacy) {
+        if matches!(kind, RequestKind::LeaveLobby) && !retried {
+            self.leave_ids.insert(id, self.lobby_id.clone());
+        }
+        // A create or join moves the player on the server, and its answer may never arrive (lost, timed out, refused): from here
+        // the lobby is unknown until an answer says which, and a leave then says `{}` (leave whatever I am in) rather than name a
+        // lobby the player may no longer be in. A leave never overtakes it (`held_leave`), so none can snapshot this gap.
+        if is_entering(&kind) && !retried {
+            self.lobby_id = None;
+        }
+        match self.call(id, &kind, legacy) {
             Ok(req) => {
                 self.send(id, req);
                 self.pending.insert(id, Pending { kind, stage: Stage::Call { retried }, legacy });
@@ -616,6 +649,7 @@ impl Backend for NakamaBackend {
 
     fn cancel(&mut self, request_id: u64) {
         self.pending.remove(&request_id);
+        self.leave_ids.remove(&request_id);
         self.waiting.retain(|(id, _)| *id != request_id);
         if let Some(t) = self.teardown.as_mut() {
             t.parked.retain(|(id, _)| *id != request_id);
