@@ -321,7 +321,7 @@ Fold-ins: the existing backlog items "Silent `panels_open` gate logs nothing" (l
 ## 5. Open questions (Frank's decisions, answered 2026-11-14)
 
 **Decisions (Frank, 2026-11-14):** 1 agreed (the inventory panel does not block world interaction; shop and container panels still do). 2 agreed (default-backed events). 4 agreed (player stats first, then the shared pool). 5 agreed (keys are not consumed automatically; `RemoveItem` stays explicit). 6 agreed (project-level inventory size, default 20, load-time warning). 7 agreed (`TransferItem` moves what fits and emits `inventory.full`). 8 agreed (assigned bar slots persist across scenes). 9 agreed (click menu plus right-click shortcut).
-**3 was answered "false" (reading: do NOT reset merchant stock on scene load, so it persists across scene loads).** This contradicts the recommendation and the "What I would NOT do" list above; read as an in-memory resource keyed by merchant spawn id that lives for the session, with no save/load. Confirm that reading at the S2 plan-review.
+**3 was answered "false"; resolved 2026-11-14 at the S2 plan review: merchant stock resets on scene load** (the persist reading would strand the demo's `old_key` quest after a scene reload; chests and corpses already reset). The architect's per-merchant `MerchantStock` component stands, and so does the acceptance line below (sold out until the next scene load).
 **Added by Frank:** health/mana checks for potions, and item-usage pre-conditions in general, are their own backlog item (see "Item use conditions" in `planning/backlog.md`). They should be general (other potions and poisons, equip conditions, collecting items and merging them into new items), not one-off checks.
 
 
