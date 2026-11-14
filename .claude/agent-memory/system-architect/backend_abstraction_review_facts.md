@@ -168,3 +168,9 @@ Code review of v3a-2 (`feature/backend_lobbies_server`, ae45cb7..4e739da, 2026-1
 
 **Why:** these were the load-bearing gaps; recurring if lobby/multiplayer plans are revised.
 **How to apply:** any review of backend, lobby, cloud-save or Form 2 networking plans. See [[nakama-spike-facts]], [[determinism-networking]].
+
+**v3a-2 follow-up (leave names lobby_id, 2026-11-14):** the adapter's own `lobby_id` can diverge from core's `hub.lobby.current`:
+core drops `current` with no adapter-visible reply on `lobby_tick` expiry (`closed:server`) and on a `LobbyState` that no longer lists
+the player (`removed`), and a cancelled/transport-failed create/join may have been applied server-side. Server create/join REPLACE the
+caller's membership, so a stale named leave becomes a server no-op (player ghosts in the new lobby until heartbeat expiry). Rule: reset
+the adapter's lobby id when a create/join is sent (safe: leaves are held while entering), so an unknown state degrades to `{}`.

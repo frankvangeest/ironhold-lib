@@ -89,6 +89,11 @@ Known limits of `at_entity` (all confirmed, all non-blocking, all worth re-flagg
   together both `OpenContainer`; FIFO means the last wins. Corpses land wherever the fight ended.
 - `TakeAllFromContainer` early-returns on an empty container, so `container.looted` never fires for
   a loot-less corpse → it can only ever hit the ambient decay path.
+- **`container.looted` = "something moved", not "now empty"** (flagged 2026-11-14, take_all_overflow
+  fix). Once TakeAll leaves overflow in the container, a partial take (e.g. gold to its stat, potion
+  won't fit) still fires `looted` → shared corpse behavior closes panel + 20 s despawn → overflow lost
+  anyway. Any TakeAll change must re-check this event's semantics + docs/30 line ~108, and whether
+  `inventory.full:player` (GiveItem emits it) is emitted on overflow.
 - `CloseContainer` takes no id (singleton panel) — any handler closes whatever is open.
 - (RESOLVED 2026-10-23, feature/fix_trigger_zone_mass) `trigger_zone` sensor now spawns with
   `ColliderMassProperties::Density(0.0)`, so it is safe on Dynamic-body NPCs. Corpses still have no

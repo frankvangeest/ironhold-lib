@@ -48,3 +48,7 @@ each one invalidates an otherwise-reasonable plan.
 **How to apply:** cite these when reviewing any feature that spawns/despawns entities from
 RON on a timer, derives one spawn id from another, or hangs logic off `container.looted`.
 See [[deferred_despawn_double_queue]] for the adjacent double-despawn class.
+
+- (2026-11-14, take_all_overflow review) `container.looted:{id}` fires on ANY transfer, incl. a partial one; the demo
+  `lootable_corpse` goes `looted` -> CloseContainer + 20s despawn, so overflow "left in the container" is unreachable and destroyed.
+  Partial-take semantics need `container.looted` only when the container ends empty (+ `inventory.full:player` otherwise).
