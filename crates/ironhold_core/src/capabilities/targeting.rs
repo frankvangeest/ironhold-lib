@@ -304,8 +304,17 @@ pub fn tab_targeting_system(
     mut game_events: MessageWriter<GameEvent>,
     mut game_vars: ResMut<GameVariables>,
     inventory_ui: Res<LoadedInventoryUi>,
+    mut blocked_logged: Local<bool>,
 ) {
-    if inventory_ui.panels_open > 0 { return; }
+    // Log once per block, not once per frame: this system runs every frame.
+    if let Some(panel) = inventory_ui.blocking_panel() {
+        if !*blocked_logged {
+            debug!("tab targeting suppressed: the {:?} panel is open", panel);
+            *blocked_logged = true;
+        }
+        return;
+    }
+    *blocked_logged = false;
     let is_multiplayer = controllers.iter().count() >= 2;
 
     for (player_entity, controller, player_gt, mut player_target, player_index, bound) in &mut controllers {

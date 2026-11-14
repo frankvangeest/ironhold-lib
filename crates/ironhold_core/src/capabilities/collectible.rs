@@ -29,8 +29,17 @@ pub fn collectible_system(
     collectibles: Query<&SpawnId, With<Collectable>>,
     mut game_events: MessageWriter<GameEvent>,
     inventory_ui: Res<LoadedInventoryUi>,
+    mut blocked_logged: Local<bool>,
 ) {
-    if inventory_ui.panels_open > 0 { return; }
+    // Log once per block, not once per frame: this system runs every fixed tick.
+    if let Some(panel) = inventory_ui.blocking_panel() {
+        if !*blocked_logged {
+            debug!("pickup suppressed: the {:?} panel is open", panel);
+            *blocked_logged = true;
+        }
+        return;
+    }
+    *blocked_logged = false;
 
     for event in collision_events.read() {
         let CollisionEvent::Started(e1, e2, _flags) = event else { continue };

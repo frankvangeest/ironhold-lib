@@ -420,7 +420,7 @@ impl Plugin for GamePlugin {
             // load-bearing: interactable_system must stay before the interpreters (see the next comment).
             // Interactable input runs before all interpreters so both readers
             // see the emitted GameEvent in the same frame.
-            // Real pause: edge-triggered input gate (`sim_running`); the `panels_open` early-return inside stays separate on purpose.
+            // Real pause: edge-triggered input gate (`sim_running`); the open-panel (`world_input_blocked`) early-return inside stays separate on purpose.
             .add_systems(Update, interactable_system
                 .in_set(crate::runtime::schedule::GameStreamSet::Interact)
                 .run_if(crate::runtime::sim_clock::sim_running))

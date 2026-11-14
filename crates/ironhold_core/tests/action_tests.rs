@@ -1086,12 +1086,13 @@ fn test_set_target_and_clear_target_actions_mirror_into_primary_player() {
 // finding: `interactable_system` fires `entity.interacted` for every interactable within radius
 // on one keypress, not just the nearest, so two nearby lootable entities can each queue their own
 // `OpenContainer` in the same frame. Before the fix, `Action::OpenContainer` incremented
-// `panels_open` unconditionally on every call — a second open while one was already active
+// the old `panels_open` counter unconditionally on every call — a second open while one was already active
 // over-incremented a counter that only ever gets decremented once per `CloseContainer`,
 // permanently suppressing interact/collectible-pickup/tab-targeting (all gated on
-// `panels_open == 0`) until the next `LoadScene`.
+// `panels_open == 0`) until the next `LoadScene`. Open-state is a set now, so this is guaranteed by
+// construction; the test stays as a behavioural pin.
 #[test]
-fn test_open_container_twice_without_close_does_not_double_count_panels_open() {
+fn test_open_container_twice_without_close_leaves_one_open_panel() {
     use ironhold_core::capabilities::inventory::{ContainerPanelMarker, Inventory, LoadedInventoryUi};
     use ironhold_core::runtime::scene_manager::SpawnRegistry;
 
@@ -1118,8 +1119,8 @@ fn test_open_container_twice_without_close_does_not_double_count_panels_open() {
     app.update();
 
     assert_eq!(
-        app.world().resource::<LoadedInventoryUi>().panels_open, 1,
-        "a second OpenContainer while one container is already open must not double-count panels_open"
+        app.world().resource::<LoadedInventoryUi>().open_panels.len(), 1,
+        "a second OpenContainer while one container is already open must not double-count the open panel"
     );
 
     // A single matching CloseContainer must fully clear it back to 0 — proving the counter isn't
@@ -1128,7 +1129,7 @@ fn test_open_container_twice_without_close_does_not_double_count_panels_open() {
     app.update();
 
     assert_eq!(
-        app.world().resource::<LoadedInventoryUi>().panels_open, 0,
+        app.world().resource::<LoadedInventoryUi>().open_panels.len(), 0,
         "one CloseContainer must fully release the panel opened by two OpenContainer calls"
     );
 }
@@ -1136,9 +1137,9 @@ fn test_open_container_twice_without_close_does_not_double_count_panels_open() {
 // Same class of bug as the OpenContainer test above, found in Action::OpenShop by the
 // debug-detective investigation into the monster_corpse_loot.md v1 playtest report — two
 // interactable merchants both in range of one interact press could each queue their own OpenShop
-// in the same frame, over-incrementing panels_open exactly like the OpenContainer case.
+// in the same frame, over-incrementing the old counter exactly like the OpenContainer case.
 #[test]
-fn test_open_shop_twice_without_close_does_not_double_count_panels_open() {
+fn test_open_shop_twice_without_close_leaves_one_open_panel() {
     use ironhold_core::capabilities::inventory::{ShopPanelMarker, ShopEntriesContainerMarker, LoadedInventoryUi};
     use ironhold_core::runtime::scene_manager::{SpawnRegistry, PrefabKey, LoadedPrefabCatalog};
     use ironhold_core::schema::catalog::{PrefabCatalog, PrefabDef, PrefabKind, MerchantDef};
@@ -1179,15 +1180,119 @@ fn test_open_shop_twice_without_close_does_not_double_count_panels_open() {
     app.update();
 
     assert_eq!(
-        app.world().resource::<LoadedInventoryUi>().panels_open, 1,
-        "a second OpenShop while one shop is already open must not double-count panels_open"
+        app.world().resource::<LoadedInventoryUi>().open_panels.len(), 1,
+        "a second OpenShop while one shop is already open must not double-count the open panel"
     );
 
     app.world_mut().resource_mut::<ActionQueue>().push(Action::CloseShop);
     app.update();
 
     assert_eq!(
-        app.world().resource::<LoadedInventoryUi>().panels_open, 0,
+        app.world().resource::<LoadedInventoryUi>().open_panels.len(), 0,
         "one CloseShop must fully release the panel opened by two OpenShop calls"
     );
+}
+
+// Item system S1 (planning/features/item_panels_open_set.md): panel open-state is a set, not a counter.
+#[test]
+fn test_open_inventory_twice_then_one_close_leaves_no_panel_open() {
+    use ironhold_core::capabilities::inventory::LoadedInventoryUi;
+    let mut app = setup_test_app();
+    app.update();
+    {
+        let mut queue = app.world_mut().resource_mut::<ActionQueue>();
+        queue.push(Action::OpenInventory);
+        queue.push(Action::OpenInventory);
+        queue.push(Action::CloseInventory);
+    }
+    app.update();
+    assert!(
+        app.world().resource::<LoadedInventoryUi>().open_panels.is_empty(),
+        "one CloseInventory must release the inventory however often it was opened"
+    );
+}
+
+#[test]
+fn test_closing_a_panel_that_is_not_open_changes_nothing() {
+    use ironhold_core::capabilities::inventory::{LoadedInventoryUi, PanelKind};
+    let mut app = setup_test_app();
+    app.update();
+    {
+        let mut queue = app.world_mut().resource_mut::<ActionQueue>();
+        queue.push(Action::OpenInventory);
+        // The demo walks the player out of the merchant zone (CloseShop) and closes containers
+        // unconditionally; neither panel is open, so the inventory must stay open.
+        queue.push(Action::CloseShop);
+        queue.push(Action::CloseShop);
+        queue.push(Action::CloseContainer);
+    }
+    app.update();
+    let ui = app.world().resource::<LoadedInventoryUi>();
+    assert!(ui.is_panel_open(PanelKind::Inventory), "closing a closed shop/container must not close the inventory");
+    assert_eq!(ui.open_panels.len(), 1);
+    assert!(!ui.world_input_blocked(), "the inventory alone is non-modal");
+}
+
+#[test]
+fn test_only_shop_and_container_panels_block_world_input() {
+    use ironhold_core::capabilities::inventory::{LoadedInventoryUi, PanelKind};
+    let mut ui = LoadedInventoryUi::default();
+    assert!(!ui.world_input_blocked());
+    ui.set_panel_open(PanelKind::Inventory, true);
+    assert!(!ui.world_input_blocked(), "an open inventory must not block interact/pickup/targeting");
+    ui.set_panel_open(PanelKind::Shop, true);
+    assert_eq!(ui.blocking_panel(), Some(PanelKind::Shop));
+    ui.set_panel_open(PanelKind::Shop, false);
+    ui.set_panel_open(PanelKind::Container, true);
+    assert_eq!(ui.blocking_panel(), Some(PanelKind::Container));
+    ui.set_panel_open(PanelKind::Container, false);
+    ui.set_panel_open(PanelKind::Container, false);
+    assert!(!ui.world_input_blocked(), "a repeated close is a no-op");
+    assert!(ui.is_panel_open(PanelKind::Inventory));
+}
+
+#[test]
+fn test_walking_past_a_merchant_with_the_inventory_open_keeps_the_inventory_open() {
+    use ironhold_core::capabilities::inventory::{LoadedInventoryUi, PanelKind, ShopPanelMarker, ShopEntriesContainerMarker};
+    use ironhold_core::runtime::scene_manager::{SpawnRegistry, PrefabKey, LoadedPrefabCatalog};
+    use ironhold_core::schema::catalog::{PrefabCatalog, PrefabDef, PrefabKind, MerchantDef};
+
+    let mut app = setup_test_app();
+    let mut prefabs = std::collections::BTreeMap::new();
+    prefabs.insert("merchant_a".to_string(), PrefabDef {
+        kind: PrefabKind::Prop,
+        merchant: Some(MerchantDef { stock: vec![], currency_stat: "gold".to_string() }),
+        ..Default::default()
+    });
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog { schema_version: 2, prefabs }));
+    let shop_panel = app.world_mut().spawn((ShopPanelMarker { font_size: 14.0 }, Visibility::Hidden)).id();
+    app.world_mut().spawn((ShopEntriesContainerMarker, ChildOf(shop_panel)));
+    let merchant = app.world_mut().spawn((SpawnId("merchant_a_01".to_string()), PrefabKey("merchant_a".to_string()))).id();
+    app.world_mut().resource_mut::<SpawnRegistry>().entities.insert("merchant_a_01".to_string(), merchant);
+    app.update();
+
+    // Bag open, then the shop opens next to the merchant.
+    {
+        let mut queue = app.world_mut().resource_mut::<ActionQueue>();
+        queue.push(Action::OpenInventory);
+        queue.push(Action::OpenShop("merchant_a_01".to_string()));
+    }
+    app.update();
+    {
+        let ui = app.world().resource::<LoadedInventoryUi>();
+        assert!(ui.is_panel_open(PanelKind::Inventory) && ui.is_panel_open(PanelKind::Shop));
+        assert!(ui.world_input_blocked(), "an open shop blocks the world");
+    }
+
+    // The shop's close button, then leaving the merchant zone (entity.exited -> CloseShop) closes it twice.
+    {
+        let mut queue = app.world_mut().resource_mut::<ActionQueue>();
+        queue.push(Action::CloseShop);
+        queue.push(Action::CloseShop);
+    }
+    app.update();
+    let ui = app.world().resource::<LoadedInventoryUi>();
+    assert!(ui.is_panel_open(PanelKind::Inventory), "the bag must still be open after the shop closed twice");
+    assert!(!ui.is_panel_open(PanelKind::Shop));
+    assert!(!ui.world_input_blocked(), "only the non-modal bag is left open, so the world is unblocked");
 }

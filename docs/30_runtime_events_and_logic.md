@@ -105,6 +105,7 @@ The name is used as-is in the rules pipeline — the caller is responsible for n
 - `"entity.interact_blocked:<id>"` — player within radius + pressed the interact key, but `interactable.requires_item` names an `items.ron` key not in `PlayerInventory`; fires instead of `entity.interacted:<id>` (never both). `PlayerInventory` is a single shared resource, not per-player, so in a local co-op scene any one player carrying the item unlocks it for every player. Event matching is exact-id-only (no wildcard) same as `entity.interacted:<id>` — for many gated doors sharing one prefab, a `.behavior.ron` with `event: "entity.interact_blocked:{self}"` scales better than one `global_on:` rule per door ✅
 - `"container.opened:<id>"` — emitted by `Action::OpenContainer(id)` after the `ContainerPanel` UI is shown for the given entity's `Inventory` ✅
 - `"container.closed"` — emitted by `Action::CloseContainer` (no entity id — only one container can be open at a time) ✅
+- `"ui.panel_opened"` / `"ui.panel_closed"` — fire when an inventory, shop or container panel opens or closes (also when an open container's entity is despawned). They do **not** say which panel. `ui.panel_closed` also fires when a close action runs for a panel that was not open (for example a `CloseShop` rule that runs whenever the player walks away from a merchant), and the inventory can stay open next to a shop or container, so do not use this pair to track "no panel is open". For logic tied to one panel use `container.opened:<id>` / `container.closed`, or put the reaction next to the `OpenShop`/`CloseShop` action. ✅
 - `"container.looted:<id>"` — emitted by `Action::TakeAllFromContainer` once the given entity's `Inventory` is empty after the transfer. When the player's inventory is full, only what fits is taken: the rest stays in the container, `inventory.full:player` is emitted instead, and `container.looted` does **not** fire, so the container stays lootable (a later Take All, after the player made room, empties it and fires it). **Does not fire if the container was already empty** — `TakeAllFromContainer` early-returns before emitting when there is nothing to transfer, so an empty container is indistinguishable from "never looted" to anything listening for this event ✅
 - `"entity.attacked:<id>"` — you emit this yourself from a skill slot's `do_actions`, next to the `ModifyStat` (`EmitEvent("entity.attacked:{target}")`, see `3rd_person_game_demo`). It makes an NPC with `on_player_near: Chase | Interact` enter the `Investigating` state (it walks toward the attacker's last-known position); `Flee` and `Alert` NPCs ignore it. The event names only the NPC that was hit, not who hit it. In co-op the NPC walks toward whichever player is standing **nearest to the NPC** when the hit lands, which is not necessarily the shooter: if player 2 hits an orc from range while player 1 stands closer, the orc investigates player 1. Two players at exactly the same distance: the spawn `id` that sorts first alphabetically wins (so `player10` comes before `player2`). The event is also handled when the NPC does not exist yet (a `Spawn` and an `entity.attacked` in the same frame: the new NPC reacts on the next tick); a hit on an NPC that is already gone simply reaches no NPC, and any binding you wrote on the event still fires ✅
 - `"npc.player_spotted:<id>"` — NPC transitioned from Alerted to Chase after detecting player ✅
@@ -1065,19 +1066,18 @@ two timers are only independent if they belong to two different entities, hence 
   are indistinguishable to this pattern.
 - `CloseContainer` in `looted`'s entry actions runs before `SetDespawnTimer` — entry actions are
   queued FIFO, so the panel is never left open and bound to a corpse that's about to disappear.
-- **Opening a container while one is already open no longer double-counts `panels_open`.**
+- **Opening a container while one is already open is harmless.**
   `interactable_system` fires `entity.interacted` for *every* interactable within radius on one
   keypress, not just the nearest — with two corpses near each other, one interact press could queue
-  two `OpenContainer` calls in the same frame. `Action::OpenContainer` only increments `panels_open`
-  when no container was already open, since the single `ContainerPanel` UI can only ever show one
-  container at a time regardless of how many `OpenContainer` calls land — without this guard, a
-  second call while one was already open would over-increment a counter that only ever gets
-  decremented once per `CloseContainer`, permanently suppressing interact/collectible-pickup/
-  tab-targeting (all gated on `panels_open == 0`) until the next `LoadScene`. The same guard applies
-  to `OpenShop`.
+  two `OpenContainer` calls in the same frame. The single `ContainerPanel` UI can only ever show
+  one container at a time, so the second call just re-targets it. Opening a panel that is already open,
+  or closing one that is already closed, does nothing. The same holds for `OpenShop` and `OpenInventory`.
+- **Which panels switch off F-interact, walk-over pickup and Tab targeting:** the shop and container
+  panels do, the inventory panel does not. The rest of the world keeps running. See "Panels, interact and
+  pickup" in `docs/20_data_formats.md`.
 - **`Action::Despawn` closes the container panel if the despawned entity is the one currently
   open.** Without this, a corpse decaying while its own loot panel is open would leave a ghost
-  panel bound to a gone entity and `panels_open` stuck above 0, permanently blocking
+  panel bound to a gone entity, with the container still counted as open, permanently blocking
   interact/pickup/tab-targeting.
 - **The player's target selection clears when the targeted entity is genuinely despawned, not just
   hidden.** `target_auto_clear_system` originally only checked `Visibility::Hidden` on an entity
