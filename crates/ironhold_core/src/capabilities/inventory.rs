@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use crate::schema::items::{ItemCatalog, ItemStack};
 
 // ─── Resources ────────────────────────────────────────────────────────────────
@@ -46,23 +46,57 @@ pub struct LoadedInventoryUi {
     /// All icon atlases keyed by catalog texture key (panel default + per-item overrides).
     /// Pre-loaded at panel spawn time so no runtime loading is needed on item pickup.
     pub icon_atlases: HashMap<String, (Handle<Image>, Handle<TextureAtlasLayout>)>, // det: lookup-only
-    /// Count of currently open panels (inventory/shop/container). Incremented by each Open
-    /// action, decremented by each Close — so closing one panel while another is still open
-    /// does not re-enable world interactions. Read by interactable_system, collectible_system,
-    /// and tab_targeting_system to suppress keyboard/physics-driven world-space events.
-    pub panels_open: u8,
+    /// The panels that are currently open. A set, not a counter: opening an open panel and closing
+    /// a closed one are both no-ops, so the state can never drift (a counter did: a stray Close
+    /// re-enabled interact under a visible panel, a doubled Open disabled it until the next
+    /// `LoadScene`). Cleared on `LoadScene`. Read through `world_input_blocked()` by
+    /// `interactable_system`, `collectible_system` and `tab_targeting_system`.
+    pub open_panels: BTreeSet<PanelKind>,
+}
+
+/// The UI panels the engine tracks open/closed state for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum PanelKind {
+    Inventory,
+    Shop,
+    Container,
+}
+
+impl PanelKind {
+    /// A modal panel suppresses world input (F-interact, walk-over pickup, Tab targeting) while it is open.
+    /// The shop and container panels belong to an interaction, so they are modal. The inventory is not:
+    /// the player can open it to check their items and still interact with the world.
+    pub fn is_modal(self) -> bool {
+        // Exhaustive on purpose: a new panel kind must decide its modality here, or the build fails.
+        match self {
+            PanelKind::Inventory => false,
+            PanelKind::Shop | PanelKind::Container => true,
+        }
+    }
 }
 
 impl LoadedInventoryUi {
-    /// Adjusts `panels_open` for one panel opening (`open: true`) or closing
-    /// (`open: false`). Saturates at 0 so a stray Close (no matching Open)
-    /// never underflows.
-    pub fn set_panel_open(&mut self, open: bool) {
+    /// Records one panel opening (`open: true`) or closing (`open: false`). Idempotent.
+    pub fn set_panel_open(&mut self, kind: PanelKind, open: bool) {
         if open {
-            self.panels_open = self.panels_open.saturating_add(1);
+            self.open_panels.insert(kind);
         } else {
-            self.panels_open = self.panels_open.saturating_sub(1);
+            self.open_panels.remove(&kind);
         }
+    }
+
+    pub fn is_panel_open(&self, kind: PanelKind) -> bool {
+        self.open_panels.contains(&kind)
+    }
+
+    /// The first open modal panel (in `PanelKind` order), if any.
+    pub fn blocking_panel(&self) -> Option<PanelKind> {
+        self.open_panels.iter().copied().find(|k| k.is_modal())
+    }
+
+    /// True while a modal panel is open: world input must be suppressed.
+    pub fn world_input_blocked(&self) -> bool {
+        self.blocking_panel().is_some()
     }
 }
 

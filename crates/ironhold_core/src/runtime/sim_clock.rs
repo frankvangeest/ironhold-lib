@@ -2,7 +2,7 @@
 //!
 //! Gameplay never reads `Time<Virtual>::is_paused()` and nothing else calls `Time<Virtual>::pause()`:
 //! everything goes through [`SimClock`]. A hold is an idempotent set member (never a counter: a
-//! counter can leak, see `panels_open`), so pausing twice needs one resume, and releasing one reason
+//! counter can leak, as the old `panels_open` counter did), so pausing twice needs one resume, and releasing one reason
 //! (a designer's pause menu) cannot undo another (static scene mode, focus loss, a networked session).
 //!
 //! `Time<Virtual>` is the lever: while it is paused `FixedUpdate` runs zero ticks, so physics, the

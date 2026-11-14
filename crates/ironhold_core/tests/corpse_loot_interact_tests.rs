@@ -649,7 +649,7 @@ fn two_corpses_in_range_does_not_soft_lock_interact() {
     app.world_mut().resource_mut::<ActionQueue>().push(Action::CloseContainer);
     app.update();
     assert_eq!(
-        app.world().resource::<LoadedInventoryUi>().panels_open, 0,
+        app.world().resource::<LoadedInventoryUi>().open_panels.len(), 0,
         "closing once must fully release the panel opened by two corpses in one interact press"
     );
 
@@ -657,7 +657,7 @@ fn two_corpses_in_range_does_not_soft_lock_interact() {
     app.update();
     assert!(
         app.world().resource::<LoadedContainerUi>().active_container.is_some(),
-        "interact must still work after a two-corpse open/close cycle — this is the soft-lock the panels_open guard fixes"
+        "interact must still work after a two-corpse open/close cycle — this is the soft-lock the open-panel set prevents"
     );
 }
 
@@ -708,8 +708,8 @@ fn a_despawned_corpses_decay_timer_cannot_later_despawn_a_new_corpse_reusing_its
 
 /// Finding 3: despawning the entity behind the currently-open container panel (e.g. its own
 /// decay firing, or any other Despawn) must tear the panel down the same way
-/// `CloseContainer` does — otherwise the panel is left bound to a gone entity and `panels_open`
-/// stuck above 0, permanently blocking interact/pickup/tab-targeting.
+/// `CloseContainer` does — otherwise the panel is left bound to a gone entity and the container stays counted open,
+/// permanently blocking interact/pickup/tab-targeting.
 #[test]
 fn despawning_the_currently_open_corpse_closes_its_container_panel() {
     let mut app = setup_test_app();
@@ -721,7 +721,7 @@ fn despawning_the_currently_open_corpse_closes_its_container_panel() {
     press_f(&mut app);
     app.update();
     assert_eq!(app.world().resource::<LoadedContainerUi>().active_container, Some(corpse));
-    assert_eq!(app.world().resource::<LoadedInventoryUi>().panels_open, 1);
+    assert_eq!(app.world().resource::<LoadedInventoryUi>().open_panels.len(), 1);
 
     app.world_mut().resource_mut::<ActionQueue>().push(Action::Despawn("zombie_01_corpse".to_string()));
     app.update();
@@ -731,8 +731,8 @@ fn despawning_the_currently_open_corpse_closes_its_container_panel() {
         "despawning the open container must clear active_container"
     );
     assert_eq!(
-        app.world().resource::<LoadedInventoryUi>().panels_open, 0,
-        "despawning the open container must release panels_open, or interact/pickup/tab-targeting stays permanently blocked"
+        app.world().resource::<LoadedInventoryUi>().open_panels.len(), 0,
+        "despawning the open container must release the container panel, or interact/pickup/tab-targeting stays permanently blocked"
     );
     assert_eq!(
         *app.world().get::<Visibility>(panel).unwrap(), Visibility::Hidden,
@@ -779,7 +779,7 @@ fn a_corpses_own_decay_timer_closes_its_open_container_panel_and_clears_its_targ
         app.world().resource::<LoadedContainerUi>().active_container.is_none(),
         "the container panel must close when its own bound corpse decays out from under it"
     );
-    assert_eq!(app.world().resource::<LoadedInventoryUi>().panels_open, 0);
+    assert_eq!(app.world().resource::<LoadedInventoryUi>().open_panels.len(), 0);
     assert_eq!(*app.world().get::<Visibility>(panel).unwrap(), Visibility::Hidden);
     assert_eq!(
         app.world().get::<PlayerTarget>(player).unwrap().0, None,
@@ -877,4 +877,46 @@ fn a_freshly_spawned_corpse_immediately_requests_its_frozen_death_pose() {
     app.update();
     app.update();
     assert_correct_pose(&app, "after 2 further updates");
+}
+
+// Item system S1: an open inventory is non-modal, an open container is modal.
+#[test]
+fn interact_works_while_the_inventory_is_open() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_container_panel(&mut app);
+    spawn_test_player(&mut app, Vec3::ZERO);
+    spawn_real_corpse(&mut app, "zombie_corpse", "zombie_01_corpse", Vec3::ZERO);
+
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::OpenInventory);
+    app.update();
+
+    press_f(&mut app);
+    app.update();
+    assert!(
+        app.world().resource::<LoadedContainerUi>().active_container.is_some(),
+        "F must still interact with the world while only the inventory panel is open"
+    );
+}
+
+#[test]
+fn interact_is_suppressed_while_a_container_is_open() {
+    let mut app = setup_test_app();
+    app.update();
+    spawn_container_panel(&mut app);
+    spawn_test_player(&mut app, Vec3::ZERO);
+    let first = spawn_real_corpse(&mut app, "zombie_corpse", "zombie_01_corpse", Vec3::ZERO);
+
+    press_f(&mut app);
+    app.update();
+    assert_eq!(app.world().resource::<LoadedContainerUi>().active_container, Some(first));
+
+    // A second corpse appears in range; with a container panel open, F must not re-target the panel.
+    spawn_real_corpse(&mut app, "spider_corpse", "spider_01_corpse", Vec3::new(1.0, 0.0, 0.0));
+    press_f(&mut app);
+    app.update();
+    assert_eq!(
+        app.world().resource::<LoadedContainerUi>().active_container, Some(first),
+        "interact must stay suppressed while a modal panel (container) is open"
+    );
 }

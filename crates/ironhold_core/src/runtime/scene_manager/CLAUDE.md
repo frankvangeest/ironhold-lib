@@ -101,17 +101,20 @@ reads it, so a same-frame `Despawn("{self}")` after it can never race it.
 ## `Action::Despawn` closes an open container panel
 
 When the despawned entity is the open container, `Action::Despawn` runs the same teardown `CloseContainer` does.
-Without it, `LoadedContainerUi.active_container` points at a gone entity and `panels_open` stays non-zero, permanently
+Without it, `LoadedContainerUi.active_container` points at a gone entity and `PanelKind::Container` stays in `open_panels`, permanently
 blocking interact, pickup and tab-targeting.
 
 <!-- b:587 -->
-## `OpenContainer` must not double-count `panels_open`
+## Panel open-state is a set (`LoadedInventoryUi.open_panels`)
 
 `interactable_system` fires `entity.interacted` for **every** interactable in radius on one keypress, so two nearby
 containers can both queue `OpenContainer` in one frame. The single `ContainerPanel` shows one container, so a second
-`OpenContainer` while one is open only re-targets `active_container` and does not increment `panels_open` again; the
-counter is decremented once per `CloseContainer`, and an over-increment permanently suppresses interact, pickup and
-tab-targeting (all gated on `panels_open == 0`, see `capabilities/inventory.rs`) until the next `LoadScene`.
+`OpenContainer` while one is open only re-targets `active_container`. Open-state is a `BTreeSet<PanelKind>`
+(`Inventory`/`Shop`/`Container`, `capabilities/inventory.rs`), never a counter: Open inserts, Close removes, a repeat of either is a
+no-op, `LoadScene` clears it. A counter drifted both ways (a stray Close re-enabled interact under a visible panel, a doubled Open
+suppressed it until the next `LoadScene`). Interact, pickup and tab-targeting read `world_input_blocked()`, true only while a
+*modal* panel (shop, container; `PanelKind::is_modal`) is open: the inventory panel is non-modal on purpose. A new panel adds a
+`PanelKind` and decides its modality there.
 
 <!-- b:598 -->
 ## A `trigger_zone` sensor is massless

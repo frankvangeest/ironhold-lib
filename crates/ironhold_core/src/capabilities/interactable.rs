@@ -48,8 +48,17 @@ pub fn interactable_system(
     mut game_events: MessageWriter<GameEvent>,
     inventory_ui: Res<LoadedInventoryUi>,
     player_inventory: Res<PlayerInventory>,
+    mut blocked_logged: Local<bool>,
 ) {
-    if inventory_ui.panels_open > 0 { return; }
+    // Log once per block, not once per frame: this system runs every frame.
+    if let Some(panel) = inventory_ui.blocking_panel() {
+        if !*blocked_logged {
+            debug!("interact suppressed: the {:?} panel is open", panel);
+            *blocked_logged = true;
+        }
+        return;
+    }
+    *blocked_logged = false;
 
     for (player_transform, controller, bound) in &player_query {
         let keyboard_pressed = controller.inputs.key("interact")

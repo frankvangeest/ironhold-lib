@@ -83,8 +83,8 @@ an idempotent `BTreeSet`, never a counter; `apply_sim_clock_system` is the **onl
 and the only emitter of `game.paused`/`game.resumed`, which follow the *announcing* holds only (`PauseHold::announces`: `Menu`; the harness `Static` hold, taken from boot by `start_app_with` for `RunMode::Static`, never announces, so a project that opens its pause menu from `game.paused` never opens it in a static screenshot). Gameplay reads `sim_running`/`SimClock::is_running`, never
 `Time<Virtual>::is_paused()`. A paused clock runs zero `FixedUpdate` ticks and freezes every `Res<Time>` system, but an
 *edge-triggered input* system (interact, targeting, the action bar, first-person/flycam mouse look, dialogue choices) does not
-follow the clock and needs its own gate. Keep the `panels_open` check a **separate** condition (merging it would stop the action
-bar from closing the inventory). `PauseGame`/`ResumeGame`/`TogglePause` touch only the `Menu` hold; a Replace-mode load releases
+follow the clock and needs its own gate. Keep the open-panel check (`LoadedInventoryUi::world_input_blocked`, true only for a modal panel: shop or container) a **separate** condition (the action bar is not gated by panel state and must keep working under any panel, and a real pause must not
+change which panel blocks the world). `PauseGame`/`ResumeGame`/`TogglePause` touch only the `Menu` hold; a Replace-mode load releases
 only `Menu` (in `spawn_scene_v2`, never in the executor's `LoadScene` arm and never for an overlay).
 
 <!-- b:706 -->

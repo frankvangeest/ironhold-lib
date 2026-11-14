@@ -8,6 +8,7 @@ use crate::runtime::messages::*;
 use crate::runtime::actions::ActionQueue;
 use crate::capabilities::animation_resolver::{AnimationRequests, AnimationRequest};
 use crate::capabilities::camera::{MAX_SPLIT_PLAYERS, CameraBlendState};
+use crate::capabilities::inventory::PanelKind;
 use crate::schema::camera::CameraModeDef;
 use crate::capabilities::damage_popup::DamagePopup;
 use crate::capabilities::particle::QueuedParticleEffect;
@@ -51,7 +52,9 @@ pub fn action_executor_system(
                 scene_state.delayed_events.0.clear();
                 spawn_params.pending_spawns.0.clear();
                 scene_state.active_dialogue.clear();
-                scene_state.inventory_ui.panels_open = 0;
+                scene_state.inventory_ui.open_panels.clear();
+                scene_state.inventory_ui.active_merchant_id = None;
+                scene_state.container_ui.active_container = None;
                 commands.insert_resource(crate::runtime::scene_manager::LoadedTargetIndicator(None));
                 commands.insert_resource(crate::runtime::scene_manager::LoadedTargetHud(None));
                 commands.insert_resource(crate::runtime::scene_manager::ActiveViewBox(None));
@@ -323,14 +326,14 @@ pub fn action_executor_system(
                     // If the despawned entity was the currently-open container (e.g. a lootable
                     // corpse decaying while its panel is still open), tear the panel down the
                     // same way CloseContainer does. Otherwise this leaves a ghost panel bound to
-                    // a gone entity and
-                    // `panels_open` stuck above 0, permanently blocking interact/pickup/
-                    // tab-targeting (debug-detective finding, monster_corpse_loot.md v2).
+                    // a gone entity and the container still counted as open, permanently
+                    // blocking interact/pickup/tab-targeting (debug-detective finding,
+                    // monster_corpse_loot.md v2).
                     if scene_state.container_ui.active_container == Some(entity) {
                         for (_, mut vis) in scene_state.container_panel_q.iter_mut() {
                             if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
                         }
-                        scene_state.inventory_ui.set_panel_open(false);
+                        scene_state.inventory_ui.set_panel_open(PanelKind::Container, false);
                         game_events.write(GameEvent::Trigger("ui.panel_closed".to_string()));
                         scene_state.container_ui.active_container = None;
                         game_events.write(GameEvent::Trigger("container.closed".to_string()));
@@ -1336,14 +1339,14 @@ pub fn action_executor_system(
                 for (_, mut vis) in scene_state.inventory_panel_q.iter_mut() {
                     if *vis != Visibility::Visible { *vis = Visibility::Visible; }
                 }
-                scene_state.inventory_ui.set_panel_open(true);
+                scene_state.inventory_ui.set_panel_open(PanelKind::Inventory, true);
                 game_events.write(GameEvent::Trigger("ui.panel_opened".to_string()));
             }
             Action::CloseInventory => {
                 for (_, mut vis) in scene_state.inventory_panel_q.iter_mut() {
                     if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
                 }
-                scene_state.inventory_ui.set_panel_open(false);
+                scene_state.inventory_ui.set_panel_open(PanelKind::Inventory, false);
                 game_events.write(GameEvent::Trigger("ui.panel_closed".to_string()));
             }
             Action::ToggleInventory => {
@@ -1357,7 +1360,7 @@ pub fn action_executor_system(
                 for (_, mut vis) in scene_state.inventory_panel_q.iter_mut() {
                     if *vis != target { *vis = target; }
                 }
-                scene_state.inventory_ui.set_panel_open(!is_visible);
+                scene_state.inventory_ui.set_panel_open(PanelKind::Inventory, !is_visible);
                 game_events.write(GameEvent::Trigger(if is_visible {
                     "ui.panel_closed".to_string()
                 } else {
@@ -1391,14 +1394,14 @@ pub fn action_executor_system(
                     warn!("Action::OpenShop: no ShopPanel in scene — add a ShopPanel UI node");
                     continue;
                 };
-                // Same guard as Action::OpenContainer (see its comment): the single ShopPanel can
-                // only ever show one merchant at a time, so a second OpenShop while one is already
-                // active (e.g. two interactable merchants both in range of one interact press)
-                // must not double-count panels_open — otherwise the one matching CloseShop only
-                // brings it back to 1, permanently suppressing interact/collectible-pickup/
-                // tab-targeting until the next LoadScene.
-                if scene_state.inventory_ui.active_merchant_id.is_none() {
-                    scene_state.inventory_ui.set_panel_open(true);
+                // The single ShopPanel can only ever show one merchant at a time, so a second
+                // OpenShop while one is already active (e.g. two interactable merchants both in
+                // range of one interact press) only re-targets it and emits no second
+                // `ui.panel_opened`. The insert is unconditional (the set is idempotent) so the
+                // panel can never be visible yet missing from the set; only the event is guarded.
+                let was_open = scene_state.inventory_ui.is_panel_open(PanelKind::Shop);
+                scene_state.inventory_ui.set_panel_open(PanelKind::Shop, true);
+                if !was_open {
                     game_events.write(GameEvent::Trigger("ui.panel_opened".to_string()));
                 }
 
@@ -1521,7 +1524,7 @@ pub fn action_executor_system(
                 for (_, mut vis, _) in scene_state.shop_panel_q.iter_mut() {
                     if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
                 }
-                scene_state.inventory_ui.set_panel_open(false);
+                scene_state.inventory_ui.set_panel_open(PanelKind::Shop, false);
                 game_events.write(GameEvent::Trigger("ui.panel_closed".to_string()));
             }
             Action::BuyItem(item_key) => {
@@ -1631,17 +1634,15 @@ pub fn action_executor_system(
                     if *vis != Visibility::Visible { *vis = Visibility::Visible; }
                 }
 
-                // Only count this as a *new* panel opening if none was already open. The
-                // ContainerPanel is a single UI node with one `active_container` slot — a second
-                // OpenContainer while one is already showing just re-targets that same slot, it
-                // doesn't add a second visible panel. Without this guard, two interactable entities
-                // both in range of one interact press (each queuing its own OpenContainer in the
-                // same frame — e.g. two nearby lootable corpses) would increment `panels_open`
-                // twice for one visual panel, and the single matching CloseContainer that follows
-                // only brings it back to 1 — permanently suppressing interact/collectible
-                // pickup/tab-targeting (all gated on `panels_open == 0`) until the next LoadScene.
-                if scene_state.container_ui.active_container.is_none() {
-                    scene_state.inventory_ui.set_panel_open(true);
+                // The ContainerPanel is a single UI node with one `active_container` slot — a second
+                // OpenContainer while one is already showing just re-targets that same slot (two
+                // interactable entities in range of one interact press each queue their own
+                // OpenContainer in the same frame, e.g. two nearby lootable corpses), so only the
+                // first emits `ui.panel_opened`. The insert is unconditional (the set is idempotent) so
+                // the panel can never be visible yet missing from the set; only the event is guarded.
+                let was_open = scene_state.inventory_ui.is_panel_open(PanelKind::Container);
+                scene_state.inventory_ui.set_panel_open(PanelKind::Container, true);
+                if !was_open {
                     game_events.write(GameEvent::Trigger("ui.panel_opened".to_string()));
                 }
                 scene_state.container_ui.active_container = Some(container_entity);
@@ -1651,7 +1652,7 @@ pub fn action_executor_system(
                 for (_, mut vis) in scene_state.container_panel_q.iter_mut() {
                     if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
                 }
-                scene_state.inventory_ui.set_panel_open(false);
+                scene_state.inventory_ui.set_panel_open(PanelKind::Container, false);
                 game_events.write(GameEvent::Trigger("ui.panel_closed".to_string()));
                 scene_state.container_ui.active_container = None;
                 game_events.write(GameEvent::Trigger("container.closed".to_string()));
