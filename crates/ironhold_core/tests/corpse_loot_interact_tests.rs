@@ -878,3 +878,67 @@ fn a_freshly_spawned_corpse_immediately_requests_its_frozen_death_pose() {
     app.update();
     assert_correct_pose(&app, "after 2 further updates");
 }
+
+/// Regression test: `Action::TakeAllFromContainer` used to remove every item from the container
+/// first and then add it to the player's inventory, ignoring how many fit, so whatever the full
+/// inventory could not hold was destroyed. Overflow must stay in the container.
+#[test]
+fn take_all_with_a_full_inventory_leaves_the_overflow_in_the_container() {
+    use ironhold_core::capabilities::inventory::PlayerInventory;
+    let mut app = setup_test_app();
+    app.update();
+    app.world_mut().insert_resource(
+        ironhold_core::capabilities::inventory::LoadedItemCatalog(Some(real_item_catalog())),
+    );
+    spawn_container_panel(&mut app);
+    spawn_test_player(&mut app, Vec3::ZERO);
+    // zombie_corpse: gold_coin x15 (a currency item) and health_potion x1.
+    let corpse = spawn_real_corpse(&mut app, "zombie_corpse", "zombie_01_corpse", Vec3::ZERO);
+
+    // The currency stat `gold_coin` pays into (the test app loads no project stats).
+    app.world_mut().resource_mut::<ironhold_core::schema::stats::LoadedStats>().0.insert(
+        "gold".to_string(),
+        LiveStat::new(StatDef {
+            base: 0.0, min: 0.0, max: 10_000.0, soft_max: None, regen_rate: 0.0, regen_delay: 0.0, thresholds: Vec::new(),
+        }),
+    );
+
+    // A one-slot inventory that is already full of something else.
+    let mut inv = PlayerInventory::new(1);
+    add_to_slots(&mut inv.slots, 1, "filler_item", 1, None);
+    app.world_mut().insert_resource(inv);
+
+    press_f(&mut app);
+    app.update();
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::TakeAllFromContainer);
+    app.update();
+
+    let count_in = |slots: &[Option<ironhold_core::schema::items::ItemStack>], key: &str| -> u32 {
+        slots.iter().flatten().filter(|s| s.item_key == key).map(|s| s.count).sum()
+    };
+    let in_corpse = count_in(&app.world().get::<Inventory>(corpse).unwrap().slots, "health_potion");
+    let on_player = count_in(&app.world().resource::<PlayerInventory>().slots, "health_potion");
+    assert_eq!(on_player, 0, "the player's inventory was full, so nothing can have been added");
+    assert_eq!(in_corpse, 1, "the potion that did not fit must stay in the container, not vanish");
+
+    // The corpse still holds loot, so it must stay lootable: `container.looted` must not move it to `looted`
+    // (which would close the panel and despawn it with the potion inside).
+    for _ in 0..3 { app.update(); }
+    assert_eq!(
+        app.world().get::<EntityFsmState>(corpse).unwrap().current, "fresh",
+        "a partially looted corpse must stay in `fresh`"
+    );
+
+    // The player makes room; a second Take All takes the rest and now the corpse counts as looted.
+    app.world_mut().resource_mut::<PlayerInventory>().resize(3);
+    app.world_mut().resource_mut::<ActionQueue>().push(Action::TakeAllFromContainer);
+    app.update();
+    app.update();
+    app.update();
+    assert_eq!(count_in(&app.world().resource::<PlayerInventory>().slots, "health_potion"), 1);
+    assert_eq!(count_in(&app.world().get::<Inventory>(corpse).unwrap().slots, "health_potion"), 0);
+    assert_eq!(
+        app.world().get::<EntityFsmState>(corpse).unwrap().current, "looted",
+        "once the container is empty the corpse moves to `looted`"
+    );
+}

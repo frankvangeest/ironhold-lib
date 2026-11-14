@@ -1678,37 +1678,52 @@ pub fn action_executor_system(
 
                 if items_to_transfer.is_empty() { continue; }
 
-                // Remove from container; currency items go to their stat, others to inventory.
+                // Currency items go to their stat; others go to the player's inventory. Only what actually fits is
+                // taken out of the container: the overflow stays in it (it used to be removed first and lost).
                 let mut any_transferred = false;
+                let mut left_behind = false;
                 for (item_key, count) in &items_to_transfer {
-                    if let Ok((sid, mut inv)) = scene_state.container_inventories.get_mut(container_entity) {
-                        let removed = remove_from_slots(&mut inv.slots, item_key, *count);
-                        if removed > 0 {
-                            let currency_stat = catalog_ref
-                                .and_then(|c| c.items.get(item_key.as_str()))
-                                .and_then(|def| def.currency_stat.clone());
-                            if let Some(ref stat_key) = currency_stat {
-                                if let Some(stat) = scene_state.loaded_stats.0.get_mut(stat_key) {
-                                    let new_val = stat.apply_delta(removed as f32);
-                                    info!("TakeAllFromContainer: {} x{} → stat \"{}\" now {:.0}", item_key, removed, stat_key, new_val);
-                                } else {
-                                    warn!("TakeAllFromContainer: currency_stat {:?} not found in stats", stat_key);
-                                }
-                            } else {
-                                let player = &mut *scene_state.player_inventory;
-                                if player.max_slots == 0 { player.resize(20); }
-                                let max = player.max_slots;
-                                add_to_slots(&mut player.slots, max, item_key, removed, catalog_ref);
-                            }
-                            game_events.write(GameEvent::Trigger(
-                                format!("inventory.added:player:{}:{}", item_key, removed)));
-                            any_transferred = true;
-                            let _ = sid; // suppress unused warning
+                    // Checked before anything is added to the player, so an add can never be left without its remove.
+                    if scene_state.container_inventories.get(container_entity).is_err() { break; }
+                    let currency_stat = catalog_ref
+                        .and_then(|c| c.items.get(item_key.as_str()))
+                        .and_then(|def| def.currency_stat.clone());
+                    let take = if let Some(stat_key) = &currency_stat {
+                        // A currency whose stat does not exist stays in the container too (it used to be destroyed).
+                        if scene_state.loaded_stats.0.contains_key(stat_key) { *count } else {
+                            warn!("TakeAllFromContainer: currency_stat {:?} not found in stats; {} stays in the container", stat_key, item_key);
+                            0
+                        }
+                    } else {
+                        let player = &mut *scene_state.player_inventory;
+                        if player.max_slots == 0 { player.resize(20); }
+                        let max = player.max_slots;
+                        add_to_slots(&mut player.slots, max, item_key, *count, catalog_ref).0
+                    };
+                    if take < *count { left_behind = true; }
+                    if take == 0 { continue; }
+                    let Ok((_, mut inv)) = scene_state.container_inventories.get_mut(container_entity) else { continue };
+                    let removed = remove_from_slots(&mut inv.slots, item_key, take);
+                    if removed == 0 { continue; }
+                    if let Some(ref stat_key) = currency_stat {
+                        if let Some(stat) = scene_state.loaded_stats.0.get_mut(stat_key) {
+                            let new_val = stat.apply_delta(removed as f32);
+                            info!("TakeAllFromContainer: {} x{} → stat \"{}\" now {:.0}", item_key, removed, stat_key, new_val);
                         }
                     }
+                    game_events.write(GameEvent::Trigger(
+                        format!("inventory.added:player:{}:{}", item_key, removed)));
+                    any_transferred = true;
                 }
 
-                if any_transferred {
+                if left_behind {
+                    game_events.write(GameEvent::Trigger("inventory.full:player".to_string()));
+                }
+                // `container.looted` means "now empty": a corpse that still holds items must stay lootable.
+                let emptied = scene_state.container_inventories.get(container_entity)
+                    .map(|(_, inv)| inv.slots.iter().all(|s| s.is_none()))
+                    .unwrap_or(false);
+                if any_transferred && emptied {
                     // Resolve entity ID from registry for the event.
                     let entity_id = spawn_params.registry.entities.iter()
                         .find_map(|(id, &e)| if e == container_entity { Some(id.clone()) } else { None })

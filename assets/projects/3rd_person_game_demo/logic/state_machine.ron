@@ -207,6 +207,8 @@
                     PlaySound(key: "click"),
                 ] ),
                 ( event: "entity.interacted:seal_door", do_actions: [
+                    // The gate only checks for the key; consuming it is an explicit action.
+                    RemoveItem(entity: "player", item_key: "old_key"),
                     ShowFloatingText(entity: "seal_door", text: "The seal breaks..."),
                     SetDespawnTimer(entity: "seal_door", delay_secs: 1.5),
                 ] ),

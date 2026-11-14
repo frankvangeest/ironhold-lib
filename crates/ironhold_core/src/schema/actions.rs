@@ -424,7 +424,8 @@ pub enum Action {
     /// Hide the `ContainerPanel` UI node and clear the active container.
     CloseContainer,
     /// Transfer all items from the currently open container to the player's inventory.
-    /// No-op if no container is open. Emits `container.looted:{entity_id}` on success.
+    /// No-op if no container is open. Only what fits is taken: the rest stays in the container and
+    /// `inventory.full:player` is emitted. Emits `container.looted:{entity_id}` once the container is empty.
     TakeAllFromContainer,
     /// Spawn a new player into an already-`Grid`-split local co-op scene at runtime, growing
     /// the split-screen camera layout live (up to `MAX_SPLIT_PLAYERS`) — no scene reload,
