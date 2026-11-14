@@ -873,3 +873,48 @@ fn a_renewal_that_never_answers_does_not_hold_the_logout_or_the_next_sign_in() {
     assert!(got.iter().any(|e| e.request_id == 5 && matches!(e.reply, BackendReply::SignedIn { .. })), "the held sign-in proceeds: {got:?}");
     stop.store(true, Ordering::Relaxed);
 }
+
+#[test]
+fn a_leave_names_the_lobby_the_player_was_in() {
+    let bodies: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
+    let seen_bodies = bodies.clone();
+    let (url, _seen, stop) = serve(move |method, path, _auth, body| {
+        if method == "POST" && path.starts_with("/v2/account/authenticate/device") {
+            return device_auth("Ada", "r");
+        }
+        let Some(rpc) = path.strip_prefix("/v2/rpc/") else { return (404, "{}".to_string()) };
+        let request = sent(body);
+        seen_bodies.lock().unwrap().push((rpc.to_string(), request.clone()));
+        match rpc {
+            "ironhold_lobby_create" if request["name"] == "Cap" => rpc_reply(json!({ "ok": false, "reason": "limit_reached" })),
+            "ironhold_lobby_create" => rpc_reply(lobby_json("L1", 1, &["Ada"], false)),
+            "ironhold_lobby_join" => rpc_reply(lobby_json("L2", 1, &["Ada", "Bo"], false)),
+            "ironhold_lobby_leave" => rpc_reply(json!({ "ok": true })),
+            _ => (404, "{}".to_string()),
+        }
+    });
+    let mut b = adapter(&url);
+    ask(&mut b, 1, RequestKind::SignIn);
+    let leaves = |bodies: &Arc<Mutex<Vec<(String, Value)>>>| -> Vec<Value> {
+        bodies.lock().unwrap().iter().filter(|(r, _)| r == "ironhold_lobby_leave").map(|(_, v)| v.clone()).collect()
+    };
+    // No lobby was ever answered: "leave whatever I am in".
+    assert_eq!(ask(&mut b, 2, RequestKind::LeaveLobby).reply, BackendReply::LobbyLeft);
+    // After a create the leave names that lobby.
+    ask(&mut b, 3, RequestKind::CreateLobby { name: "Casual".into(), max_players: 4 });
+    assert_eq!(ask(&mut b, 4, RequestKind::LeaveLobby).reply, BackendReply::LobbyLeft);
+    // After a join it names the joined one, and after that leave the player is in none again.
+    ask(&mut b, 5, RequestKind::JoinLobby { lobby_id: "ok".into() });
+    assert_eq!(ask(&mut b, 6, RequestKind::LeaveLobby).reply, BackendReply::LobbyLeft);
+    assert_eq!(ask(&mut b, 7, RequestKind::LeaveLobby).reply, BackendReply::LobbyLeft);
+    // A create whose answer says nothing about the old membership (here: refused) makes the lobby unknown again: `{}`, not L1.
+    ask(&mut b, 8, RequestKind::CreateLobby { name: "Casual".into(), max_players: 4 });
+    ask(&mut b, 9, RequestKind::CreateLobby { name: "Cap".into(), max_players: 4 });
+    assert_eq!(ask(&mut b, 10, RequestKind::LeaveLobby).reply, BackendReply::LobbyLeft);
+    stop.store(true, Ordering::Relaxed);
+    assert_eq!(
+        leaves(&bodies),
+        vec![json!({}), json!({ "lobby_id": "L1" }), json!({ "lobby_id": "L2" }), json!({}), json!({})],
+        "each leave names the lobby of the last answered create or join, `{{}}` when there is none"
+    );
+}
