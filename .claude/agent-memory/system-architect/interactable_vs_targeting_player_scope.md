@@ -31,7 +31,9 @@ per-player interact feedback) will need player-scoping — same class as targeti
 primary/non-primary split. Also note: `player.attack_missed` emitted from an *interact* system is
 a pre-existing naming smell. Also: `interactable_system` early-returns globally on
 `inventory_ui.panels_open > 0` — one player opening an inventory panel disables interact for
-*every* player in a co-op scene. Pre-existing, affects keyboard interact equally; out of scope for
+*every* player in a co-op scene. (S1, feature/item_panels_open_set 2026-11-14: now
+`open_panels: BTreeSet<PanelKind>` + `world_input_blocked()`; inventory is non-modal, so only a
+shop/container open by anyone blocks everyone. Still global, not per-player.) Pre-existing, affects keyboard interact equally; out of scope for
 gamepad work but the same global-vs-per-player class.
 
 **How to apply:** interactable now matches the per-player pattern; treat the two systems as

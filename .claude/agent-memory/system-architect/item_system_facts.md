@@ -23,6 +23,14 @@ Non-obvious facts:
 - `panels_open` is a counter: OpenInventory always +1, every Close* always -1; demo `entity.exited:merchant_01 -> CloseShop`
   decrements on every walk-past. Same lesson as SimClock: use an idempotent set. Even fixed, an open inventory blocks
   interact by design (open question: inventory modality).
+- S1 review (2026-11-14, `feature/item_panels_open_set`): set lives INSIDE `LoadedInventoryUi` (not a separate
+  `OpenPanels` resource as the review proposed) — fine, scene_loader's whole-struct `Default` reset on Replace also clears it.
+  Residual facts for S2-S6: (a) `ui.panel_opened/closed` stay non-edge (every Close* emits, e.g. walk-past CloseShop) and
+  carry no panel kind; `set_panel_open` returning "changed" is the cheap hook for edge events. (b) `initially_hidden: false`
+  Inventory/Shop panels spawn Visible but NOT in the set (no shipped RON uses it). (c) No Despawn teardown for an open
+  shop's merchant (container has one). (d) `is_modal` uses `!matches!(Inventory)` so a new PanelKind silently defaults to modal.
+  (e) collectible_system early-return leaves CollisionEvents unread, so a Started pair from while blocked can fire right
+  after the panel closes (pre-existing).
 - Shop Buy buttons emit `ui.button_pressed:buy_item:{key}`; FSM is exact-match, so one RON rule per stocked item.
   Proposed: "default-backed events" (generalise HandledIntentSlots) so a rule wins, else the engine runs the default.
 - bevy_ui 0.18 `ui_focus_system` sets Pressed only for Left mouse / touch (focus.rs:176,188): right-click-to-use needs
