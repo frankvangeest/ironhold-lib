@@ -48,6 +48,14 @@ Non-obvious facts:
   Container->container transfer needs two `&mut Inventory` from one query: clone-and-swap with sequential write-back
   sidesteps `get_many_mut`.
 
+- S2a code review (2026-11-14, `feature/item_transaction_primitive`): primitive = `capabilities/item_txn.rs` (`plan` on
+  owned `TxnLedger`), glue = `runtime/scene_manager/item_actions.rs`. Stock is `MerchantStockState` (BTreeMap<Entity,..>,
+  lookup-only; Entity key makes the LoadScene clear mere hygiene). **Trap found:** refreshing shop rows by pushing
+  `Action::OpenShop` to the FIFO queue re-opens a shop that a later action in the same batch closed (`[BuyItem, CloseShop]`,
+  pause `entry_actions` CloseShop) — refresh in place instead. TakeAll and AddItem's slot path still call
+  add_to_slots directly (deliberate); coin->stat logic exists in 3 copies (credit_coins, transfer, TakeAll). After S2a a
+  coin item given to the player becomes a stat, so `RemoveItem`/`requires_item` of a coin can never succeed (asymmetry).
+
 **How to apply:** any new item-moving action must go through the primitive (once built) and emit a failure event
 instead of a success event on failure. See [[inventory-panel-triplication]], [[panel-input-blocking]],
 [[event-pipeline-intent-layer]], [[stat-ownership-global-vs-instance]].

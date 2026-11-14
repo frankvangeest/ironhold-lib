@@ -1,5 +1,7 @@
 # Memory Index
 
+- [Executor follow-up push runs after queued](project_executor_followup_push_runs_after_queued.md) — BuyItem's pushed OpenShop refresh runs after a same-queue CloseShop/LoadScene and re-opens the modal shop
+
 - [CLI fixture vs core tripwire](project_cli_fixture_vs_core_tripwire.md) — core's no-rules.ron tripwire scans CLI fixtures; a rules.ron fixture passes CLI tests, fails core suite
 
 - [Flycam spawn roll until first write](project_flycam_spawn_roll_until_first_write.md) — XYZ spawn rotation keeps roll, FlycamState YXZ drops it; sim gate before the write shows a tilted horizon (terrain_demo -22 deg)
