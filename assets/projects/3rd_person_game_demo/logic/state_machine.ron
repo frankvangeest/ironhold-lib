@@ -184,6 +184,9 @@
                 // chest_01 has initial_items defined in prefabs.ron.
                 ( event: "entity.interacted:chest_01",               do_actions: [ OpenContainer("chest_01") ] ),
                 ( event: "entity.exited:chest_01",                   do_actions: [ CloseContainer ] ),
+                // chest_swords_01 holds 20 iron swords: Take All fills the bag (see the chest_swords prefab).
+                ( event: "entity.interacted:chest_swords_01",        do_actions: [ OpenContainer("chest_swords_01") ] ),
+                ( event: "entity.exited:chest_swords_01",            do_actions: [ CloseContainer ] ),
                 // chest_02_spawned is spawned by the "Spawn Chest" button; contains 500 gold coins.
                 ( event: "entity.interacted:chest_02_spawned",       do_actions: [ OpenContainer("chest_02_spawned") ] ),
                 ( event: "entity.exited:chest_02_spawned",           do_actions: [ CloseContainer ] ),

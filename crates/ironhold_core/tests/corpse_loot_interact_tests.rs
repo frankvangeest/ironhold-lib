@@ -140,8 +140,8 @@ fn self_sub(action: Action, id: &str) -> Action {
             Action::SetDespawnTimer { entity: entity.replace("{self}", id), delay_secs },
         Action::AddItem { entity, item_key, count } =>
             Action::AddItem { entity: entity.replace("{self}", id), item_key, count },
-        Action::RemoveItem { entity, item_key, count } =>
-            Action::RemoveItem { entity: entity.replace("{self}", id), item_key, count },
+        Action::RemoveItem { entity, item_key, count, all_or_nothing } =>
+            Action::RemoveItem { entity: entity.replace("{self}", id), item_key, count, all_or_nothing },
         Action::OpenContainer(t) => Action::OpenContainer(t.replace("{self}", id)),
         Action::Spawn { prefab, id: spawn_id, position, spawn_point, yaw_deg, at_entity } =>
             Action::Spawn {

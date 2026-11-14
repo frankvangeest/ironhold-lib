@@ -1396,7 +1396,7 @@ InventoryPanel((
 
 A scrollable list of merchant stock entries. Always positioned absolutely. Hidden by default; shown by `OpenShop(merchant_id)` and hidden by `CloseShop`. Stock is repopulated from the merchant's `MerchantDef` every time `OpenShop` fires. Requires `items_path` to be set in `project.ron`.
 
-> **v1 scope note:** `Action::BuyItem` is fully implemented — it checks stock, deducts `buy_price` from the player's `currency_stat`, adds the item to the player's inventory, and emits `item.bought:{item_key}`. **Selling is still not implemented** — `sell_price` is stored on `ShopEntry` but nothing reads it; there is no `SellItem` action yet. See "MerchantDef fields" below.
+> **What shops do:** `Action::BuyItem` checks stock, gold and bag room together and changes nothing unless all three work (see [Buying, selling and what survives a scene load](#buying-selling-and-what-survives-a-scene-load)). **Selling is still not implemented** - `sell_price` is stored on `ShopEntry` but nothing reads it; there is no `SellItem` action yet. See "MerchantDef fields" below.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -4939,14 +4939,14 @@ Items persist across scene transitions (the `PlayerInventory` resource is not cl
 | `max_stack` | `u32` | `99` | Maximum count per stack when `stackable: true` |
 | `weight` | `f32` | `1.0` | Weight in game units (for future encumbrance mechanics) |
 | `tags` | `Vec<String>` | `[]` | Arbitrary designer tags (e.g. `["consumable", "quest"]`) |
-| `currency_stat` | `Option<String>` | `None` | When set, looting this item adds its count to the named global stat instead of occupying an inventory slot. Use for currency (e.g. `"gold"`). `ironhold_cli validate` cross-checks this against `stats.ron` (when the project sets `items_path`). |
+| `currency_stat` | `Option<String>` | `None` | When set, this item is currency: giving it to the player (`AddItem`, `TransferItem`, looting a container with Take All) adds its count to the named stat instead of occupying an inventory slot, up to the stat's `max` (coins that would pass it stay where they were, or are not added, and `inventory.full:player` fires). A coin whose stat does not exist is kept as an ordinary item with a warning. Use for currency (e.g. `"gold"`). `ironhold_cli validate` cross-checks this against `stats.ron` (when the project sets `items_path`). |
 
 **`InventoryContainerDef` fields (on `PrefabDef.inventory`):**
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `max_slots` | `usize` | `9` | Maximum number of item slots this container entity has. Clamped to at least 4. |
-| `initial_items` | `Vec<InitialItemEntry>` | `[]` | Items pre-placed at spawn time, in slot order. Stacking respects each item's `stackable`/`max_stack` from the project's item catalog (`items.ron`) — an item absent from the catalog falls back to `max_stack: 99`. Excess is silently ignored when slots are full. |
+| `initial_items` | `Vec<InitialItemEntry>` | `[]` | Items pre-placed at spawn time, in slot order. Stacking respects each item's `stackable`/`max_stack` from the project's item catalog (`items.ron`) — an item absent from the catalog falls back to `max_stack: 99`. Excess is silently ignored when slots are full. Refilled from this list on every scene load. |
 
 **`InitialItemEntry` fields:**
 
@@ -4973,7 +4973,7 @@ The slot count label in `InventoryPanel` and `ContainerPanel` now shows `"N/MAX"
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `stock` | `Vec<ShopEntry>` | ✅ | Items the merchant sells/buys |
-| `currency_stat` | `String` | `"gold"` | Global stat key used as currency for `Action::BuyItem` (deducted on purchase — see the scope note below; selling is not yet implemented). Defaults to `"gold"` when omitted, so `ironhold_cli validate`'s cross-check against `stats.ron` uses `"gold"` too if this field isn't authored |
+| `currency_stat` | `String` | `"gold"` | Stat key used as currency (it is also the word in the "Not enough ..." message) for `Action::BuyItem`. The player's own stat of that name is spent if the primary player's prefab has one (`stat_templates`), otherwise the shared pool from `stats.ron`; the inventory's gold footer and the action bar's costs use the same rule. Defaults to `"gold"` when omitted, so `ironhold_cli validate`'s cross-check against `stats.ron` uses `"gold"` too if this field isn't authored |
 
 `ironhold_cli validate` cross-checks `currency_stat` against `stats.ron` and every `ShopEntry.item_key`
 against `items.ron` (whenever an item catalog is loaded — the project's configured `items_path`, or
@@ -4987,7 +4987,7 @@ only surfaced as a runtime no-op the first time a player opened the shop.
 | `item_key` | `String` | ✅ | Key of the item from `items.ron` |
 | `buy_price` | `u32` | ✅ | Price for the player to buy the item |
 | `sell_price` | `u32` | ✅ | Price the merchant pays to buy the item from the player |
-| `stock_count` | `Option<u32>` | `null` | If set, the merchant only has this many; displayed as `[N]` in the shop panel (deduction not yet implemented) |
+| `stock_count` | `Option<u32>` | `null` | If set, the merchant only has this many: each buy uses one, the shop row shows `[N]` and then `(Sold out)` (the row stays, its button dimmed, and a click on it emits `shop.sold_out`). The remaining count is runtime state per merchant, so it refills on scene load, like chests. Leave it out for unlimited stock |
 
 **Example:**
 
@@ -5054,12 +5054,45 @@ only surfaced as a runtime no-op the first time a player opened the shop.
 
 | Event | Trigger |
 |-------|---------|
-| `inventory.added:{entity}:{item_key}:{count}` | `AddItem` successfully adds items |
-| `inventory.full:{entity}` | `AddItem` finds no room (all slots occupied) |
+| `inventory.added:{entity}:{item_key}:{count}` | `AddItem` adds items (count = what actually fit); also a coin item credited to its stat, and Take All |
+| `inventory.full:{entity}` | Part or all of an add, transfer or Take All did not fit (the rest stays where it was); it also fires next to `inventory.transfer_failed` when nothing fit |
 | `inventory.removed:{entity}:{item_key}:{count}` | `RemoveItem` removes items (count = actual removed) |
-| `inventory.transferred:{from}:{to}:{item_key}` | `TransferItem` completes a move between entities |
+| `inventory.remove_failed:{entity}` and `inventory.remove_failed:{entity}:{item_key}` | `RemoveItem` removed nothing: none held, or `all_or_nothing: true` with fewer than `count` held (then nothing at all is removed). The generic form lets one rule cover every item |
+| `inventory.transferred:{from}:{to}:{item_key}` | `TransferItem` moved something (it moves what fits and leaves the rest in the source). A coin item sent to `"player"` also emits `inventory.added:player:{coin}:{n}` |
+| `inventory.transfer_failed:{from}:{to}:{item_key}` | `TransferItem` moved nothing (source holds none, or the destination is full) |
+| `item.bought:{item_key}` | `BuyItem` succeeded |
+| `shop.sold_out` and `shop.sold_out:{item_key}` | `BuyItem` on an item with no stock left |
+| `shop.insufficient_funds` and `shop.insufficient_funds:{item_key}` | `BuyItem` without enough of the currency |
+| `shop.no_room` and `shop.no_room:{item_key}` | `BuyItem` with no room in the bag (`inventory.full:player` also fires) |
+| `container.looted:{entity_id}` | Take All left the container empty |
 
-> **v1 scope note (corrected — this previously said buy/sell were display-only in v1; that's out of date):** `Action::BuyItem` is fully implemented — it checks stock, deducts `buy_price` from the player's `currency_stat`, adds the item to the player's inventory, and emits `item.bought:{item_key}`. **Selling is still not implemented** — `sell_price` is stored on `ShopEntry` but nothing reads it; there is no `SellItem` action yet.
+A failed action never emits its success event, and changes nothing: no gold is spent and no stock used if the item does not fit.
+
+```ron
+// Quest turn-in: the reward only runs if all three pelts were taken (guard on the success event of the exact count).
+( event: "entity.interacted:hunter", do_actions: [ RemoveItem(entity: "player", item_key: "wolf_pelt", count: 3, all_or_nothing: true) ] ),
+( event: "inventory.removed:player:wolf_pelt:3", do_actions: [ AddItem(entity: "player", item_key: "gold_coin", count: 50) ] ),
+( event: "inventory.remove_failed:player:wolf_pelt", do_actions: [ ShowFloatingText(entity: "hunter", text: "Bring me 3 pelts") ] ),
+// One rule for every sold-out item (the generic form has no item suffix):
+( event: "shop.sold_out", do_actions: [ PlaySound(key: "click") ] ),
+```
+
+
+#### Buying, selling and what survives a scene load
+
+`Action::BuyItem` is all or nothing. It checks stock, then the currency (`currency_stat`), then room in the bag, and only if all three work does it use one stock, take the price and add the item. Selling is still not implemented: `sell_price` is stored on `ShopEntry` but nothing reads it; there is no `SellItem` action yet.
+
+The engine shows a short floating message over the player for each buy outcome: "Bought X!", "Not enough gold!", "Sold out!", "Bag is full!" (over player 1 in co-op; the word after "Not enough" is the merchant's `currency_stat` key exactly as written, so give the stat a name a player can read). They cannot be turned off yet; a later release lets a rule you write replace them. A rule of your own that adds text shows next to them.
+
+| | Survives `LoadScene`? |
+|---|---|
+| Player bag | yes |
+| Shared stats (`stats.ron`, e.g. the global `gold`) | yes |
+| A player's own stats (`stat_templates` on the player prefab) | no, they live on the player entity and restart with it |
+| Chest and corpse contents | no, refilled from `initial_items` |
+| Merchant `stock_count` (what is left to buy) | no, refills when the scene loads |
+
+So a one-of-a-kind item can be bought again after a scene load. Coin items (`currency_stat`) never occupy a bag slot: they become the stat, so `RemoveItem` and `requires_item` on a coin item can never succeed; pay with `ModifyStat` instead. Not supported yet: selling, buy-back, restock timers, per-player prices, buying more than one at a time, saving the bag across page reloads. In local co-op there is one shared bag; the shop and the gold footer use player 1's own gold if its prefab has the stat, otherwise the shared pool (the action bar uses each slot owner's own stat).
 
 ---
 

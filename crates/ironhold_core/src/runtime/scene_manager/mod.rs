@@ -18,6 +18,7 @@ pub mod project_loader;
 pub mod scene_loader;
 pub mod entity_spawner;
 pub mod action_executor;
+pub mod item_actions;
 pub mod action_substitution;
 pub mod fsm_interpreter;
 pub mod entity_fsm_interpreter;
@@ -780,6 +781,10 @@ pub struct SceneStateParams<'w, 's> {
     pub container_panel_q: Query<'w, 's, (Entity, &'static mut Visibility), (With<crate::capabilities::inventory::ContainerPanelMarker>, Without<crate::capabilities::inventory::InventoryPanelMarker>, Without<crate::capabilities::inventory::ShopPanelMarker>)>,
     /// UI nodes addressable by `Action::SetUiVisible` (the only core writer of `Node.display`).
     pub ui_nodes_q: Query<'w, 's, (&'static UiNodeId, &'static mut Node)>,
+    /// Remaining shop stock per merchant entity (`capabilities/inventory.rs`); cleared on `LoadScene`.
+    pub merchant_stock: ResMut<'w, crate::capabilities::inventory::MerchantStockState>,
+    /// Every player, read-only, so `item_actions::primary_player_id` can pick the lowest `PlayerIndex`.
+    pub primary_players: Query<'w, 's, (&'static SpawnId, Option<&'static crate::capabilities::player::PlayerIndex>), With<crate::capabilities::player::CharacterController>>,
 }
 
 /// Bundles material-related assets to keep `spawn_scene_v2` under Bevy's 16-param limit.

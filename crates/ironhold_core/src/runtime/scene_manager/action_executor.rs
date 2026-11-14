@@ -53,6 +53,7 @@ pub fn action_executor_system(
                 spawn_params.pending_spawns.0.clear();
                 scene_state.active_dialogue.clear();
                 scene_state.inventory_ui.open_panels.clear();
+                scene_state.merchant_stock.0.clear();
                 scene_state.inventory_ui.active_merchant_id = None;
                 scene_state.container_ui.active_container = None;
                 commands.insert_resource(crate::runtime::scene_manager::LoadedTargetIndicator(None));
@@ -1218,10 +1219,23 @@ pub fn action_executor_system(
             }
             Action::AddItem { entity: entity_id, item_key, count } => {
                 use crate::capabilities::inventory::add_to_slots;
+                // A coin item given to the player credits its currency stat instead of using a slot.
+                if entity_id == "player" {
+                    if let Some(credited) = super::item_actions::credit_coins(&mut scene_state, &item_key, count) {
+                        if credited > 0 {
+                            game_events.write(GameEvent::Trigger(
+                                format!("inventory.added:player:{}:{}", item_key, credited)));
+                        }
+                        if credited < count {
+                            game_events.write(GameEvent::Trigger("inventory.full:player".to_string()));
+                        }
+                        continue;
+                    }
+                }
                 let catalog_ref = scene_state.loaded_item_catalog.0.as_ref();
                 if entity_id == "player" {
                     let inv = &mut *scene_state.player_inventory;
-                    if inv.max_slots == 0 { inv.resize(20); }
+                    if inv.max_slots == 0 { inv.resize(crate::capabilities::inventory::DEFAULT_PLAYER_SLOTS); }
                     let (added, full) = add_to_slots(&mut inv.slots, inv.max_slots, &item_key, count, catalog_ref);
                     if added > 0 {
                         game_events.write(GameEvent::Trigger(
@@ -1253,73 +1267,11 @@ pub fn action_executor_system(
                     }
                 }
             }
-            Action::RemoveItem { entity: entity_id, item_key, count } => {
-                use crate::capabilities::inventory::remove_from_slots;
-                if entity_id == "player" {
-                    let inv = &mut *scene_state.player_inventory;
-                    let removed = remove_from_slots(&mut inv.slots, &item_key, count);
-                    if removed > 0 {
-                        game_events.write(GameEvent::Trigger(
-                            format!("inventory.removed:player:{}:{}", item_key, removed)));
-                    }
-                } else {
-                    let mut found = false;
-                    for (sid, mut inv) in scene_state.container_inventories.iter_mut() {
-                        if sid.0 == entity_id {
-                            found = true;
-                            let removed = remove_from_slots(&mut inv.slots, &item_key, count);
-                            if removed > 0 {
-                                game_events.write(GameEvent::Trigger(
-                                    format!("inventory.removed:{}:{}:{}", entity_id, item_key, removed)));
-                            }
-                            break;
-                        }
-                    }
-                    if !found {
-                        warn!("Action::RemoveItem: entity '{}' not found or has no Inventory", entity_id);
-                    }
-                }
+            Action::RemoveItem { entity: entity_id, item_key, count, all_or_nothing } => {
+                super::item_actions::remove_item(entity_id, item_key, count, all_or_nothing, &mut scene_state, &mut game_events);
             }
             Action::TransferItem { from, to, item_key, count } => {
-                use crate::capabilities::inventory::{add_to_slots, remove_from_slots};
-                let catalog_ref = scene_state.loaded_item_catalog.0.as_ref();
-
-                // Step 1: remove from source.
-                let removed = if from == "player" {
-                    let inv = &mut *scene_state.player_inventory;
-                    remove_from_slots(&mut inv.slots, &item_key, count)
-                } else {
-                    let mut r = 0u32;
-                    for (sid, mut inv) in scene_state.container_inventories.iter_mut() {
-                        if sid.0 == from {
-                            r = remove_from_slots(&mut inv.slots, &item_key, count);
-                            break;
-                        }
-                    }
-                    r
-                };
-
-                if removed == 0 {
-                    warn!("Action::TransferItem: no '{}' found in '{}'", item_key, from);
-                } else {
-                    // Step 2: add to destination.
-                    if to == "player" {
-                        let inv = &mut *scene_state.player_inventory;
-                        if inv.max_slots == 0 { inv.resize(20); }
-                        let max = inv.max_slots;
-                        add_to_slots(&mut inv.slots, max, &item_key, removed, catalog_ref);
-                    } else {
-                        for (sid, mut inv) in scene_state.container_inventories.iter_mut() {
-                            if sid.0 == to {
-                                let max = inv.max_slots;
-                                add_to_slots(&mut inv.slots, max, &item_key, removed, catalog_ref);
-                                break;
-                            }
-                        }
-                    }
-                    game_events.write(GameEvent::Trigger(
-                        format!("inventory.transferred:{}:{}:{}", from, to, item_key)));
-                }
+                super::item_actions::transfer_item(from, to, item_key, count, &mut scene_state, &mut game_events);
             }
             Action::PauseGame => {
                 // Idempotent: check through `Deref` first so a redundant PauseGame does not even mark the clock changed.
@@ -1417,107 +1369,9 @@ pub fn action_executor_system(
                     continue;
                 };
 
-                let catalog = &scene_state.loaded_item_catalog.0;
-                let panel_icon_sheet = scene_state.inventory_ui.panel_icon_sheet.clone();
-                commands.entity(entries_entity).despawn_children();
-                for entry in &merchant_def.stock {
-                    let display_name = catalog
-                        .as_ref()
-                        .and_then(|c| c.items.get(&entry.item_key))
-                        .map(|d| d.display_name.clone())
-                        .unwrap_or_else(|| entry.item_key.clone());
-                    let stock_label = entry.stock_count
-                        .map(|n| format!(" [{}]", n))
-                        .unwrap_or_default();
-
-                    // Resolve icon data for this entry (smaller than inventory slots).
-                    let item_def = catalog.as_ref().and_then(|c| c.items.get(&entry.item_key));
-                    let icon_index = item_def.map(|d| d.icon_index as usize).unwrap_or(0);
-                    let icon_color = item_def
-                        .and_then(|d| d.icon_color)
-                        .map(|(r, g, b, a)| Color::srgba(r, g, b, a))
-                        .unwrap_or(Color::WHITE);
-                    let sheet_key: Option<String> = item_def
-                        .and_then(|d| d.icon_sheet.clone())
-                        .or_else(|| panel_icon_sheet.clone());
-                    // Clone handles so the borrow on inventory_ui ends before with_children.
-                    let atlas_pair: Option<(Handle<Image>, Handle<TextureAtlasLayout>)> = sheet_key
-                        .as_deref()
-                        .and_then(|k| scene_state.inventory_ui.icon_atlases.get(k))
-                        .map(|(t, l)| (t.clone(), l.clone()));
-
-                    let item_key = entry.item_key.clone();
-                    let buy_price = entry.buy_price;
-                    commands.entity(entries_entity).with_children(|p| {
-                        p.spawn((
-                            Name::new("ShopEntryRow"),
-                            Node {
-                                flex_direction: FlexDirection::Row,
-                                align_items: AlignItems::Center,
-                                justify_content: JustifyContent::SpaceBetween,
-                                width: Val::Percent(100.0),
-                                padding: UiRect::axes(Val::Px(6.0), Val::Px(5.0)),
-                                ..default()
-                            },
-                        )).with_children(|row| {
-                            // Item icon (28×28, smaller than inventory slots).
-                            if let Some((tex, layout)) = atlas_pair {
-                                row.spawn((
-                                    Name::new("ShopEntryIcon"),
-                                    Node {
-                                        width: Val::Px(28.0),
-                                        height: Val::Px(28.0),
-                                        flex_shrink: 0.0,
-                                        margin: UiRect::right(Val::Px(6.0)),
-                                        ..default()
-                                    },
-                                    ImageNode {
-                                        image: tex,
-                                        texture_atlas: Some(TextureAtlas { layout, index: icon_index }),
-                                        color: icon_color,
-                                        ..default()
-                                    },
-                                ));
-                            }
-                            // Item name + optional stock count.
-                            row.spawn((
-                                Name::new("ShopEntryName"),
-                                Node { flex_grow: 1.0, ..default() },
-                                Text::new(format!("{}{}", display_name, stock_label)),
-                                TextFont { font_size, ..default() },
-                                TextColor(Color::srgba(0.90, 0.88, 0.78, 1.0)),
-                            ));
-                            // Buy price (gold tint).
-                            row.spawn((
-                                Name::new("ShopEntryPrice"),
-                                Node { margin: UiRect::axes(Val::Px(8.0), Val::Px(0.0)), ..default() },
-                                Text::new(format!("{} g", buy_price)),
-                                TextFont { font_size, ..default() },
-                                TextColor(Color::srgba(0.95, 0.85, 0.40, 1.0)),
-                            ));
-                            // Buy button (bigger padding, full font_size).
-                            row.spawn((
-                                Name::new("ShopBuyBtn"),
-                                Button,
-                                Node {
-                                    padding: UiRect::axes(Val::Px(10.0), Val::Px(5.0)),
-                                    border: UiRect::all(Val::Px(1.0)),
-                                    ..default()
-                                },
-                                BorderColor::from(Color::srgba(0.2, 0.5, 0.2, 0.8)),
-                                BackgroundColor(Color::srgba(0.08, 0.20, 0.08, 0.85)),
-                                UiAction::Trigger(format!("buy_item:{}", item_key)),
-                            )).with_children(|b| {
-                                b.spawn((
-                                    Name::new("BuyBtnText"),
-                                    Text::new("Buy"),
-                                    TextFont { font_size, ..default() },
-                                    TextColor(Color::srgba(0.60, 0.90, 0.60, 1.0)),
-                                ));
-                            });
-                        });
-                    });
-                }
+                super::item_actions::rebuild_shop_rows(
+                    &mut commands, &mut scene_state, entries_entity, entity_opt, &merchant_def, font_size,
+                );
             }
             Action::CloseShop => {
                 scene_state.inventory_ui.active_merchant_id = None;
@@ -1528,86 +1382,7 @@ pub fn action_executor_system(
                 game_events.write(GameEvent::Trigger("ui.panel_closed".to_string()));
             }
             Action::BuyItem(item_key) => {
-                use crate::capabilities::inventory::add_to_slots;
-
-                // Find active merchant.
-                let merchant_id = match scene_state.inventory_ui.active_merchant_id.clone() {
-                    Some(id) => id,
-                    None => { warn!("Action::BuyItem: no shop is currently open"); continue; }
-                };
-
-                // Look up merchant def.
-                let entity_opt = spawn_params.registry.entities.get(&merchant_id).copied();
-                let prefab_key_opt = entity_opt.and_then(|e| {
-                    scene_state.prefab_keys.get(e).ok().map(|k| k.0.clone())
-                });
-                let merchant_def = prefab_key_opt.and_then(|key| {
-                    spawn_params.prefab_catalog.0.prefabs.get(&key)
-                        .and_then(|p| p.merchant.clone())
-                });
-                let Some(merchant_def) = merchant_def else {
-                    warn!("Action::BuyItem: active merchant '{}' has no MerchantDef", merchant_id);
-                    continue;
-                };
-
-                // Find item in stock.
-                let Some(stock_entry) = merchant_def.stock.iter().find(|e| e.item_key == item_key) else {
-                    warn!("Action::BuyItem: item '{}' not in merchant '{}' stock", item_key, merchant_id);
-                    continue;
-                };
-
-                // Check stock (stock_count: Some(0) means sold out).
-                if stock_entry.stock_count == Some(0) {
-                    info!("Action::BuyItem: item '{}' is sold out", item_key);
-                    continue;
-                }
-
-                // Resolve display name for floating text.
-                let display_name = scene_state.loaded_item_catalog.0.as_ref()
-                    .and_then(|c| c.items.get(&item_key))
-                    .map(|d| d.display_name.clone())
-                    .unwrap_or_else(|| item_key.clone());
-
-                let player_id = scene_state.player_inventory.player_spawn_id.clone();
-
-                // Check and deduct currency (global stat).
-                let currency = &merchant_def.currency_stat;
-                let price = stock_entry.buy_price as f32;
-                let current = scene_state.loaded_stats.0.get(currency.as_str())
-                    .map(|s| s.current)
-                    .unwrap_or(0.0);
-                if current < price {
-                    info!("Action::BuyItem: not enough {} ({:.0} < {:.0})", currency, current, price);
-                    game_events.write(GameEvent::Trigger("shop.insufficient_funds".to_string()));
-                    if let Some(ref pid) = player_id {
-                        action_queue.push(Action::ShowFloatingText {
-                            entity: pid.clone(),
-                            text: "Not enough gold!".to_string(),
-                            offset: Some((0.0, 2.2, 0.0)),
-                        });
-                    }
-                    continue;
-                }
-                if let Some(stat) = scene_state.loaded_stats.0.get_mut(currency.as_str()) {
-                    stat.apply_delta(-price);
-                }
-
-                // Add item to player inventory.
-                let catalog_ref = scene_state.loaded_item_catalog.0.as_ref();
-                let inv = &mut *scene_state.player_inventory;
-                if inv.max_slots == 0 { inv.resize(20); }
-                let max = inv.max_slots;
-                add_to_slots(&mut inv.slots, max, &item_key, 1, catalog_ref);
-
-                info!("Action::BuyItem: bought '{}' for {} {}", item_key, price, currency);
-                game_events.write(GameEvent::Trigger(format!("item.bought:{}", item_key)));
-                if let Some(ref pid) = player_id {
-                    action_queue.push(Action::ShowFloatingText {
-                        entity: pid.clone(),
-                        text: format!("Bought {}!", display_name),
-                        offset: Some((0.0, 2.2, 0.0)),
-                    });
-                }
+                super::item_actions::buy_item(item_key, &mut commands, &mut scene_state, &spawn_params, &mut game_events, &mut action_queue);
             }
             Action::OpenContainer(entity_id) => {
                 // Verify a ContainerPanel exists in the scene.
@@ -1659,7 +1434,6 @@ pub fn action_executor_system(
             }
             Action::TakeAllFromContainer => {
                 use crate::capabilities::inventory::{add_to_slots, remove_from_slots};
-                let catalog_ref = scene_state.loaded_item_catalog.0.as_ref();
                 let Some(container_entity) = scene_state.container_ui.active_container else {
                     warn!("Action::TakeAllFromContainer: no container is open");
                     continue;
@@ -1679,6 +1453,14 @@ pub fn action_executor_system(
 
                 if items_to_transfer.is_empty() { continue; }
 
+                // Deliberate exception to "item moves go through `item_txn::plan`" (see `scene_manager/CLAUDE.md`): Take All
+                // is partial by design, one stack at a time, and adds before it removes only what was added. It shares the
+                // currency rule (`item_actions::resolve_currency`). The catalog is cloned so its borrow does not block the
+                // shared currency helpers below.
+                let catalog_owned = scene_state.loaded_item_catalog.0.clone();
+                let catalog_ref = catalog_owned.as_ref();
+                let player_id = super::item_actions::primary_player_id(&scene_state);
+
                 // Currency items go to their stat; others go to the player's inventory. Only what actually fits is
                 // taken out of the container: the overflow stays in it (it used to be removed first and lost).
                 let mut any_transferred = false;
@@ -1690,14 +1472,18 @@ pub fn action_executor_system(
                         .and_then(|c| c.items.get(item_key.as_str()))
                         .and_then(|def| def.currency_stat.clone());
                     let take = if let Some(stat_key) = &currency_stat {
-                        // A currency whose stat does not exist stays in the container too (it used to be destroyed).
-                        if scene_state.loaded_stats.0.contains_key(stat_key) { *count } else {
-                            warn!("TakeAllFromContainer: currency_stat {:?} not found in stats; {} stays in the container", stat_key, item_key);
-                            0
+                        // A currency whose stat does not exist stays in the container too (it used to be destroyed),
+                        // and so do coins that would pass the stat's max. One currency rule: `item_actions::resolve_currency`.
+                        match super::item_actions::resolve_currency(&scene_state, stat_key, player_id.as_deref()) {
+                            Some((_, stat)) => (*count).min(super::item_actions::stat_room(&stat)),
+                            None => {
+                                warn!("TakeAllFromContainer: currency_stat {:?} not found in stats; {} stays in the container", stat_key, item_key);
+                                0
+                            }
                         }
                     } else {
                         let player = &mut *scene_state.player_inventory;
-                        if player.max_slots == 0 { player.resize(20); }
+                        if player.max_slots == 0 { player.resize(crate::capabilities::inventory::DEFAULT_PLAYER_SLOTS); }
                         let max = player.max_slots;
                         add_to_slots(&mut player.slots, max, item_key, *count, catalog_ref).0
                     };
@@ -1707,9 +1493,9 @@ pub fn action_executor_system(
                     let removed = remove_from_slots(&mut inv.slots, item_key, take);
                     if removed == 0 { continue; }
                     if let Some(ref stat_key) = currency_stat {
-                        if let Some(stat) = scene_state.loaded_stats.0.get_mut(stat_key) {
-                            let new_val = stat.apply_delta(removed as f32);
-                            info!("TakeAllFromContainer: {} x{} → stat \"{}\" now {:.0}", item_key, removed, stat_key, new_val);
+                        if let Some((r, stat)) = super::item_actions::resolve_currency(&scene_state, stat_key, player_id.as_deref()) {
+                            super::item_actions::store_stat(&mut scene_state, &r, stat.current, stat.current + removed as f32);
+                            info!("TakeAllFromContainer: {} x{} → stat \"{}\"", item_key, removed, stat_key);
                         }
                     }
                     game_events.write(GameEvent::Trigger(

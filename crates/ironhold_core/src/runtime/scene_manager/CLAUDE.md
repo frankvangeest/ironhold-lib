@@ -315,3 +315,17 @@ and both use one shared `depth_scale_factor()` so the curve cannot drift.
   source of truth for camera classification; both checks union `scene.join_prefab_keys` variants and skip player cameras
   when a `tags: ["flycam"]` entity is present. The CLI additionally scans project-wide `Action::Spawn` actions for player prefabs and the runtime cannot, so the two
   camera sets differ on purpose (a known, accepted asymmetry, not a bug; `planning/claude_suggestions.md`).
+
+## Item actions go through the transaction primitive (`item_actions.rs`, `capabilities/item_txn.rs`)
+
+`BuyItem`, `TransferItem` and `RemoveItem` (and the coin handling in `AddItem` and Take All) do not add and remove slots
+themselves. `item_actions.rs` gathers an owned `TxnLedger` (cloned slots, stat values, remaining stock), calls the pure
+`item_txn::plan` (all-or-nothing on a clone, ordered `Vec` ops, no ECS types), and on success writes each touched entry back
+one at a time (a `get_mut`, or a scan by `SpawnId` for a container), so no two `&mut` ECS borrows are held across the call. **A new item-moving action builds ops and calls `plan`; never call
+`add_to_slots`/`remove_from_slots` for a multi-part change** (that is how a buy once took the gold and lost the item). A failure
+emits its failure events and never its success event; `BuyItem` orders its ops stock, gold, item so "sold out" wins.
+Currency is resolved in one place (`item_txn::resolve_stat_source`: the primary player's own `StatMap`, else the pool) for the
+shop, `AddItem`, Take All, the action bar and the gold footer, and "the player" is `item_txn::pick_primary_player` (lowest
+`PlayerIndex`, a player without one counting as 0 like `targeting::is_primary_player`; `PlayerInventory.player_spawn_id` is only a fallback; the action bar resolves a slot's cost against its own owner, not the primary player). Merchant stock is `MerchantStockState`, runtime state keyed
+by the merchant entity, seeded from `MerchantDef` on first use and cleared on `LoadScene`; never read `stock_count` from the
+prefab catalog at action time. A successful buy refreshes the shop rows in place (`rebuild_shop_rows`) only while that shop is still the open one; never push `Action::OpenShop` to refresh (the queue is FIFO, so it would run after a `CloseShop` or `LoadScene` queued behind the buy and re-open the shop). `TakeAllFromContainer` is a deliberate exception to "build ops and call `plan`": it is partial by design, one stack at a time, and shares only the currency rule.

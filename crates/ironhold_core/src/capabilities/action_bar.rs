@@ -360,14 +360,8 @@ fn resolve_cost_source(
     player_stats: Option<&StatMap>,
     loaded_stats: Option<&LoadedStats>,
 ) -> (f32, bool) {
-    if let Some(live) = player_stats.and_then(|sm| sm.0.get(stat)) {
-        return (live.current, true);
-    }
-    let current = loaded_stats
-        .and_then(|ls| ls.0.get(stat))
-        .map(|s| s.current)
-        .unwrap_or(0.0);
-    (current, false)
+    // One rule for the bar, shops, loot and the gold footer: `capabilities::item_txn::resolve_stat_source`.
+    crate::capabilities::item_txn::resolve_stat_source(stat, player_stats, loaded_stats)
 }
 
 /// Drains `PendingIntentActions` after all interpreter systems have run.

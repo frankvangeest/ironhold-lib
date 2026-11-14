@@ -238,6 +238,7 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::schema::stats::LoadedModifiers>()
             .init_resource::<crate::capabilities::dialogue::ActiveDialogue>()
             .init_resource::<crate::capabilities::inventory::PlayerInventory>()
+            .init_resource::<crate::capabilities::inventory::MerchantStockState>()
             .init_resource::<crate::capabilities::inventory::LoadedItemCatalog>()
             .init_resource::<crate::capabilities::inventory::LoadedInventoryUi>()
             .init_resource::<crate::capabilities::inventory::LoadedContainerUi>()

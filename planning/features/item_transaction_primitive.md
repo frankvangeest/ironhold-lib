@@ -1,6 +1,6 @@
 # Feature: Item transaction primitive (item system S2a)
 
-_Status: Ready_
+_Status: In Progress (S2a Done 2026-11-14, S2b Queued)_
 _Planned at: `9fa2ef3` (2026-11-14)_
 _Plan-reviewed 2026-11-14: system-architect and ux-gamedesigner-reviewer both returned "needs more design work"; Frank's
 answers to the four blocking questions and the reviewers' remaining points are folded in below._
@@ -123,27 +123,27 @@ Existing projects keep working: merchants without `stock_count` stay unlimited, 
 `ui.button_pressed:buy_item:{key}` rules still drive `BuyItem` unchanged.
 
 ## Tasks
-- [ ] Failing tests first (red against today's code): buy into a full inventory keeps gold and emits no `item.bought`;
+- [x] Failing tests first (red against today's code): buy into a full inventory keeps gold and emits no `item.bought`;
       buy a `stock_count: 1` item twice (second fails with `shop.sold_out`); a sold-out item that is also unaffordable
       reports sold out; transfer into a full inventory leaves the rest in the source and emits `inventory.full`;
       container-to-container transfer; a coin item via `AddItem` credits the stat; coins past the stat's max stay put;
       `RemoveItem` of 0 and `all_or_nothing` with too few emit `inventory.remove_failed`; stock refills after
       `LoadScene` and is not shared with a same-id merchant of a different prefab; the footer agrees with the shop when
       the player has its own gold stat; the built-in message reaches a scene-placed player
-- [ ] Pure transaction function with unit tests (all-or-nothing, ordering, stack merge, freeing and filling a slot)
-- [ ] `BuyItem`, `TransferItem`, `AddItem`, `RemoveItem`, `TakeAllFromContainer` on the primitive
-- [ ] Shared currency resolver + `primary_player_spawn_id`; footer, shop, bar and loot all use them
-- [ ] `MerchantStock` component; shop label and sold-out row; built-in messages; the five event families
-- [ ] `RemoveItem.all_or_nothing` in the schema, CLI `query`/`validate`; fix the `actions.rs` doc comments (~`:377-428`)
-- [ ] Docs: `docs/20_data_formats.md` (`stock_count` row, `currency_stat` row, the items/merchant "v1 scope" blocks,
+- [x] Pure transaction function with unit tests (all-or-nothing, ordering, stack merge, freeing and filling a slot)
+- [x] `BuyItem`, `TransferItem`, `AddItem`, `RemoveItem`, `TakeAllFromContainer` on the primitive
+- [x] Shared currency resolver + `primary_player_spawn_id`; footer, shop, bar and loot all use them
+- [x] `MerchantStock` component; shop label and sold-out row; built-in messages; the five event families
+- [x] `RemoveItem.all_or_nothing` in the schema, CLI `query`/`validate`; fix the `actions.rs` doc comments (~`:377-428`)
+- [x] Docs: `docs/20_data_formats.md` (`stock_count` row, `currency_stat` row, the items/merchant "v1 scope" blocks,
       pipeline events table incl. `item.bought`/`shop.*`/`container.looted`), `docs/30` (actions `BuyItem`,
       `TakeAllFromContainer`, `OpenContainer`, `CloseContainer`; the new events; the failure contract), a "what survives
       a scene load" table (player bag and gold yes; chest/corpse contents and merchant stock no), `docs/STATUS.md`
       "Shops and inventory" row, `capabilities/` and `runtime/scene_manager/` `CLAUDE.md`, stale text in the demo
       `stats.ron` and `schema/catalog.rs`
-- [ ] Demo playtest aid (before step 4, so `ron_lint` covers it): a debug button that runs `AddItem` with 20
+- [x] Demo playtest aid (before step 4, so `ron_lint` covers it): a debug button that runs `AddItem` with 20
       non-stackable swords so the full-bag buy is reachable; no rule that duplicates the built-in messages
-- [ ] Reviews, full core test loop, `cargo check -p ironhold_cli`
+- [x] Reviews, full core test loop, `cargo check -p ironhold_cli`
 
 ## Split off
 **S2b: `player_inventory` project field** (Frank, decision 6 of the item review: project-level, default 20). Its own
@@ -177,3 +177,19 @@ form for partial moves is polish and may be logged instead.)
   `inventory.remove_failed` fires.
 - The gold footer, the shop and the action bar cost agree on whose gold is spent.
 - Existing `TakeAllFromContainer`, shop and container tests pass unchanged.
+
+## Implementation notes (2026-11-14, from the step-4 reviews)
+Where the build differs from the plan above, on purpose:
+- **Stock is a `MerchantStockState` resource keyed by the merchant `Entity`**, not a component inserted at spawn. Same behaviour
+  (a new entity refills, `LoadScene` clears it), no spawner change, no same-frame double-buy race.
+- **Shop rows refresh in place** (`item_actions::rebuild_shop_rows`, called from `OpenShop` and from a successful buy) only while that
+  shop is still the open one. A first version queued `Action::OpenShop` after the buy; the review showed that runs after anything queued
+  behind the buy and re-opens a shop closed by `CloseShop` or `LoadScene` (a soft-lock). Never refresh by queueing `OpenShop`.
+- **`TakeAllFromContainer` keeps its own per-stack loop** (partial by design); it shares the currency resolver and the
+  primary-player rule but is a documented exception to "build ops and call `plan`". Follow-up: one `give_to_player` helper.
+- **The "Not enough ..." message uses the merchant's `currency_stat` key**, not a display name: `StatDef` has no display name.
+- **`pick_primary_player`** treats a player without a `PlayerIndex` as index 0, the same as targeting and the action bar.
+- **A missing inventory entity** in `RemoveItem`/`TransferItem`, and `TransferItem` from an inventory to itself, emit the failure
+  events instead of only logging.
+- **Coin items never occupy a bag slot** (they become the stat), so `RemoveItem`/`requires_item` on a coin item cannot succeed; documented.
+- `capabilities/CLAUDE.md` is at its size budget, so the item rules live in `runtime/scene_manager/CLAUDE.md` only.

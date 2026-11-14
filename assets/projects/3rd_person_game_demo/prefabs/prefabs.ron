@@ -510,6 +510,33 @@
       ),
     ),
 
+    // A chest holding 20 iron swords (a non-stackable item, one per slot): looting it with Take All fills a 20-slot bag, which
+    // makes the full-bag cases easy to reach (buying with no room, taking more loot than fits). The ContainerPanel shows
+    // only its first columns*rows slots, but Take All moves every slot.
+    "chest_swords": (
+      kind: Prop,
+      model: "chest_01",
+      nameplate: false,
+      components: (
+        tags: ["loot"],
+      ),
+      colliders: [
+        (shape: Cuboid, size: (0.70, 0.55, 1.00), offset: (0.0, -0.125, 0.0)),
+        (shape: Cuboid, size: (0.68, 0.28, 0.98), offset: (0.0,  0.275, 0.0)),
+      ],
+      click_selectable: true,
+      select_aim_height: 0.1,
+      indicator_category: "neutral",
+      interactable: (radius: 2.0, hint_text: "Loot"),
+      trigger_zone: (radius: 2.5),
+      inventory: (
+        max_slots: 20,
+        initial_items: [
+          (item_key: "iron_sword", count: 20),
+        ],
+      ),
+    ),
+
     // Item-gated interactable demo (see the "interactable" row in docs/20_data_formats.md and
     // entity.interact_blocked:{id} in docs/30_runtime_events_and_logic.md) — requires "old_key"
     // (buyable from merchant_01, the merchant_vendor prefab) to interact; see

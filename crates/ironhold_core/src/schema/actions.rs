@@ -374,26 +374,35 @@ pub enum Action {
     /// Add items to an entity's inventory.
     /// `entity: "player"` routes to `PlayerInventory` (persistent across scenes).
     /// Any other value routes to the entity's `Inventory` component by spawn ID.
-    /// Emits `inventory.added:{entity}:{item_key}:{count}` on success.
-    /// Emits `inventory.full:{entity}` when the inventory has no space.
+    /// Emits `inventory.added:{entity}:{item_key}:{count}` for what was added (the count that actually fit).
+    /// Emits `inventory.full:{entity}` when part or all of it did not fit (the rest is not added).
+    /// A currency item (`ItemDef.currency_stat`) given to `"player"` credits that stat instead of using a slot,
+    /// up to the stat's max, and still emits `inventory.added:player:{item_key}:{credited}`.
     AddItem {
         entity: String,
         item_key: String,
         #[serde(default = "one_u32")]
         count: u32,
     },
-    /// Remove items from an entity's inventory. Removes all held if count exceeds what's held.
+    /// Remove items from an entity's inventory. By default removes all held if count exceeds what's held.
     /// `entity: "player"` targets `PlayerInventory`; any other value targets the entity's `Inventory`.
-    /// Emits `inventory.removed:{entity}:{item_key}:{actual_count}` on success.
+    /// Emits `inventory.removed:{entity}:{item_key}:{actual_count}` on success. When nothing is removed (none held,
+    /// or `all_or_nothing: true` and fewer than `count` held, in which case nothing at all is removed) it emits
+    /// `inventory.remove_failed:{entity}` and `inventory.remove_failed:{entity}:{item_key}` instead, never the success event.
     RemoveItem {
         entity: String,
         item_key: String,
         #[serde(default = "one_u32")]
         count: u32,
+        #[serde(default)]
+        all_or_nothing: bool,
     },
     /// Transfer items from one entity's inventory to another.
     /// `from` / `to` each accept `"player"` or a spawn ID.
-    /// Emits `inventory.transferred:{from}:{to}:{item_key}` on success.
+    /// Moves what fits and leaves the rest in the source (nothing is destroyed). Emits
+    /// `inventory.transferred:{from}:{to}:{item_key}` only when something moved, `inventory.full:{to}` when part of
+    /// it did not fit, and `inventory.transfer_failed:{from}:{to}:{item_key}` when nothing moved. A currency item
+    /// sent to `"player"` credits its stat instead of using a slot.
     TransferItem {
         from: String,
         to: String,
@@ -412,10 +421,13 @@ pub enum Action {
     OpenShop(String),
     /// Hide the `ShopPanel` UI node.
     CloseShop,
-    /// Buy one unit of `item_key` from the currently open shop.
-    /// Deducts `buy_price` from the player's currency stat and adds the item to the player's
-    /// inventory. No-ops with a warning if no shop is open, the item is not in stock, or
-    /// the player cannot afford it. Emits `item.bought:{item_key}` on success.
+    /// Buy one unit of `item_key` from the currently open shop, all or nothing: the stock, the gold and the bag
+    /// slot are checked together (in that order) and nothing changes unless all three work. The currency is the
+    /// primary player's own stat if it has one, otherwise the shared pool. No-op with a warning if no shop is open
+    /// or the item is not in the merchant's list.
+    /// Success: `item.bought:{item_key}` and a "Bought X!" message. Failures (never `item.bought`), each with a
+    /// short built-in message: `shop.sold_out` + `shop.sold_out:{item_key}`; `shop.insufficient_funds` +
+    /// `shop.insufficient_funds:{item_key}`; `shop.no_room:{item_key}` + `inventory.full:player`.
     BuyItem(String),
     /// Show the `ContainerPanel` UI node populated with the given entity's inventory.
     /// The argument is the container entity's spawn ID (e.g. `"chest_01"`).

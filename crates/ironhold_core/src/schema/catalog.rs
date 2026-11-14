@@ -1672,7 +1672,8 @@ fn default_max_slots() -> usize { 9 }
 #[serde(deny_unknown_fields)]
 pub struct MerchantDef {
     pub stock: Vec<ShopEntry>,
-    /// Global stat key used as currency (e.g. `"gold"`). Default: `"gold"`.
+    /// Stat key used as currency (e.g. `"gold"`): the primary player's own stat of that name if it has one, otherwise the
+    /// shared pool. Also the word in the built-in "Not enough ..." message. Default: `"gold"`.
     #[serde(default = "default_currency_stat")]
     pub currency_stat: String,
 }
@@ -1689,7 +1690,8 @@ pub struct ShopEntry {
     pub buy_price: u32,
     /// Price the merchant pays when the player sells this item (added to currency stat).
     pub sell_price: u32,
-    /// Finite stock — restocks at scene load. `None` means unlimited.
+    /// Finite stock; runs down with each buy (runtime state per merchant entity) and refills on scene load. `None`
+    /// means unlimited.
     #[serde(default)]
     pub stock_count: Option<u32>,
 }

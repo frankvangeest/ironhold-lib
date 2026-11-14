@@ -183,6 +183,16 @@
         scale: (1.0, 1.0, 1.0),
       ),
     ),
+    // Chest of 20 iron swords, well away from the other interactables (each fires for every one in range of one F press).
+    (
+      id: "chest_swords_01",
+      prefab: "chest_swords",
+      transform: (
+        translation: (1.0, 0.4, 15.0),
+        rotation_euler_deg: (0.0, 20.0, 0.0),
+        scale: (1.0, 1.0, 1.0),
+      ),
+    ),
     // Anvil prop — to the left-rear, makes the clearing feel like a camp.
     (
       id: "anvil_01",

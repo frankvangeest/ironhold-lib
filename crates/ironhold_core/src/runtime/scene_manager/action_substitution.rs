@@ -86,8 +86,8 @@ pub(crate) fn rewrite_self(action: Action, spawn_id: &str) -> Action {
         },
         Action::AddItem { entity, item_key, count } =>
             Action::AddItem { entity: sub(&entity, spawn_id), item_key, count },
-        Action::RemoveItem { entity, item_key, count } =>
-            Action::RemoveItem { entity: sub(&entity, spawn_id), item_key, count },
+        Action::RemoveItem { entity, item_key, count, all_or_nothing } =>
+            Action::RemoveItem { entity: sub(&entity, spawn_id), item_key, count, all_or_nothing },
         Action::TransferItem { from, to, item_key, count } =>
             Action::TransferItem {
                 from: sub(&from, spawn_id),
@@ -221,8 +221,8 @@ pub(crate) fn rewrite_target(action: Action, target_id: &str) -> Action {
         },
         Action::AddItem { entity, item_key, count } =>
             Action::AddItem { entity: sub(&entity, target_id), item_key, count },
-        Action::RemoveItem { entity, item_key, count } =>
-            Action::RemoveItem { entity: sub(&entity, target_id), item_key, count },
+        Action::RemoveItem { entity, item_key, count, all_or_nothing } =>
+            Action::RemoveItem { entity: sub(&entity, target_id), item_key, count, all_or_nothing },
         Action::TransferItem { from, to, item_key, count } =>
             Action::TransferItem {
                 from: sub(&from, target_id),

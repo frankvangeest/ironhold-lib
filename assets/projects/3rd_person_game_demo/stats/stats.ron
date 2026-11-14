@@ -31,7 +31,7 @@
             thresholds: [],
         ),
         // Currency stat — used by merchant_vendor as currency_stat.
-        // No regen, no thresholds; modified by future buy/sell transaction actions (v1.1).
+        // No regen, no thresholds; spent by BuyItem and credited by coin items (a shop uses the player's own gold stat if its prefab has one).
         "gold": (
             base: 200.0,
             min: 0.0,

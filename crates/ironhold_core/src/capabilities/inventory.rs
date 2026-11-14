@@ -4,6 +4,17 @@ use crate::schema::items::{ItemCatalog, ItemStack};
 
 // ─── Resources ────────────────────────────────────────────────────────────────
 
+/// Slots the player inventory gets when nothing sized it yet (the one shared constant for the lazy size;
+/// item system S2b makes the size a project setting).
+pub const DEFAULT_PLAYER_SLOTS: usize = 20;
+
+/// Remaining shop stock per merchant entity (item key -> remaining; `None` = unlimited), seeded from the merchant's
+/// `MerchantDef` the first time it is opened or bought from. Runtime state: a new merchant entity (scene load,
+/// respawn) starts full, and `LoadScene` clears the map, so a finite `stock_count` refills on scene load, like chests.
+/// Keyed by `Entity` (never iterated on a gameplay path, lookups only).
+#[derive(Resource, Debug, Default)]
+pub struct MerchantStockState(pub std::collections::BTreeMap<Entity, std::collections::BTreeMap<String, Option<u32>>>);
+
 /// Player inventory — persists across scene transitions (like `LoadedStats`).
 /// Addressed by `entity: "player"` in inventory actions.
 #[derive(Resource, Debug, Default)]
@@ -273,12 +284,22 @@ pub fn inventory_ui_system(
     mut label_q: Query<(&InventorySlotLabelMarker, &mut Text)>,
     mut icon_q: Query<(&InventorySlotIconMarker, &mut ImageNode, &mut Visibility)>,
     mut gold_q: Query<(&GoldLabelMarker, &mut Text), Without<InventorySlotLabelMarker>>,
+    players: Query<(&crate::runtime::SpawnId, Option<&crate::capabilities::player::PlayerIndex>), With<crate::capabilities::player::CharacterController>>,
+    stat_maps: Query<(&crate::runtime::SpawnId, &crate::schema::stats::StatMap)>,
 ) {
-    // Gold footer: always refresh (guarded write avoids change-detection spam; one entity).
-    for (marker, mut text) in gold_q.iter_mut() {
-        let amount = loaded_stats.0.get(&marker.stat_key).map(|s| s.current).unwrap_or(0.0);
-        let label = format!("Gold: {:.0}", amount);
-        if text.0 != label { text.0 = label; }
+    // Gold footer: always refresh (guarded write avoids change-detection spam; one entity). Same currency rule as
+    // the shop and the action bar (`item_txn::resolve_stat_source`): the primary player's own stat, else the pool.
+    if !gold_q.is_empty() {
+        let primary = crate::capabilities::item_txn::pick_primary_player(
+            players.iter().map(|(sid, idx)| (sid.0.as_str(), idx.map(|i| i.0))),
+            player_inv.player_spawn_id.as_deref(),
+        );
+        let own_stats = primary.and_then(|pid| stat_maps.iter().find(|(sid, _)| sid.0 == pid).map(|(_, sm)| sm));
+        for (marker, mut text) in gold_q.iter_mut() {
+            let amount = crate::capabilities::item_txn::resolve_stat_source(&marker.stat_key, own_stats, Some(&*loaded_stats)).0;
+            let label = format!("Gold: {:.0}", amount);
+            if text.0 != label { text.0 = label; }
+        }
     }
 
     // Update slot stack labels (count/max: "3/10" for stackable items, empty otherwise).
