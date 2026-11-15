@@ -54,6 +54,18 @@ Its rows are plain `Button`s with no `UiAction`. The menu nodes carry no `UiNode
 writer of their `Node.display` (keep the guarded writes). The row text rules are the pure `menu_view` (unit-tested without Bevy): change a label there, not in the
 systems. Escape deliberately does nothing here (backlog "Escape closes the topmost window before it pauses"): when that lands, register the menu as a closable layer.
 
+## Action bar item slots (`action_bar.rs`, item system S5)
+
+A slot with `item:` carries `ActionSlotItem` (its own component, not a field of `ActionSlotUi`, so S6 can insert and remove it at runtime), **the one source of what the slot does**:
+`action_bar_input_system` fires `[UseItem(item)]` from it (`ActionSlotUi.do_actions` is empty for an item slot), through the same `pending`/intent path as any slot.
+Removing it clears the label and hides the icon (`RemovedComponents`); the icon and count children are spawned by the loader (S6 must spawn them for an assignable slot). **The no-item gate sits after the
+owning player is resolved and the gamepad cooldown check, before the cost check** (cooldown, then no-item, then cost); it refuses when fewer are held than one use takes (`item_needed`: `use.consume`, at least 1), not only when none are; a refusal pushes nothing, starts no
+cooldown and emits neither `action_bar.pressed` nor `intent.slot.*`. The icon and the bag count are refreshed by `action_bar_item_slot_system` in
+`GameplaySet::PostExecute` (after the executor, so the label never lags a use), gated on the bag, the catalog, `LoadedInventoryUi` or a changed
+`ActionSlotItem`; the dim in `action_bar_visual_system` reads the count that system stored on `SlotItemCount`. **The item's icon is resolved by
+`inventory::resolve_item_icon`, the same function as the bag's (the item's sheet, else the `InventoryPanel`'s, against the panel's grid): never against
+the bar's own sheet.** Do not add `Added<SlotItemCount>` to a filter next to the `&mut SlotItemCount` query (it conflicts and panics every test).
+
 ## `target.*` events and selection
 
 Selection is **screen-space proximity** (`camera.world_to_viewport`, nearest to the cursor), not mesh raycasting, which

@@ -378,31 +378,44 @@ pub fn inventory_ui_system(
     for (marker, mut img_node, mut vis) in icon_q.iter_mut() {
         match player_inv.slots.get(marker.slot_index).and_then(|s| s.as_ref()) {
             Some(stack) => {
-                let item_def = catalog.0.as_ref().and_then(|c| c.items.get(&stack.item_key));
-                let icon_index = item_def.map(|d| d.icon_index as usize).unwrap_or(0);
-                let sheet_key = item_def
-                    .and_then(|d| d.icon_sheet.as_deref())
-                    .or(inv_ui.panel_icon_sheet.as_deref());
-                if let Some(key) = sheet_key {
-                    if let Some((tex, layout)) = inv_ui.icon_atlases.get(key) {
-                        if img_node.image != *tex { img_node.image = tex.clone(); }
-                        if let Some(ta) = img_node.texture_atlas.as_mut() {
-                            if ta.layout != *layout { ta.layout = layout.clone(); }
-                            if ta.index != icon_index { ta.index = icon_index; }
-                        }
+                let icon = resolve_item_icon(catalog.0.as_ref(), &inv_ui, &stack.item_key);
+                if let Some((tex, layout)) = icon.atlas {
+                    if img_node.image != *tex { img_node.image = tex.clone(); }
+                    if let Some(ta) = img_node.texture_atlas.as_mut() {
+                        if ta.layout != *layout { ta.layout = layout.clone(); }
+                        if ta.index != icon.index { ta.index = icon.index; }
                     }
                 }
-                let tint = match item_def.and_then(|d| d.icon_color) {
-                    Some((r, g, b, a)) => Color::srgba(r, g, b, a),
-                    None => Color::WHITE,
-                };
-                if img_node.color != tint { img_node.color = tint; }
+                if img_node.color != icon.tint { img_node.color = icon.tint; }
                 if *vis != Visibility::Inherited { *vis = Visibility::Inherited; }
             }
             None => {
                 if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
             }
         }
+    }
+}
+
+/// Where an item's icon comes from: the cell index, the atlas (texture + layout) when one is loaded, and the tint.
+pub struct ItemIcon<'a> {
+    pub index: usize,
+    pub atlas: Option<&'a (Handle<Image>, Handle<TextureAtlasLayout>)>,
+    pub tint: Color,
+}
+
+/// Resolves an item's icon the one way the whole UI does it (the bag and the action bar's item slots): the item's own `icon_sheet`,
+/// else the `InventoryPanel`'s sheet, both read against the panel's grid (`LoadedInventoryUi.icon_atlases`, built when the panel
+/// spawns). `atlas` is `None` when no panel has loaded the sheet (a scene without an `InventoryPanel`).
+pub fn resolve_item_icon<'a>(catalog: Option<&ItemCatalog>, ui: &'a LoadedInventoryUi, item_key: &str) -> ItemIcon<'a> {
+    let item_def = catalog.and_then(|c| c.items.get(item_key));
+    let sheet_key = item_def.and_then(|d| d.icon_sheet.as_deref()).or(ui.panel_icon_sheet.as_deref());
+    ItemIcon {
+        index: item_def.map(|d| d.icon_index as usize).unwrap_or(0),
+        atlas: sheet_key.and_then(|k| ui.icon_atlases.get(k)),
+        tint: match item_def.and_then(|d| d.icon_color) {
+            Some((r, g, b, a)) => Color::srgba(r, g, b, a),
+            None => Color::WHITE,
+        },
     }
 }
 

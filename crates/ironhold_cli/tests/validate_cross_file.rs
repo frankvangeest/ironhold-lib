@@ -2856,3 +2856,39 @@ fn sell_and_destroy_overrides_and_buttons_are_clean_under_strict() {
     let (code, stdout) = validate_strict("valid_sell_destroy_overrides");
     assert_eq!(code, 0, "expected exit 0 under --strict, got {code}:\n{stdout}");
 }
+
+// -- Action bar item slots (item system S5) --------------------------------------
+
+/// `item:` next to `do_actions`, an unknown item and an item with no `use:` block are errors; the good potion slot is not reported.
+#[test]
+fn bad_action_bar_item_slots_exit_1() {
+    let (code, stdout) = validate("bad_action_slot_item");
+    assert_eq!(code, 1, "expected exit 1, got {code}:
+{stdout}");
+    assert!(stdout.contains("has both item: and do_actions") && stdout.contains("\"6\""), "{stdout}");
+    assert!(stdout.contains("nonsense") && stdout.contains("not found in items.ron"), "{stdout}");
+    assert!(stdout.contains("iron_sword") && stdout.contains("no `use:` block"), "{stdout}");
+}
+
+/// --strict: a currency item on a slot, no icon source (no InventoryPanel, no own `icon:`) and a player-2 bar. Clean without --strict.
+#[test]
+fn action_bar_item_slot_hygiene_warnings_are_strict_only() {
+    let (code, stdout) = validate("warn_action_slot_item_strict");
+    assert_eq!(code, 0, "expected exit 0 without --strict, got {code}:
+{stdout}");
+    let (code, stdout) = validate_strict("warn_action_slot_item_strict");
+    assert_eq!(code, 1, "expected exit 1 under --strict, got {code}:
+{stdout}");
+    for fragment in ["is a currency item", "takes its icon from the scene's InventoryPanel", "always acts on player 1"] {
+        assert!(stdout.contains(fragment), "expected {fragment:?} in output:
+{stdout}");
+    }
+}
+
+/// A well-formed item slot (and one with its own icon) is clean under --strict, including a rule on `action_bar.no_item:6`.
+#[test]
+fn well_formed_action_bar_item_slots_are_clean_under_strict() {
+    let (code, stdout) = validate_strict("valid_action_slot_item");
+    assert_eq!(code, 0, "expected exit 0 under --strict, got {code}:
+{stdout}");
+}

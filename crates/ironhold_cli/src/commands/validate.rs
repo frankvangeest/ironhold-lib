@@ -917,6 +917,69 @@ fn inventory_bag_warnings(project_dir: &Path, project_config: Option<&ProjectCon
         .collect()
 }
 
+// ── Action bar item slots (item system S5) ──────────────────────────────────────
+
+/// An `item:` slot fires `UseItem(item)` itself, so `do_actions` next to it is dead: at load the item wins and the engine logs it;
+/// `validate` makes it an error. (The unknown-item and no-`use:` checks come from the synthesized `UseItem`.)
+fn action_slot_item_errors(scenes: &[(String, GameSceneV2)], errors: &mut Vec<CrossFileError>) {
+    for (scene_path, scene) in scenes {
+        for node in walk_ui_nodes(&scene.ui) {
+            let UiNodeDef::ActionBar(bar) = node else { continue };
+            for slot in &bar.slots {
+                if slot.item.is_some() && !slot.do_actions.is_empty() {
+                    errors.push(CrossFileError {
+                        source_file: scene_path.clone(),
+                        message: format!(
+                            "slot {:?} on bar {:?} has both item: and do_actions: - use one (item: uses the item's use: block; the item wins at runtime)",
+                            slot.key, bar.id
+                        ),
+                        error_type: "action_slot_item_and_actions",
+                    });
+                }
+            }
+        }
+    }
+}
+
+/// `--strict` hygiene for item slots: a currency item never sits in the bag (the slot always reads 0); the item's icon is read from the
+/// scene's `InventoryPanel`, so an item slot with no own `icon:` in a scene with no panel has no picture; `{self}` in the item's `use:`
+/// is always the primary player, so an item slot on a player-2+ bar acts on player 1.
+fn action_slot_item_warnings(item_catalog: Option<&ItemCatalog>, scenes: &[(String, GameSceneV2)]) -> Vec<StrictWarning> {
+    let mut out = Vec::new();
+    // Any scene's panel counts: a bar in a HUD overlay reads the icon atlases a base scene's panel loaded (and the reverse).
+    let has_panel = scenes.iter().any(|(_, sc)| walk_ui_nodes(&sc.ui).any(|n| matches!(n, UiNodeDef::InventoryPanel(_))));
+    for (scene_path, scene) in scenes {
+        for node in walk_ui_nodes(&scene.ui) {
+            let UiNodeDef::ActionBar(bar) = node else { continue };
+            for slot in &bar.slots {
+                let Some(item) = &slot.item else { continue };
+                if item_catalog.and_then(|c| c.items.get(item)).is_some_and(|d| d.currency_stat.is_some()) {
+                    out.push(StrictWarning {
+                        source_file: scene_path.clone(),
+                        message: format!("slot {:?} on bar {:?}: item {item:?} is a currency item, which never sits in the bag: the slot always reads 0", slot.key, bar.id),
+                        kind: "action_slot_currency_item",
+                    });
+                }
+                if slot.icon.is_empty() && !has_panel {
+                    out.push(StrictWarning {
+                        source_file: scene_path.clone(),
+                        message: format!("slot {:?} on bar {:?}: item {item:?} takes its icon from the scene's InventoryPanel, and no scene of this project has one: set `icon:` on the slot", slot.key, bar.id),
+                        kind: "action_slot_item_no_icon_source",
+                    });
+                }
+                if bar.owner_player.is_some_and(|p| p > 0) {
+                    out.push(StrictWarning {
+                        source_file: scene_path.clone(),
+                        message: format!("slot {:?} on bar {:?} (owner_player {}): using an item always acts on player 1 (`{{self}}` in its `use:` is the primary player)", slot.key, bar.id, bar.owner_player.unwrap_or(0)),
+                        kind: "action_slot_item_other_player",
+                    });
+                }
+            }
+        }
+    }
+    out
+}
+
 // ── Item `use:` checks (item system S3) ─────────────────────────────────────────
 
 /// `use:` blocks in items.ron: a `UseItem` inside any item's `do_actions` could loop forever inside one executor drain (the
@@ -1299,6 +1362,7 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
     set_ui_visible_checks(scenes, actions, scenes_parsed_cleanly, &mut errors);
     item_use_errors(item_catalog, project_config.and_then(|c| c.items_path.as_deref()).unwrap_or("items/items.ron"), &mut errors);
     inventory_bag_errors(project_dir, project_config, scenes, &mut errors);
+    action_slot_item_errors(scenes, &mut errors);
 
     // All four catalog types have real schema-level invariants their own `.validate()` enforces
     // (e.g. `AssetCatalog::validate()` rejects an empty `models[]`/`decals[]` path,
@@ -4711,6 +4775,7 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
     warnings.extend(pause_checks(project));
     warnings.extend(item_event_rule_warnings(state_machine, behaviors));
     warnings.extend(inventory_bag_warnings(project.project_dir, project.project_config, project.scenes));
+    warnings.extend(action_slot_item_warnings(project.item_catalog, project.scenes));
     warnings.extend(item_sell_warnings(project.item_catalog, project.prefab_catalog, actions, project.project_config.and_then(|c| c.items_path.as_deref()).unwrap_or("items/items.ron")));
     warnings.extend(item_use_warnings(project.item_catalog, project.project_config.and_then(|c| c.items_path.as_deref()).unwrap_or("items/items.ron")));
 
@@ -4894,6 +4959,10 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
             for slot in &bar.slots {
                 for action in &slot.do_actions {
                     all_actions.push((scene_path.clone(), action.clone()));
+                }
+                // An item slot (item system S5) fires `UseItem(item)`: the unknown-item and `use:`-block checks must see it.
+                if let Some(item) = &slot.item {
+                    all_actions.push((scene_path.clone(), Action::UseItem(item.clone())));
                 }
             }
         }

@@ -1,0 +1,7 @@
+(
+    schema_version: 2,
+    name: "main",
+    ui: [
+        ActionBar((id: "bar", owner_player: 1, position: (10.0, 600.0), slots: [(key: "6", item: "gold_coin"), (key: "7", item: "health_potion")])),
+    ],
+)

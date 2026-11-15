@@ -1577,15 +1577,23 @@ pub struct ActionSlotDef {
     /// for this slot. Leave empty to use the bar-level `icon_sheet`.
     #[serde(default)]
     pub icon: String,
-    /// Zero-based index into the icon atlas (row-major). `icon_sheet` on the bar must be set.
+    /// Zero-based index into the icon atlas (row-major). `icon_sheet` on the bar must be set. Ignored on an `item:` slot without `icon:` (the item's own index is used).
     /// Row 0 = top row; index `col + row * icon_cols`. Default: 0.
     #[serde(default)]
     pub icon_index: u32,
     /// Linear RGBA replacement color for the icon. Replaces the icon's RGB with this color; texture alpha provides the shape. Omit to render the icon as-is.
     #[serde(default)]
     pub icon_color: Option<(f32, f32, f32, f32)>,
-    /// Actions fired through the pipeline when the slot activates.
+    /// Actions fired through the pipeline when the slot activates. Omit them on an `item:` slot (it fires `UseItem(item)`).
+    #[serde(default)]
     pub do_actions: Vec<crate::schema::actions::Action>,
+    /// An `items.ron` key: makes this an item slot. The slot shows the item's icon (resolved like the bag's: the item's `icon_sheet`,
+    /// else the `InventoryPanel`'s sheet; set `icon:` to use your own picture instead) and the total number held over every stack
+    /// (grey `0` and dimmed when none), and pressing it fires `UseItem(item)` through the usual intent path (`cooldown_secs`, `cost`,
+    /// `intent.slot.*` all apply). With none in the bag the press emits `action_bar.no_item:{key}` instead: no cooldown, no cost.
+    /// Do not combine with `do_actions` (`ironhold validate` errors; at load the item wins). The item needs a `use:` block.
+    #[serde(default)]
+    pub item: Option<String>,
     /// Seconds before this slot can be used again. Omit for no cooldown.
     #[serde(default)]
     pub cooldown_secs: Option<f32>,
