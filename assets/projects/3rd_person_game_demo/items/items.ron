@@ -10,6 +10,8 @@
             max_stack: 10,
             weight: 0.5,
             tags: ["consumable"],
+            // What a shop pays per unit (this merchant's own price in prefabs.ron overrides it). No sell_price = cannot be sold.
+            sell_price: 5,
             // Click or right-click the potion in the bag to drink it. {self} is the player.
             use: (
                 do_actions: [
@@ -28,6 +30,7 @@
             max_stack: 10,
             weight: 0.5,
             tags: ["consumable"],
+            sell_price: 5,
             use: (
                 do_actions: [
                     ModifyStat(key: "player_mana", delta: 30.0),
@@ -44,6 +47,7 @@
             stackable: false,
             weight: 3.5,
             tags: ["weapon", "melee"],
+            sell_price: 30,
         ),
         // index 62 = "Royal Coin" — gold tint
         "gold_coin": (
@@ -64,6 +68,8 @@
             stackable: false,
             weight: 0.2,
             tags: ["quest"],
+            // A quest item: the player cannot destroy it, and with no sell_price no shop buys it either.
+            destroyable: false,
         ),
     },
 )

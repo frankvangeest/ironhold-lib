@@ -10,6 +10,7 @@
 use std::collections::BTreeMap;
 
 use crate::capabilities::inventory::{add_to_slots, remove_from_slots};
+use crate::schema::catalog::MerchantDef;
 use crate::schema::items::{ItemCatalog, ItemStack};
 use crate::schema::stats::{LoadedStats, StatMap};
 
@@ -146,6 +147,17 @@ pub fn plan(ops: &[TxnOp], ledger: &TxnLedger, catalog: Option<&ItemCatalog>) ->
         }
     }
     Ok(l)
+}
+
+/// The price per unit a merchant pays for `item_key`, or `None` when it does not buy it: the merchant's own
+/// `ShopEntry.sell_price` for the item wins when set (`0` = this merchant does not buy it), otherwise the item's own
+/// `sell_price` (`None` or `0` = not sellable).
+pub fn sell_price_for(merchant: &MerchantDef, item_key: &str, item_price: Option<u32>) -> Option<u32> {
+    let own = merchant.stock.iter().find(|e| e.item_key == item_key).and_then(|e| e.sell_price);
+    match own.or(item_price) {
+        Some(0) | None => None,
+        Some(p) => Some(p),
+    }
 }
 
 /// Where a currency stat is read from: `(current, is_the_players_own_stat)`. The player's own `StatMap` wins when it
@@ -307,7 +319,7 @@ mod tests {
         assert!(plan(&ops, &l, None).is_ok(), "no catalog: today's behaviour, any key is allowed");
         let real = ItemDef {
             display_name: "Real".to_string(), icon_sheet: None, icon_index: 0, icon_color: None,
-            stackable: true, max_stack: 99, weight: 1.0, tags: vec![], currency_stat: None, use_def: None,
+            stackable: true, max_stack: 99, weight: 1.0, tags: vec![], currency_stat: None, sell_price: None, destroyable: true, use_def: None,
         };
         let catalog = ItemCatalog { schema_version: 1, items: std::iter::once(("real".to_string(), real)).collect() };
         assert_eq!(plan(&ops, &l, Some(&catalog)).unwrap_err(), TxnError::UnknownItem);

@@ -1,0 +1,13 @@
+(
+    schema_version: 1,
+    global_on: [
+        (
+            event: "scene.ready:main",
+            do_actions: [
+                SellItem(item_key: "nonsense"),
+                DestroyItem(item_key: "iron_sword", count: 0),
+                SellItem(item_key: "iron_sword", count: 0, all: true),
+            ],
+        ),
+    ],
+)

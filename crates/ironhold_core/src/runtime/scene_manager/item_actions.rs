@@ -12,7 +12,7 @@ use bevy::prelude::*;
 
 use crate::capabilities::inventory::{MerchantStockState, PanelKind};
 use crate::capabilities::item_txn::{
-    count_item, plan, resolve_stat_source, room_for, InvKey, InvLedger, StatLedger, StatOwner, StatRef, TxnError,
+    count_item, plan, resolve_stat_source, room_for, sell_price_for, InvKey, InvLedger, StatLedger, StatOwner, StatRef, TxnError,
     TxnLedger, TxnOp,
 };
 use crate::runtime::actions::ActionQueue;
@@ -623,4 +623,150 @@ pub(super) fn use_item(
         None => actions,
     };
     action_queue.push_front_all(rewritten);
+}
+
+// ─── SellItem / DestroyItem ───────────────────────────────────────────────────
+
+/// How many units an action means: `all` is every unit held across all stacks (read now, not when the action was
+/// queued), otherwise `count`. `0` means "nothing to do" and is refused by the callers.
+fn units_for(held: u32, count: u32, all: bool) -> u32 {
+    if all { held } else { count }
+}
+
+/// Sells `count` (or all) of `item_key` to the open shop, all or nothing. See `Action::SellItem`.
+pub(super) fn sell_item(
+    item_key: String,
+    count: u32,
+    all: bool,
+    scene_state: &mut SceneStateParams,
+    spawn_params: &SpawnParams,
+    game_events: &mut MessageWriter<GameEvent>,
+    action_queue: &mut ActionQueue,
+) {
+    let player_id = primary_player_id(scene_state);
+    let refuse = |game_events: &mut MessageWriter<GameEvent>, action_queue: &mut ActionQueue, why: &str| {
+        emit(game_events, "item.sell_refused".to_string());
+        emit(game_events, format!("item.sell_refused:{}", item_key));
+        say(action_queue, &player_id, why.to_string());
+    };
+
+    let Some(merchant_id) = scene_state.inventory_ui.active_merchant_id.clone() else {
+        info!("Action::SellItem: no shop is currently open");
+        refuse(game_events, action_queue, "Nobody to sell to here");
+        return;
+    };
+    let merchant_def = spawn_params
+        .registry
+        .entities
+        .get(&merchant_id)
+        .and_then(|e| scene_state.prefab_keys.get(*e).ok().map(|k| k.0.clone()))
+        .and_then(|key| spawn_params.prefab_catalog.0.prefabs.get(&key).and_then(|p| p.merchant.clone()));
+    let Some(merchant_def) = merchant_def else {
+        warn!("Action::SellItem: active merchant '{}' has no MerchantDef", merchant_id);
+        refuse(game_events, action_queue, "Can't sell that here");
+        return;
+    };
+    let item_def = scene_state.loaded_item_catalog.0.as_ref().and_then(|c| c.items.get(&item_key)).cloned();
+    let Some(item_def) = item_def else {
+        info!("Action::SellItem: unknown item '{}'", item_key);
+        refuse(game_events, action_queue, "Can't sell that here");
+        return;
+    };
+    let Some(price) = sell_price_for(&merchant_def, &item_key, item_def.sell_price) else {
+        info!("Action::SellItem: merchant '{}' does not buy '{}'", merchant_id, item_key);
+        refuse(game_events, action_queue, "Can't sell that here");
+        return;
+    };
+
+    let Some(bag) = load_inv(scene_state, &InvKey::Player) else { return };
+    let units = units_for(count_item(&bag.slots, &item_key), count, all);
+    if units == 0 {
+        info!("Action::SellItem: nothing to sell of '{}' (count 0, or none held)", item_key);
+        refuse(game_events, action_queue, "You have none to sell");
+        return;
+    }
+    let total = price as u64 * units as u64;
+
+    let currency = merchant_def.currency_stat.clone();
+    let Some((stat_ref, stat_ledger)) = resolve_currency(scene_state, &currency, player_id.as_deref()) else {
+        warn!("Action::SellItem: currency stat '{}' not found; nothing can be paid out", currency);
+        refuse(game_events, action_queue, "Can't sell that here");
+        return;
+    };
+    let mut ledger = TxnLedger::default();
+    ledger.invs.insert(InvKey::Player, bag);
+    ledger.stats.insert(stat_ref.clone(), stat_ledger);
+    let ops = [
+        TxnOp::Take { inv: InvKey::Player, item: item_key.clone(), count: units },
+        TxnOp::Stat { stat: stat_ref.clone(), delta: total as f32 },
+    ];
+    match plan(&ops, &ledger, scene_state.loaded_item_catalog.0.as_ref()) {
+        Ok(done) => {
+            if let Some(bag) = done.invs.get(&InvKey::Player) {
+                store_inv(scene_state, &InvKey::Player, bag);
+            }
+            if let Some(new) = done.stats.get(&stat_ref) {
+                store_stat(scene_state, &stat_ref, stat_ledger.current, new.current);
+            }
+            info!("Action::SellItem: sold {} x '{}' for {} {}", units, item_key, total, currency);
+            emit(game_events, format!("item.sold:{}", item_key));
+            say(action_queue, &player_id, format!("Sold {} for {} {}", item_def.display_name, total, currency));
+        }
+        Err(TxnError::NoRoom) => {
+            info!("Action::SellItem: paying {} {} would pass the stat's maximum", total, currency);
+            refuse(game_events, action_queue, "Can't carry any more");
+        }
+        Err(e) => {
+            info!("Action::SellItem: '{}' could not be sold ({:?})", item_key, e);
+            refuse(game_events, action_queue, "You have none to sell");
+        }
+    }
+}
+
+/// Destroys `count` (or all) of `item_key` from the player's bag, all or nothing. See `Action::DestroyItem`.
+pub(super) fn destroy_item(
+    item_key: String,
+    count: u32,
+    all: bool,
+    scene_state: &mut SceneStateParams,
+    game_events: &mut MessageWriter<GameEvent>,
+    action_queue: &mut ActionQueue,
+) {
+    let player_id = primary_player_id(scene_state);
+    let refuse = |game_events: &mut MessageWriter<GameEvent>, action_queue: &mut ActionQueue, why: &str| {
+        emit(game_events, "item.destroy_refused".to_string());
+        emit(game_events, format!("item.destroy_refused:{}", item_key));
+        say(action_queue, &player_id, why.to_string());
+    };
+    let item_def = scene_state.loaded_item_catalog.0.as_ref().and_then(|c| c.items.get(&item_key)).cloned();
+    let Some(item_def) = item_def else {
+        info!("Action::DestroyItem: unknown item '{}'", item_key);
+        refuse(game_events, action_queue, "Can't destroy that");
+        return;
+    };
+    if !item_def.destroyable {
+        info!("Action::DestroyItem: '{}' is not destroyable", item_key);
+        refuse(game_events, action_queue, "You can't destroy that");
+        return;
+    }
+    let Some(bag) = load_inv(scene_state, &InvKey::Player) else { return };
+    let units = units_for(count_item(&bag.slots, &item_key), count, all);
+    if units == 0 {
+        info!("Action::DestroyItem: nothing to destroy of '{}' (count 0, or none held)", item_key);
+        refuse(game_events, action_queue, "You have none to destroy");
+        return;
+    }
+    let mut ledger = TxnLedger::default();
+    ledger.invs.insert(InvKey::Player, bag);
+    let ops = [TxnOp::Take { inv: InvKey::Player, item: item_key.clone(), count: units }];
+    match plan(&ops, &ledger, None) {
+        Ok(done) => {
+            if let Some(bag) = done.invs.get(&InvKey::Player) {
+                store_inv(scene_state, &InvKey::Player, bag);
+            }
+            info!("Action::DestroyItem: destroyed {} x '{}'", units, item_key);
+            emit(game_events, format!("item.destroyed:{}", item_key));
+        }
+        Err(_) => refuse(game_events, action_queue, "You have none to destroy"),
+    }
 }

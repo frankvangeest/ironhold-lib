@@ -181,6 +181,10 @@
                 ( event: "ui.button_pressed:buy_item:iron_sword",         do_actions: [ BuyItem("iron_sword") ] ),
                 ( event: "ui.button_pressed:buy_item:old_key",            do_actions: [ BuyItem("old_key") ] ),
 
+                // Selling and destroying (the bag menu, or SellItem / DestroyItem from a rule or a bar slot) work with no rule too.
+                // Add one only to react: `item.sold:iron_sword`, `item.sell_refused:old_key`, `item.destroyed:health_potion`. A rule on
+                // `ui.button_pressed:destroy_item:iron_sword` or `sell_item:...` / `sell_stack:...` would replace the built-in (in any state).
+
                 // Using an item shows no message of its own; this is where to add one for a failed use (UseItem from a rule or the bar).
                 ( event: "item.use_failed", do_actions: [ ShowFloatingText(entity: "player_01", text: "Nothing to use") ] ),
 

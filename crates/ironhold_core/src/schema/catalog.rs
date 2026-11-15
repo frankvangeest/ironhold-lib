@@ -1688,8 +1688,10 @@ pub struct ShopEntry {
     pub item_key: String,
     /// Price to buy this item from the merchant (deducted from the currency stat).
     pub buy_price: u32,
-    /// Price the merchant pays when the player sells this item (added to currency stat).
-    pub sell_price: u32,
+    /// What this merchant pays per unit when the player sells this item, overriding the item's own `sell_price`. `0` means
+    /// this merchant does not buy it. Omit it to use the item's `sell_price` (an item with neither cannot be sold).
+    #[serde(default)]
+    pub sell_price: Option<u32>,
     /// Finite stock; runs down with each buy (runtime state per merchant entity) and refills on scene load. `None`
     /// means unlimited.
     #[serde(default)]

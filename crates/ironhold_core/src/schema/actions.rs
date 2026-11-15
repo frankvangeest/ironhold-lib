@@ -436,6 +436,36 @@ pub enum Action {
     /// Success: `item.used:{item_key}`. Failure (not held, no `use:` block, unknown item), never `item.used`:
     /// `item.use_failed` and `item.use_failed:{item_key}`.
     UseItem(String),
+    /// Sell `count` (default 1) of `item_key` from the player's bag to the currently open shop, or every unit of it across
+    /// all stacks with `all: true`. All or nothing. The price per unit is the merchant's own `ShopEntry.sell_price` for the item,
+    /// otherwise the item's `sell_price` in items.ron; an item with neither (or `0`) is not bought. The merchant pays in its
+    /// `currency_stat` (the primary player's own stat if it has one, otherwise the shared pool). The stock is not changed
+    /// (there is no buy-back). Choosing Sell in the bag menu does this unless your `state_machine.ron` binds
+    /// `ui.button_pressed:sell_item:{item_key}` (one unit) or `ui.button_pressed:sell_stack:{item_key}` (the clicked stack).
+    /// Success: `item.sold:{item_key}` and a "Sold X for N gold" message. Refused (changes nothing, never `item.sold`):
+    /// `item.sell_refused` + `item.sell_refused:{item_key}` when no shop is open, the item is unknown or not bought here, not
+    /// enough is held, `count` is 0 without `all`, or the payment would pass the currency stat's maximum.
+    SellItem {
+        item_key: String,
+        #[serde(default = "one_u32")]
+        count: u32,
+        #[serde(default)]
+        all: bool,
+    },
+    /// Destroy `count` (default 1) of `item_key` from the player's bag, or every unit across all stacks with `all: true`. All
+    /// or nothing, no payment. Never asks for confirmation (the bag menu does that before it fires the event). Refused for an
+    /// item with `destroyable: false`. Choosing Destroy in the bag menu does this unless your `state_machine.ron` binds
+    /// `ui.button_pressed:destroy_item:{item_key}`.
+    /// Success: `item.destroyed:{item_key}`. Refused (changes nothing, never `item.destroyed`): `item.destroy_refused` +
+    /// `item.destroy_refused:{item_key}` when the item is unknown, not destroyable, not held in that count, or `count` is 0
+    /// without `all`.
+    DestroyItem {
+        item_key: String,
+        #[serde(default = "one_u32")]
+        count: u32,
+        #[serde(default)]
+        all: bool,
+    },
     /// Show the `ContainerPanel` UI node populated with the given entity's inventory.
     /// The argument is the container entity's spawn ID (e.g. `"chest_01"`).
     /// Emits `container.opened:{entity_id}` on success.
@@ -542,6 +572,7 @@ impl Action {
             | Action::OpenInventory | Action::CloseInventory | Action::ToggleInventory
             | Action::PauseGame | Action::ResumeGame | Action::TogglePause
             | Action::OpenShop(_) | Action::CloseShop | Action::BuyItem(_) | Action::UseItem(_)
+            | Action::SellItem { .. } | Action::DestroyItem { .. }
             | Action::OpenContainer(_) | Action::CloseContainer | Action::TakeAllFromContainer
             | Action::ToggleOwnNameplate | Action::JoinPlayer
             | Action::SignIn | Action::SignOut | Action::SubmitScore { .. } | Action::FetchLeaderboard { .. }

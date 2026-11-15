@@ -1,0 +1,18 @@
+(
+    schema_version: 2,
+    prefabs: {
+        "seal_door": (
+            kind: Prop,
+            interactable: ( radius: 2.0, requires_item: "relic" ),
+        ),
+        "shopkeeper": (
+            kind: Prop,
+            merchant: (
+                currency_stat: "gold",
+                stock: [
+                    ( item_key: "ore", buy_price: 10, sell_price: 40 ),
+                ],
+            ),
+        ),
+    },
+)

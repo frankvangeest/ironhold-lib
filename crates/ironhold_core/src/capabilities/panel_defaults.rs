@@ -18,6 +18,22 @@ use crate::schema::Action;
 
 pub const BUY_ITEM_PREFIX: &str = "buy_item:";
 pub const USE_ITEM_PREFIX: &str = "use_item:";
+/// Sell one unit of the item (a bag menu row).
+pub const SELL_ITEM_PREFIX: &str = "sell_item:";
+/// Sell the clicked stack (the bag menu's "Sell N" row, after its confirm).
+pub const SELL_STACK_PREFIX: &str = "sell_stack:";
+/// Destroy the clicked stack (the bag menu's Destroy row, after its confirm).
+pub const DESTROY_ITEM_PREFIX: &str = "destroy_item:";
+
+/// Every default-backed click trigger prefix. The one list the runtime (`BoundPanelEvents`, the default pusher) and
+/// `ironhold validate` (reachability, the "bound in a transition runs both" warning) all read, so they cannot drift.
+pub const DEFAULT_BACKED_PREFIXES: [&str; 5] =
+    [BUY_ITEM_PREFIX, USE_ITEM_PREFIX, SELL_ITEM_PREFIX, SELL_STACK_PREFIX, DESTROY_ITEM_PREFIX];
+
+/// True when `trigger` (without the `ui.button_pressed:` prefix) is one of the default-backed panel clicks.
+pub fn is_default_backed_trigger(trigger: &str) -> bool {
+    DEFAULT_BACKED_PREFIXES.iter().any(|p| trigger.starts_with(p))
+}
 
 /// The default-backed click triggers (`buy_item:*` / `use_item:*`, stored without the `ui.button_pressed:` prefix, so a
 /// click lookup allocates nothing) that `state_machine.ron` binds somewhere. Rebuilt when the state machine loads. Lookup-only.
@@ -30,7 +46,7 @@ impl BoundPanelEvents {
         let mut set = HashSet::new(); // det: lookup-only
         for binding in fsm.global_on.iter().chain(fsm.states.iter().flat_map(|s| s.on.iter())) {
             if let Some(trigger) = binding.event.strip_prefix("ui.button_pressed:") {
-                if trigger.starts_with(BUY_ITEM_PREFIX) || trigger.starts_with(USE_ITEM_PREFIX) {
+                if is_default_backed_trigger(trigger) {
                     set.insert(trigger.to_string());
                 }
             }
@@ -39,7 +55,7 @@ impl BoundPanelEvents {
     }
 }
 
-/// Pushes `BuyItem` / `UseItem` for a Buy or inventory-slot click that no `state_machine.ron` binding owns.
+/// Pushes `BuyItem` / `UseItem` / `SellItem` / `DestroyItem` for a Buy, inventory-slot or bag-menu click that no `state_machine.ron` binding owns.
 /// `GameplaySet::Execute`, after `flush_pending_intent_system` and before the executor: a sanctioned `ActionQueue` pusher.
 /// A click on an item with no `use:` block runs no default (the event still reached any rule).
 pub fn default_panel_actions_system(
@@ -64,6 +80,18 @@ pub fn default_panel_actions_system(
             let usable = catalog.0.as_ref().and_then(|c| c.items.get(key)).is_some_and(|d| d.use_def.is_some());
             if usable && !bound.0.contains(trigger.as_str()) {
                 action_queue.push(Action::UseItem(key.to_string()));
+            }
+        } else if let Some(key) = trigger.strip_prefix(SELL_ITEM_PREFIX) {
+            if !bound.0.contains(trigger.as_str()) {
+                action_queue.push(Action::SellItem { item_key: key.to_string(), count: 1, all: false });
+            }
+        } else if let Some(key) = trigger.strip_prefix(SELL_STACK_PREFIX) {
+            if !bound.0.contains(trigger.as_str()) {
+                action_queue.push(Action::SellItem { item_key: key.to_string(), count: 1, all: true });
+            }
+        } else if let Some(key) = trigger.strip_prefix(DESTROY_ITEM_PREFIX) {
+            if !bound.0.contains(trigger.as_str()) {
+                action_queue.push(Action::DestroyItem { item_key: key.to_string(), count: 1, all: true });
             }
         }
     }

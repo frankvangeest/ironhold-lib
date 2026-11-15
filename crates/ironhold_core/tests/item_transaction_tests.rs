@@ -34,6 +34,8 @@ fn item(name: &str, stackable: bool, currency_stat: Option<&str>) -> ItemDef {
         weight: 1.0,
         tags: Vec::new(),
         currency_stat: currency_stat.map(str::to_string),
+        sell_price: None,
+        destroyable: true,
         use_def: None,
     }
 }
@@ -108,7 +110,7 @@ fn shop_app(stock: Option<u32>, gold_now: f32, bag_slots: usize) -> App {
     prefabs.insert("merchant".to_string(), PrefabDef {
         kind: PrefabKind::Prop,
         merchant: Some(MerchantDef {
-            stock: vec![ShopEntry { item_key: "old_key".to_string(), buy_price: 50, sell_price: 0, stock_count: stock }],
+            stock: vec![ShopEntry { item_key: "old_key".to_string(), buy_price: 50, sell_price: None, stock_count: stock }],
             currency_stat: "gold".to_string(),
         }),
         ..Default::default()
@@ -1111,4 +1113,269 @@ fn the_footer_shows_used_slots_over_the_bag_size_and_turns_orange_when_full() {
     app.update();
     assert_eq!(app.world().get::<Text>(label).unwrap().0, "Slots: 2/3");
     assert_eq!(app.world().get::<TextColor>(label).unwrap().0, SLOT_COUNT_COLOR, "no longer full");
+}
+
+// ---- item system S4: selling and destroying (`planning/features/item_sell_destroy.md`) ------------------------------------
+
+fn priced(name: &str, stackable: bool, max_stack: u32, sell_price: Option<u32>, destroyable: bool) -> ItemDef {
+    let mut d = item(name, stackable, None);
+    d.max_stack = max_stack;
+    d.sell_price = sell_price;
+    d.destroyable = destroyable;
+    d
+}
+
+fn sell_catalog() -> ItemCatalog {
+    let mut items = std::collections::BTreeMap::new();
+    items.insert("potion".to_string(), priced("Potion", true, 10, Some(5), true));
+    items.insert("sword".to_string(), priced("Sword", false, 1, Some(30), true));
+    items.insert("pelt".to_string(), priced("Wolf Pelt", true, 99, None, true));
+    items.insert("old_key".to_string(), priced("Old Key", false, 1, None, false));
+    items.insert("ore".to_string(), priced("Ore", true, 99, Some(8), true));
+    items.insert("idol".to_string(), priced("Idol", false, 1, Some(20), true));
+    items.insert("gold_coin".to_string(), item("Gold Coin", true, Some("gold")));
+    ItemCatalog { schema_version: 1, items }
+}
+
+/// A scene with a merchant (currency `gold`), an open shop, and a six-slot bag holding `bag`. The merchant's own prices:
+/// `old_key` (buy 50, one in stock, buys it back for 10), `ore` (buy 20, `sell_price: 0` = not bought here), `idol` (buy 200, pays 100).
+fn sell_app(gold_now: f32, gold_max: f32, bag: &[(&str, u32)]) -> App {
+    let mut app = setup_test_app();
+    app.world_mut().insert_resource(LoadedItemCatalog(Some(sell_catalog())));
+    let entry = |key: &str, buy: u32, sell: Option<u32>, stock: Option<u32>| ShopEntry {
+        item_key: key.to_string(), buy_price: buy, sell_price: sell, stock_count: stock,
+    };
+    let mut prefabs = std::collections::BTreeMap::new();
+    prefabs.insert("merchant".to_string(), PrefabDef {
+        kind: PrefabKind::Prop,
+        merchant: Some(MerchantDef {
+            stock: vec![
+                entry("old_key", 50, Some(10), Some(1)),
+                entry("ore", 20, Some(0), None),
+                entry("idol", 200, Some(100), None),
+            ],
+            currency_stat: "gold".to_string(),
+        }),
+        ..Default::default()
+    });
+    app.world_mut().insert_resource(LoadedPrefabCatalog(PrefabCatalog { schema_version: 2, prefabs }));
+    let panel = app.world_mut().spawn((ShopPanelMarker { font_size: 14.0 }, Visibility::Hidden)).id();
+    app.world_mut().spawn((ShopEntriesContainerMarker, ChildOf(panel)));
+    app.world_mut().resource_mut::<LoadedStats>().0.insert("gold".to_string(), gold(gold_now, gold_max));
+    let mut inv = PlayerInventory::new(6);
+    for (key, n) in bag {
+        add_to_slots(&mut inv.slots, 6, key, *n, Some(&sell_catalog()));
+    }
+    app.world_mut().insert_resource(inv);
+    spawn_merchant(&mut app, "merchant_01");
+    app.update();
+    let _ = run(&mut app, vec![Action::OpenShop("merchant_01".to_string())]);
+    app
+}
+
+fn sell(key: &str, count: u32, all: bool) -> Action {
+    Action::SellItem { item_key: key.to_string(), count, all }
+}
+
+fn destroy(key: &str, count: u32, all: bool) -> Action {
+    Action::DestroyItem { item_key: key.to_string(), count, all }
+}
+
+#[test]
+fn selling_takes_the_items_and_pays_the_price_times_the_count() {
+    let mut app = sell_app(100.0, 99_999.0, &[("potion", 7)]);
+    let ev = run(&mut app, vec![sell("potion", 3, false)]);
+    assert!(has(&ev, "item.sold:potion"), "{ev:?}");
+    assert!(!has(&ev, "item.sell_refused"), "{ev:?}");
+    assert_eq!(bag_count(&app, "potion"), 4);
+    assert_eq!(global_gold(&app), 115.0, "3 x 5");
+}
+
+#[test]
+fn a_merchant_buys_an_item_it_does_not_stock() {
+    // The merchant only stocks old_key, ore and idol; the potion is still bought at the item's own price.
+    let mut app = sell_app(0.0, 99_999.0, &[("potion", 1)]);
+    let ev = run(&mut app, vec![sell("potion", 1, false)]);
+    assert!(has(&ev, "item.sold:potion"), "{ev:?}");
+    assert_eq!(global_gold(&app), 5.0);
+}
+
+#[test]
+fn a_merchants_own_price_beats_the_items_price_and_zero_means_not_bought() {
+    let mut app = sell_app(0.0, 99_999.0, &[("idol", 1), ("ore", 4)]);
+    let ev = run(&mut app, vec![sell("idol", 1, false)]);
+    assert!(has(&ev, "item.sold:idol"), "{ev:?}");
+    assert_eq!(global_gold(&app), 100.0, "the ShopEntry price (100) beats the item's (20)");
+
+    let ev = run(&mut app, vec![sell("ore", 1, false)]);
+    assert!(has(&ev, "item.sell_refused:ore") && !has(&ev, "item.sold:ore"), "`sell_price: 0` on the entry: not bought here: {ev:?}");
+    assert_eq!(bag_count(&app, "ore"), 4);
+    assert_eq!(global_gold(&app), 100.0);
+}
+
+#[test]
+fn an_item_with_no_price_cannot_be_sold() {
+    let mut app = sell_app(0.0, 99_999.0, &[("pelt", 2)]);
+    for key in ["pelt"] {
+        let ev = run(&mut app, vec![sell(key, 1, false)]);
+        assert!(has(&ev, "item.sell_refused") && has(&ev, &format!("item.sell_refused:{key}")), "{ev:?}");
+        assert!(!has(&ev, &format!("item.sold:{key}")), "{ev:?}");
+    }
+    assert_eq!(bag_count(&app, "pelt"), 2);
+    assert_eq!(global_gold(&app), 0.0);
+}
+
+#[test]
+fn selling_with_no_shop_open_is_refused_and_changes_nothing() {
+    let mut app = sell_app(0.0, 99_999.0, &[("potion", 2)]);
+    let _ = run(&mut app, vec![Action::CloseShop]);
+    let ev = run(&mut app, vec![sell("potion", 1, false)]);
+    assert!(has(&ev, "item.sell_refused:potion") && !has(&ev, "item.sold:potion"), "{ev:?}");
+    assert_eq!(bag_count(&app, "potion"), 2);
+    assert_eq!(global_gold(&app), 0.0);
+}
+
+#[test]
+fn selling_more_than_held_or_zero_is_refused_and_changes_nothing() {
+    let mut app = sell_app(0.0, 99_999.0, &[("potion", 2)]);
+    for (count, all) in [(3, false), (0, false)] {
+        let ev = run(&mut app, vec![sell("potion", count, all)]);
+        assert!(has(&ev, "item.sell_refused:potion") && !has(&ev, "item.sold:potion"), "count {count}: {ev:?}");
+    }
+    assert_eq!(bag_count(&app, "potion"), 2, "all or nothing");
+    assert_eq!(global_gold(&app), 0.0);
+    // `all: true` with none held is refused too
+    let mut app = sell_app(0.0, 99_999.0, &[]);
+    let ev = run(&mut app, vec![sell("potion", 1, true)]);
+    assert!(has(&ev, "item.sell_refused:potion"), "{ev:?}");
+}
+
+#[test]
+fn sell_all_sells_every_unit_across_stacks() {
+    // 25 potions at 10 per stack are three slots.
+    let mut app = sell_app(0.0, 99_999.0, &[("potion", 25)]);
+    assert_eq!(app.world().resource::<PlayerInventory>().slots.iter().flatten().count(), 3);
+    let ev = run(&mut app, vec![sell("potion", 1, true)]);
+    assert!(has(&ev, "item.sold:potion"), "{ev:?}");
+    assert_eq!(bag_count(&app, "potion"), 0);
+    assert_eq!(global_gold(&app), 125.0);
+}
+
+#[test]
+fn a_payout_past_the_currency_maximum_is_refused_and_keeps_the_items() {
+    let mut app = sell_app(95.0, 100.0, &[("potion", 3)]);
+    let ev = run(&mut app, vec![sell("potion", 3, false)]);
+    assert!(has(&ev, "item.sell_refused:potion") && !has(&ev, "item.sold:potion"), "{ev:?}");
+    assert_eq!(bag_count(&app, "potion"), 3);
+    assert_eq!(global_gold(&app), 95.0);
+    // Selling what fits works.
+    let ev = run(&mut app, vec![sell("potion", 1, false)]);
+    assert!(has(&ev, "item.sold:potion"), "{ev:?}");
+    assert_eq!(global_gold(&app), 100.0);
+}
+
+#[test]
+fn a_missing_currency_stat_refuses_the_sale() {
+    let mut app = sell_app(0.0, 99_999.0, &[("potion", 2)]);
+    app.world_mut().resource_mut::<LoadedStats>().0.remove("gold");
+    let ev = run(&mut app, vec![sell("potion", 1, false)]);
+    assert!(has(&ev, "item.sell_refused:potion") && !has(&ev, "item.sold:potion"), "{ev:?}");
+    assert_eq!(bag_count(&app, "potion"), 2);
+}
+
+#[test]
+fn selling_does_not_restock_the_merchant() {
+    // old_key: one in stock. Buy it, sell it back (this merchant pays 10), and it is still sold out: there is no buy-back.
+    let mut app = sell_app(200.0, 99_999.0, &[]);
+    let ev = run(&mut app, vec![Action::BuyItem("old_key".to_string())]);
+    assert!(has(&ev, "item.bought:old_key"), "{ev:?}");
+    let ev = run(&mut app, vec![sell("old_key", 1, false)]);
+    assert!(has(&ev, "item.sold:old_key"), "this merchant's entry prices it: {ev:?}");
+    assert_eq!(global_gold(&app), 160.0, "200 - 50 + 10");
+    let ev = run(&mut app, vec![Action::BuyItem("old_key".to_string())]);
+    assert!(has(&ev, "shop.sold_out:old_key") && !has(&ev, "item.bought:old_key"), "{ev:?}");
+}
+
+#[test]
+fn destroying_removes_the_count_without_paying() {
+    let mut app = sell_app(50.0, 99_999.0, &[("potion", 7)]);
+    let ev = run(&mut app, vec![destroy("potion", 3, false)]);
+    assert!(has(&ev, "item.destroyed:potion"), "{ev:?}");
+    assert!(!has(&ev, "item.destroy_refused"), "{ev:?}");
+    assert_eq!(bag_count(&app, "potion"), 4);
+    assert_eq!(global_gold(&app), 50.0, "destroying pays nothing");
+    let ev = run(&mut app, vec![destroy("potion", 1, true)]);
+    assert!(has(&ev, "item.destroyed:potion"), "{ev:?}");
+    assert_eq!(bag_count(&app, "potion"), 0, "`all` destroys every unit");
+}
+
+#[test]
+fn destroying_works_with_no_shop_open() {
+    let mut app = sell_app(0.0, 99_999.0, &[("pelt", 2)]);
+    let _ = run(&mut app, vec![Action::CloseShop]);
+    let ev = run(&mut app, vec![destroy("pelt", 2, false)]);
+    assert!(has(&ev, "item.destroyed:pelt"), "{ev:?}");
+    assert_eq!(bag_count(&app, "pelt"), 0);
+}
+
+#[test]
+fn a_key_item_cannot_be_destroyed() {
+    let mut app = sell_app(0.0, 99_999.0, &[("old_key", 1)]);
+    let ev = run(&mut app, vec![destroy("old_key", 1, false)]);
+    assert!(has(&ev, "item.destroy_refused") && has(&ev, "item.destroy_refused:old_key"), "{ev:?}");
+    assert!(!has(&ev, "item.destroyed:old_key"), "{ev:?}");
+    assert_eq!(bag_count(&app, "old_key"), 1);
+}
+
+#[test]
+fn destroying_more_than_held_zero_or_an_unknown_item_is_refused() {
+    let mut app = sell_app(0.0, 99_999.0, &[("potion", 2)]);
+    for action in [destroy("potion", 3, false), destroy("potion", 0, false), destroy("nonsense", 1, false), destroy("pelt", 1, true)] {
+        let ev = run(&mut app, vec![action.clone()]);
+        assert!(has(&ev, "item.destroy_refused"), "{action:?}: {ev:?}");
+        assert!(!ev.iter().any(|e| e.starts_with("item.destroyed:")), "{action:?}: {ev:?}");
+    }
+    assert_eq!(bag_count(&app, "potion"), 2, "all or nothing");
+}
+
+#[test]
+fn the_bag_menu_events_run_the_built_in_sell_and_destroy_unless_a_rule_owns_them() {
+    // sell_item = one unit, sell_stack = every unit, destroy_item = every unit (the menu's confirm happened before the event).
+    let mut app = sell_app(0.0, 99_999.0, &[("potion", 4), ("pelt", 3)]);
+    send_click(&mut app, "sell_item:potion");
+    assert_eq!(bag_count(&app, "potion"), 3);
+    assert_eq!(global_gold(&app), 5.0);
+    send_click(&mut app, "sell_stack:potion");
+    assert_eq!(bag_count(&app, "potion"), 0);
+    assert_eq!(global_gold(&app), 20.0);
+    send_click(&mut app, "destroy_item:pelt");
+    assert_eq!(bag_count(&app, "pelt"), 0);
+
+    // A rule bound on the event (in any state) owns it: the built-in does not run, so there is no double action.
+    let mut app = sell_app(0.0, 99_999.0, &[("potion", 4), ("pelt", 3)]);
+    for trigger in ["sell_item:potion", "destroy_item:pelt"] {
+        app.world_mut().insert_resource(fsm_with("playing", Some(&format!("ui.button_pressed:{trigger}")), false));
+        app.world_mut().resource_mut::<LogicState>().0 = "playing".to_string();
+        app.update();
+        send_click(&mut app, trigger);
+        assert!(has(&events(&app), "rule.ran"), "{trigger}: {:?}", events(&app));
+    }
+    assert_eq!(bag_count(&app, "potion"), 4);
+    assert_eq!(bag_count(&app, "pelt"), 3);
+}
+
+#[test]
+fn the_sell_and_destroy_actions_parse_from_ron_with_defaults() {
+    let a: Action = ron::from_str(r#"SellItem(item_key: "gem")"#).expect("count and all default");
+    assert_eq!(a, Action::SellItem { item_key: "gem".to_string(), count: 1, all: false });
+    let a: Action = ron::from_str(r#"DestroyItem(item_key: "gem", all: true)"#).expect("all");
+    assert_eq!(a, Action::DestroyItem { item_key: "gem".to_string(), count: 1, all: true });
+    let e: ShopEntry = ron::from_str(r#"(item_key: "gem", buy_price: 10)"#).expect("sell_price omitted");
+    assert_eq!(e.sell_price, None);
+    // The project's RON loader enables `implicit_some` (schema/ron_loader.rs), so an authored `sell_price: 5` is still a valid `Option<u32>`.
+    let implicit = ron::Options::default().with_default_extension(ron::extensions::Extensions::IMPLICIT_SOME);
+    let e: ShopEntry = implicit.from_str(r#"(item_key: "gem", buy_price: 10, sell_price: 5)"#).expect("an old authored price still parses");
+    assert_eq!(e.sell_price, Some(5));
+    let d: ItemDef = ron::from_str(r#"(display_name: "Gem")"#).expect("defaults");
+    assert!(d.destroyable && d.sell_price.is_none());
 }
