@@ -1,6 +1,6 @@
 # Feature: Item slots on the action bar (item system S5)
 
-_Status: In Progress (plan-reviewed 2026-11-15; system-architect and ux-gamedesigner-reviewer findings folded in, Q1-Q4 settled)_
+_Status: Done (2026-11-15)_
 _Planned at: `a40dbd7` (2026-11-15)_
 
 Slice S5 of `planning/features/item_system_review.md`. Builds on S3 (`UseItem`, `planning/features/done/item_use.md`) and the action bar's intent

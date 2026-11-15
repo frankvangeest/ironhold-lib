@@ -1718,7 +1718,7 @@ fn the_all_events_run_the_built_in_unless_a_rule_owns_them() {
     assert_eq!(bag_count(&app, "sword"), 3, "the rule owns the event: the built-in did not sell");
 }
 
-// ---- item system S5: item slots on the action bar (`planning/features/action_bar_item_slots.md`) ---------------------------------------
+// ---- item system S5: item slots on the action bar (`planning/features/done/action_bar_item_slots.md`) ---------------------------------------
 
 use ironhold_core::capabilities::action_bar::{
     ActionSlotItem, ActionSlotUi, CooldownMap, CooldownOverlay, SlotIcon, SlotItemCount,
