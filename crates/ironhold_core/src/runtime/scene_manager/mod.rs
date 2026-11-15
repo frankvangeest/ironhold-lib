@@ -663,6 +663,8 @@ pub struct SceneV2Params<'w> {
     pub project_root: Res<'w, ProjectRoot>,
     pub inventory_ui: ResMut<'w, crate::capabilities::inventory::LoadedInventoryUi>,
     pub container_ui: ResMut<'w, crate::capabilities::inventory::LoadedContainerUi>,
+    /// The bag's size (panel slots past it are spawned faded; a panel smaller than the bag logs a warning).
+    pub player_inventory: Res<'w, crate::capabilities::inventory::PlayerInventory>,
     pub loaded_item_catalog: Res<'w, crate::capabilities::inventory::LoadedItemCatalog>,
     /// `spawn_scene_v2` is already at Bevy's 16-top-level-param `SystemParam` ceiling, so a
     /// player's `stat_label`/`world_stat_bar` widget queue (`DynamicStatUiQueue`) is bundled

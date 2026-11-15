@@ -1,4 +1,4 @@
-// Item system S2a (`planning/features/item_transaction_primitive.md`): buy, transfer, add (coins) and remove go through
+// Item system S2a (`planning/features/done/item_transaction_primitive.md`): buy, transfer, add (coins) and remove go through
 // one all-or-nothing transaction, merchant stock is runtime state, and every outcome has a defined event.
 //
 // No test covered BuyItem / TransferItem / AddItem / RemoveItem before this file (only TakeAllFromContainer, in
@@ -981,4 +981,134 @@ fn a_bad_use_list_with_target_does_not_stop_the_other_effects() {
     let ev = run(&mut app, vec![use_action("target_potion")]);
     assert!(has(&ev, "item.used:target_potion"), "{ev:?}");
     assert!(has(&ev, "target.potion.drunk"), "the other effects still run: {ev:?}");
+}
+
+// ---- Item system S2b: the player's bag size comes from the project config (`planning/features/done/player_inventory_slots.md`) --------
+
+fn project_from(ron_text: &str) -> Result<ironhold_core::schema::project::ProjectConfig, ron::error::SpannedError> {
+    ron::Options::default().from_str(ron_text)
+}
+
+#[test]
+fn the_bag_defaults_to_20_slots_everywhere() {
+    use ironhold_core::schema::project::{ProjectConfig, DEFAULT_PLAYER_SLOTS};
+    // A derived Default would be 0 slots; ~45 tests build `ProjectConfig { ..Default::default() }` and load a project.
+    assert_eq!(ProjectConfig::default().player_inventory.max_slots, 20);
+    let bag = PlayerInventory::default();
+    assert_eq!((bag.max_slots, bag.slots.len(), DEFAULT_PLAYER_SLOTS), (20, 20, 20));
+    let cfg = project_from("(schema_version: 3, initial_scene: \"main.scene.ron\")").unwrap();
+    assert_eq!(cfg.player_inventory.max_slots, 20, "field omitted");
+    let cfg = project_from("(schema_version: 3, initial_scene: \"main.scene.ron\", player_inventory: ())").unwrap();
+    assert_eq!(cfg.player_inventory.max_slots, 20, "empty struct");
+}
+
+#[test]
+fn the_bag_size_parses_and_unknown_fields_are_errors() {
+    let cfg = project_from("(schema_version: 3, initial_scene: \"m\", player_inventory: (max_slots: 12))").unwrap();
+    assert_eq!(cfg.player_inventory.max_slots, 12);
+    assert_eq!(cfg.player_inventory.effective_slots(), 12);
+    assert!(project_from("(schema_version: 3, initial_scene: \"m\", player_inventory: (max_slot: 12))").is_err(), "typo is an error");
+}
+
+#[test]
+fn an_out_of_range_bag_size_is_a_validate_error_and_is_clamped_at_runtime() {
+    for (n, used) in [(0usize, 1usize), (300, 256), (1, 1), (256, 256)] {
+        let cfg = project_from(&format!("(schema_version: 3, initial_scene: \"m\", player_inventory: (max_slots: {n}))")).unwrap();
+        assert_eq!(cfg.player_inventory.effective_slots(), used, "{n}");
+        let ok = (1..=256).contains(&n);
+        let msg = cfg.validate();
+        assert_eq!(msg.is_ok(), ok, "{n}: {msg:?}");
+        if !ok {
+            assert!(msg.unwrap_err().contains("player_inventory.max_slots"));
+        }
+    }
+}
+
+#[test]
+fn a_small_bag_refuses_what_does_not_fit() {
+    let mut app = setup_test_app();
+    app.world_mut().insert_resource(LoadedItemCatalog(Some(catalog())));
+    app.world_mut().insert_resource(PlayerInventory::new(2));
+    app.update();
+    let ev = run(&mut app, vec![Action::AddItem { entity: "player".to_string(), item_key: "sword".to_string(), count: 3 }]);
+    assert_eq!(bag_count(&app, "sword"), 2, "{ev:?}");
+    assert!(has(&ev, "inventory.full:player"), "{ev:?}");
+}
+
+#[test]
+fn a_default_panel_has_exactly_as_many_cells_as_the_default_bag() {
+    // `default_inv_columns() * default_inv_rows()` must equal DEFAULT_PLAYER_SLOTS, or a default panel would trip its own validate error.
+    let scene: ironhold_core::schema::scene_v2::GameSceneV2 = ron::Options::default()
+        .from_str("(schema_version: 2, name: \"m\", ui: [InventoryPanel((id: \"p\", position: (0.0, 0.0)))])")
+        .unwrap();
+    let ironhold_core::schema::scene_v2::UiNodeDef::InventoryPanel(p) = &scene.ui[0] else { panic!("not a panel") };
+    assert_eq!((p.columns * p.rows) as usize, ironhold_core::capabilities::inventory::DEFAULT_PLAYER_SLOTS);
+}
+
+#[test]
+fn the_panel_vs_bag_check_reports_both_directions() {
+    use ironhold_core::schema::scene_v2::{inventory_panel_bag_issue, InventoryBagIssue};
+    assert_eq!(inventory_panel_bag_issue(20, 20), None);
+    assert_eq!(inventory_panel_bag_issue(12, 20), Some(InventoryBagIssue::PanelSmaller { hidden: 8 }));
+    assert_eq!(inventory_panel_bag_issue(20, 12), Some(InventoryBagIssue::PanelLarger { faded: 8 }));
+}
+
+#[test]
+fn a_click_on_a_cell_past_the_bag_does_nothing_even_with_a_stale_item_there() {
+    use ironhold_core::schema::items::ItemStack;
+    let mut app = setup_test_app();
+    app.world_mut().insert_resource(LoadedItemCatalog(Some(use_catalog())));
+    let mut inv = PlayerInventory::new(2);
+    // Six entries but a bag of two: an item sitting past `max_slots` must not be usable.
+    inv.slots = vec![None, None, None, None, Some(ItemStack { item_key: "potion".to_string(), count: 2 }), None];
+    app.world_mut().insert_resource(inv);
+    let s = slot(&mut app, 4);
+    app.update();
+    app.world_mut().resource_mut::<Messages<GameEvent>>().clear();
+    *app.world_mut().get_mut::<Interaction>(s).unwrap() = Interaction::Pressed;
+    app.update();
+    assert!(!has(&events(&app), "item.used:potion"), "{:?}", events(&app));
+}
+
+#[test]
+fn cells_past_the_bag_are_drawn_faded_and_come_back_with_a_bigger_bag() {
+    use ironhold_core::capabilities::inventory::{SLOT_BG, SLOT_BG_DEAD};
+    let mut app = setup_test_app();
+    app.world_mut().insert_resource(LoadedItemCatalog(Some(catalog())));
+    app.world_mut().insert_resource(PlayerInventory::new(2));
+    let inside = app.world_mut().spawn((InventorySlotMarker { slot_index: 1 }, BackgroundColor(SLOT_BG_DEAD))).id();
+    let outside = app.world_mut().spawn((InventorySlotMarker { slot_index: 2 }, BackgroundColor(SLOT_BG))).id();
+    app.update();
+    assert_eq!(app.world().get::<BackgroundColor>(inside).unwrap().0, SLOT_BG, "inside the bag: normal");
+    assert_eq!(app.world().get::<BackgroundColor>(outside).unwrap().0, SLOT_BG_DEAD, "past the bag: faded");
+    app.world_mut().insert_resource(PlayerInventory::new(3));
+    app.update();
+    assert_eq!(app.world().get::<BackgroundColor>(outside).unwrap().0, SLOT_BG, "a bigger bag brings the cell back");
+}
+
+#[test]
+fn the_footer_shows_used_slots_over_the_bag_size_and_turns_orange_when_full() {
+    use ironhold_core::capabilities::inventory::{SlotCountLabelMarker, SLOT_COUNT_COLOR, SLOT_COUNT_COLOR_FULL};
+    let mut app = setup_test_app();
+    app.world_mut().insert_resource(LoadedItemCatalog(Some(catalog())));
+    app.world_mut().insert_resource(PlayerInventory::new(3));
+    let label = app.world_mut().spawn((SlotCountLabelMarker, Text::new(""), TextColor(SLOT_COUNT_COLOR))).id();
+    app.update();
+    assert_eq!(app.world().get::<Text>(label).unwrap().0, "Slots: 0/3");
+    let _ = run(&mut app, vec![
+        Action::AddItem { entity: "player".to_string(), item_key: "sword".to_string(), count: 1 },
+        Action::AddItem { entity: "player".to_string(), item_key: "potion".to_string(), count: 40 },
+    ]);
+    app.update();
+    // A stack is one slot: a sword and 40 potions are 2 of 3 slots.
+    assert_eq!(app.world().get::<Text>(label).unwrap().0, "Slots: 2/3");
+    assert_eq!(app.world().get::<TextColor>(label).unwrap().0, SLOT_COUNT_COLOR);
+    let _ = run(&mut app, vec![Action::AddItem { entity: "player".to_string(), item_key: "old_key".to_string(), count: 1 }]);
+    app.update();
+    assert_eq!(app.world().get::<Text>(label).unwrap().0, "Slots: 3/3");
+    assert_eq!(app.world().get::<TextColor>(label).unwrap().0, SLOT_COUNT_COLOR_FULL, "a full bag is orange");
+    let _ = run(&mut app, vec![Action::RemoveItem { entity: "player".to_string(), item_key: "sword".to_string(), count: 1, all_or_nothing: false }]);
+    app.update();
+    assert_eq!(app.world().get::<Text>(label).unwrap().0, "Slots: 2/3");
+    assert_eq!(app.world().get::<TextColor>(label).unwrap().0, SLOT_COUNT_COLOR, "no longer full");
 }

@@ -342,3 +342,4 @@ for `ui.button_pressed:buy_item:{key}` / `use_item:{key}` unless `BoundPanelEven
 changes from the `global_on` and in-state `on:` bindings only (not transitions, not behaviors). "Bound anywhere" is deliberate: a rule scoped to `playing`
 keeps a click in another state doing nothing, as before S3. `inventory_slot_click_system` (`EmitSet::Ui`, after `icon_button_click_system`, gated on
 `SimClock` in the body) emits `use_item:{key}` from a slot `Button` (no `UiAction`: `button_system` must keep ignoring slots).
+The player bag is sized once, in `check_project_loaded`'s tail from `ProjectConfig.player_inventory` (clamped 1..=256), never lazily in an action; `PlayerInventory::default()` is 20 slots (hand-written, never derived).

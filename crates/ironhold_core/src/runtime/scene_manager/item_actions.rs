@@ -1,5 +1,5 @@
 //! Executor-side glue for the item actions that go through the transaction primitive
-//! (`capabilities/item_txn.rs`, item system S2a, `planning/features/item_transaction_primitive.md`).
+//! (`capabilities/item_txn.rs`, item system S2a, `planning/features/done/item_transaction_primitive.md`).
 //!
 //! The pure primitive works on an owned `TxnLedger`; this file gathers that ledger from the ECS (clones of the touched
 //! slot vectors, stat values and stock entries), calls `plan`, and on success writes each touched entry back one at a
@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 
 use bevy::prelude::*;
 
-use crate::capabilities::inventory::{MerchantStockState, PanelKind, DEFAULT_PLAYER_SLOTS};
+use crate::capabilities::inventory::{MerchantStockState, PanelKind};
 use crate::capabilities::item_txn::{
     count_item, plan, resolve_stat_source, room_for, InvKey, InvLedger, StatLedger, StatOwner, StatRef, TxnError,
     TxnLedger, TxnOp,
@@ -29,18 +29,9 @@ fn inv_key(entity: &str) -> InvKey {
     if entity == "player" { InvKey::Player } else { InvKey::Entity(entity.to_string()) }
 }
 
-/// The player inventory is sized lazily; keep one constant for the lazy size (S2b makes it configurable).
-fn ensure_player_inventory(scene_state: &mut SceneStateParams) {
-    let inv = &mut *scene_state.player_inventory;
-    if inv.max_slots == 0 {
-        inv.resize(DEFAULT_PLAYER_SLOTS);
-    }
-}
-
 fn load_inv(scene_state: &mut SceneStateParams, key: &InvKey) -> Option<InvLedger> {
     match key {
         InvKey::Player => {
-            ensure_player_inventory(scene_state);
             let p = &*scene_state.player_inventory;
             Some(InvLedger { slots: p.slots.clone(), max_slots: p.max_slots })
         }

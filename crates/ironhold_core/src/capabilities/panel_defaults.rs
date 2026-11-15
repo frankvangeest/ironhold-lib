@@ -95,6 +95,10 @@ pub fn inventory_slot_click_system(
         if !(left_click || right_click) {
             continue;
         }
+        // A cell past the bag's size is drawn faded and does nothing (`slots.get` is already `None` there; this states the rule).
+        if slot.slot_index >= player_inv.max_slots {
+            continue;
+        }
         let Some(stack) = player_inv.slots.get(slot.slot_index).and_then(|s| s.as_ref()) else { continue };
         ui_events.write(UiEvent::ButtonPressed(format!("{USE_ITEM_PREFIX}{}", stack.item_key)));
     }

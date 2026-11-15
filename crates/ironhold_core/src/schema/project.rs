@@ -237,6 +237,12 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub items_path: Option<String>,
 
+    /// Size of the player's bag: `( max_slots: 20 )` (default 20, range 1-256). One bag shared by every player in local co-op.
+    /// Make it equal to your `InventoryPanel`'s `columns * rows`; `ironhold validate` checks this. Slots the bag does not have
+    /// are drawn faded and cannot be used. Not a prefab's `inventory:` field (that is a container's own inventory).
+    #[serde(default)]
+    pub player_inventory: PlayerInventoryDef,
+
     /// Visual style for floating damage/heal popups shown by `Action::ShowDamagePopup`.
     /// Omit to use the built-in defaults (22 px font, 1.2 s duration, 1.5 m/s rise).
     #[serde(default)]
@@ -380,6 +386,33 @@ impl UiScaleConfig {
     }
 }
 
+/// Slots the player's bag has when `player_inventory` is not set in the project config.
+pub const DEFAULT_PLAYER_SLOTS: usize = 20;
+/// Largest bag a project may ask for (a sanity cap: a bag this big has no UI).
+pub const MAX_PLAYER_SLOTS: usize = 256;
+
+fn default_player_slots() -> usize { DEFAULT_PLAYER_SLOTS }
+
+/// The player's bag, set in the `.project.ron` (`player_inventory: ( max_slots: 12 )`). One bag shared by every local player.
+/// Not the same as a prefab's `inventory:` field, which is a container's own inventory.
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct PlayerInventoryDef {
+    /// Number of slots in the bag, 1 to 256. Default: 20 (the default 5x4 `InventoryPanel`).
+    #[serde(default = "default_player_slots")]
+    pub max_slots: usize,
+}
+
+// Written by hand, never derived: a derived default would be 0 slots.
+impl Default for PlayerInventoryDef {
+    fn default() -> Self { Self { max_slots: DEFAULT_PLAYER_SLOTS } }
+}
+
+impl PlayerInventoryDef {
+    /// The slot count the runtime uses: `max_slots` clamped to `1..=MAX_PLAYER_SLOTS` (`validate()` reports a value outside it).
+    pub fn effective_slots(&self) -> usize { self.max_slots.clamp(1, MAX_PLAYER_SLOTS) }
+}
+
 /// Floor for `ProjectConfig::max_frame_delta_secs`: two fixed-tick periods. Below this, the cap
 /// clamps ordinary healthy frames (not just stall recovery), producing permanent slow-motion with
 /// no visible cause in the RON file — see that field's doc comment. Also comfortably above the
@@ -482,6 +515,13 @@ impl ProjectConfig {
         }
         if let Some(ui_scale) = &self.ui_scale {
             ui_scale.validate()?;
+        }
+        let slots = self.player_inventory.max_slots;
+        if !(1..=MAX_PLAYER_SLOTS).contains(&slots) {
+            return Err(format!(
+                "player_inventory.max_slots must be between 1 and {MAX_PLAYER_SLOTS}, got {slots} (the game would use {})",
+                self.player_inventory.effective_slots()
+            ));
         }
         Ok(())
     }

@@ -788,6 +788,32 @@ fn max_frame_delta_secs_is_applied_by_check_project_loaded_during_project_load()
 }
 
 #[test]
+fn the_player_bag_is_sized_from_the_project_config_during_project_load() {
+    // Item system S2b: check_project_loaded inserts the bag once, clamped to 1..=256 (a runtime validate() failure only logs).
+    use ironhold_core::capabilities::inventory::PlayerInventory;
+    use ironhold_core::schema::project::PlayerInventoryDef;
+    for (asked, expected) in [(None, 20usize), (Some(7usize), 7), (Some(0), 1), (Some(300), 256)] {
+        let mut app = setup_test_app();
+        for _ in 0..5 {
+            app.update();
+        }
+        let config_handle = app.world_mut().resource_mut::<Assets<ProjectConfig>>().add(ProjectConfig {
+            schema_version: 1,
+            initial_scene: "scenes/t.ron".to_string(),
+            player_inventory: asked.map(|n| PlayerInventoryDef { max_slots: n }).unwrap_or_default(),
+            ..Default::default()
+        });
+        app.world_mut().insert_resource(ProjectConfigHandle(config_handle));
+        app.world_mut().remove_resource::<PendingProjectLoads>();
+        app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::LoadingProject);
+        app.update();
+        app.update();
+        let bag = app.world().resource::<PlayerInventory>();
+        assert_eq!((bag.max_slots, bag.slots.len()), (expected, expected), "player_inventory asked for {asked:?}");
+    }
+}
+
+#[test]
 fn test_pipeline_warmup_stops_at_zero() {
     let mut app = setup_test_app();
     app.update(); // Startup

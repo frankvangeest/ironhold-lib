@@ -4,9 +4,11 @@ use crate::schema::items::{ItemCatalog, ItemStack};
 
 // ─── Resources ────────────────────────────────────────────────────────────────
 
-/// Slots the player inventory gets when nothing sized it yet (the one shared constant for the lazy size;
-/// item system S2b makes the size a project setting).
-pub const DEFAULT_PLAYER_SLOTS: usize = 20;
+pub use crate::schema::project::{DEFAULT_PLAYER_SLOTS, MAX_PLAYER_SLOTS};
+
+/// Background of an inventory slot the bag has, and of one past the bag's size (drawn faded: about 35% of the normal alpha).
+pub const SLOT_BG: Color = Color::srgba(0.12, 0.12, 0.16, 0.85);
+pub const SLOT_BG_DEAD: Color = Color::srgba(0.12, 0.12, 0.16, 0.30);
 
 /// Remaining shop stock per merchant entity (item key -> remaining; `None` = unlimited), seeded from the merchant's
 /// `MerchantDef` the first time it is opened or bought from. Runtime state: a new merchant entity (scene load,
@@ -17,7 +19,10 @@ pub struct MerchantStockState(pub std::collections::BTreeMap<Entity, std::collec
 
 /// Player inventory — persists across scene transitions (like `LoadedStats`).
 /// Addressed by `entity: "player"` in inventory actions.
-#[derive(Resource, Debug, Default)]
+///
+/// Invariant: `slots.len() == max_slots` (`new` and `resize` keep it). The faded-cell colour and the click guard read `max_slots`;
+/// the icon and count label read `slots`. A future `SetInventorySize` must keep the two equal.
+#[derive(Resource, Debug)]
 pub struct PlayerInventory {
     pub slots: Vec<Option<ItemStack>>,
     pub max_slots: usize,
@@ -25,6 +30,11 @@ pub struct PlayerInventory {
     /// Set by `Action::Spawn` when a player-tagged prefab is queued.
     /// Used by shop/container actions to show floating feedback text on the player.
     pub player_spawn_id: Option<String>,
+}
+
+// Written by hand: the bag has `DEFAULT_PLAYER_SLOTS` slots until the project loader sizes it from `player_inventory`.
+impl Default for PlayerInventory {
+    fn default() -> Self { Self::new(DEFAULT_PLAYER_SLOTS) }
 }
 
 impl PlayerInventory {
@@ -145,6 +155,20 @@ pub struct InventoryPanelMarker {
     pub columns: u32,
     pub rows: u32,
     pub font_size: f32,
+}
+
+/// Marks the "Slots: used/total" footer label inside an `InventoryPanel` (left of the gold label).
+/// `inventory_ui_system` keeps its text and colour current: `used` counts occupied bag slots (a stack is one slot).
+#[derive(Component)]
+pub struct SlotCountLabelMarker;
+
+/// Colour of the slot count text normally, and when every slot of the bag is taken (not "nothing more fits": a partial stack can still grow).
+pub const SLOT_COUNT_COLOR: Color = Color::srgba(0.85, 0.85, 0.90, 0.90);
+pub const SLOT_COUNT_COLOR_FULL: Color = Color::srgba(1.0, 0.60, 0.20, 1.0);
+
+/// The footer text for a bag: `"Slots: 12/20"`.
+pub fn slot_count_text(used: usize, total: usize) -> String {
+    format!("Slots: {used}/{total}")
 }
 
 /// Marks the gold/currency footer label inside an `InventoryPanel`.
@@ -283,6 +307,8 @@ pub fn inventory_ui_system(
     loaded_stats: Res<crate::schema::stats::LoadedStats>,
     mut label_q: Query<(&InventorySlotLabelMarker, &mut Text)>,
     mut icon_q: Query<(&InventorySlotIconMarker, &mut ImageNode, &mut Visibility)>,
+    mut slot_bg_q: Query<(&InventorySlotMarker, &mut BackgroundColor), (Without<InventorySlotLabelMarker>, Without<InventorySlotIconMarker>)>,
+    mut slot_count_q: Query<(&mut Text, &mut TextColor), (With<SlotCountLabelMarker>, Without<InventorySlotLabelMarker>, Without<GoldLabelMarker>)>,
     mut gold_q: Query<(&GoldLabelMarker, &mut Text), Without<InventorySlotLabelMarker>>,
     players: Query<(&crate::runtime::SpawnId, Option<&crate::capabilities::player::PlayerIndex>), With<crate::capabilities::player::CharacterController>>,
     stat_maps: Query<(&crate::runtime::SpawnId, &crate::schema::stats::StatMap)>,
@@ -300,6 +326,24 @@ pub fn inventory_ui_system(
             let label = format!("Gold: {:.0}", amount);
             if text.0 != label { text.0 = label; }
         }
+    }
+
+    // Footer "Slots: used/total": occupied bag slots over the bag's size; orange when the bag is full. Guarded writes.
+    if !slot_count_q.is_empty() {
+        let total = player_inv.max_slots;
+        let used = player_inv.slots.iter().take(total).filter(|s| s.is_some()).count();
+        let label = slot_count_text(used, total);
+        let color = if used >= total { SLOT_COUNT_COLOR_FULL } else { SLOT_COUNT_COLOR };
+        for (mut text, mut text_color) in slot_count_q.iter_mut() {
+            if text.0 != label { text.0 = label.clone(); }
+            if text_color.0 != color { text_color.0 = color; }
+        }
+    }
+
+    // Slots past the bag's size are drawn faded (written both ways, guarded, so a future resize needs no change here).
+    for (marker, mut bg) in slot_bg_q.iter_mut() {
+        let want = if marker.slot_index < player_inv.max_slots { SLOT_BG } else { SLOT_BG_DEAD };
+        if bg.0 != want { bg.0 = want; }
     }
 
     // Update slot stack labels (count/max: "3/10" for stackable items, empty otherwise).

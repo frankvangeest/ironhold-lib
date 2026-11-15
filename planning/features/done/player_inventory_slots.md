@@ -1,6 +1,6 @@
 # Feature: Player bag size from data (item system S2b)
 
-_Status: Ready_
+_Status: Done (2026-11-15)_
 _Plan-reviewed 2026-11-15: system-architect and ux-gamedesigner-reviewer; both returned Ready once their corrections were in (all folded in above)._
 _Planned at: `29cce26` (2026-11-15)_
 
@@ -43,7 +43,8 @@ RON, and a mismatch today fails silently (hidden items, dead slots). It also unb
    calls it in its InventoryPanel arm and logs a `warn!` (a designer without the CLI otherwise never learns items are hidden):
    - panel smaller than the bag -> CLI **error** `inventory_panel_smaller_than_bag` + runtime `warn!`;
    - panel larger than the bag -> CLI **strict warning** `inventory_panel_larger_than_bag` + no runtime warning (the faded slots show it);
-   - no `InventoryPanel` anywhere, or no `items_path`, with `player_inventory` set -> no message.
+   - no `InventoryPanel` anywhere, with `player_inventory` set -> no message (a bag can be driven by actions alone). The check does not look at
+     `items_path`: a panel smaller than the bag is a latent bug even in a project without items. Skipped when the `.project.ron` fails to parse.
    The error text names the scene file, the panel `id`, `columns x rows = N`, the bag size and whether it is the default ("player_inventory
    not set, default 20"), and both fixes ("set `player_inventory: (max_slots: N)` in your .project.ron, or resize the panel"). A unit test
    pins the default panel (`default_inv_columns() * default_inv_rows()`) equal to `DEFAULT_PLAYER_SLOTS`.
@@ -64,6 +65,7 @@ RON, and a mismatch today fails silently (hidden items, dead slots). It also unb
 ```
 
 ## Tasks
+- [x] (added at the playtest, Frank) footer label `Slots: used/total` left of the gold label, orange when full
 - [ ] `PlayerInventoryDef` + `ProjectConfig.player_inventory` + `validate()` range check; hand-written Defaults; constants in `schema/`
 - [ ] Loader tail inserts the clamped, sized bag with a `warn!`; remove the three lazy resize sites
 - [ ] Dead-slot fading in `inventory_ui_system` (shared colour constants); explicit click guard

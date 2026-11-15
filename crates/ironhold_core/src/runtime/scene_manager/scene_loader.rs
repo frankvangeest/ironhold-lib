@@ -1309,6 +1309,7 @@ pub fn spawn_scene_v2(
                                 item_catalog: params.loaded_item_catalog.0.as_ref(),
                                 inventory_ui: &mut params.inventory_ui,
                                 container_ui: &mut params.container_ui,
+                                bag_slots: params.player_inventory.max_slots,
                                 depth: 1,
                             };
                             spawn_ui_element_node(parent, el, node, &mut ctx);
@@ -1342,6 +1343,7 @@ pub fn spawn_scene_v2(
                         item_catalog: params.loaded_item_catalog.0.as_ref(),
                         inventory_ui: &mut params.inventory_ui,
                         container_ui: &mut params.container_ui,
+                        bag_slots: params.player_inventory.max_slots,
                         depth: 1,
                     };
                     spawn_ui_element_node(parent, el, node, &mut ctx);
@@ -1778,6 +1780,8 @@ struct UiSpawnCtx<'a> {
     item_catalog: Option<&'a crate::schema::items::ItemCatalog>,
     inventory_ui: &'a mut crate::capabilities::inventory::LoadedInventoryUi,
     container_ui: &'a mut crate::capabilities::inventory::LoadedContainerUi,
+    /// Slots in the player's bag (`PlayerInventory.max_slots`): panel cells past it spawn faded.
+    bag_slots: usize,
     /// Nesting depth of the node being spawned; a top-level node is depth 1 (matches
     /// `walk_ui_nodes`, so spawning and diagnostics cover exactly the same nodes).
     depth: usize,
@@ -1825,6 +1829,7 @@ fn spawn_ui_element_node(
     let atlas_layouts = &mut ctx.atlas_layouts;
     let inventory_ui = &mut *ctx.inventory_ui;
     let container_ui = &mut *ctx.container_ui;
+    let ctx_bag_slots = ctx.bag_slots;
     use crate::schema::scene_v2::UiNodeDef;
     match el {
         UiNodeDef::Group(g) => {
@@ -2522,6 +2527,17 @@ fn spawn_ui_element_node(
                     .and_then(|key| inventory_ui.icon_atlases.get(key))
                     .map(|(t, l)| (t.clone(), l.clone()));
 
+            // A panel with fewer cells than the bag holds hides items; say so (the CLI reports the same as an error).
+            if let Some(crate::schema::scene_v2::InventoryBagIssue::PanelSmaller { hidden }) =
+                crate::schema::scene_v2::inventory_panel_bag_issue((columns as usize).saturating_mul(rows as usize), ctx_bag_slots)
+            {
+                warn!(
+                    "InventoryPanel \"{}\" shows {} cells but the bag holds {} slots (player_inventory.max_slots, default {} when not set); \
+                     items in the last {} bag slots would be invisible and unusable. Either make the panel bigger or lower player_inventory.max_slots.",
+                    panel.id, (columns as usize).saturating_mul(rows as usize), ctx_bag_slots, crate::capabilities::inventory::DEFAULT_PLAYER_SLOTS, hidden
+                );
+            }
+
             let entity = parent
                 .spawn((
                     Name::new(format!("InventoryPanel: {}", panel.id)),
@@ -2618,7 +2634,7 @@ fn spawn_ui_element_node(
                                         height: Val::Px(slot_size),
                                         ..default()
                                     },
-                                    BackgroundColor(Color::srgba(0.12, 0.12, 0.16, 0.85)),
+                                    BackgroundColor(if idx < ctx_bag_slots { crate::capabilities::inventory::SLOT_BG } else { crate::capabilities::inventory::SLOT_BG_DEAD }),
                                     InventorySlotMarker { slot_index: idx },
                                 ));
                                 slot_cmd.with_children(|slot_parent| {
@@ -2672,8 +2688,9 @@ fn spawn_ui_element_node(
                         Name::new("InvGoldFooter"),
                         Node {
                             flex_direction: FlexDirection::Row,
-                            justify_content: JustifyContent::FlexEnd,
+                            justify_content: JustifyContent::SpaceBetween,
                             align_items: AlignItems::Center,
+                            column_gap: Val::Px(8.0),
                             width: Val::Percent(100.0),
                             padding: UiRect::new(Val::Px(6.0), Val::Px(6.0), Val::Px(4.0), Val::Px(2.0)),
                             border: UiRect::top(Val::Px(1.0)),
@@ -2681,6 +2698,13 @@ fn spawn_ui_element_node(
                         },
                         BorderColor::from(Color::srgba(0.6, 0.5, 0.1, 0.3)),
                     )).with_children(|footer| {
+                        footer.spawn((
+                            Name::new("SlotCountLabel"),
+                            Text::new(crate::capabilities::inventory::slot_count_text(0, ctx_bag_slots)),
+                            TextFont { font_size, ..default() },
+                            TextColor(crate::capabilities::inventory::SLOT_COUNT_COLOR),
+                            crate::capabilities::inventory::SlotCountLabelMarker,
+                        ));
                         footer.spawn((
                             Name::new("GoldLabel"),
                             Text::new("Gold: 0"),

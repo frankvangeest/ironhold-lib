@@ -1,4 +1,4 @@
-//! The item transaction primitive (item system S2a, `planning/features/item_transaction_primitive.md`).
+//! The item transaction primitive (item system S2a, `planning/features/done/item_transaction_primitive.md`).
 //!
 //! Every action that moves items, gold or shop stock in one step (buy, transfer, an all-or-nothing remove) goes through
 //! [`plan`]: it applies the ops, in order, to a *clone* of an owned [`TxnLedger`] and returns the new ledger, or the

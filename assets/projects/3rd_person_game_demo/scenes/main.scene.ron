@@ -382,11 +382,11 @@
 
     // ── Inventory panel ────────────────────────────────────────────────────────
     // Starts hidden. Press I (wired in state_machine.ron) to open.
-    // Shows the player's persistent inventory (PlayerInventory resource).
+    // Shows the player's bag. Its size is `player_inventory` in the .project.ron: keep it equal to columns x rows here.
     // Note: OpenInventory/CloseInventory target the panel by node TYPE — only one
-    // InventoryPanel per scene is supported. The id field is decorative.
+    // InventoryPanel per scene is supported. The id is only used in validate and console messages.
     InventoryPanel((
-      id: "player_inventory",
+      id: "bag_panel",
       position: (12.0, 80.0),
       columns: 5,
       rows: 4,

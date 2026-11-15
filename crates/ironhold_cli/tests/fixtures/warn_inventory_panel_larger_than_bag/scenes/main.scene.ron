@@ -1,0 +1,7 @@
+(
+    schema_version: 2,
+    name: "main",
+    ui: [
+        InventoryPanel((id: "bag_panel", position: (10.0, 10.0), columns: 5, rows: 4)),
+    ],
+)

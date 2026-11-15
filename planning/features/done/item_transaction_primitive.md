@@ -1,6 +1,6 @@
 # Feature: Item transaction primitive (item system S2a)
 
-_Status: In Progress (S2a Done 2026-11-14, S2b Queued)_
+_Status: Done (S2a 2026-11-14, S2b 2026-11-15)_
 _Planned at: `9fa2ef3` (2026-11-14)_
 _Plan-reviewed 2026-11-14: system-architect and ux-gamedesigner-reviewer both returned "needs more design work"; Frank's
 answers to the four blocking questions and the reviewers' remaining points are folded in below._

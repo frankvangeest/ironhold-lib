@@ -2771,3 +2771,49 @@ fn item_event_rule_warnings_strict_exit_1() {
     assert!(stdout.contains("UseItem(\"horn\")") && stdout.contains("every frame"), "{stdout}");
     assert!(stdout.contains("transition") && stdout.contains("buy_item:iron_sword"), "{stdout}");
 }
+
+/// Item system S2b: a panel with fewer cells than the bag hides items. Reported as an error that names the panel, both sizes
+/// and the fix; the panel here is nested in a Group and the bag size is the default (20).
+#[test]
+fn inventory_panel_smaller_than_the_bag_exits_1() {
+    let (code, stdout) = validate("bad_inventory_panel_smaller_than_bag");
+    assert_eq!(code, 1, "expected exit 1, got {code}:\n{stdout}");
+    assert!(stdout.contains("inventory_panel_smaller_than_bag"), "{stdout}");
+    assert!(stdout.contains("bag_panel") && stdout.contains("3 x 4 = 12") && stdout.contains("holds 20") && stdout.contains("(max_slots: 12)"), "{stdout}");
+    assert!(stdout.contains("player_inventory"), "the message names the fix: {stdout}");
+}
+
+/// A `max_slots` outside 1..=256 is a validate error (the runtime only clamps it and logs).
+#[test]
+fn player_inventory_max_slots_out_of_range_exits_1() {
+    let (code, stdout) = validate("bad_player_inventory_out_of_range");
+    assert_eq!(code, 1, "expected exit 1, got {code}:\n{stdout}");
+    assert!(stdout.contains("player_inventory.max_slots"), "{stdout}");
+}
+
+/// A panel with more cells than the bag is allowed (faded "locked" cells): clean normally, a warning under --strict.
+#[test]
+fn inventory_panel_larger_than_the_bag_is_a_strict_warning_only() {
+    let (code, stdout) = validate("warn_inventory_panel_larger_than_bag");
+    assert_eq!(code, 0, "expected exit 0 without --strict, got {code}:\n{stdout}");
+    let (code, stdout) = validate_strict("warn_inventory_panel_larger_than_bag");
+    assert_eq!(code, 1, "expected exit 1 under --strict, got {code}:\n{stdout}");
+    assert!(stdout.contains("inventory_panel_larger_than_bag") && stdout.contains("8 cells will show faded") && stdout.contains("max_slots: 20"), "{stdout}");
+}
+
+#[test]
+fn inventory_panel_matching_the_bag_is_clean_under_strict() {
+    let (code, stdout) = validate_strict("valid_inventory_panel_matches_bag");
+    assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
+}
+
+/// A typo in `player_inventory` makes the project config fail to parse: the real bag size is unknown, so the panel-vs-bag check must
+/// stay quiet instead of reporting against a made-up default (the parse error is the one to fix).
+#[test]
+fn a_project_config_typo_does_not_also_report_the_panel_vs_bag_error() {
+    let (code, stdout) = validate("bad_player_inventory_typo_with_small_panel");
+    assert_eq!(code, 1, "expected exit 1, got {code}:
+{stdout}");
+    assert!(stdout.contains("max_slot"), "the parse error names the typo: {stdout}");
+    assert!(!stdout.contains("inventory_panel_smaller_than_bag"), "no made-up bag size: {stdout}");
+}

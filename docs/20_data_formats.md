@@ -113,6 +113,7 @@ Entry point for a project. References all other files.
 | `primitive_default_color` | `Option<(f32,f32,f32)>` | — | Default sRGB color for all `kind: "primitive"` prefabs that omit their own `color`. Falls back to grey `(0.7, 0.7, 0.7)` when absent. |
 | `stats_path` | `Option<String>` | — | Path to a `stats.ron` file. When absent, the stat system is inactive for this project. `ironhold_cli validate` reads this field, not the `stats/stats.ron` convention path (falls back to checking the convention path only when this field itself is unset). |
 | `items_path` | `Option<String>` | — | Path to an `items/items.ron` file. When absent, the inventory system is inactive for this project. `ironhold_cli validate` reads this field the same way — see `asset_catalog` above. |
+| `player_inventory` | `( max_slots: N )` | — | Size of the player's bag, 1 to 256, default `( max_slots: 20 )` (see [The player's bag](#the-players-bag)). One bag shared by every player in local co-op. Make it equal to your `InventoryPanel`'s `columns * rows`; `ironhold_cli validate` checks this. Not the `inventory:` field on a prefab, which is a container's own inventory. A value outside 1-256 is a `validate` error; the game still starts and uses the nearest allowed value (the console says so). |
 | `damage_popup_style` | `Option<DamagePopupStyle>` | — | Visual style for `Action::ShowDamagePopup` popups. Omit for built-in defaults. See [DamagePopupStyle](#damagepopupstyle) below. |
 | `audio` | `AudioConfig` | — | Project-level audio settings. Omit for defaults (`max_volume: 1.0, mute_on_start: false`). See [AudioConfig](#audioconfig) below. |
 | `backend_path` | `Option<String>` | — | Path to a `backend.ron` file (online sign-in and leaderboards). When absent, the project runs fully offline and the online actions answer `backend.offline` (no convention-path fallback). See [`backend.ron`](#backendron--backendconfig-). |
@@ -1357,7 +1358,7 @@ DialoguePanel((
 
 #### `InventoryPanel((...))` ✅
 
-A grid of item slots that displays the player's `PlayerInventory`. Always positioned absolutely. Hidden by default; toggled by `ToggleInventory` or shown/hidden explicitly with `OpenInventory`/`CloseInventory`. Slot icons and count labels update automatically via change detection whenever `PlayerInventory` changes. Requires `items_path` to be set in `project.ron`. Its embedded close button fires `ui.button_pressed:close_inventory` — `ironhold_cli validate` cross-checks this against `state_machine.ron`/behavior files whenever an `InventoryPanel` is present in a scene (`unreachable_trigger`). Click or tap an item to use it, or right-click it with the mouse (see [Using items](#using-items)); an empty slot does nothing. Slots can only be used with the mouse or touch: there is no gamepad or keyboard cursor in the bag.
+A grid of item slots that displays the player's `PlayerInventory`. Always positioned absolutely. Hidden by default; toggled by `ToggleInventory` or shown/hidden explicitly with `OpenInventory`/`CloseInventory`. Slot icons and count labels update automatically via change detection whenever `PlayerInventory` changes. Requires `items_path` to be set in `project.ron`. Its embedded close button fires `ui.button_pressed:close_inventory` — `ironhold_cli validate` cross-checks this against `state_machine.ron`/behavior files whenever an `InventoryPanel` is present in a scene (`unreachable_trigger`). Click or tap an item to use it, or right-click it with the mouse (see [Using items](#using-items)); an empty slot does nothing. Slots can only be used with the mouse or touch: there is no gamepad or keyboard cursor in the bag. The footer shows `Slots: 12/20` (occupied bag slots over the bag's size; a stack is one slot) on the left and the gold on the right; the count turns orange when every slot is taken (a partly filled stack can still take more of its item). The footer is one line: on a panel narrower than about 3 columns the two labels crowd each other. The panel should show exactly as many slots as the bag holds (`columns * rows` = `player_inventory.max_slots`, default 20; the default 5x4 panel already matches). Fewer cells than the bag: items in the extra bag slots are invisible and unusable (`validate` error, console warning). More cells than the bag: the extra cells are drawn faded and do nothing (the faded look is fixed for now).
 
 When `icon_sheet` is set, each non-empty slot shows the icon at the item's `icon_index` (from `items.ron`); a small count label (`x3`) appears in the corner for stacks greater than 1.
 
@@ -1379,7 +1380,7 @@ When `icon_sheet` is set, each non-empty slot shows the icon at the item's `icon
 
 ```ron
 InventoryPanel((
-    id: "player_inventory",
+    id: "bag_panel",
     position: (20.0, 100.0),
     columns: 5,
     rows: 4,
@@ -5081,6 +5082,20 @@ A failed action never emits its success event, and changes nothing: no gold is s
 ( event: "shop.sold_out", do_actions: [ PlaySound(key: "click") ] ),
 ```
 
+
+#### The player's bag
+
+The player has one bag, shared by every local player. It has 20 slots unless the project says otherwise:
+
+```ron
+// in your .project.ron
+player_inventory: ( max_slots: 12 ),   // optional, 1 to 256, default 20
+```
+
+- A stackable item fills one slot per stack (`max_stack`); a non-stackable item takes a slot each. With every slot taken, an `AddItem` or a pick-up gives `inventory.full:player` (what fits is still added), and a buy is refused with "Bag is full!" and `shop.no_room:{item}`.
+- Match the size to your `InventoryPanel` (`columns * rows`). `ironhold validate` reports a panel that shows fewer slots than the bag as an error, because the extra items could not be seen or used, and with `--strict` it warns about a panel that shows more (those cells are drawn faded, which is fine for "locked" slots). Without the CLI, the browser console warns when a panel is smaller than the bag.
+- The bag keeps its items across `LoadScene` and cannot change size while the game runs (a future action will).
+- A prefab's `inventory: ( max_slots: 9 )` is something else: the inventory of a chest, crate or corpse. It does not size the player's bag. (The two also differ on a bad value: a container's `max_slots` is quietly raised to at least 4, while a player bag outside 1-256 is a `validate` error.)
 
 #### Buying, selling and what survives a scene load
 

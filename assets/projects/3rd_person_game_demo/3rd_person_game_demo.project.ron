@@ -10,6 +10,7 @@
     state_machine_path: "logic/state_machine.ron",
     stats_path: "stats/stats.ron",
     items_path: "items/items.ron",
+    player_inventory: ( max_slots: 20 ),  // size of the bag; matches the 5x4 InventoryPanel in scenes/main.scene.ron
     model_fixes_path: "overrides/model_fixes.ron",
 
     global_environment: (

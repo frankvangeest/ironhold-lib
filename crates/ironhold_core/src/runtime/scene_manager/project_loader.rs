@@ -362,6 +362,19 @@ pub fn check_project_loaded(
         apply_max_frame_delta(&mut time_virtual, secs);
     }
 
+    // The player's bag is sized once, here (never lazily). `validate()` only logs at runtime, so an out-of-range value is
+    // clamped and the game still loads: a web-only designer sees a console line, not a stuck loading screen.
+    let bag = config.player_inventory.effective_slots();
+    if bag != config.player_inventory.max_slots {
+        warn!(
+            "player_inventory.max_slots {} is out of range (1-{}); using {}",
+            config.player_inventory.max_slots,
+            crate::capabilities::inventory::MAX_PLAYER_SLOTS,
+            bag
+        );
+    }
+    commands.insert_resource(crate::capabilities::inventory::PlayerInventory::new(bag));
+
     let initial = scene_override
         .as_deref()
         .map(|r| r.0.as_str())

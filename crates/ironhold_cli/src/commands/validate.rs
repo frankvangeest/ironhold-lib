@@ -850,6 +850,73 @@ fn resolve_logic_files(
     ResolvedLogicFiles { state_machine, state_machine_source }
 }
 
+// ── Player bag vs InventoryPanel size (item system S2b) ─────────────────────────
+
+/// Every `InventoryPanel` (nested ones too) against the player's bag (`player_inventory.max_slots`, default 20): a panel with
+/// fewer cells than the bag hides items (error); one with more draws the extra cells faded (`--strict` warning). Same pure
+/// check the scene loader logs at runtime (`inventory_panel_bag_issue`). Skipped when the `.project.ron` exists but did not
+/// parse: the real bag size is unknown then, and its parse error is already reported.
+/// Returns `(scene path, message head, issue, panel cells)`.
+fn inventory_bag_issues(
+    project_dir: &Path,
+    project_config: Option<&ProjectConfig>,
+    scenes: &[(String, GameSceneV2)],
+) -> Vec<(String, String, ironhold_core::schema::scene_v2::InventoryBagIssue, usize)> {
+    use ironhold_core::schema::scene_v2::inventory_panel_bag_issue;
+    if project_config.is_none() && find_project_ron(project_dir).is_some() {
+        return Vec::new();
+    }
+    let def = project_config.map(|c| c.player_inventory.clone()).unwrap_or_default();
+    let bag = def.effective_slots();
+    let default_slots = ironhold_core::schema::project::DEFAULT_PLAYER_SLOTS;
+    let bag_text = format!("the bag holds {bag} slots (player_inventory.max_slots, default {default_slots} when not set)");
+    let mut out = Vec::new();
+    for (scene_path, scene) in scenes {
+        for node in walk_ui_nodes(&scene.ui) {
+            let UiNodeDef::InventoryPanel(panel) = node else { continue };
+            // usize math: columns and rows are u32 and nothing caps them.
+            let cells = (panel.columns as usize).saturating_mul(panel.rows as usize);
+            if let Some(issue) = inventory_panel_bag_issue(cells, bag) {
+                let head = format!("InventoryPanel {:?} shows {} x {} = {cells} cells but {bag_text}", panel.id, panel.columns, panel.rows);
+                out.push((scene_path.clone(), head, issue, cells));
+            }
+        }
+    }
+    out
+}
+
+fn inventory_bag_errors(project_dir: &Path, project_config: Option<&ProjectConfig>, scenes: &[(String, GameSceneV2)], errors: &mut Vec<CrossFileError>) {
+    use ironhold_core::schema::scene_v2::InventoryBagIssue;
+    for (scene_path, head, issue, cells) in inventory_bag_issues(project_dir, project_config, scenes) {
+        if let InventoryBagIssue::PanelSmaller { hidden } = issue {
+            errors.push(CrossFileError {
+                source_file: scene_path,
+                message: format!(
+                    "{head}; items in the last {hidden} bag slots would be invisible and unusable. Either put `player_inventory: (max_slots: {cells})` in your .project.ron, or make the panel bigger"
+                ),
+                error_type: "inventory_panel_smaller_than_bag",
+            });
+        }
+    }
+}
+
+fn inventory_bag_warnings(project_dir: &Path, project_config: Option<&ProjectConfig>, scenes: &[(String, GameSceneV2)]) -> Vec<StrictWarning> {
+    use ironhold_core::schema::scene_v2::InventoryBagIssue;
+    inventory_bag_issues(project_dir, project_config, scenes)
+        .into_iter()
+        .filter_map(|(scene_path, head, issue, cells)| match issue {
+            InventoryBagIssue::PanelLarger { faded } => Some(StrictWarning {
+                source_file: scene_path,
+                message: format!(
+                    "{head}; {faded} cells will show faded and unusable. Fine for locked slots; otherwise put `player_inventory: (max_slots: {cells})` in your .project.ron"
+                ),
+                kind: "inventory_panel_larger_than_bag",
+            }),
+            _ => None,
+        })
+        .collect()
+}
+
 // ── Item `use:` checks (item system S3) ─────────────────────────────────────────
 
 /// `use:` blocks in items.ron: a `UseItem` inside any item's `do_actions` could loop forever inside one executor drain (the
@@ -1126,6 +1193,7 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
 
     set_ui_visible_checks(scenes, actions, scenes_parsed_cleanly, &mut errors);
     item_use_errors(item_catalog, project_config.and_then(|c| c.items_path.as_deref()).unwrap_or("items/items.ron"), &mut errors);
+    inventory_bag_errors(project_dir, project_config, scenes, &mut errors);
 
     // All four catalog types have real schema-level invariants their own `.validate()` enforces
     // (e.g. `AssetCatalog::validate()` rejects an empty `models[]`/`decals[]` path,
@@ -4509,6 +4577,7 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
 
     warnings.extend(pause_checks(project));
     warnings.extend(item_event_rule_warnings(state_machine, behaviors));
+    warnings.extend(inventory_bag_warnings(project.project_dir, project.project_config, project.scenes));
     warnings.extend(item_use_warnings(project.item_catalog, project.project_config.and_then(|c| c.items_path.as_deref()).unwrap_or("items/items.ron")));
 
     warnings.extend(

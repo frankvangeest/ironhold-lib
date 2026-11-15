@@ -616,6 +616,24 @@ fn size_is_valid(size: UiSizeDef) -> bool {
     }
 }
 
+/// How an `InventoryPanel`'s slot count compares with the player's bag (`ProjectConfig.player_inventory.max_slots`).
+/// One pure check shared by `ironhold validate` and the scene loader's warning (CLI/runtime mirror).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InventoryBagIssue {
+    /// The panel shows fewer slots than the bag holds: `hidden` bag slots have no cell, so their items are invisible and unusable.
+    PanelSmaller { hidden: usize },
+    /// The panel shows more slots than the bag holds: `faded` cells are drawn faded and do nothing (can be deliberate).
+    PanelLarger { faded: usize },
+}
+
+pub fn inventory_panel_bag_issue(panel_slots: usize, bag_slots: usize) -> Option<InventoryBagIssue> {
+    match panel_slots.cmp(&bag_slots) {
+        std::cmp::Ordering::Less => Some(InventoryBagIssue::PanelSmaller { hidden: bag_slots - panel_slots }),
+        std::cmp::Ordering::Greater => Some(InventoryBagIssue::PanelLarger { faded: panel_slots - bag_slots }),
+        std::cmp::Ordering::Equal => None,
+    }
+}
+
 /// All `Group` layout diagnostics for a scene's `ui:` tree. Empty when the scene has no `Group`s.
 pub fn ui_layout_diagnostics(scene: &GameSceneV2) -> Vec<UiDiagnostic> {
     let parent = match &scene.ui_panel {

@@ -1235,7 +1235,6 @@ pub fn action_executor_system(
                 let catalog_ref = scene_state.loaded_item_catalog.0.as_ref();
                 if entity_id == "player" {
                     let inv = &mut *scene_state.player_inventory;
-                    if inv.max_slots == 0 { inv.resize(crate::capabilities::inventory::DEFAULT_PLAYER_SLOTS); }
                     let (added, full) = add_to_slots(&mut inv.slots, inv.max_slots, &item_key, count, catalog_ref);
                     if added > 0 {
                         game_events.write(GameEvent::Trigger(
@@ -1486,7 +1485,6 @@ pub fn action_executor_system(
                         }
                     } else {
                         let player = &mut *scene_state.player_inventory;
-                        if player.max_slots == 0 { player.resize(crate::capabilities::inventory::DEFAULT_PLAYER_SLOTS); }
                         let max = player.max_slots;
                         add_to_slots(&mut player.slots, max, item_key, *count, catalog_ref).0
                     };
