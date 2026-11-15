@@ -1,5 +1,7 @@
 # Memory Index
 
+- [{self} is not the player's bag](project_self_vs_player_bag_address.md) — item verbs map only literal "player" to the bag; `{self}` -> "player_01" = container lookup, silent fail
+
 - [Executor follow-up push runs after queued](project_executor_followup_push_runs_after_queued.md) — BuyItem's pushed OpenShop refresh runs after a same-queue CloseShop/LoadScene and re-opens the modal shop
 
 - [CLI fixture vs core tripwire](project_cli_fixture_vs_core_tripwire.md) — core's no-rules.ron tripwire scans CLI fixtures; a rules.ron fixture passes CLI tests, fails core suite

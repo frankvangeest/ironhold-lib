@@ -67,6 +67,19 @@ Non-obvious facts:
   (f) `every_edge_triggered_input_system_reads_the_pause_clock` forces a SimClock read on the slot click system.
   (g) no executor-side `{target}` rewrite exists; effects pushed by the executor never get one.
 
+- S3 code review (2026-11-15, `feature/item_use`, uncommitted on 543017a): `ActionQueue::push_front_all` is the one
+  executor-only exception to FIFO (pub, enforced by doc only; crate CLAUDE.md:21 + docs/30:673 still say "push order is
+  execution order"). No composite Action variants exist, so UseItem is the ONLY synchronous re-entry into the executor
+  drain; filtering nested UseItem makes a same-frame loop impossible. Cross-frame loop still possible
+  (`item.used:x -> UseItem(x)` with `consume: 0` = one use per frame forever; not validated). `BoundPanelEvents` is
+  static (global_on + state on:), rebuilt on `LoadedStateMachine.is_changed()`; that resource is only ever written via
+  `commands.insert_resource` in project_loader, read via `Res`, so no spurious rebuilds. Default pusher acts on ANY
+  UiEvent with the prefix (authored Buttons/key bindings too), but CLI forward check still hard-errors an authored
+  `use_item:`/`buy_item:` Button without a rule (false positive). Reverse check only marks `use_item:{key}` reachable for
+  items WITH `use:` though slots emit it for every item. Slot Buttons (FocusPolicy::Block) take Pressed/Hovered from the
+  panel root under the cursor; harmless (targeting checks ANY Pressed). items.ron use actions are added to validate's
+  all_actions AFTER discover_extra_scenes (a LoadScene in a use list doesn't load that scene for validation).
+
 **How to apply:** any new item-moving action must go through the primitive (once built) and emit a failure event
 instead of a success event on failure. See [[inventory-panel-triplication]], [[panel-input-blocking]],
 [[event-pipeline-intent-layer]], [[stat-ownership-global-vs-instance]].

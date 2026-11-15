@@ -1,29 +1,24 @@
 ---
 name: project_item_use_s3_plan_review
-description: Item system S3 (UseItem, use: block, default-backed buy_item/use_item clicks) plan review 2026-11-14 - do_actions naming, unreachable_trigger must drop buy_item, transitions must not suppress default, no-use: click footgun
+description: Item system S3 (UseItem, use: block, default-backed buy_item/use_item clicks) plan + impl review - "bound anywhere" means do_actions: [] in ONE state disables the built-in in EVERY state; co-op bar slot {self}=player 1
 metadata:
   type: project
 ---
 
-Plan-reviewed `planning/features/item_use.md` at 60e28b0 (2026-11-14). Facts worth checking at impl review:
+Plan-reviewed 2026-11-14 (60e28b0); impl-reviewed 2026-11-15 on feature/item_use. Plan points all closed in the impl
+(do_actions naming, buy_item dropped from unreachable_trigger, transitions/behaviors do not count, no default for items
+without use:, buy-message promise reworded, demo HUD hint).
 
-- Every action-list field in the schema is `do_actions` / `entry_actions` / `exit_actions`; there is NO bare
-  `actions:` field anywhere. Plan proposed `use: (actions: [...])` - recommended `do_actions`.
-- `unreachable_trigger` (docs/15 ~92, docs/20 ShopPanel note ~1418) currently REQUIRES a rule per `buy_item:<key>`;
-  once Buy is default-backed that check tells designers to write rules S3 made optional. Plan task list omitted it.
-- Plan: "MatchedUiEvents records bindings OR transitions". Transitions carry no actions, so a tutorial transition on
-  `ui.button_pressed:use_item:x` would silently cancel the drink. The intent.slot precedent (docs/20 ~1176) counts
-  bindings only.
-- Default-backed = a state-scoped buy rule no longer gates buying in other states; blocking needs an explicit
-  rule with empty do_actions (verify empty list counts as a match + passes ron_lint).
-- docs/20 ~5085 + docs/30 BuyItem entry promise "a later release lets a rule replace the built-in buy messages";
-  S3 does not deliver that (BuyItem itself still prints them) - sentence must be reworded.
-- Clicking a slot holding an item without `use:` (sword, key) -> use_failed, so a generic "No potions left" rule
-  fires on a sword click. Recommended: no default UseItem for items without `use:`.
-- Demo: no drink sound (only "click"), `respawn_glow` effect reusable; player_mana max 60 with regen 5/s makes a
-  small mana potion near-worthless; demo has no on-screen hint that slots are clickable.
-- Right-click on a slot in 3rd_person (orbit_button "Right") / left-click (target clear) click-through to the world
-  is undocumented anywhere - needs a test.
+Open at impl review (check at S4/S5):
+- **"Bound anywhere" trap:** `BoundPanelEvents` (capabilities/panel_defaults.rs) is one global set. docs/20 "Using items"
+  and the plan both said "to switch the built-in off in some state, bind the event with `do_actions: []`" - wrong: that
+  switches it off in EVERY state. Correct recipe = bind `[BuyItem(k)]`/`[UseItem(k)]` in each state where it should work
+  (what the demo's `playing` Buy rules do). Exact-match only, so one binding per item key.
+- `default_panel_actions_system` has no SimClock/FSM gate: with no rule, a Buy click works in any FSM state, incl. a
+  real pause if the shop is visible. Slot clicks ARE pause-gated (inventory_slot_click_system).
+- UseItem `{self}` = primary player (lowest player_index) also when fired from player 2's action bar slot.
+- gamepad_key in the docs' bar-slot recipe needs `inputs.gamepad_index` on the owner (`gamepad_key_without_gamepad_index`).
+- Right-click on a slot vs 3rd_person `orbit_button: "Right"` leak: playtest item only, undocumented.
 
-**How to apply:** at S3 impl review and S4/S5 plan reviews, check these closed; see [[project_item_txn_s2_plan_review]],
-[[project_panel_world_blocking]], [[project_ui_trigger_wiring]], [[project_fsm_designer_traps]].
+**How to apply:** S4 (menu, Sell) will add more default-backed verbs - recheck the same per-state recipe text; see
+[[project_item_txn_s2_plan_review]], [[project_panel_world_blocking]], [[project_ui_trigger_wiring]], [[project_fsm_designer_traps]].

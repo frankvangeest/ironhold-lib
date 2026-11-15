@@ -29,7 +29,10 @@ iterated.
 `fsm_interpreter_system` and *can* be matched by a designer `state_machine.ron` binding — it is
 merely also consumed by `dialogue_tick_system`), `close_inventory`, `close_shop`, `close_container`,
 `take_all_from_container` (`scene_loader.rs` ~2362/2538/2666/2764), `buy_item:{item_key}`
-(`action_executor.rs` ~1439). The five panel ones are enumerated by
+(`action_executor.rs` ~1439), and since item system S3 (2026-11-15) `use_item:{item_key}` (emitted by
+`panel_defaults::inventory_slot_click_system`, not a UiAction). S3 also made `buy_item:`/`use_item:` *default-backed*
+(engine runs BuyItem/UseItem unless a global_on/state on: binding exists), so the forward check dropped the buy_item
+derivation; but its authored-source `check` closure does NOT exempt those prefixes. The five panel ones are enumerated by
 `collect_reachable_ui_triggers` (reverse check, gated on `InventoryPanel`/`ShopPanel`/
 `ContainerPanel` presence + `MerchantDef.stock[]`); `dialogue_choice:{n}` is **not** enumerated
 anywhere. The forward check covers none of the six.
