@@ -98,6 +98,15 @@ Non-obvious facts:
   (pub fields): UI icons/labels key off `slots.get`, the click guard off `max_slots` - a future `SetInventorySize`
   must keep them equal (`resize` already truncates, silently dropping items).
 
+- S4 plan review (2026-11-15, at a65e696, `item_sell_destroy.md`): `button_system` (lib.rs:634) has NO SimClock gate
+  (shop Buy buttons fire while paused; only the inspector gate). The default-backed prefix list is now hand-copied in 4
+  places (BoundPanelEvents, default_panel_actions_system, CLI `item_event_rule_warnings::is_panel_click` ~1000, forward
+  check `default_backed` ~3142, reverse `collect_reachable_ui_triggers` ~3316): one shared const slice is the fix.
+  A count snapshotted by the default pusher (Execute, before the executor) can go stale vs actions the interpreters
+  queued ahead of it in the same drain -> prefer an executor-resolved "all". `ShopEntry` has no Default and test literals
+  write `sell_price: 0` (item_transaction_tests.rs:111). Every Close path of a panel differs (Close*, Toggle*, LoadScene,
+  pause): derive "menu must close" from state (open_panels/SimClock/bag), never enumerate actions.
+
 **How to apply:** any new item-moving action must go through the primitive (once built) and emit a failure event
 instead of a success event on failure. See [[inventory-panel-triplication]], [[panel-input-blocking]],
 [[event-pipeline-intent-layer]], [[stat-ownership-global-vs-instance]].
