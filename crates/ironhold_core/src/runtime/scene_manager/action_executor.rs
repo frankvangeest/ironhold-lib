@@ -1384,6 +1384,9 @@ pub fn action_executor_system(
             Action::BuyItem(item_key) => {
                 super::item_actions::buy_item(item_key, &mut commands, &mut scene_state, &spawn_params, &mut game_events, &mut action_queue);
             }
+            Action::UseItem(item_key) => {
+                super::item_actions::use_item(item_key, &mut scene_state, &mut game_events, &mut action_queue);
+            }
             Action::OpenContainer(entity_id) => {
                 // Verify a ContainerPanel exists in the scene.
                 if scene_state.container_panel_q.iter().next().is_none() {

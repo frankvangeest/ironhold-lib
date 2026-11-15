@@ -2611,6 +2611,8 @@ fn spawn_ui_element_node(
                                 let idx = (row * columns + col) as usize;
                                 let mut slot_cmd = p.spawn((
                                     Name::new(format!("Slot:{}", idx)),
+                                    // A Button (no UiAction) so the slot gets an `Interaction`: `inventory_slot_click_system` reads it.
+                                    Button,
                                     Node {
                                         width: Val::Px(slot_size),
                                         height: Val::Px(slot_size),

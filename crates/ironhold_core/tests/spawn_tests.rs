@@ -1420,6 +1420,7 @@ fn test_spawn_action_initial_items_respect_real_item_catalog_max_stack() {
                 weight: 0.01,
                 tags: vec![],
                 currency_stat: None,
+                use_def: None,
             }),
         ]),
     })));
@@ -1494,6 +1495,7 @@ fn test_spawn_action_non_stackable_initial_item_occupies_one_slot_per_unit() {
                 weight: 3.5,
                 tags: vec![],
                 currency_stat: None,
+                use_def: None,
             }),
         ]),
     })));

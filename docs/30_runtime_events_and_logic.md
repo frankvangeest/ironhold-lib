@@ -134,6 +134,8 @@ The name is used as-is in the rules pipeline — the caller is responsible for n
 - `"inventory.transfer_failed:{from}:{to}:{item_key}"` — `TransferItem` moved nothing (the source holds none, or the destination is full) ✅
 - `"inventory.remove_failed:{entity}"` / `"inventory.remove_failed:{entity}:{item_key}"` — `RemoveItem` removed nothing (none held, or `all_or_nothing: true` with too few); the generic form covers every item ✅
 - `"item.bought:{item_key}"` — `BuyItem` succeeded ✅
+- `"item.used:{item_key}"` — `UseItem` succeeded: the item was taken from the bag and its `use:` actions were queued. Only this specific form exists (like `item.bought`) ✅
+- `"item.use_failed"` / `"item.use_failed:{item_key}"` — `UseItem` failed and changed nothing (none held, no `use:` block, unknown item, or `{self}` with no player) ✅
 - `"shop.sold_out"` / `"shop.sold_out:{item_key}"` — `BuyItem` on an item with no stock left ✅
 - `"shop.insufficient_funds"` / `"shop.insufficient_funds:{item_key}"` — `BuyItem` without enough of the currency ✅
 - `"shop.no_room"` / `"shop.no_room:{item_key}"` — `BuyItem` with no room in the bag (`inventory.full:player` also fires) ✅
@@ -383,12 +385,13 @@ key bindings and UI, and a pause you left open is already released; a Replace-mo
 does), but timers, regeneration, cooldowns and camera smoothing start counting one frame later. A key pressed on the load frame
 is read *before* that frame's `scene.ready`, so it is matched against the old state.
 
-**What order your actions run in** (the order actions are queued is the order they execute):
+**What order your actions run in** (the order actions are queued is the order they execute; one exception: a `UseItem`'s own effects run right after it, see 5):
 
 1. a spawned entity's behavior starting, and a `SetDespawnTimer` running out;
 2. dialogue (`StartDialogue` on interact, and a chosen dialogue choice's actions);
 3. your `state_machine.ron` rules, then each entity's own `.behavior.ron`;
-4. the action bar's own slot actions.
+4. the action bar's own slot actions;
+5. the engine's built-in `BuyItem` / `UseItem` for a Buy or inventory-slot click that no `state_machine.ron` binding owns (after the action bar's, and a use's own effects jump the queue and run right after the `UseItem`).
 
 So a slot's built-in `do_actions` run *after* every `state_machine.ron` reaction to the same frame, and dialogue actions run
 *before* them. A skill key and the pause key pressed in the same frame still fire the skill: the pause lands after the slot's
@@ -657,6 +660,7 @@ Applies actions to the world. Key design points:
 - `OpenShop(merchant_id)` — resolves the merchant's `MerchantDef` via the `SpawnRegistry` + `PrefabKey`, makes the `ShopPanel` visible, and repopulates its stock list. Targets by node **type** — at most one `ShopPanel` per scene. `{self}` and `{target}` substituted in the merchant ID. Warns if no merchant entity or no `ShopPanel` UI node is present.
 - `CloseShop` — hides the `ShopPanel` (equality-guarded; no-op if already hidden)
 - `BuyItem(item_key)` - buys one unit from the shop that is open, all or nothing: stock, then the currency (`currency_stat`), then room in the bag are checked together and nothing changes unless all work. Success: `item.bought:{key}`. Failures (never `item.bought`): `shop.sold_out` + `shop.sold_out:{key}`, `shop.insufficient_funds` + `shop.insufficient_funds:{key}`, `shop.no_room` + `shop.no_room:{key}` + `inventory.full:player`. The engine also shows a short message over the player for each outcome ("Bought X!", "Not enough gold!", "Sold out!", "Bag is full!", over player 1 in co-op). They cannot be turned off yet, so a rule that adds its own text shows next to them; see "Buying, selling and what survives a scene load" in `docs/20_data_formats.md`. No-op with a warning if no shop is open or the item is not in the merchant's list.
+- `UseItem(item_key)` - uses one of `item_key` from the player's bag: takes `use.consume` units (none for `consume: 0`, which only needs one held) and, only if that worked, runs the item's `use.do_actions` immediately afterwards (before anything else already queued, the one exception to "queue order is execution order"), with `{self}` as the player (player 1 in co-op). Success: `item.used:{key}`. Failure (never `item.used`): `item.use_failed` + `item.use_failed:{key}`. A `UseItem` inside an item's own `use:` is skipped. Clicking or right-clicking an item in the inventory does this unless `state_machine.ron` binds `ui.button_pressed:use_item:{key}`; see "Using items" in `docs/20_data_formats.md`.
 - `OpenContainer(entity_id)` / `CloseContainer` - show / hide the `ContainerPanel` for the entity's `Inventory` (emits `container.opened:{id}` / `container.closed`). Opening a second container while one is open re-targets the panel.
 - `TakeAllFromContainer` - moves everything from the open container to the player: what fits is taken and the rest stays in the container (`inventory.full:player`); currency items credit their stat; `container.looted:{id}` fires only once the container is empty. No-op if no container is open.
 - `PauseGame` / `ResumeGame` / `TogglePause` — hold / release / flip the simulation (see [Pausing the game](#pausing-the-game)). `PauseGame` is a request: `game.paused` is emitted only when the game becomes paused, and `game.resumed` when it stops being paused (including the automatic resume on a Replace-mode `LoadScene`). No-ops if already in that state.
@@ -666,7 +670,7 @@ Applies actions to the world. Key design points:
 - `ListLobbies` / `CreateLobby { name, max_players }` / `JoinLobby { row }` / `LeaveLobby` / `StartLobby` — the lobby flow (`features: [Lobbies]` and `lobby_names` in `backend.ron`); `JoinLobby` joins the row the last list showed (1-10), `StartLobby` is host only. Answers are the `lobby.*` events (a failure is the generic event, then the same with `:<reason>`) and the `lobby.*` variables; see [Lobbies](20_data_formats.md#lobbies)
 
 ### Infrastructure ✅
-- `ActionQueue` — FIFO queue processed each frame by `action_executor_system` (push order equals execution order)
+- `ActionQueue` — FIFO queue processed each frame by `action_executor_system` (push order equals execution order; the only exception is `UseItem`'s effects, which the executor inserts at the front)
 - `LogicState` resource — tracks the current named state (default `""`); checked by `fsm_interpreter_system` (the per-entity `entity_fsm_interpreter_system` tracks its own state independently, via `EntityFsmState`)
 - `DebugState` resource — tracks `frame`, `app_state`, `last_action`, `scene`, `logic_state`, `score`, `window_size`, `ui_scale`; serialised to DOM on WASM for browser testing
 - `StateMachineAsset` loaded from `logic/state_machine.ron` via `fsm_interpreter_system`; every project uses this — `state_machine_path` in the project config points to it

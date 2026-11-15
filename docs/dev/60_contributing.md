@@ -174,11 +174,12 @@ If you add a new UI button that should be testable, note its canvas coordinates 
   exists.
 - **Scene discovery**: scene paths from actions and `initial_scene` are parsed and folded into the same cross-checked
   scene set as `scenes/*.scene.ron`, so their contents are checked too. A scene reachable only through an
-  `ActionSlotDef.do_actions` is not yet covered (see `planning/claude_suggestions.md`).
+  `ActionSlotDef.do_actions` (or an item's `use:` actions) is not yet covered (see `planning/claude_suggestions.md`).
 - **`unreachable_trigger` / `orphan_binding`**: skipped entirely when `state_machine.ron`/a behavior file failed to
-  parse (fix that parse error first). Both account for the five engine-hardcoded panel triggers
-  (`close_inventory`/`close_shop`/`close_container`/`take_all_from_container`/`buy_item:{item_key}`) whenever the
-  matching panel is in a scene. `orphan_binding` only inspects `ui.button_pressed:*`-shaped events.
+  parse (fix that parse error first). Both account for the engine-hardcoded panel triggers
+  (`close_inventory`/`close_shop`/`close_container`/`take_all_from_container`) whenever the matching panel is in a scene;
+  `buy_item:{item_key}` and `use_item:{item_key}` are default-backed (the engine runs the action unless a rule binds the
+  click), so the forward check skips them and the reverse check treats every item's `use_item:` as reachable. `orphan_binding` only inspects `ui.button_pressed:*`-shaped events.
 - **`missing_reference` on `Action::Spawn`'s `spawn_point`**: a `{self}`/`{target}`-templated value is skipped because
   it is resolved before the check would see it; a `requires_item` naming a missing key fails *closed* at runtime, so
   that one also has a scene-load `warn!` (the only diagnostic a WASM-only designer sees). The `join_prefab_keys` half

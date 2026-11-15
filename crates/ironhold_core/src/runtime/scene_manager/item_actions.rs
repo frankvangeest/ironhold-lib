@@ -21,6 +21,7 @@ use crate::schema::catalog::MerchantDef;
 use crate::schema::ui::UiAction;
 use crate::schema::Action;
 
+use super::action_substitution::{rewrite_self, rewrite_target};
 use super::{SceneStateParams, SpawnParams};
 
 /// `"player"` addresses `PlayerInventory`, anything else a container entity's spawn id.
@@ -540,4 +541,95 @@ pub(super) fn rebuild_shop_rows(
             });
         });
     }
+}
+
+// ─── UseItem ──────────────────────────────────────────────────────────────────
+
+/// Uses one of `item_key` from the player's bag: takes `use.consume` units (none for `consume: 0`, which only needs one
+/// held) and, only if that worked, runs the item's `use.do_actions` with `{self}` as the primary player. The effects are
+/// inserted at the FRONT of the queue (`ActionQueue::push_front_all`, executor-only), so `[UseItem(x), LoadScene(..)]` runs
+/// them before the load. A failure changes nothing, runs nothing and emits `item.use_failed` (+ `:{item}`), never `item.used`.
+pub(super) fn use_item(
+    item_key: String,
+    scene_state: &mut SceneStateParams,
+    game_events: &mut MessageWriter<GameEvent>,
+    action_queue: &mut ActionQueue,
+) {
+    let fail = |game_events: &mut MessageWriter<GameEvent>, item_key: &str| {
+        emit(game_events, "item.use_failed".to_string());
+        emit(game_events, format!("item.use_failed:{}", item_key));
+    };
+
+    let use_def = scene_state
+        .loaded_item_catalog
+        .0
+        .as_ref()
+        .and_then(|c| c.items.get(&item_key))
+        .and_then(|d| d.use_def.clone());
+    let Some(use_def) = use_def else {
+        info!("Action::UseItem: '{}' is unknown or has no `use:` block", item_key);
+        fail(game_events, &item_key);
+        return;
+    };
+
+    // A `UseItem` inside a use list could loop forever inside one executor drain: never run it.
+    let actions: Vec<Action> = use_def
+        .do_actions
+        .iter()
+        .filter(|a| {
+            let nested = matches!(a, Action::UseItem(_));
+            if nested {
+                warn!("Action::UseItem: '{}' has a UseItem inside its `use:` list; it is skipped (it could loop forever)", item_key);
+            }
+            !nested
+        })
+        .cloned()
+        .collect();
+
+    // `{target}` is not available in an item's actions (nothing fills it in): say so instead of silently doing nothing.
+    // Compared through `rewrite_target` so only fields that really are substituted count (an exhaustive match, not a string search).
+    if actions.iter().any(|a| rewrite_target(a.clone(), "\u{0}") != *a) {
+        warn!("Action::UseItem: '{}' uses {{target}} in its `use:` actions, which is not available there; it stays unreplaced", item_key);
+    }
+
+    // `{self}` is the primary player: without one, fail before anything is taken. Only a field `rewrite_self` really
+    // substitutes counts (a `Log` text or a sound key that merely contains the token does not).
+    let player_id = primary_player_id(scene_state);
+    if player_id.is_none() && actions.iter().any(|a| rewrite_self(a.clone(), "\u{0}") != *a) {
+        warn!("Action::UseItem: '{}' uses {{self}} but there is no player in the scene", item_key);
+        fail(game_events, &item_key);
+        return;
+    }
+
+    let Some(bag) = load_inv(scene_state, &InvKey::Player) else { return };
+    let held = count_item(&bag.slots, &item_key);
+    if use_def.consume == 0 {
+        // Reusable: the player must hold one, none is taken.
+        if held == 0 {
+            fail(game_events, &item_key);
+            return;
+        }
+    } else {
+        let mut ledger = TxnLedger::default();
+        ledger.invs.insert(InvKey::Player, bag);
+        let ops = [TxnOp::Take { inv: InvKey::Player, item: item_key.clone(), count: use_def.consume }];
+        match plan(&ops, &ledger, None) {
+            Ok(done) => {
+                if let Some(bag) = done.invs.get(&InvKey::Player) {
+                    store_inv(scene_state, &InvKey::Player, bag);
+                }
+            }
+            Err(_) => {
+                fail(game_events, &item_key);
+                return;
+            }
+        }
+    }
+
+    emit(game_events, format!("item.used:{}", item_key));
+    let rewritten: Vec<Action> = match player_id.as_deref() {
+        Some(id) => actions.into_iter().map(|a| rewrite_self(a, id)).collect(),
+        None => actions,
+    };
+    action_queue.push_front_all(rewritten);
 }

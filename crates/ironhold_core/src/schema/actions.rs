@@ -429,6 +429,13 @@ pub enum Action {
     /// short built-in message: `shop.sold_out` + `shop.sold_out:{item_key}`; `shop.insufficient_funds` +
     /// `shop.insufficient_funds:{item_key}`; `shop.no_room:{item_key}` + `inventory.full:player`.
     BuyItem(String),
+    /// Use one of `item_key` (an `items.ron` key) from the player's bag: take `use.consume` units (none for `consume: 0`)
+    /// and, only if that worked, run the item's `use.do_actions` immediately afterwards (before anything else already
+    /// queued), with `{self}` as the primary player. Clicking or right-clicking an item in the inventory does this unless
+    /// your `state_machine.ron` binds `ui.button_pressed:use_item:{item_key}`.
+    /// Success: `item.used:{item_key}`. Failure (not held, no `use:` block, unknown item), never `item.used`:
+    /// `item.use_failed` and `item.use_failed:{item_key}`.
+    UseItem(String),
     /// Show the `ContainerPanel` UI node populated with the given entity's inventory.
     /// The argument is the container entity's spawn ID (e.g. `"chest_01"`).
     /// Emits `container.opened:{entity_id}` on success.
@@ -534,7 +541,7 @@ impl Action {
             | Action::AddItem { .. } | Action::RemoveItem { .. } | Action::TransferItem { .. }
             | Action::OpenInventory | Action::CloseInventory | Action::ToggleInventory
             | Action::PauseGame | Action::ResumeGame | Action::TogglePause
-            | Action::OpenShop(_) | Action::CloseShop | Action::BuyItem(_)
+            | Action::OpenShop(_) | Action::CloseShop | Action::BuyItem(_) | Action::UseItem(_)
             | Action::OpenContainer(_) | Action::CloseContainer | Action::TakeAllFromContainer
             | Action::ToggleOwnNameplate | Action::JoinPlayer
             | Action::SignIn | Action::SignOut | Action::SubmitScore { .. } | Action::FetchLeaderboard { .. }

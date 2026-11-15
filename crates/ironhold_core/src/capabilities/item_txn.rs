@@ -307,7 +307,7 @@ mod tests {
         assert!(plan(&ops, &l, None).is_ok(), "no catalog: today's behaviour, any key is allowed");
         let real = ItemDef {
             display_name: "Real".to_string(), icon_sheet: None, icon_index: 0, icon_color: None,
-            stackable: true, max_stack: 99, weight: 1.0, tags: vec![], currency_stat: None,
+            stackable: true, max_stack: 99, weight: 1.0, tags: vec![], currency_stat: None, use_def: None,
         };
         let catalog = ItemCatalog { schema_version: 1, items: std::iter::once(("real".to_string(), real)).collect() };
         assert_eq!(plan(&ops, &l, Some(&catalog)).unwrap_err(), TxnError::UnknownItem);

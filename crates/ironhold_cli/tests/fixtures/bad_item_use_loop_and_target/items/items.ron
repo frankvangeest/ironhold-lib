@@ -1,0 +1,10 @@
+(
+    schema_version: 1,
+    items: {
+        "looping_potion": ( display_name: "Looping Potion", use: ( do_actions: [ UseItem("looping_potion") ] ) ),
+        "targeting_potion": ( display_name: "Targeting Potion", use: ( do_actions: [ ShowFloatingText(entity: "{target}", text: "hit") ] ) ),
+        "arrow": ( display_name: "Arrow" ),
+        "bow": ( display_name: "Bow", use: ( do_actions: [ RemoveItem(entity: "{self}", item_key: "arrow") ] ) ),
+        "fine_potion": ( display_name: "Fine Potion", use: ( do_actions: [ ShowFloatingText(entity: "{self}", text: "ok") ] ) ),
+    },
+)

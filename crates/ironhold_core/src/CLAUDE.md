@@ -18,13 +18,13 @@ Capability emits Message  →  Interpreter matches rules  →  ActionQueue  → 
 2. **Interpreter** — `fsm_interpreter_system` matches messages against the project's `state_machine.ron` (global_on, in-state
    bindings, transitions) and `entity_fsm_interpreter_system` does the same per entity against its `.behavior.ron`; matches push
    `Action`s onto `ActionQueue`.
-3. **ActionQueue** — a FIFO `VecDeque<Action>`: push order is execution order, and exit actions are pushed before entry actions.
+3. **ActionQueue** — a FIFO `VecDeque<Action>`: push order is execution order, and exit actions are pushed before entry actions (`push_front_all`: executor-only exception).
 4. **Executor** — `action_executor_system` drains the queue and dispatches each `Action`.
 
 **Physics sensors emit messages, not actions.** A sensor that detects overlap emits `GameEvent::Trigger("entity.collected:{id}")`;
 it must NOT push `Action::Despawn` or `Action::PlaySound`. **Never push to `ActionQueue` from a capability system:** only the
 interpreters and the sanctioned pushers named in `runtime/schedule.rs` (behaviour activation, despawn timers, dialogue, the
-action-bar flush, the executor) do. If you are adding `ResMut<ActionQueue>` to a physics or gameplay system, stop, emit a `GameEvent`/`UiEvent`
+action-bar flush, Buy/Use default, the executor) do. If you are adding `ResMut<ActionQueue>` to a physics or gameplay system, stop, emit a `GameEvent`/`UiEvent`
 and handle the response in `state_machine.ron`. Hardwired actions lock behaviour in code; going through the pipeline lets
 designers add rewards, score and conditions in RON without recompiling.
 

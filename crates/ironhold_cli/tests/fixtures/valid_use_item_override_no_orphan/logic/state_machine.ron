@@ -1,0 +1,10 @@
+(
+    schema_version: 1,
+    global_on: [
+        ( event: "ui.button_pressed:close_inventory", do_actions: [] ),
+        // Overrides the built-in Use for this one item: reachable because the InventoryPanel's slots emit it.
+        ( event: "ui.button_pressed:use_item:health_potion", do_actions: [ UseItem("health_potion") ] ),
+        // A click on an item with no `use:` block still emits its event, so a rule on it is reachable too.
+        ( event: "ui.button_pressed:use_item:iron_sword", do_actions: [] ),
+    ],
+)

@@ -1,0 +1,7 @@
+(
+    schema_version: 1,
+    initial_state: "playing",
+    states: [ ( name: "playing" ), ( name: "other" ) ],
+    transitions: [ ( from: None, on: "ui.button_pressed:buy_item:iron_sword", to: "other" ) ],
+    global_on: [ ( event: "item.used:horn", do_actions: [ UseItem("horn") ] ) ],
+)

@@ -239,6 +239,7 @@ impl Plugin for GamePlugin {
             .init_resource::<crate::capabilities::dialogue::ActiveDialogue>()
             .init_resource::<crate::capabilities::inventory::PlayerInventory>()
             .init_resource::<crate::capabilities::inventory::MerchantStockState>()
+            .init_resource::<crate::capabilities::panel_defaults::BoundPanelEvents>()
             .init_resource::<crate::capabilities::inventory::LoadedItemCatalog>()
             .init_resource::<crate::capabilities::inventory::LoadedInventoryUi>()
             .init_resource::<crate::capabilities::inventory::LoadedContainerUi>()
@@ -314,6 +315,8 @@ impl Plugin for GamePlugin {
                 unclaimed_gamepad_trigger_system,
                 button_system,
                 icon_button_click_system,
+                // A click or right click on an inventory slot emits `use_item:{key}` (item system S3).
+                crate::capabilities::panel_defaults::inventory_slot_click_system,
             ).chain().in_set(crate::runtime::schedule::EmitSet::Ui))
             // Stat pipeline (GameStreamSet::Stats, last of the game stream): modifier ticks → regen → effective value
             // recompute, all before the interpreter chain. Threshold CROSSINGS are NOT visible in the same frame: they are
@@ -349,6 +352,9 @@ impl Plugin for GamePlugin {
             ).chain().in_set(crate::runtime::schedule::GameplaySet::Interpret))
             .add_systems(Update, (
                 flush_pending_intent_system,
+                // Buy / inventory-slot Use clicks that no state_machine.ron binding owns run their built-in action. A sanctioned
+                // ActionQueue pusher: after the action-bar flush, before the executor (item system S3).
+                crate::capabilities::panel_defaults::default_panel_actions_system,
                 action_executor_system,
                 // The only caller of Time<Virtual>::pause()/unpause(); runs after every writer of SimClock this frame.
                 crate::runtime::sim_clock::apply_sim_clock_system
@@ -510,7 +516,7 @@ impl Plugin for GamePlugin {
             .add_systems(Update, (stat_bar_update_system, stat_bar_value_text_system, stat_label_update_system, world_stat_bar_update_system, world_pixel_bar_update_system, world_icon_bar_update_system, world_textured_bar_update_system))
             .add_systems(Update, stat_widget_cleanup_system)
             .add_systems(Update, stat_radar_update_system)
-            // GameplaySet::PostExecute (after the executor): AddItem/RemoveItem/TransferItem/BuyItem/
+            // GameplaySet::PostExecute (after the executor): AddItem/RemoveItem/TransferItem/BuyItem/UseItem/
             // TakeAllFromContainer all mutate PlayerInventory/Inventory this same frame — without
             // this ordering the scheduler is free to run these before the executor, rendering one
             // frame of stale slot counts/icons on the same frame an item is added or removed.

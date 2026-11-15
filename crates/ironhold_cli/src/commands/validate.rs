@@ -850,6 +850,127 @@ fn resolve_logic_files(
     ResolvedLogicFiles { state_machine, state_machine_source }
 }
 
+// ── Item `use:` checks (item system S3) ─────────────────────────────────────────
+
+/// `use:` blocks in items.ron: a `UseItem` inside any item's `do_actions` could loop forever inside one executor drain (the
+/// runtime skips it, this reports it), and `{target}` is not available in an item's actions (only `{self}`, the primary player).
+fn item_use_errors(item_catalog: Option<&ItemCatalog>, source: &str, errors: &mut Vec<CrossFileError>) {
+    let Some(catalog) = item_catalog else { return };
+    for (key, def) in &catalog.items {
+        let Some(use_def) = &def.use_def else { continue };
+        for action in &use_def.do_actions {
+            if matches!(action, Action::UseItem(_)) {
+                errors.push(CrossFileError {
+                    source_file: source.to_string(),
+                    message: format!(
+                        "item {key:?}: `use:` contains a UseItem; it is skipped at runtime because it could loop forever (an item's effects run inside one frame)"
+                    ),
+                    error_type: "use_item_inside_use",
+                });
+            }
+            // The bag is addressed by the literal "player"; `{self}` becomes the player's spawn id, which names no inventory.
+            let bag_via_self = match action {
+                Action::AddItem { entity, .. } | Action::RemoveItem { entity, .. } => entity == "{self}",
+                Action::TransferItem { from, to, .. } => from == "{self}" || to == "{self}",
+                _ => false,
+            };
+            if bag_via_self {
+                errors.push(CrossFileError {
+                    source_file: source.to_string(),
+                    message: format!(
+                        "item {key:?}: an item verb in `use:` addresses the bag as `{{self}}`; use \"player\" (`{{self}}` becomes the player's spawn id, which is not an inventory)"
+                    ),
+                    error_type: "use_item_self_bag_address",
+                });
+            }
+            if format!("{action:?}").contains("{target}") {
+                errors.push(CrossFileError {
+                    source_file: source.to_string(),
+                    message: format!("item {key:?}: `{{target}}` is not available in an item's `use:` actions (only `{{self}}`, the player)"),
+                    error_type: "use_item_target_token",
+                });
+            }
+        }
+    }
+}
+
+/// `--strict` hygiene for `use:` blocks: an empty `do_actions` does nothing but consume the item, and `use:` on a currency item
+/// can never run (a currency item becomes its stat and never sits in the bag).
+fn item_use_warnings(item_catalog: Option<&ItemCatalog>, source: &str) -> Vec<StrictWarning> {
+    let mut out = Vec::new();
+    let Some(catalog) = item_catalog else { return out };
+    for (key, def) in &catalog.items {
+        let Some(use_def) = &def.use_def else { continue };
+        if use_def.do_actions.is_empty() {
+            out.push(StrictWarning {
+                source_file: source.to_string(),
+                message: format!("item {key:?}: `use:` has an empty do_actions, so using it only consumes the item"),
+                kind: "empty_item_use",
+            });
+        }
+        if def.currency_stat.is_some() {
+            out.push(StrictWarning {
+                source_file: source.to_string(),
+                message: format!("item {key:?}: `use:` on a currency item can never run (it becomes its stat and never sits in the bag)"),
+                kind: "use_on_currency_item",
+            });
+        }
+    }
+    out
+}
+
+/// `--strict` hygiene for item events in rules: a rule on `item.used:{k}` that runs `UseItem(k)` re-uses the item every frame
+/// (with `consume: 0` forever; it never freezes a frame because the event is read next frame), and a `buy_item:` / `use_item:`
+/// click bound in a transition or a behavior file does not stop the built-in action, so the click does the built-in action AND
+/// the binding (only `global_on` and in-state `on:` bindings in `state_machine.ron` own the event).
+fn item_event_rule_warnings(
+    state_machine: Option<(&str, &StateMachineAsset)>,
+    behaviors: &[(String, StateMachineAsset)],
+) -> Vec<StrictWarning> {
+    fn is_panel_click(event: &str) -> bool {
+        event
+            .strip_prefix("ui.button_pressed:")
+            .is_some_and(|t| t.starts_with("buy_item:") || t.starts_with("use_item:"))
+    }
+    fn scan(out: &mut Vec<StrictWarning>, source: &str, fsm: &StateMachineAsset, is_behavior: bool) {
+        for b in fsm.global_on.iter().chain(fsm.states.iter().flat_map(|s| s.on.iter())) {
+            if let Some(key) = b.event.strip_prefix("item.used:") {
+                if b.do_actions.iter().any(|a| matches!(a, Action::UseItem(k) if k == key)) {
+                    out.push(StrictWarning {
+                        source_file: source.to_string(),
+                        message: format!("a rule on {:?} runs UseItem({key:?}): the item is used again every frame, forever with `consume: 0`", b.event),
+                        kind: "item_use_reuse_loop",
+                    });
+                }
+            }
+            if is_behavior && is_panel_click(&b.event) {
+                out.push(StrictWarning {
+                    source_file: source.to_string(),
+                    message: format!("{:?} is bound in a behavior file, which does not stop the built-in Buy/Use: a click runs both; bind it in state_machine.ron `global_on` or a state's `on:`", b.event),
+                    kind: "panel_click_bound_outside_rules",
+                });
+            }
+        }
+        for t in &fsm.transitions {
+            if is_panel_click(&t.on) {
+                out.push(StrictWarning {
+                    source_file: source.to_string(),
+                    message: format!("{:?} is the `on:` of a transition, which does not stop the built-in Buy/Use: a click runs both; bind it in `global_on` or a state's `on:` as well", t.on),
+                    kind: "panel_click_bound_outside_rules",
+                });
+            }
+        }
+    }
+    let mut out = Vec::new();
+    if let Some((src, fsm)) = state_machine {
+        scan(&mut out, src, fsm, false);
+    }
+    for (path, fsm) in behaviors {
+        scan(&mut out, path, fsm, true);
+    }
+    out
+}
+
 // ── Action collection ─────────────────────────────────────────────────────────
 
 fn collect_actions(
@@ -1004,6 +1125,7 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
     let mut errors = Vec::new();
 
     set_ui_visible_checks(scenes, actions, scenes_parsed_cleanly, &mut errors);
+    item_use_errors(item_catalog, project_config.and_then(|c| c.items_path.as_deref()).unwrap_or("items/items.ron"), &mut errors);
 
     // All four catalog types have real schema-level invariants their own `.validate()` enforces
     // (e.g. `AssetCatalog::validate()` rejects an empty `models[]`/`decals[]` path,
@@ -1200,14 +1322,26 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
             Action::AddItem { item_key, .. }
             | Action::RemoveItem { item_key, .. }
             | Action::TransferItem { item_key, .. }
-            | Action::BuyItem(item_key) => {
+            | Action::BuyItem(item_key)
+            | Action::UseItem(item_key) => {
                 if let Some(c) = item_catalog {
-                    if !c.items.contains_key(item_key) {
-                        errors.push(CrossFileError {
+                    match c.items.get(item_key) {
+                        None => errors.push(CrossFileError {
                             source_file: source.clone(),
                             message: format!("item_key {:?} not found in items.ron", item_key),
                             error_type: "missing_reference",
-                        });
+                        }),
+                        // UseItem on an item with no `use:` block can only ever fail (`item.use_failed`).
+                        Some(def) if matches!(action, Action::UseItem(_)) && def.use_def.is_none() => {
+                            errors.push(CrossFileError {
+                                source_file: source.clone(),
+                                message: format!(
+                                    "UseItem({item_key:?}): the item has no `use:` block in items.ron, so using it always fails (`item.use_failed`)"
+                                ),
+                                error_type: "use_item_without_use_block",
+                            });
+                        }
+                        Some(_) => {}
                     }
                 }
             }
@@ -2899,7 +3033,7 @@ fn check_asset_root_paths(project: LoadedProject) -> Vec<CrossFileError> {
 /// are also handled there, in `check_orphan_event`.
 fn check_ui_trigger_reachability(project: LoadedProject) -> Vec<CrossFileError> {
     let LoadedProject {
-        project_dir, project_config, scenes, prefab_catalog, actions, state_machine,
+        project_dir, project_config, scenes, state_machine, item_catalog,
         behaviors, logic_files_parsed_cleanly, ..
     } = project;
     // collect_handled_events/the checks below only need the parsed asset, not its source path.
@@ -2917,29 +3051,6 @@ fn check_ui_trigger_reachability(project: LoadedProject) -> Vec<CrossFileError> 
     let mut errors = Vec::new();
     let handled = collect_handled_events(state_machine, behaviors);
 
-    // Which prefab keys are actually placed/spawnable anywhere in this project -- mirrors
-    // strict_checks's own `used_prefabs` computation (scene entities, join_prefab_keys hot-join
-    // slots, and Action::Spawn). Used below to scope the ShopPanel buy_item derivation to
-    // merchants that could actually be opened, not every merchant in the whole catalog: unlike
-    // collect_reachable_ui_triggers (where over-approximating only ever suppresses a --strict
-    // orphan warning, a false negative), over-approximating here would fabricate a hard
-    // unreachable_trigger error for a merchant prefab nobody has placed yet -- a real, disruptive
-    // false positive at error severity, not just a suppressed warning.
-    let mut used_prefabs: HashSet<&str> = HashSet::new();
-    for (_, scene) in scenes {
-        for entity in &scene.entities {
-            used_prefabs.insert(&entity.prefab);
-        }
-        for entry in scene.join_prefab_keys.iter().flatten() {
-            used_prefabs.insert(entry);
-        }
-    }
-    for (_, action) in actions {
-        if let Action::Spawn { prefab, .. } = action {
-            used_prefabs.insert(prefab);
-        }
-    }
-
     // `verb`/`consequence` phrase the message correctly for each trigger source — a key/gamepad
     // binding is never "clicked," and saying so is actively misleading (a designer debugging a
     // broken Escape binding would go looking for a nonexistent button).
@@ -2955,6 +3066,16 @@ fn check_ui_trigger_reachability(project: LoadedProject) -> Vec<CrossFileError> 
                 message: format!("{describe} has no action configured — {consequence}"),
                 error_type: "unreachable_trigger",
             });
+            return;
+        }
+        // `buy_item:{key}` and `use_item:{key}` are default-backed (item system S3): the engine runs `BuyItem` / `UseItem` itself
+        // for them unless a rule binds the event, so an authored Button/key/gamepad binding with such a trigger works with no
+        // rule. `use_item:{key}` only does something for an item that has a `use:` block.
+        let default_backed = trigger.starts_with("buy_item:")
+            || trigger.strip_prefix("use_item:").is_some_and(|k| {
+                item_catalog.map_or(true, |c| c.items.get(k).is_some_and(|d| d.use_def.is_some()))
+            });
+        if default_backed {
             return;
         }
         let event = format!("ui.button_pressed:{trigger}");
@@ -3021,7 +3142,7 @@ fn check_ui_trigger_reachability(project: LoadedProject) -> Vec<CrossFileError> 
                         "when clicked", "clicking it will do nothing",
                     );
                 }
-                // The five engine-hardcoded panel triggers (scene_loader.rs's panel-spawn sites,
+                // The engine-hardcoded panel triggers (scene_loader.rs's panel-spawn sites,
                 // action_executor.rs's per-MerchantDef.stock[] entry) are UiAction::Trigger
                 // strings a designer never types as a Button.action -- they're emitted internally
                 // by the panel's own built-in close/buy button. A project that adds one of these
@@ -3041,34 +3162,8 @@ fn check_ui_trigger_reachability(project: LoadedProject) -> Vec<CrossFileError> 
                         &mut errors, scene_path, format!("ShopPanel {:?}", panel.id), "close_shop",
                         "when its close button is clicked", "clicking it will do nothing",
                     );
-                    // Scoped to every PLACED merchant in the project (any scene entity,
-                    // join_prefab_keys slot, or Action::Spawn), not the whole prefab catalog:
-                    // ShopPanel is a single generic widget populated at runtime by whichever
-                    // entity's Action::OpenShop names it, so which merchant's stock actually shows
-                    // here isn't statically knowable, and unioning across every placed merchant is
-                    // the safe over-approximation for a hard error (unlike
-                    // collect_reachable_ui_triggers's whole-catalog union, which only ever
-                    // suppresses a --strict warning -- reusing that same width here would
-                    // fabricate a hard error for a merchant prefab nobody has placed yet).
-                    // Deduplicated via a sorted set (not the raw per-stock-entry loop) so two
-                    // merchants stocking the same item_key -- or the same merchant listing it
-                    // twice -- produce one error, not a byte-identical repeat, and so the report
-                    // order is deterministic rather than following HashMap iteration order.
-                    if let Some(catalog) = prefab_catalog {
-                        let item_keys: std::collections::BTreeSet<&str> = catalog.prefabs.iter()
-                            .filter(|(key, _)| used_prefabs.contains(key.as_str()))
-                            .filter_map(|(_, p)| p.merchant.as_ref())
-                            .flat_map(|m| m.stock.iter().map(|e| e.item_key.as_str()))
-                            .collect();
-                        for item_key in item_keys {
-                            check(
-                                &mut errors, scene_path,
-                                format!("ShopPanel {:?}'s buy button for item_key {:?}", panel.id, item_key),
-                                &format!("buy_item:{item_key}"),
-                                "when clicked", "buying it will do nothing",
-                            );
-                        }
-                    }
+                    // A Buy click needs no rule: the engine runs `BuyItem` itself for `buy_item:{key}` unless this state machine
+                    // binds that exact event (item system S3), so there is no per-item check here any more.
                 }
                 UiNodeDef::ContainerPanel(panel) => {
                     check(
@@ -3111,6 +3206,7 @@ fn collect_reachable_ui_triggers(
     project_config: Option<&ProjectConfig>,
     scenes: &[(String, GameSceneV2)],
     prefab_catalog: Option<&PrefabCatalog>,
+    item_catalog: Option<&ItemCatalog>,
 ) -> HashSet<String> {
     let mut reachable = HashSet::new();
     let mut insert = |trigger: &str| {
@@ -3141,7 +3237,18 @@ fn collect_reachable_ui_triggers(
             match node {
                 UiNodeDef::Button(btn) => insert(btn.action.strip_prefix("ui.").unwrap_or(&btn.action)),
                 UiNodeDef::IconButton(btn) => insert(btn.action.strip_prefix("ui.").unwrap_or(&btn.action)),
-                UiNodeDef::InventoryPanel(_) => insert("close_inventory"),
+                UiNodeDef::InventoryPanel(_) => {
+                    insert("close_inventory");
+                    // A click on an inventory slot emits `use_item:{key}` for the item in it (item system S3), so a rule
+                    // binding it to override the built-in Use is reachable, not an orphan.
+                    if let Some(items) = item_catalog {
+                        // Every item, not only those with `use:`: a slot click fires the event for any non-empty slot, so a
+                        // rule on `use_item:iron_sword` is reachable (over-approximating only suppresses a --strict warning).
+                        for key in items.items.keys() {
+                            insert(&format!("use_item:{key}"));
+                        }
+                    }
+                }
                 UiNodeDef::ShopPanel(_) => {
                     insert("close_shop");
                     if let Some(catalog) = prefab_catalog {
@@ -4396,11 +4503,13 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
     // flagged orphaned. `orphan_binding_prereqs_clean` is true only when BOTH logic files and every
     // scene parsed cleanly.
     if orphan_binding_prereqs_clean {
-        let reachable = collect_reachable_ui_triggers(project_config, scenes, prefab_catalog);
+        let reachable = collect_reachable_ui_triggers(project_config, scenes, prefab_catalog, project.item_catalog);
         warnings.extend(check_orphan_ui_bindings(&reachable, state_machine, behaviors));
     }
 
     warnings.extend(pause_checks(project));
+    warnings.extend(item_event_rule_warnings(state_machine, behaviors));
+    warnings.extend(item_use_warnings(project.item_catalog, project.project_config.and_then(|c| c.items_path.as_deref()).unwrap_or("items/items.ron")));
 
     warnings.extend(
         super::backend_checks::strict_warnings(project_dir, project_config, project.backend_source, project.backend, actions)
@@ -4582,6 +4691,21 @@ fn do_validate(project_dir: &Path, strict: bool) -> ValidationRun {
             for slot in &bar.slots {
                 for action in &slot.do_actions {
                     all_actions.push((scene_path.clone(), action.clone()));
+                }
+            }
+        }
+    }
+
+    // An item's `use:` actions are real actions too (they run through the executor): the item/stat/sound/scene checks must see
+    // them. Added after scene discovery for the same reason as the bar slots above.
+    {
+        let items_source = project_config.as_ref().and_then(|c| c.items_path.as_deref()).unwrap_or("items/items.ron");
+        if let Some(catalog) = &item_catalog {
+            for def in catalog.items.values() {
+                if let Some(use_def) = &def.use_def {
+                    for action in &use_def.do_actions {
+                        all_actions.push((items_source.to_string(), action.clone()));
+                    }
                 }
             }
         }

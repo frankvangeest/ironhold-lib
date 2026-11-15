@@ -1,0 +1,8 @@
+(
+    schema_version: 2,
+    name: "main",
+    ui: [
+        Button((id: "btn_0", text: "B0", action: "ui.use_item:health_potion", position: (0.0, 0.0), size: (100.0, 40.0))),
+        Button((id: "btn_1", text: "B1", action: "ui.buy_item:iron_sword", position: (0.0, 50.0), size: (100.0, 40.0))),
+    ],
+)

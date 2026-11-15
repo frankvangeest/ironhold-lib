@@ -687,6 +687,7 @@ fn action_kind(a: &Action) -> &'static str {
         Action::OpenShop(_) => "OpenShop",
         Action::CloseShop => "CloseShop",
         Action::BuyItem(_) => "BuyItem",
+        Action::UseItem(_) => "UseItem",
         Action::OpenContainer(_) => "OpenContainer",
         Action::CloseContainer => "CloseContainer",
         Action::TakeAllFromContainer => "TakeAllFromContainer",

@@ -1662,10 +1662,11 @@ fn bad_panel_trigger_unreachable_exits_1() {
         stdout.contains("ShopPanel") && stdout.contains("ui.button_pressed:close_shop"),
         "expected the unreachable ShopPanel close trigger in output:\n{stdout}"
     );
+    // A Buy click needs no rule any more (the engine runs `BuyItem` itself unless state_machine.ron binds the event),
+    // so a missing `buy_item:{key}` rule is not an error.
     assert!(
-        stdout.contains("buy_item:sword") && stdout.contains("ui.button_pressed:buy_item:sword"),
-        "expected the unreachable ShopPanel buy trigger (derived from the merchant's stock) in \
-         output:\n{stdout}"
+        !stdout.contains("buy_item:sword"),
+        "a missing buy_item rule must not be reported (Buy is default-backed):\n{stdout}"
     );
     assert!(
         stdout.contains("ContainerPanel") && stdout.contains("ui.button_pressed:close_container"),
@@ -2690,4 +2691,83 @@ fn lobby_vocabulary_typos_are_strict_warnings_not_errors() {
     assert!(out.contains("\"lobby.11.name\", but the list shows at most 10 rows"), "{out}");
     assert!(out.contains("\"lobby.current.nmae\", but the engine never writes it"), "{out}");
     assert!(!out.contains("lobby.join_failed:full") && !out.contains("\"lobby.1.name\""), "names the engine does produce must not be reported: {out}");
+}
+
+// ── Item `use:` (item system S3) ─────────────────────────────────────────────────
+
+/// `UseItem` on an item with no `use:` block can only ever fail at runtime: reported, while `UseItem` on a usable item is fine.
+#[test]
+fn use_item_on_an_item_without_a_use_block_exits_1() {
+    let (code, stdout) = validate("bad_use_item_without_use_block");
+    assert_eq!(code, 1, "expected exit 1, got {code}:\n{stdout}");
+    assert!(
+        stdout.contains("iron_sword") && stdout.contains("no `use:` block"),
+        "expected the item without a use: block in output:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("\"health_potion\"): the item has no"),
+        "a usable item must not be reported:\n{stdout}"
+    );
+}
+
+/// A `UseItem` inside an item's own `use:` could loop forever in one frame; `{target}` is unavailable there. A fine potion is clean.
+#[test]
+fn item_use_loop_and_target_token_exit_1() {
+    let (code, stdout) = validate("bad_item_use_loop_and_target");
+    assert_eq!(code, 1, "expected exit 1, got {code}:\n{stdout}");
+    assert!(
+        stdout.contains("looping_potion") && stdout.contains("UseItem") && stdout.contains("loop forever"),
+        "expected the looping item reported:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("targeting_potion") && stdout.contains("{target}"),
+        "expected the {{target}} use reported:\n{stdout}"
+    );
+    assert!(!stdout.contains("fine_potion"), "the valid potion must not be reported:\n{stdout}");
+}
+
+/// A rule overriding the built-in inventory click (`use_item:{key}`) is reachable (the panel's slots emit it), so it is not an
+/// orphan under `--strict`, and the whole fixture validates clean.
+#[test]
+fn use_item_override_rule_is_not_an_orphan_strict_exits_0() {
+    let (code, stdout) = validate_strict("valid_use_item_override_no_orphan");
+    assert_eq!(code, 0, "expected exit 0 under --strict, got {code}:\n{stdout}");
+}
+
+/// An authored Button/key bound to a default-backed trigger (`use_item:{key}`, `buy_item:{key}`) works with no rule: the engine
+/// runs the built-in action, so it is not an `unreachable_trigger`.
+#[test]
+fn authored_buttons_with_default_backed_triggers_exit_0() {
+    let (code, stdout) = validate("valid_authored_panel_event_buttons");
+    assert_eq!(code, 0, "expected exit 0, got {code}:\n{stdout}");
+}
+
+/// ...except `use_item:{key}` for an item with no `use:` block: the built-in does nothing for it, so the button is dead.
+#[test]
+fn authored_use_item_button_for_an_item_without_use_exits_1() {
+    let (code, stdout) = validate("bad_authored_use_item_without_use_block");
+    assert_eq!(code, 1, "expected exit 1, got {code}:\n{stdout}");
+    assert!(stdout.contains("use_item:iron_sword") && stdout.contains("will do nothing"), "{stdout}");
+}
+
+/// An item verb in `use:` that addresses the bag as `{self}` is an error: `{self}` becomes the player's spawn id, which names no
+/// inventory (the bag is the literal "player").
+#[test]
+fn item_use_self_bag_address_exits_1() {
+    let (code, stdout) = validate("bad_item_use_loop_and_target");
+    assert_eq!(code, 1, "expected exit 1, got {code}:\n{stdout}");
+    assert!(
+        stdout.contains("bow") && stdout.contains("addresses the bag as `{self}`"),
+        "expected the {{self}} bag address reported:\n{stdout}"
+    );
+}
+
+/// --strict: `item.used:x -> UseItem(x)` reuses the item every frame, and a `buy_item:` click bound in a transition does not stop
+/// the built-in (a click runs both).
+#[test]
+fn item_event_rule_warnings_strict_exit_1() {
+    let (code, stdout) = validate_strict("warn_item_event_rules");
+    assert_eq!(code, 1, "expected exit 1 under --strict, got {code}:\n{stdout}");
+    assert!(stdout.contains("UseItem(\"horn\")") && stdout.contains("every frame"), "{stdout}");
+    assert!(stdout.contains("transition") && stdout.contains("buy_item:iron_sword"), "{stdout}");
 }

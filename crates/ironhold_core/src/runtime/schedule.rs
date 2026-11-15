@@ -40,7 +40,8 @@
 //!
 //! # Order the docs promise (designer view: `docs/30_runtime_events_and_logic.md`, "Same-frame event order")
 //! - `ActionQueue` push order in a frame: `DirectActions` (behaviour activation, despawn timers) -> `Dialogue` -> FSM ->
-//!   entity FSM -> action-bar flush. An action-bar slot's built-in `do_actions` therefore run *after* every
+//!   entity FSM -> action-bar flush -> `default_panel_actions_system` (the built-in `BuyItem`/`UseItem` for a click no rule owns).
+//!   An action-bar slot's built-in `do_actions` therefore run *after* every
 //!   `state_machine.ron` reaction, and dialogue actions run *before* them.
 //! - The game stream the interpreters read in frame N: (1) the carry-over from frame N-1's `Execute` (action-bar
 //!   `activated`, executor events, then `game.paused`/`game.resumed`, then stat-threshold crossings), (2) events from the
@@ -65,7 +66,7 @@ pub enum GameplaySet {
     Emit,
     /// `fsm_interpreter_system` -> `entity_fsm_interpreter_system`.
     Interpret,
-    /// `flush_pending_intent_system` -> `action_executor_system` -> `apply_sim_clock_system` -> `stat_effective_value_system`
+    /// `flush_pending_intent_system` -> `default_panel_actions_system` -> `action_executor_system` -> `apply_sim_clock_system` -> `stat_effective_value_system`
     /// (2nd instance) -> `stat_threshold_system` -> the drain/pool/decal tail.
     Execute,
     /// Readers of what `Execute` produced (`npc_hit_relay_system`, inventory/container UI, audio mirrors, scene-event readers).

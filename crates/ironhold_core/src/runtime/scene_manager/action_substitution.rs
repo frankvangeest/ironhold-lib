@@ -117,6 +117,7 @@ pub(crate) fn rewrite_self(action: Action, spawn_id: &str) -> Action {
         Action::CameraShake { duration_secs, intensity, owner_player } =>
             Action::CameraShake { duration_secs, intensity, owner_player },
         Action::BuyItem(item_key) => Action::BuyItem(item_key),
+        Action::UseItem(item_key) => Action::UseItem(item_key),
         // UI node ids are literal scene-authored ids, never entity spawn ids.
         Action::SetUiVisible { id, visible } => Action::SetUiVisible { id, visible },
         // Backend leaderboard names and variable names are literal ids declared in `backend.ron`.
@@ -252,6 +253,7 @@ pub(crate) fn rewrite_target(action: Action, target_id: &str) -> Action {
         Action::CameraShake { duration_secs, intensity, owner_player } =>
             Action::CameraShake { duration_secs, intensity, owner_player },
         Action::BuyItem(item_key) => Action::BuyItem(item_key),
+        Action::UseItem(item_key) => Action::UseItem(item_key),
         // UI node ids are literal scene-authored ids, never entity spawn ids.
         Action::SetUiVisible { id, visible } => Action::SetUiVisible { id, visible },
         // Backend leaderboard names and variable names are literal ids declared in `backend.ron`.

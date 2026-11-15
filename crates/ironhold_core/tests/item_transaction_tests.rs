@@ -5,9 +5,12 @@
 // corpse_loot_interact_tests.rs), so these tests are the regression net for the item actions.
 use bevy::prelude::*;
 use ironhold_core::capabilities::inventory::{
-    add_to_slots, GoldLabelMarker, Inventory, LoadedInventoryUi, LoadedItemCatalog, PanelKind, PlayerInventory,
+    add_to_slots, GoldLabelMarker, Inventory, InventorySlotMarker, LoadedInventoryUi, LoadedItemCatalog, PanelKind, PlayerInventory,
     ShopEntriesContainerMarker, ShopPanelMarker,
 };
+use ironhold_core::runtime::scene_manager::{LoadedStateMachine, LogicState};
+use ironhold_core::runtime::UiEvent;
+use ironhold_core::schema::project::{FsmEventBinding, FsmState, StateMachineAsset};
 use ironhold_core::capabilities::player::{CharacterController, PlayerIndex};
 use ironhold_core::schema::player::InputMap;
 use ironhold_core::runtime::scene_manager::{LoadedPrefabCatalog, PrefabKey, SpawnRegistry};
@@ -31,6 +34,7 @@ fn item(name: &str, stackable: bool, currency_stat: Option<&str>) -> ItemDef {
         weight: 1.0,
         tags: Vec::new(),
         currency_stat: currency_stat.map(str::to_string),
+        use_def: None,
     }
 }
 
@@ -577,4 +581,404 @@ fn a_zero_price_item_can_be_bought_with_no_currency_stat() {
     }
     let ev = buy(&mut app);
     assert!(has(&ev, "item.bought:old_key"), "{ev:?}");
+}
+
+// ─── Item system S3: using items (`planning/features/done/item_use.md`) ───────────────────────────────────────────────────
+
+fn use_def(consume: u32, do_actions: Vec<Action>) -> ironhold_core::schema::items::ItemUseDef {
+    ironhold_core::schema::items::ItemUseDef { do_actions, consume }
+}
+
+fn emit_action(name: &str) -> Action {
+    Action::EmitEvent(name.to_string())
+}
+
+/// The catalog for the use tests: a potion (consume 1), an elixir (consume 2), a reusable horn (consume 0), an item whose use
+/// list contains a `UseItem` (loops), a sword with no `use:`, and an item whose effect needs `{self}`.
+fn use_catalog() -> ItemCatalog {
+    let mut c = catalog();
+    let mut with = |key: &str, stackable: bool, u: ironhold_core::schema::items::ItemUseDef| {
+        let mut d = item(key, stackable, None);
+        d.use_def = Some(u);
+        c.items.insert(key.to_string(), d);
+    };
+    with("potion", true, use_def(1, vec![emit_action("potion.drunk")]));
+    with("elixir", true, use_def(2, vec![emit_action("elixir.drunk")]));
+    with("horn", false, use_def(0, vec![emit_action("horn.blown")]));
+    with("looping", true, use_def(1, vec![Action::UseItem("looping".to_string()), emit_action("loop.effect")]));
+    with("blessing", true, use_def(1, vec![Action::ShowFloatingText {
+        entity: "{self}".to_string(), text: "+40 HP".to_string(), offset: None,
+    }]));
+    c
+}
+
+fn use_app(bag: &[(&str, u32)]) -> App {
+    let mut app = setup_test_app();
+    app.world_mut().insert_resource(LoadedItemCatalog(Some(use_catalog())));
+    let mut inv = PlayerInventory::new(6);
+    for (key, n) in bag {
+        add_to_slots(&mut inv.slots, 6, key, *n, None);
+    }
+    app.world_mut().insert_resource(inv);
+    app.update();
+    app
+}
+
+fn use_action(key: &str) -> Action {
+    Action::UseItem(key.to_string())
+}
+
+fn count_of(events: &[String], name: &str) -> usize {
+    events.iter().filter(|e| *e == name).count()
+}
+
+#[test]
+fn using_a_potion_consumes_one_and_runs_its_actions_once() {
+    let mut app = use_app(&[("potion", 3)]);
+    let ev = run(&mut app, vec![use_action("potion")]);
+    assert_eq!(bag_count(&app, "potion"), 2, "{ev:?}");
+    assert!(has(&ev, "item.used:potion"), "{ev:?}");
+    assert_eq!(count_of(&ev, "potion.drunk"), 1, "the item's actions run once: {ev:?}");
+    assert!(!has(&ev, "item.use_failed"));
+}
+
+#[test]
+fn using_an_item_not_held_changes_nothing_and_fails() {
+    let mut app = use_app(&[("sword", 1)]);
+    let ev = run(&mut app, vec![use_action("potion")]);
+    assert!(has(&ev, "item.use_failed"), "generic form: {ev:?}");
+    assert!(has(&ev, "item.use_failed:potion"), "item form: {ev:?}");
+    assert!(!has(&ev, "item.used:potion"));
+    assert_eq!(count_of(&ev, "potion.drunk"), 0, "no effect runs on a failed use: {ev:?}");
+    assert_eq!(bag_count(&app, "sword"), 1);
+}
+
+#[test]
+fn an_item_without_a_use_block_fails_and_is_kept() {
+    let mut app = use_app(&[("sword", 1)]);
+    let ev = run(&mut app, vec![use_action("sword")]);
+    assert!(has(&ev, "item.use_failed:sword"), "{ev:?}");
+    assert_eq!(bag_count(&app, "sword"), 1);
+    let ev = run(&mut app, vec![use_action("no_such_item")]);
+    assert!(has(&ev, "item.use_failed:no_such_item"), "an unknown item fails the same way: {ev:?}");
+}
+
+#[test]
+fn consume_two_needs_two() {
+    let mut app = use_app(&[("elixir", 1)]);
+    let ev = run(&mut app, vec![use_action("elixir")]);
+    assert!(has(&ev, "item.use_failed:elixir"), "{ev:?}");
+    assert_eq!(bag_count(&app, "elixir"), 1, "one is not enough and none is taken");
+    add_to_slots(&mut app.world_mut().resource_mut::<PlayerInventory>().slots, 6, "elixir", 2, None);
+    let ev = run(&mut app, vec![use_action("elixir")]);
+    assert!(has(&ev, "item.used:elixir"), "{ev:?}");
+    assert_eq!(bag_count(&app, "elixir"), 1, "three held, two consumed");
+    assert_eq!(count_of(&ev, "elixir.drunk"), 1);
+}
+
+#[test]
+fn consume_zero_is_reusable_but_needs_one_held() {
+    let mut app = use_app(&[("horn", 1)]);
+    for _ in 0..2 {
+        let ev = run(&mut app, vec![use_action("horn")]);
+        assert!(has(&ev, "item.used:horn"), "{ev:?}");
+        assert_eq!(count_of(&ev, "horn.blown"), 1);
+        assert_eq!(bag_count(&app, "horn"), 1, "none is taken");
+    }
+    let mut empty = use_app(&[]);
+    let ev = run(&mut empty, vec![use_action("horn")]);
+    assert!(has(&ev, "item.use_failed:horn"), "holding none still fails: {ev:?}");
+    assert_eq!(count_of(&ev, "horn.blown"), 0);
+}
+
+#[test]
+fn self_in_an_items_actions_is_the_primary_player() {
+    let mut app = use_app(&[("blessing", 1)]);
+    spawn_player(&mut app, "player_02", 1, 0.0);
+    spawn_player(&mut app, "player_01", 0, 0.0);
+    app.update();
+    let ev = run(&mut app, vec![use_action("blessing")]);
+    assert!(has(&ev, "item.used:blessing"), "{ev:?}");
+    assert!(popup_texts(&mut app).iter().any(|t| t == "+40 HP"), "{:?}", popup_texts(&mut app));
+}
+
+#[test]
+fn self_with_no_player_in_the_scene_fails_before_anything_is_taken() {
+    let mut app = use_app(&[("blessing", 1)]);
+    let ev = run(&mut app, vec![use_action("blessing")]);
+    assert!(has(&ev, "item.use_failed:blessing"), "{ev:?}");
+    assert_eq!(bag_count(&app, "blessing"), 1, "the item must not be consumed when its effect cannot run");
+}
+
+#[test]
+fn an_items_effects_run_right_after_the_use_not_after_the_rest_of_the_batch() {
+    let mut app = use_app(&[("potion", 1)]);
+    let ev = run(&mut app, vec![use_action("potion"), emit_action("queued.behind")]);
+    let drunk = ev.iter().position(|e| e == "potion.drunk").expect("effect ran");
+    let behind = ev.iter().position(|e| e == "queued.behind").expect("the queued action ran");
+    assert!(drunk < behind, "the effect must run before an action queued behind the use: {ev:?}");
+}
+
+#[test]
+fn a_use_item_inside_a_use_list_is_skipped_instead_of_looping() {
+    let mut app = use_app(&[("looping", 5)]);
+    let ev = run(&mut app, vec![use_action("looping")]);
+    assert_eq!(bag_count(&app, "looping"), 4, "only the outer use consumed one: {ev:?}");
+    assert_eq!(count_of(&ev, "item.used:looping"), 1, "{ev:?}");
+    assert_eq!(count_of(&ev, "loop.effect"), 1, "the other effects still run once: {ev:?}");
+}
+
+// ---- default-backed panel events -----------------------------------------------------------------------------------
+
+fn send_click(app: &mut App, trigger: &str) {
+    app.world_mut().resource_mut::<Messages<UiEvent>>().clear();
+    app.world_mut().resource_mut::<Messages<GameEvent>>().clear();
+    app.world_mut().resource_mut::<Messages<UiEvent>>().write(UiEvent::ButtonPressed(trigger.to_string()));
+    app.update();
+}
+
+fn fsm_with(state: &str, binding_event: Option<&str>, in_state: bool) -> LoadedStateMachine {
+    let b = binding_event.map(|e| FsmEventBinding { event: e.to_string(), do_actions: vec![emit_action("rule.ran")] });
+    let (state_on, global_on) = match (b, in_state) {
+        (Some(b), true) => (vec![b], vec![]),
+        (Some(b), false) => (vec![], vec![b]),
+        (None, _) => (vec![], vec![]),
+    };
+    LoadedStateMachine(Some(StateMachineAsset {
+        schema_version: 1,
+        initial_state: state.to_string(),
+        states: vec![FsmState { name: "playing".to_string(), entry_actions: vec![], exit_actions: vec![], on: state_on }],
+        transitions: vec![],
+        global_on,
+    }))
+}
+
+#[test]
+fn a_use_click_with_no_rule_runs_the_built_in_use() {
+    let mut app = use_app(&[("potion", 2)]);
+    send_click(&mut app, "use_item:potion");
+    assert_eq!(bag_count(&app, "potion"), 1);
+    assert!(has(&events(&app), "item.used:potion"), "{:?}", events(&app));
+}
+
+#[test]
+fn a_use_click_on_an_item_with_no_use_block_runs_no_default() {
+    let mut app = use_app(&[("sword", 1)]);
+    send_click(&mut app, "use_item:sword");
+    let ev = events(&app);
+    assert!(!has(&ev, "item.use_failed:sword") && !has(&ev, "item.use_failed"), "no failure event for a plain click: {ev:?}");
+    assert_eq!(bag_count(&app, "sword"), 1);
+}
+
+#[test]
+fn a_rule_bound_in_the_current_state_replaces_the_built_in_use() {
+    let mut app = use_app(&[("potion", 2)]);
+    app.world_mut().insert_resource(fsm_with("playing", Some("ui.button_pressed:use_item:potion"), true));
+    app.world_mut().resource_mut::<LogicState>().0 = "playing".to_string();
+    app.update();
+    send_click(&mut app, "use_item:potion");
+    let ev = events(&app);
+    assert!(has(&ev, "rule.ran"), "the designer's rule ran: {ev:?}");
+    assert!(!has(&ev, "item.used:potion"), "and the built-in use did not: {ev:?}");
+    assert_eq!(bag_count(&app, "potion"), 2);
+}
+
+#[test]
+fn a_rule_bound_in_another_state_still_owns_the_event() {
+    // Bound anywhere wins: a rule in `playing` means the engine never runs the default, in any state.
+    let mut app = use_app(&[("potion", 2)]);
+    app.world_mut().insert_resource(fsm_with("playing", Some("ui.button_pressed:use_item:potion"), true));
+    app.world_mut().resource_mut::<LogicState>().0 = "paused".to_string();
+    app.update();
+    send_click(&mut app, "use_item:potion");
+    let ev = events(&app);
+    assert!(!has(&ev, "rule.ran"), "the rule is state-scoped and the game is in another state: {ev:?}");
+    assert!(!has(&ev, "item.used:potion"), "the built-in must not run either: {ev:?}");
+    assert_eq!(bag_count(&app, "potion"), 2);
+}
+
+#[test]
+fn a_global_rule_also_owns_the_event() {
+    let mut app = use_app(&[("potion", 2)]);
+    app.world_mut().insert_resource(fsm_with("playing", Some("ui.button_pressed:use_item:potion"), false));
+    app.world_mut().resource_mut::<LogicState>().0 = "playing".to_string();
+    app.update();
+    send_click(&mut app, "use_item:potion");
+    let ev = events(&app);
+    assert!(has(&ev, "rule.ran") && !has(&ev, "item.used:potion"), "{ev:?}");
+}
+
+#[test]
+fn a_buy_click_with_no_rule_buys() {
+    let mut app = shop_app(Some(1), 200.0, 5);
+    send_click(&mut app, "buy_item:old_key");
+    assert!(has(&events(&app), "item.bought:old_key"), "{:?}", events(&app));
+    assert_eq!(bag_count(&app, "old_key"), 1);
+}
+
+#[test]
+fn an_existing_buy_rule_wins_so_there_is_no_double_buy() {
+    let mut app = shop_app(Some(2), 500.0, 5);
+    let rule = FsmEventBinding {
+        event: "ui.button_pressed:buy_item:old_key".to_string(),
+        do_actions: vec![Action::BuyItem("old_key".to_string())],
+    };
+    app.world_mut().insert_resource(LoadedStateMachine(Some(StateMachineAsset {
+        schema_version: 1,
+        initial_state: "playing".to_string(),
+        states: vec![FsmState { name: "playing".to_string(), entry_actions: vec![], exit_actions: vec![], on: vec![rule] }],
+        transitions: vec![],
+        global_on: vec![],
+    })));
+    app.world_mut().resource_mut::<LogicState>().0 = "playing".to_string();
+    app.update();
+    send_click(&mut app, "buy_item:old_key");
+    assert_eq!(bag_count(&app, "old_key"), 1, "the rule's BuyItem ran once and the default did not add a second");
+    assert_eq!(global_gold(&app), 450.0);
+}
+
+#[test]
+fn a_state_scoped_buy_rule_outside_its_state_does_not_buy() {
+    // Today's behaviour for existing projects is kept: the demo's Buy rules live in `playing`; in another state the click does nothing.
+    let mut app = shop_app(Some(2), 500.0, 5);
+    let rule = FsmEventBinding {
+        event: "ui.button_pressed:buy_item:old_key".to_string(),
+        do_actions: vec![Action::BuyItem("old_key".to_string())],
+    };
+    app.world_mut().insert_resource(LoadedStateMachine(Some(StateMachineAsset {
+        schema_version: 1,
+        initial_state: "paused".to_string(),
+        states: vec![FsmState { name: "playing".to_string(), entry_actions: vec![], exit_actions: vec![], on: vec![rule] }],
+        transitions: vec![],
+        global_on: vec![],
+    })));
+    app.world_mut().resource_mut::<LogicState>().0 = "paused".to_string();
+    app.update();
+    send_click(&mut app, "buy_item:old_key");
+    assert_eq!(bag_count(&app, "old_key"), 0, "no buy outside the rule's state");
+    assert_eq!(global_gold(&app), 500.0);
+}
+
+// ---- clickable inventory slots --------------------------------------------------------------------------------------
+
+fn slot(app: &mut App, index: usize) -> Entity {
+    app.world_mut().spawn((InventorySlotMarker { slot_index: index }, Button, Interaction::None)).id()
+}
+
+#[test]
+fn a_left_click_on_a_slot_uses_its_item() {
+    let mut app = use_app(&[("potion", 2)]);
+    let s = slot(&mut app, 0);
+    app.update();
+    app.world_mut().resource_mut::<Messages<GameEvent>>().clear();
+    *app.world_mut().get_mut::<Interaction>(s).unwrap() = Interaction::Pressed;
+    app.update();
+    assert!(has(&events(&app), "item.used:potion"), "{:?}", events(&app));
+    assert_eq!(bag_count(&app, "potion"), 1);
+    // The slot is still `Pressed` (the mouse button is held): only the edge counts, so holding it must not drink again.
+    app.world_mut().resource_mut::<Messages<GameEvent>>().clear();
+    app.update();
+    app.update();
+    assert!(!has(&events(&app), "item.used:potion"), "holding the button must not keep using the item: {:?}", events(&app));
+    assert_eq!(bag_count(&app, "potion"), 1);
+}
+
+#[test]
+fn a_right_click_on_a_hovered_slot_uses_its_item() {
+    let mut app = use_app(&[("potion", 2)]);
+    let s = slot(&mut app, 0);
+    *app.world_mut().get_mut::<Interaction>(s).unwrap() = Interaction::Hovered;
+    app.update();
+    app.world_mut().resource_mut::<Messages<GameEvent>>().clear();
+    app.world_mut().resource_mut::<ButtonInput<MouseButton>>().press(MouseButton::Right);
+    app.update();
+    app.world_mut().resource_mut::<ButtonInput<MouseButton>>().clear();
+    assert!(has(&events(&app), "item.used:potion"), "{:?}", events(&app));
+    assert_eq!(bag_count(&app, "potion"), 1);
+}
+
+#[test]
+fn a_click_on_an_empty_slot_does_nothing() {
+    let mut app = use_app(&[("potion", 1)]);
+    let s = slot(&mut app, 3);
+    app.update();
+    app.world_mut().resource_mut::<Messages<GameEvent>>().clear();
+    *app.world_mut().get_mut::<Interaction>(s).unwrap() = Interaction::Pressed;
+    app.update();
+    assert!(events(&app).iter().all(|e| !e.starts_with("item.")), "{:?}", events(&app));
+    assert_eq!(bag_count(&app, "potion"), 1);
+}
+
+#[test]
+fn a_slot_click_while_paused_does_nothing() {
+    use ironhold_core::runtime::sim_clock::{PauseHold, SimClock};
+    let mut app = use_app(&[("potion", 2)]);
+    let s = slot(&mut app, 0);
+    app.update();
+    app.world_mut().resource_mut::<SimClock>().hold(PauseHold::Menu);
+    app.update();
+    app.world_mut().resource_mut::<Messages<GameEvent>>().clear();
+    *app.world_mut().get_mut::<Interaction>(s).unwrap() = Interaction::Pressed;
+    app.update();
+    assert!(!has(&events(&app), "item.used:potion"), "{:?}", events(&app));
+    assert_eq!(bag_count(&app, "potion"), 2);
+}
+
+// ---- schema -------------------------------------------------------------------------------------------------------
+
+#[test]
+fn the_use_block_parses_with_do_actions_and_consume() {
+    let ron_src = r#"(schema_version: 1, items: { "horn": ( display_name: "Horn", use: ( do_actions: [ EmitEvent("x") ], consume: 0 ) ) })"#;
+    let cat: ItemCatalog = ron::Options::default()
+        .with_default_extension(ron::extensions::Extensions::IMPLICIT_SOME)
+        .from_str(ron_src)
+        .expect("a use: block parses");
+    let u = cat.items["horn"].use_def.as_ref().expect("use_def");
+    assert_eq!((u.consume, u.do_actions.len()), (0, 1));
+}
+
+#[test]
+fn a_bad_action_or_the_old_field_name_in_items_ron_is_a_parse_error() {
+    // The loader logs the error and proceeds with no item catalog (the whole file), so the parse failure must be real.
+    let opts = ron::Options::default().with_default_extension(ron::extensions::Extensions::IMPLICIT_SOME);
+    let bad_action = r#"(schema_version: 1, items: { "x": ( display_name: "X", use: ( do_actions: [ NoSuchAction("y") ] ) ) })"#;
+    assert!(opts.from_str::<ItemCatalog>(bad_action).is_err());
+    let old_name = r#"(schema_version: 1, items: { "x": ( display_name: "X", use: ( actions: [] ) ) })"#;
+    assert!(opts.from_str::<ItemCatalog>(old_name).is_err(), "`actions:` is not a field of use:, it is `do_actions:`");
+}
+
+#[test]
+fn the_demo_items_ron_still_parses() {
+    let src = std::fs::read_to_string(format!("{DEMO}/items/items.ron")).expect("demo items.ron readable");
+    let cat: ItemCatalog = ron::Options::default()
+        .with_default_extension(ron::extensions::Extensions::IMPLICIT_SOME)
+        .from_str(&src)
+        .expect("the demo items.ron parses");
+    assert!(cat.validate().is_ok());
+}
+
+#[test]
+fn two_uses_in_one_batch_each_run_their_effects_in_order() {
+    let mut app = use_app(&[("potion", 3)]);
+    let ev = run(&mut app, vec![use_action("potion"), use_action("potion")]);
+    assert_eq!(bag_count(&app, "potion"), 1, "{ev:?}");
+    let order: Vec<&str> = ev.iter().map(String::as_str).filter(|e| *e == "item.used:potion" || *e == "potion.drunk").collect();
+    assert_eq!(order, ["item.used:potion", "potion.drunk", "item.used:potion", "potion.drunk"], "use1, effect1, use2, effect2: {ev:?}");
+}
+
+#[test]
+fn a_bad_use_list_with_target_does_not_stop_the_other_effects() {
+    // `{target}` is not available in a use list; it stays unreplaced (and warns) but the use itself still works.
+    let mut c = use_catalog();
+    let mut d = item("Target Potion", true, None);
+    d.use_def = Some(use_def(1, vec![
+        Action::ShowFloatingText { entity: "{target}".to_string(), text: "x".to_string(), offset: None },
+        emit_action("target.potion.drunk"),
+    ]));
+    c.items.insert("target_potion".to_string(), d);
+    let mut app = use_app(&[("target_potion", 1)]);
+    app.world_mut().insert_resource(LoadedItemCatalog(Some(c)));
+    let ev = run(&mut app, vec![use_action("target_potion")]);
+    assert!(has(&ev, "item.used:target_potion"), "{ev:?}");
+    assert!(has(&ev, "target.potion.drunk"), "the other effects still run: {ev:?}");
 }

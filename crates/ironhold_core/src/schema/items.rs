@@ -2,6 +2,8 @@ use bevy::prelude::*;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
+use crate::schema::actions::Action;
+
 pub const ITEM_CATALOG_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Deserialize, Asset, TypePath, Debug, Clone)]
@@ -64,7 +66,25 @@ pub struct ItemDef {
     /// placing it in the player's inventory slots. Use for currency items (e.g. "gold").
     #[serde(default)]
     pub currency_stat: Option<String>,
+    /// What using this item does (`Action::UseItem`, a click or right-click on it in the inventory). Omit for items that
+    /// cannot be used. RON field name is `use` (a Rust keyword, hence the rename).
+    #[serde(default, rename = "use")]
+    pub use_def: Option<ItemUseDef>,
 }
+
+/// The `use:` block of an item: the actions that run when it is used, and how many units using it takes.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct ItemUseDef {
+    /// Run, in order, right after the item was taken from the bag (and only if that worked). `{self}` is the primary
+    /// player. `{target}` is not available, and `UseItem` inside this list is forbidden (it could loop forever).
+    pub do_actions: Vec<Action>,
+    /// Units taken per use. Default 1. `0` makes the item reusable: the player must hold one, none is taken.
+    #[serde(default = "default_consume")]
+    pub consume: u32,
+}
+
+fn default_consume() -> u32 { 1 }
 
 fn default_stackable() -> bool { true }
 fn default_max_stack() -> u32 { 99 }

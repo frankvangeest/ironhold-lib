@@ -329,3 +329,16 @@ shop, `AddItem`, Take All, the action bar and the gold footer, and "the player" 
 `PlayerIndex`, a player without one counting as 0 like `targeting::is_primary_player`; `PlayerInventory.player_spawn_id` is only a fallback; the action bar resolves a slot's cost against its own owner, not the primary player). Merchant stock is `MerchantStockState`, runtime state keyed
 by the merchant entity, seeded from `MerchantDef` on first use and cleared on `LoadScene`; never read `stock_count` from the
 prefab catalog at action time. A successful buy refreshes the shop rows in place (`rebuild_shop_rows`) only while that shop is still the open one; never push `Action::OpenShop` to refresh (the queue is FIFO, so it would run after a `CloseShop` or `LoadScene` queued behind the buy and re-open the shop). `TakeAllFromContainer` is a deliberate exception to "build ops and call `plan`": it is partial by design, one stack at a time, and shares only the currency rule.
+
+## `UseItem` effects jump the queue, and Buy/Use clicks have a built-in default (`item_actions::use_item`, `capabilities/panel_defaults.rs`)
+
+`Action::UseItem` takes the item through `item_txn::plan` and then **front-inserts** the item's `use.do_actions` with `ActionQueue::push_front_all`
+(`{self}` rewritten to `primary_player_id`), so `[UseItem(x), LoadScene(..)]` runs the effects before the load. That is the one exception to "push
+order = execution order" and it is **executor-only**: interpreters and capability systems never call it. A `UseItem` inside any `use.do_actions` is
+skipped with a `warn!` (the executor drains the queue to empty in one frame, so it could loop forever; `ironhold validate` reports it too).
+**Never push a refresh, or anything that must run before later queued actions, to the back of the queue** (the S2a shop refresh bug; a message such as a buy's floating text may go to the back). The default for a Buy or inventory-slot
+click is `default_panel_actions_system` (`GameplaySet::Execute`, after `flush_pending_intent_system`, a sanctioned pusher): it pushes `BuyItem`/`UseItem`
+for `ui.button_pressed:buy_item:{key}` / `use_item:{key}` unless `BoundPanelEvents` has the event, a lookup-only set rebuilt when `LoadedStateMachine`
+changes from the `global_on` and in-state `on:` bindings only (not transitions, not behaviors). "Bound anywhere" is deliberate: a rule scoped to `playing`
+keeps a click in another state doing nothing, as before S3. `inventory_slot_click_system` (`EmitSet::Ui`, after `icon_button_click_system`, gated on
+`SimClock` in the body) emits `use_item:{key}` from a slot `Button` (no `UiAction`: `button_system` must keep ignoring slots).

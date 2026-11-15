@@ -1,0 +1,7 @@
+(
+    schema_version: 1,
+    items: {
+        "horn": ( display_name: "Horn", stackable: false, use: ( do_actions: [ EmitEvent("horn.blown") ], consume: 0 ) ),
+        "iron_sword": ( display_name: "Iron Sword", stackable: false ),
+    },
+)

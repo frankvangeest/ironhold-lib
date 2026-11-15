@@ -1,6 +1,6 @@
 # Feature: Using items (item system S3)
 
-_Status: Ready_
+_Status: Done (2026-11-15)_
 _Planned at: `60e28b0` (2026-11-14)_
 _Plan-reviewed 2026-11-15: system-architect and ux-gamedesigner-reviewer both returned "needs more design work"; Frank's answers to the
 two open decisions and every point from both reviews are folded in below._
@@ -100,7 +100,7 @@ New: `item.used:{item}` (specific form only, like `item.bought`; do not write a 
 ( event: "ui.button_pressed:use_item:health_potion", do_actions: [ UseItem("health_potion"), ShowFloatingText(entity: "player_01", text: "Ahh") ] ),
 ( event: "item.use_failed",                          do_actions: [ ShowFloatingText(entity: "player_01", text: "None left") ] ),
 ( event: "item.used:mana_potion",                    do_actions: [ EmitEvent("quest.mana_potion_used") ] ),
-// switch the built-in Buy off in a state: bind the event in that state with no actions
+// switch the built-in Buy off everywhere: bind the event once with no actions (there is no per-state switch: a binding anywhere owns the event in every state)
 ( event: "ui.button_pressed:buy_item:old_key", do_actions: [] ),
 
 // gamepad/keyboard users cannot click the bag: give them an action bar slot
@@ -146,3 +146,18 @@ Follow-ups to log, not part of S3: the built-in buy messages becoming replaceabl
 - Given a sword with no `use:`, when it is clicked, then nothing is consumed and no `item.use_failed` fires (the click event still reaches rules).
 - Given `consume: 0` and one horn held, when used, then its actions run and the horn stays.
 - `ironhold validate` no longer asks for a `buy_item:*` rule and rejects `UseItem` inside an item's `use:`.
+
+## Implementation notes (2026-11-15, from the step-4 reviews)
+- **No per-state switch.** "Bound anywhere" means a binding in any state owns the event in every state: to limit Buy/Use to some states, bind it in
+  those states and call the action; to switch it off everywhere, bind it once with `do_actions: []` in `global_on`. (The plan's earlier wording
+  "switch it off in some state" was wrong.)
+- **Authored triggers are default-backed too:** a designer's own `Button`/key/gamepad binding with a `buy_item:`/`use_item:` trigger gets the built-in;
+  `ironhold validate` no longer reports it as `unreachable_trigger` (except `use_item:` for an item with no `use:`).
+- **`--strict` reachability counts every catalog item** (`use_item:{key}` fires for any non-empty slot), and warns on `item.used:x -> UseItem(x)` rules
+  (a cross-frame reuse loop) and on a `buy_item:`/`use_item:` click bound in a transition or behavior (it runs both).
+- **An item verb in `use:` must address the bag as `"player"`**, not `{self}` (validate error `use_item_self_bag_address`).
+- **`{self}`/`{target}` presence is detected through `rewrite_self`/`rewrite_target`**, not a string search; `{target}` in a use list warns at runtime too.
+- `ActionQueue::push_front_all` is `pub(crate)`. `BoundPanelEvents` stores triggers without the `ui.button_pressed:` prefix.
+- Not covered by a test: loading a whole project with a broken `items.ron` (only the parse failure is tested; the loader's `Failed` arm was read, not run).
+- Known/accepted: a scene reached only through a `LoadScene` in a `use:` list is not validated (same gap as action bar slots); bag clicks are ignored
+  while paused (a Buy click is not); right-click on a slot may also orbit the camera in a project whose `orbit_button` is `"Right"` (check at playtest).

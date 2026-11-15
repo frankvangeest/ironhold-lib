@@ -1,0 +1,7 @@
+(
+    schema_version: 2,
+    name: "main",
+    ui: [
+        Button((id: "btn_0", text: "B0", action: "ui.use_item:iron_sword", position: (0.0, 0.0), size: (100.0, 40.0))),
+    ],
+)

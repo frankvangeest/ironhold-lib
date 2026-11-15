@@ -71,7 +71,10 @@ Sample `watch` output (each save prints the changed file and a result):
 | an effect/decal/audio/prefab/modifier key used in an action or scene that is not defined in `assets.ron` / `prefabs.ron` / `stats.ron` | `missing_reference` | the action does nothing or the entity does not spawn | add the key to the catalog or fix the typo |
 | a prefab's `behavior` / `dialogue` / `animation_policy` file path that does not exist | `missing_file` | a character with a missing animation policy is **permanently invisible** in the web build | fix the path |
 | a `Spawn(...)` action's `spawn_point` is not in any scene's `spawn_points` | `missing_reference` | the entity silently appears at the world origin | add the spawn point or fix the name (a `{self}`/`{target}` template is skipped) |
-| a merchant's `currency_stat`, a `stock[].item_key`, an `inventory.initial_items[].item_key`, an `AddItem`/`RemoveItem`/`TransferItem`/`BuyItem` item key, an `ItemDef.currency_stat`, or an `interactable.requires_item` that does not exist | `missing_reference` | the shop/item does not work; a `requires_item` typo **permanently blocks every player** | fix the key |
+| a merchant's `currency_stat`, a `stock[].item_key`, an `inventory.initial_items[].item_key`, an `AddItem`/`RemoveItem`/`TransferItem`/`UseItem`/`BuyItem` item key, an `ItemDef.currency_stat`, or an `interactable.requires_item` that does not exist | `missing_reference` | the shop/item does not work; a `requires_item` typo **permanently blocks every player** | fix the key |
+| `UseItem("x")` where item `x` has no `use:` block in `items.ron` | `use_item_without_use_block` | using it always fails (`item.use_failed`) | add a `use:` block, or remove the action |
+| a `UseItem` inside an item's own `use:` `do_actions` | `use_item_inside_use` | it is skipped at runtime (it could loop forever inside one frame) | remove it; run the other item from a rule on `item.used:<key>` |
+| `{target}` inside an item's `use:` `do_actions` | `use_item_target_token` | it is never filled in there (only `{self}`, the player, is) | remove it |
 | a dialogue `jump_to` that names no node (and is not `"__end__"`) | `missing_reference` | the dialogue panel silently closes mid-conversation | fix the node id |
 | a dialogue condition `stat_key` that is not in `stats.ron` | `missing_reference` | the choice is hidden forever, with no message | fix the stat key |
 | two dialogue nodes with the same `id` in one file | `duplicate_node_id` | every later duplicate is unreachable | make ids unique |
@@ -89,7 +92,7 @@ Sample `watch` output (each save prints the changed file and a result):
 ### Logic wiring
 | What you see | Code | What breaks if ignored | Fix |
 |---|---|---|---|
-| a `Button`, `IconButton`, key binding or gamepad binding whose `ui.button_pressed:<trigger>` is not handled by any binding in `state_machine.ron` or a `behaviors/*.behavior.ron` file (also the built-in panel triggers such as `close_inventory`, `take_all_from_container`, `buy_item:<key>` when that panel is in a scene) | `unreachable_trigger` | "I clicked the button and nothing happened" | add a binding for the trigger, or remove the button |
+| a `Button`, `IconButton`, key binding or gamepad binding whose `ui.button_pressed:<trigger>` is not handled by any binding in `state_machine.ron` or a `behaviors/*.behavior.ron` file (also the built-in panel triggers such as `close_inventory`, `take_all_from_container` when that panel is in a scene; `buy_item:<key>` and `use_item:<key>` are not checked: the engine runs Buy and Use itself unless a rule binds the click) | `unreachable_trigger` | "I clicked the button and nothing happened" | add a binding for the trigger, or remove the button |
 | a state machine / behavior / dialogue file that fails to parse | `parse_error` | the button-wiring checks are skipped for the whole project | fix that file's parse error first |
 
 ### Online backend
@@ -109,6 +112,8 @@ Sample `watch` output (each save prints the changed file and a result):
 | `--strict`: a rule that writes an engine-owned variable (`SetVariable`/`IncrementVariable` on a key starting `backend.`, `leaderboard.` or `lobby.`) | `reserved_variable_write` | the engine overwrites it at the next backend reply | read it with a `Label` instead of writing it |
 | `--strict`: an online action in a project with no `backend_path` | `online_action_without_backend` | it only ever answers `backend.offline` | add `backend_path` or remove the action |
 | `--strict`: `JoinLobby` when no rule in the project runs `ListLobbies` | `join_without_list` | no row is ever filled, so every join answers `lobby.join_failed:no_lobby` | run `ListLobbies` first (e.g. on `backend.signed_in`) |
+| `--strict`: an item's `use:` with an empty `do_actions` | `empty_item_use` | using it only consumes the item | add actions, or drop the `use:` block |
+| `--strict`: `use:` on a currency item (`currency_stat`) | `use_on_currency_item` | it can never run: a currency item becomes its stat and never sits in the bag | drop the `use:` block |
 | `--strict`: a rule bound to a `lobby.` event the engine never emits (a typo such as `lobby.joind` or `lobby.join_failed:fulll`) | `unknown_lobby_event` | the rule never fires | fix the name (the events are in the table under [Online events](20_data_formats.md#online-events), the reasons in [Lobbies](20_data_formats.md#lobbies)); the `lobby.` prefix is reserved for the engine, so name your own events differently |
 | `--strict`: a Label bound to a `lobby.` variable the engine never writes (`lobby.current.nmae`) | `unknown_lobby_variable` | the label stays empty | fix the name |
 | `--strict`: a Label bound to a lobby row past the end (`lobby.11.name`, `lobby.member.9.name`) | `lobby_row_binding_out_of_range` | the list shows at most 10 rows and a lobby holds at most 8 players, so it is always empty | use a row in range |

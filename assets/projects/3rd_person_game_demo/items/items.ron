@@ -10,6 +10,14 @@
             max_stack: 10,
             weight: 0.5,
             tags: ["consumable"],
+            // Click or right-click the potion in the bag to drink it. {self} is the player.
+            use: (
+                do_actions: [
+                    ModifyStat(key: "player_health", delta: 40.0),
+                    ShowFloatingText(entity: "{self}", text: "+40 HP"),
+                ],
+                consume: 1,
+            ),
         ),
         // index 3 = "Mana Flask" — matches mana bar fill_color
         "mana_potion": (
@@ -20,6 +28,13 @@
             max_stack: 10,
             weight: 0.5,
             tags: ["consumable"],
+            use: (
+                do_actions: [
+                    ModifyStat(key: "player_mana", delta: 30.0),
+                    ShowFloatingText(entity: "{self}", text: "+30 MP"),
+                ],
+                consume: 1,
+            ),
         ),
         // index 54 = "Metal Ingot" — steel grey; closest weapon-material on this sheet
         "iron_sword": (

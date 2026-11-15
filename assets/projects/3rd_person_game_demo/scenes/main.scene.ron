@@ -282,6 +282,14 @@
       size: (200.0, 44.0),
     )),
 
+    Label((
+      id: "bag_hint_label",
+      text: "I: bag - right-click a potion to drink it",
+      position: (256.0, 56.0),
+      size: (500.0, 22.0),
+      align: Left,
+    )),
+
     // ── Player stat bars ───────────────────────────────────────────────────────
     // Reads from LoadedStats (populated via stats/stats.ron + stats_path in project.ron).
     StatBar((
