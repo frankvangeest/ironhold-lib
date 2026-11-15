@@ -107,6 +107,14 @@ Non-obvious facts:
   write `sell_price: 0` (item_transaction_tests.rs:111). Every Close path of a panel differs (Close*, Toggle*, LoadScene,
   pause): derive "menu must close" from state (open_panels/SimClock/bag), never enumerate actions.
 
+- S4 code review (2026-11-15, `feature/item_sell_destroy`, 8facc3a + uncommitted menu): menu = one `SlotMenuRoot` per
+  InventoryPanel re-parented (ChildOf insert, flushed before PostUpdate layout, no glitch) under the clicked slot; state in
+  `LoadedInventoryUi.slot_menu` + one-shot `menu_action: Option<(key,count)>` handoff (Ui click -> Execute pusher, same
+  frame, ungated sets so no leak) - keyed by item only, not prefix. `remove_from_slots` takes from the LAST stack first, so
+  "Sell N of the clicked stack" may drain a different stack. PlayerInventory has no writer between PostExecute and EmitSet::Ui,
+  so the menu snapshot count is always fresh at Yes time. New benign Res/ResMut ambiguities on LoadedInventoryUi
+  (EmitSet::Ui vs Game readers; PostExecute vs inventory_ui_system); nobody reads its is_changed().
+
 **How to apply:** any new item-moving action must go through the primitive (once built) and emit a failure event
 instead of a success event on failure. See [[inventory-panel-triplication]], [[panel-input-blocking]],
 [[event-pipeline-intent-layer]], [[stat-ownership-global-vs-instance]].

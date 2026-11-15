@@ -51,3 +51,4 @@
 - [Debug-state DOM sync](project_debug_state_dom_sync.md) — per-frame JSON+set_text_content in release; ~6 tiny allocs/frame; CANNOT gate out (play.html readiness) or dirty-skip (frame counter)
 - [Nakama adapter (backend v2)](project_nakama_adapter.md) — ehttp gates ureq/rustls off wasm (cargo tree verified); poll idle alloc-free; localStorage only with ?nakama_key
 - [blake3 device id](project_blake3_device_id.md) — direct dep turns on blake3 `std` (bevy uses no-default); wasm32-inert, no SIMD/rayon/mmap; hash once per sign-in
+- [Bag slot menu (item S4)](project_slot_menu_system.md) — slot_menu_sync_system closed path free; open path per-frame MerchantDef clone + 9 text() Strings (guarded writes); no is_changed readers of LoadedInventoryUi
