@@ -90,6 +90,14 @@ Non-obvious facts:
   highlight"). `ironhold query` has no project-config subcommand. Only `3rd_person_game_demo` has an InventoryPanel
   (5x4 = `default_inv_columns`*`rows` = DEFAULT_PLAYER_SLOTS, an unpinned coincidence).
 
+- S2b code review (2026-11-15, `feature/player_inventory_slots`, uncommitted on c22b1c2): `PlayerInventory` has exactly
+  two writers (loader-tail insert, `SceneStateParams` ResMut in the executor) + Res readers (interactable, UI, slot click,
+  `SceneV2Params`); `spawn_scene_v2` takes no `SceneStateParams`, so no Res/ResMut conflict. Only the bag panel spawns
+  `InventorySlotMarker` (containers/shop do not), so the faded writer is safe; the only other BackgroundColor writer on
+  Buttons (`button_system`) filters `&UiAction`, which slots lack. Implicit invariant `slots.len() == max_slots`
+  (pub fields): UI icons/labels key off `slots.get`, the click guard off `max_slots` - a future `SetInventorySize`
+  must keep them equal (`resize` already truncates, silently dropping items).
+
 **How to apply:** any new item-moving action must go through the primitive (once built) and emit a failure event
 instead of a success event on failure. See [[inventory-panel-triplication]], [[panel-input-blocking]],
 [[event-pipeline-intent-layer]], [[stat-ownership-global-vs-instance]].

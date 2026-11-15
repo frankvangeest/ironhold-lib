@@ -107,3 +107,5 @@
 - [Device secret off-wire is untested](project_device_secret_wire_leak_untested.md) — secret and hash are both 32 hex; server/contract can't tell `{game}:{secret}` from `{game}:{hash}`
 - [Nakama RPC hook/error facts](project_nakama_rpc_error_and_hook_facts.md) — RpcFunc before-hook never runs; error({m,7})=403, plain error()=500 leaking module path; probe recipe
 - [Shop stock_count never decremented](project_shop_stock_count_never_decremented.md) — BuyItem checks Some(0) only, stock 1 = unlimited; requires_item never consumes; F with panel open = silent
+- [project_config None = missing OR unparsable](project_cli_project_config_none_conflation.md) — validate checks that default a config field cascade a misleading error after a .project.ron parse failure
+- [InventoryPanel is a fixed px box](project_inventory_panel_fixed_box_footer_overflow.md) — size() fixes width/68px chrome; wider footer text wraps/spills outside the bg at 1-2 columns, untested

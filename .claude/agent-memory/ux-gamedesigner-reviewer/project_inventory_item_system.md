@@ -31,5 +31,9 @@ Container `inventory.max_slots` silently clamps to >=4; the player bag plan erro
 (asymmetry to document). I flagged: invalid value "fails to load" may mean a stuck loading screen
 for web-only designers (see [[ron-parse-failure-diagnostics]]); smaller-panel case needs a runtime
 console warning too, since the CLI is optional.
+Impl review 2026-11-15: both flagged items implemented (clamp+warn, runtime panel-smaller warn);
+demo panel renamed `bag_panel`. Gaps left: docs/15 `invalid_project_config` row (~183) does not
+list player_inventory.max_slots; docs/20 ProjectConfig table's 3rd column is "Required" but the
+new row put a default there. Faded slot colour is hardcoded (SLOT_BG_DEAD), not styleable.
 
 **Why:** designers copy examples verbatim with no source/error feedback; the player-vs-spawn-id routing and the dead `gold` stat are the two things most likely to waste their time.
