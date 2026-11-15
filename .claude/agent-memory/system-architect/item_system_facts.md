@@ -115,6 +115,13 @@ Non-obvious facts:
   so the menu snapshot count is always fresh at Yes time. New benign Res/ResMut ambiguities on LoadedInventoryUi
   (EmitSet::Ui vs Game readers; PostExecute vs inventory_ui_system); nobody reads its is_changed().
 
+- S5 plan review (2026-11-15, at a40dbd7, `action_bar_item_slots.md`): `ActionSlotDef.icon_index` is a bare `u32` default 0
+  (scene_v2.rs:1583), so "slot icon_index wins when set" is undetectable (only `icon` non-empty and `icon_color: Option` are).
+  The bar's Icon child is spawned only when an atlas resolves (scene_loader.rs ~2412) and is unmarked: a runtime item change
+  (S6) has nothing to write to. `ActionSlotUi` has ~37 struct literals in tests, no Default. No CLI check knows any
+  `action_bar.*` event and `ironhold query` never lists slots. Validate pushes slot `do_actions` into `all_actions`
+  (validate.rs ~4895): synthesizing `UseItem(item)` there gets unknown-item + `use_item_without_use_block` (~1499) for free.
+
 **How to apply:** any new item-moving action must go through the primitive (once built) and emit a failure event
 instead of a success event on failure. See [[inventory-panel-triplication]], [[panel-input-blocking]],
 [[event-pipeline-intent-layer]], [[stat-ownership-global-vs-instance]].

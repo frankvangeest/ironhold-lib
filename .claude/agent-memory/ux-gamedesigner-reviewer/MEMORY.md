@@ -3,6 +3,7 @@
 - [Item txn S2a plan+impl review](project_item_txn_s2_plan_review.md) — built-in msgs use raw stat key; no generic shop.no_room; transfer is partial; Fill Bag one-way
 - [Item use S3 plan+impl review](project_item_use_s3_plan_review.md) — do_actions:[] in one state kills built-in in ALL states; default not state/pause gated; co-op {self}=P1
 - [Item sell/destroy S4 plan+impl review](project_item_sell_destroy_s4_plan_review.md) — plan honoured; stale docs/20 lines, red No button, gold-max msg, prompt width
+- [Item bar slots S5 plan review](project_action_bar_item_slots_s5_plan_review.md) — icon_index u32 (no "unset"); bar-sheet fallback = wrong icon; demo lacks gamepad_index
 - [Panel world-blocking](project_panel_world_blocking.md) — shop/container block interact/pickup/Tab, inventory not; rule only in docs/30 corpse notes; ui.panel_* unnamed+undocumented
 
 - [backend_abstraction plan+v1+v2 review](project_backend_abstraction_plan_review.md) — v2 Nakama: no-key says "no adapter", config regen drops games, no key source/troubleshooting
