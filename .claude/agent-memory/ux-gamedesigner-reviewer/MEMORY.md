@@ -1,6 +1,7 @@
 # Memory Index
 
 - [Item txn S2a plan+impl review](project_item_txn_s2_plan_review.md) — built-in msgs use raw stat key; no generic shop.no_room; transfer is partial; Fill Bag one-way
+- [Item use S3 plan review](project_item_use_s3_plan_review.md) — use: wants do_actions; unreachable_trigger must drop buy_item; transitions must not suppress default
 - [Panel world-blocking](project_panel_world_blocking.md) — shop/container block interact/pickup/Tab, inventory not; rule only in docs/30 corpse notes; ui.panel_* unnamed+undocumented
 
 - [backend_abstraction plan+v1+v2 review](project_backend_abstraction_plan_review.md) — v2 Nakama: no-key says "no adapter", config regen drops games, no key source/troubleshooting

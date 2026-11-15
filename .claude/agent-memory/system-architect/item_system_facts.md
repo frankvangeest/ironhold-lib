@@ -56,6 +56,17 @@ Non-obvious facts:
   add_to_slots directly (deliberate); coin->stat logic exists in 3 copies (credit_coins, transfer, TakeAll). After S2a a
   coin item given to the player becomes a stat, so `RemoveItem`/`requires_item` of a coin can never succeed (asymmetry).
 
+- S3 plan review (2026-11-14, at 60e28b0, `item_use.md`): (a) "matched this frame" default-backed suppression breaks the
+  "state-scoped rule = gate" pattern (demo's buy_item rules are in-state "playing"; in any other state a click would run the
+  default); recommended a STATIC "bound anywhere in state_machine.ron => designer owns it" set instead (no interpreter change).
+  (b) CLI `check_ui_trigger_reachability` makes a missing `buy_item:{key}` rule a HARD error (validate.rs ~3063) and
+  `collect_reachable_ui_triggers` must learn `use_item:{key}`. (c) executor drains the queue until empty in one frame, so a
+  `UseItem` inside `use.actions` (with an `AddItem` of the same item) is an infinite loop / frame hang: forbid it.
+  (d) `TxnOp::Take{count:0}` always succeeds, so `consume: 0` = free infinite use unless guarded. (e) one bad action in
+  items.ron fails the whole file -> `LoadedItemCatalog(None)` -> coins become bag items, icons gone (error! only).
+  (f) `every_edge_triggered_input_system_reads_the_pause_clock` forces a SimClock read on the slot click system.
+  (g) no executor-side `{target}` rewrite exists; effects pushed by the executor never get one.
+
 **How to apply:** any new item-moving action must go through the primitive (once built) and emit a failure event
 instead of a success event on failure. See [[inventory-panel-triplication]], [[panel-input-blocking]],
 [[event-pipeline-intent-layer]], [[stat-ownership-global-vs-instance]].
