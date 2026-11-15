@@ -1358,7 +1358,7 @@ DialoguePanel((
 
 #### `InventoryPanel((...))` ✅
 
-A grid of item slots that displays the player's `PlayerInventory`. Always positioned absolutely. Hidden by default; toggled by `ToggleInventory` or shown/hidden explicitly with `OpenInventory`/`CloseInventory`. Slot icons and count labels update automatically via change detection whenever `PlayerInventory` changes. Requires `items_path` to be set in `project.ron`. Its embedded close button fires `ui.button_pressed:close_inventory` — `ironhold_cli validate` cross-checks this against `state_machine.ron`/behavior files whenever an `InventoryPanel` is present in a scene (`unreachable_trigger`). Click or tap an item to use it, or right-click it with the mouse (see [Using items](#using-items)); an empty slot does nothing. Slots can only be used with the mouse or touch: there is no gamepad or keyboard cursor in the bag. The footer shows `Slots: 12/20` (occupied bag slots over the bag's size; a stack is one slot) on the left and the gold on the right; the count turns orange when every slot is taken (a partly filled stack can still take more of its item). The footer is one line: on a panel narrower than about 3 columns the two labels crowd each other. The panel should show exactly as many slots as the bag holds (`columns * rows` = `player_inventory.max_slots`, default 20; the default 5x4 panel already matches). Fewer cells than the bag: items in the extra bag slots are invisible and unusable (`validate` error, console warning). More cells than the bag: the extra cells are drawn faded and do nothing (the faded look is fixed for now).
+A grid of item slots that displays the player's `PlayerInventory`. Always positioned absolutely. Hidden by default; toggled by `ToggleInventory` or shown/hidden explicitly with `OpenInventory`/`CloseInventory`. Slot icons and count labels update automatically via change detection whenever `PlayerInventory` changes. Requires `items_path` to be set in `project.ron`. Its embedded close button fires `ui.button_pressed:close_inventory` — `ironhold_cli validate` cross-checks this against `state_machine.ron`/behavior files whenever an `InventoryPanel` is present in a scene (`unreachable_trigger`). Click or tap an item to open its menu (Use / Sell / Destroy, see [Selling and destroying items](#selling-and-destroying-items)), or right-click it to use it at once (see [Using items](#using-items)); an empty slot does nothing. Slots can only be used with the mouse or touch: there is no gamepad or keyboard cursor in the bag. The footer shows `Slots: 12/20` (occupied bag slots over the bag's size; a stack is one slot) on the left and the gold on the right; the count turns orange when every slot is taken (a partly filled stack can still take more of its item). The footer is one line: on a panel narrower than about 3 columns the two labels crowd each other. The panel should show exactly as many slots as the bag holds (`columns * rows` = `player_inventory.max_slots`, default 20; the default 5x4 panel already matches). Fewer cells than the bag: items in the extra bag slots are invisible and unusable (`validate` error, console warning). More cells than the bag: the extra cells are drawn faded and do nothing (the faded look is fixed for now).
 
 When `icon_sheet` is set, each non-empty slot shows the icon at the item's `icon_index` (from `items.ron`); a small count label (`x3`) appears in the corner for stacks greater than 1.
 
@@ -1397,7 +1397,7 @@ InventoryPanel((
 
 A scrollable list of merchant stock entries. Always positioned absolutely. Hidden by default; shown by `OpenShop(merchant_id)` and hidden by `CloseShop`. Stock is repopulated from the merchant's `MerchantDef` every time `OpenShop` fires. Requires `items_path` to be set in `project.ron`.
 
-> **What shops do:** `Action::BuyItem` checks stock, gold and bag room together and changes nothing unless all three work (see [Buying, selling and what survives a scene load](#buying-selling-and-what-survives-a-scene-load)). **Selling is still not implemented** - `sell_price` is stored on `ShopEntry` but nothing reads it; there is no `SellItem` action yet. See "MerchantDef fields" below.
+> **What shops do:** `Action::BuyItem` checks stock, gold and bag room together and changes nothing unless all three work (see [Buying, selling and what survives a scene load](#buying-selling-and-what-survives-a-scene-load)). Players sell from the bag menu, or with `SellItem` (see [Selling and destroying items](#selling-and-destroying-items)). See "MerchantDef fields" below.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -4941,7 +4941,9 @@ Items persist across scene transitions (the `PlayerInventory` resource is not cl
 | `weight` | `f32` | `1.0` | Weight in game units (for future encumbrance mechanics) |
 | `tags` | `Vec<String>` | `[]` | Arbitrary designer tags (e.g. `["consumable", "quest"]`) |
 | `currency_stat` | `Option<String>` | `None` | When set, this item is currency: giving it to the player (`AddItem`, `TransferItem`, looting a container with Take All) adds its count to the named stat instead of occupying an inventory slot, up to the stat's `max` (coins that would pass it stay where they were, or are not added, and `inventory.full:player` fires). A coin whose stat does not exist is kept as an ordinary item with a warning. Use for currency (e.g. `"gold"`). `ironhold_cli validate` cross-checks this against `stats.ron` (when the project sets `items_path`). |
-| `use` | `Option<ItemUseDef>` | `None` | What using the item does (`UseItem`, or a click / right-click on it in the inventory): `use: ( do_actions: [ ... ], consume: 1 )`. `do_actions` run in order right after the item was taken from the bag, only if that worked (`{self}` is the primary player, but item verbs on the bag still address it as `"player"`: `RemoveItem(entity: "player", ...)`, never `entity: "{self}"`; `{target}` is not available; a `UseItem` inside the list is an error and is skipped). `consume` (default `1`) is how many are taken; `0` makes the item reusable: the player must hold one, none is taken. Omit `use:` for items that cannot be used. A typo anywhere in `items.ron` makes the whole file fail to load (an error in the log, and every item then behaves as if the catalog were missing: no icons, everything stacks to 99, coin items fill slots). `ironhold validate` checks the actions. **Known limitation:** nothing stops a health potion being used at full health (it is consumed for nothing); use conditions are planned |
+| `sell_price` | `Option<u32>` | `None` | What a shop pays per unit when the player sells this item (the bag menu's Sell rows, `SellItem`). Leave it out (or `0`) and the item cannot be sold, which is also how you keep quest and key items from being sold. A merchant's own `ShopEntry.sell_price` for the item overrides it for that merchant. See [Selling and destroying items](#selling-and-destroying-items). |
+| `destroyable` | `bool` | `true` | Whether the player can destroy the item (the bag menu's Destroy row, `DestroyItem`). Set `false` for quest and key items. |
+| `use` | `Option<ItemUseDef>` | `None` | What using the item does (`UseItem`, Use in the bag menu, or a right-click on it in the inventory): `use: ( do_actions: [ ... ], consume: 1 )`. `do_actions` run in order right after the item was taken from the bag, only if that worked (`{self}` is the primary player, but item verbs on the bag still address it as `"player"`: `RemoveItem(entity: "player", ...)`, never `entity: "{self}"`; `{target}` is not available; a `UseItem` inside the list is an error and is skipped). `consume` (default `1`) is how many are taken; `0` makes the item reusable: the player must hold one, none is taken. Omit `use:` for items that cannot be used. A typo anywhere in `items.ron` makes the whole file fail to load (an error in the log, and every item then behaves as if the catalog were missing: no icons, everything stacks to 99, coin items fill slots). `ironhold validate` checks the actions. **Known limitation:** nothing stops a health potion being used at full health (it is consumed for nothing); use conditions are planned |
 
 **`InventoryContainerDef` fields (on `PrefabDef.inventory`):**
 
@@ -4988,7 +4990,7 @@ only surfaced as a runtime no-op the first time a player opened the shop.
 |-------|------|---------|-------------|
 | `item_key` | `String` | ✅ | Key of the item from `items.ron` |
 | `buy_price` | `u32` | ✅ | Price for the player to buy the item |
-| `sell_price` | `u32` | ✅ | Price the merchant pays to buy the item from the player |
+| `sell_price` | `Option<u32>` | `null` | What this merchant pays per unit when the player sells the item to it, overriding the item's own `sell_price` (an old `sell_price: 5` still works). **`0` means this merchant does not buy it.** Leave it out to use the item's `sell_price`; an item with neither cannot be sold. The merchant buys any item that has a price, whether or not it is in its `stock` list |
 | `stock_count` | `Option<u32>` | `null` | If set, the merchant only has this many: each buy uses one, the shop row shows `[N]` and then `(Sold out)` (the row stays, its button dimmed, and a click on it emits `shop.sold_out`). The remaining count is runtime state per merchant, so it refills on scene load, like chests. Leave it out for unlimited stock |
 
 **Example:**
@@ -5006,7 +5008,7 @@ only surfaced as a runtime no-op the first time a player opened the shop.
             max_stack: 10,
             weight: 0.5,
             tags: ["consumable"],
-            use: ( do_actions: [ ModifyStat(key: "player_health", delta: 40.0) ], consume: 1 ),  // click or right-click it in the bag
+            use: ( do_actions: [ ModifyStat(key: "player_health", delta: 40.0) ], consume: 1 ),  // Use in the bag menu, or right-click it
         ),
         // Uses a different sheet for this item only
         "iron_sword": (
@@ -5066,6 +5068,10 @@ only surfaced as a runtime no-op the first time a player opened the shop.
 | `item.bought:{item_key}` | `BuyItem` succeeded |
 | `item.used:{item_key}` | `UseItem` succeeded (the item was taken and its `use:` actions were queued). There is only this specific form, like `item.bought`: a bare `item.used` rule never fires |
 | `item.use_failed` and `item.use_failed:{item_key}` | `UseItem` failed and changed nothing: none held, the item has no `use:` block, it is unknown, or its actions need `{self}` and there is no player. A later version may add a reason form; these two will keep firing |
+| `item.sold:{item_key}` | `SellItem` succeeded. Only this specific form |
+| `item.sell_refused` and `item.sell_refused:{item_key}` | `SellItem` changed nothing: no shop open, the item is unknown or this merchant does not buy it, not enough held (or `count: 0` without `all`), or the payment would pass the currency stat's maximum. A short message says which |
+| `item.destroyed:{item_key}` | `DestroyItem` succeeded. Only this specific form |
+| `item.destroy_refused` and `item.destroy_refused:{item_key}` | `DestroyItem` changed nothing: the item is unknown or `destroyable: false`, or not enough is held (or `count: 0` without `all`) |
 | `shop.sold_out` and `shop.sold_out:{item_key}` | `BuyItem` on an item with no stock left |
 | `shop.insufficient_funds` and `shop.insufficient_funds:{item_key}` | `BuyItem` without enough of the currency |
 | `shop.no_room` and `shop.no_room:{item_key}` | `BuyItem` with no room in the bag (`inventory.full:player` also fires) |
@@ -5099,7 +5105,7 @@ player_inventory: ( max_slots: 12 ),   // optional, 1 to 256, default 20
 
 #### Buying, selling and what survives a scene load
 
-`Action::BuyItem` is all or nothing. It checks stock, then the currency (`currency_stat`), then room in the bag, and only if all three work does it use one stock, take the price and add the item. Selling is still not implemented: `sell_price` is stored on `ShopEntry` but nothing reads it; there is no `SellItem` action yet.
+`Action::BuyItem` is all or nothing. It checks stock, then the currency (`currency_stat`), then room in the bag, and only if all three work does it use one stock, take the price and add the item. Selling (`SellItem`) is all or nothing in the same way: see [Selling and destroying items](#selling-and-destroying-items).
 
 The engine shows a short floating message over the player for each buy outcome: "Bought X!", "Not enough gold!", "Sold out!", "Bag is full!" (over player 1 in co-op; the word after "Not enough" is the merchant's `currency_stat` key exactly as written, so give the stat a name a player can read). They cannot be turned off yet (a rule that calls `BuyItem` shows them too); making them replaceable by a rule is planned. A rule of your own that adds text shows next to them.
 
@@ -5111,11 +5117,11 @@ The engine shows a short floating message over the player for each buy outcome: 
 | Chest and corpse contents | no, refilled from `initial_items` |
 | Merchant `stock_count` (what is left to buy) | no, refills when the scene loads |
 
-So a one-of-a-kind item can be bought again after a scene load. Coin items (`currency_stat`) never occupy a bag slot: they become the stat, so `RemoveItem` and `requires_item` on a coin item can never succeed; pay with `ModifyStat` instead. Not supported yet: selling, buy-back, restock timers, per-player prices, buying more than one at a time, saving the bag across page reloads. In local co-op there is one shared bag; the shop and the gold footer use player 1's own gold if its prefab has the stat, otherwise the shared pool (the action bar uses each slot owner's own stat).
+So a one-of-a-kind item can be bought again after a scene load. Coin items (`currency_stat`) never occupy a bag slot: they become the stat, so `RemoveItem` and `requires_item` on a coin item can never succeed; pay with `ModifyStat` instead. Not supported yet: buy-back (what you sell is gone, and the merchant's stock does not change), restock timers, per-player prices, buying more than one at a time, saving the bag across page reloads. In local co-op there is one shared bag; the shop and the gold footer use player 1's own gold if its prefab has the stat, otherwise the shared pool (the action bar uses each slot owner's own stat).
 
 #### Using items
 
-Give an item a `use:` block in `items.ron` (see the `ItemDef` table) and the player can use it: click or tap it in the bag, or right-click it with the mouse. Using one takes `consume` of it from the bag and, only if that worked, runs your `do_actions` right after (before anything else that was already queued), with `{self}` as the player. If the item is not held, has no `use:` block, is unknown, or its actions need `{self}` and there is no player in the scene, nothing happens except `item.use_failed` (and `item.use_failed:{item_key}`). Using an item shows no message of its own: the effect is the feedback (a stat bar moving, a floating text you add), and `( event: "item.use_failed", do_actions: [ ... ] )` is where to add a failure message. Write "right-click to use" in tutorial text: a later version opens a Use / Sell / Destroy menu on left click, and right-click stays the shortcut. There is no cooldown on using an item, so a fast double-click drinks two.
+Give an item a `use:` block in `items.ron` (see the `ItemDef` table) and the player can use it: open the bag menu with a click or tap and choose Use, or right-click it with the mouse (the shortcut). Using one takes `consume` of it from the bag and, only if that worked, runs your `do_actions` right after (before anything else that was already queued), with `{self}` as the player. If the item is not held, has no `use:` block, is unknown, or its actions need `{self}` and there is no player in the scene, nothing happens except `item.use_failed` (and `item.use_failed:{item_key}`). Using an item shows no message of its own: the effect is the feedback (a stat bar moving, a floating text you add), and `( event: "item.use_failed", do_actions: [ ... ] )` is where to add a failure message. Write "right-click to use" in tutorial text: a left click or tap opens the bag menu (Use, Sell, Destroy), and right-click is the one-step shortcut. There is no cooldown on using an item, so a fast double-click drinks two.
 
 ```ron
 // items.ron
@@ -5125,7 +5131,7 @@ Give an item a `use:` block in `items.ron` (see the `ItemDef` table) and the pla
 ),
 ```
 
-**Your rule wins.** A bag click emits `ui.button_pressed:use_item:{item_key}` and a shop Buy button emits `ui.button_pressed:buy_item:{item_key}`. The engine runs the built-in `UseItem` / `BuyItem` for them, unless `state_machine.ron` has a binding for that exact event in `global_on` or in any state's `on:` list. If it does, you own that event, in every state (a rule in `playing` also switches the built-in off while the game is paused or in a menu, so a click in those states does nothing, as before). Only those bindings count: a transition's `on:` and a `.behavior.ron` binding do not replace the built-in. To react to a use without replacing it, listen to `item.used:{item_key}`. With no rule at all the built-in runs in every state, including a pause or dialogue state if the shop is still on screen (close the shop on entering those states, or bind the Buy rules in `playing` as the demo does). Bag-slot clicks do nothing while the game is paused, whatever rules you have, so do not pause the game just by opening the bag.
+**Your rule wins.** A right click on a bag item, or Use in the bag menu, emits `ui.button_pressed:use_item:{item_key}` and a shop Buy button emits `ui.button_pressed:buy_item:{item_key}`. The engine runs the built-in `UseItem` / `BuyItem` for them, unless `state_machine.ron` has a binding for that exact event in `global_on` or in any state's `on:` list. If it does, you own that event, in every state (a rule in `playing` also switches the built-in off while the game is paused or in a menu, so a click in those states does nothing, as before). Only those bindings count: a transition's `on:` and a `.behavior.ron` binding do not replace the built-in. To react to a use without replacing it, listen to `item.used:{item_key}`. With no rule at all the built-in runs in every state, including a pause or dialogue state if the shop is still on screen (close the shop on entering those states, or bind the Buy rules in `playing` as the demo does). Bag-slot clicks do nothing while the game is paused, whatever rules you have, so do not pause the game just by opening the bag.
 
 **There is no per-state switch.** A binding anywhere owns the event everywhere. To make Buy or Use work only in some states, bind the event in each of those states and call the action yourself: `( event: "ui.button_pressed:buy_item:health_potion", do_actions: [ BuyItem("health_potion") ] )` in `playing` only (the demo does exactly this), and a click in any other state then does nothing. To switch it off everywhere, bind the event once with `do_actions: []`, in `global_on`. The match is exact, so it takes one binding per item key; there is no wildcard.
 
@@ -5137,11 +5143,52 @@ The same built-in handles an authored `Button`, key or gamepad binding whose tri
 ( event: "item.used:mana_potion",                    do_actions: [ EmitEvent("quest.mana_potion_used") ] ),
 ```
 
-Only Buy and the inventory-slot Use have a built-in action: `close_*` and `take_all_from_container` still need rules. A click on an item with no `use:` block (a sword, a key) runs no built-in action, but the `use_item:{item_key}` event still fires, so a rule can catch it.
+Buy, Use, Sell and Destroy have a built-in action (Sell and Destroy are in [Selling and destroying items](#selling-and-destroying-items)): `close_*` and `take_all_from_container` still need rules. A right click on an item with no `use:` block (a sword, a key) runs no built-in action, but the `use_item:{item_key}` event still fires, so a rule can catch it.
 
 **Gamepad and keyboard players** cannot click the bag. Give them an action bar slot (its cooldown and cost apply even when none is left, and `item.use_failed` tells you that happened): `( key: "6", gamepad_key: "DPadUp", do_actions: [ UseItem("health_potion") ], cooldown_secs: 2.0, label: "Potion" )`. In local co-op the bag is shared and `{self}` in `use:` is always player 1, also when player 2 clicks the bag or presses their own action bar slot, so a potion drunk from player 2's slot heals player 1. (`gamepad_key` needs `inputs.gamepad_index` on that player's prefab.)
 
-Not supported yet: equipping, item cooldowns, cast or drink times, using an item on a target (`{target}`), effects over time (`ApplyModifier` is the nearest tool), combining or crafting, use conditions (for example "not at full health"), the Use / Sell / Destroy menu, hover tooltips, gamepad or keyboard bag navigation, dragging an item to the action bar.
+Not supported yet: equipping, item cooldowns, cast or drink times, using an item on a target (`{target}`), effects over time (`ApplyModifier` is the nearest tool), combining or crafting, use conditions (for example "not at full health"), hover tooltips, gamepad or keyboard bag navigation, dragging an item to the action bar.
+
+#### Selling and destroying items
+
+Give an item a `sell_price` in `items.ron` and the player can sell it to any shop that is open; mark it `destroyable: false` to stop the player throwing it away. A **left click or tap** on an item in the bag opens a small menu next to it:
+
+| Row | When it shows | What it does |
+|---|---|---|
+| **Use** | the item has a `use:` block | the same as a right click: `UseItem` |
+| **Sell (5 gold)** / **Sell 1 (5 gold)** | a shop is open and pays for the item | sells one unit |
+| **Sell 10 (50 gold)** | the clicked stack holds more than one | asks "Sell 10 Health Potion for 50 gold?" (Yes / No), then sells that stack |
+| **Destroy** / **Destroy 10** | the item is `destroyable` | asks "Destroy 10 Health Potion?" (Yes / No), then destroys that stack |
+| *Cannot be sold or destroyed* | none of the above applies (a key item) | a dimmed line, so the click does not look broken |
+
+"That stack" is the stack the player clicked, not every unit of the item in the bag (two stacks of 10 potions: Sell 10 sells one of them). The menu closes by itself when anything it shows goes stale: the bag is closed or hidden, the game is paused, the shop opens or closes (walking away from the merchant), or the item or its quantity changes. A click anywhere else closes it. It is mouse and touch only, like the bag: for gamepad or keyboard players use `SellItem` / `DestroyItem` in a rule or an action bar slot. Escape is not used by the menu (the demo's Escape pauses the game, and pausing closes the menu).
+
+Which stack the units come from is not the clicked one: the engine takes them from the item's stacks, last stack first, so with two stacks the other one may be the one that empties (the total is always right).
+
+**What a shop pays.** The price per unit is the merchant's own `ShopEntry.sell_price` for the item if it sets one (`0` = this merchant does not buy it), otherwise the item's `sell_price`; with neither the item cannot be sold. A merchant buys anything that has a price, whether or not it is in its `stock` list (a herbalist buys swords; a way to refuse whole categories is not built yet). The menu is built to stay inside the panel and opens towards the middle of the bag grid; a panel pushed against the right or bottom screen edge can still push it partly off screen. It pays in its `currency_stat`, the same stat `BuyItem` uses (player 1's own, otherwise the shared pool). If paying would pass that stat's maximum the sale is refused and nothing changes. What you sell is gone: the merchant's `stock_count` does not go up and there is no buy-back. Make the sell price at most the buy price for the same item, or players can make gold by buying and selling it back (`ironhold validate --strict` warns).
+
+**The actions.** `SellItem(item_key: "gem", count: 3)` and `DestroyItem(item_key: "gem", all: true)` work from rules, dialogue and action bar slots. `count` defaults to `1`; `all: true` means every unit in the bag across all stacks; `count: 0` without `all` is always refused (and a `validate` error). `SellItem` needs an open shop. Both are all or nothing and tell you what happened:
+
+```ron
+// items.ron
+"health_potion": ( display_name: "Health Potion", max_stack: 10, sell_price: 5 ),
+"old_key":       ( display_name: "Old Key", stackable: false, destroyable: false ),   // no sell_price: cannot be sold either
+
+// prefabs.ron: this merchant pays 45 for a sword whatever the item says, and does not buy ore at all
+(item_key: "iron_sword", buy_price: 80, sell_price: 45),
+(item_key: "ore",        buy_price: 20, sell_price: 0),
+
+// state_machine.ron: react (add a message or a sound), or replace the built-in
+( event: "item.sold:iron_sword",         do_actions: [ ShowFloatingText(entity: "player_01", text: "Pleasure doing business") ] ),
+( event: "item.destroy_refused:old_key", do_actions: [ ShowFloatingText(entity: "player_01", text: "I should keep this") ] ),
+( event: "ui.button_pressed:destroy_item:iron_sword", do_actions: [ DestroyItem(item_key: "iron_sword", all: true), PlaySound(key: "break") ] ),
+// from an action bar slot (or any rule's do_actions): sell three gems to the open shop
+( key: "7", do_actions: [ SellItem(item_key: "gem", count: 3) ], label: "Sell gems" ),
+```
+
+A successful sale shows "Sold Iron Sword for 45 gold" (or "Sold 10 Health Potion for 50 gold" for more than one) over the player, in your `currency_stat`'s own word: the stat key is printed as it is, so name the stat `gold`, not `player_gold` (stats have no display name yet). A refusal shows a short reason: "Nobody to sell to here" (no shop open), "Can't sell that here" (this merchant does not buy it), "You have none to sell" / "You don't have that many to sell", "Can't hold any more gold" (the payout would pass the stat's maximum), "You can't destroy that", "Can't destroy that" (unknown item), "You have none to destroy" / "You don't have that many to destroy". A destroy shows no message of its own. These texts cannot be turned off yet, so a message you add in a rule appears next to them, as for "Bought X!" (give yours a different `offset` to stack it above). **Your rule wins**, as for Buy and Use: the menu rows emit `ui.button_pressed:sell_item:{item_key}` (one unit), `ui.button_pressed:sell_stack:{item_key}` (the clicked stack, after its Yes) and `ui.button_pressed:destroy_item:{item_key}` (the clicked stack, after its Yes), and the engine runs `SellItem` / `DestroyItem` for them unless `state_machine.ron` binds that exact event in `global_on` or any state's `on:` list (then you own it in every state; the Yes/No has already happened, so an override still asks first). **A rule you write chooses its own count** (a rule cannot read the size of the clicked stack): the built-in sells or destroys the clicked stack, so an override that should do the same needs `count:` or `all: true` spelled out. An authored `Button` with `action: "ui.sell_stack:iron_sword"` or `"ui.destroy_item:iron_sword"` also gets the built-in, and with no menu behind it acts on every unit of the item, with no confirmation. `DestroyItem` fired from a rule or a bar slot never asks for confirmation.
+
+Not supported yet: buy-back, a quantity picker (the menu offers one, or the clicked stack), a merchant that refuses whole categories, the sell price in a hover tooltip, a one-tap potion setting (`left click = use`).
 
 ---
 

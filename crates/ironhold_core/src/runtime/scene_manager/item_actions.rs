@@ -710,15 +710,16 @@ pub(super) fn sell_item(
             }
             info!("Action::SellItem: sold {} x '{}' for {} {}", units, item_key, total, currency);
             emit(game_events, format!("item.sold:{}", item_key));
-            say(action_queue, &player_id, format!("Sold {} for {} {}", item_def.display_name, total, currency));
+            let what = if units > 1 { format!("{} {}", units, item_def.display_name) } else { item_def.display_name.clone() };
+            say(action_queue, &player_id, format!("Sold {} for {} {}", what, total, currency));
         }
         Err(TxnError::NoRoom) => {
             info!("Action::SellItem: paying {} {} would pass the stat's maximum", total, currency);
-            refuse(game_events, action_queue, "Can't carry any more");
+            refuse(game_events, action_queue, &format!("Can't hold any more {}", currency));
         }
         Err(e) => {
             info!("Action::SellItem: '{}' could not be sold ({:?})", item_key, e);
-            refuse(game_events, action_queue, "You have none to sell");
+            refuse(game_events, action_queue, "You don't have that many to sell");
         }
     }
 }
@@ -767,6 +768,6 @@ pub(super) fn destroy_item(
             info!("Action::DestroyItem: destroyed {} x '{}'", units, item_key);
             emit(game_events, format!("item.destroyed:{}", item_key));
         }
-        Err(_) => refuse(game_events, action_queue, "You have none to destroy"),
+        Err(_) => refuse(game_events, action_queue, "You don't have that many to destroy"),
     }
 }

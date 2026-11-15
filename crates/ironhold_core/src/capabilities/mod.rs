@@ -31,6 +31,7 @@ pub mod dialogue;
 pub mod inventory;
 pub mod item_txn;
 pub mod panel_defaults;
+pub mod slot_menu;
 pub mod nameplate;
 pub mod ui_scale;
 pub mod cursor_capture;

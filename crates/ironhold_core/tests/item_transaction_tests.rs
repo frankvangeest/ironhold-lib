@@ -5,7 +5,7 @@
 // corpse_loot_interact_tests.rs), so these tests are the regression net for the item actions.
 use bevy::prelude::*;
 use ironhold_core::capabilities::inventory::{
-    add_to_slots, GoldLabelMarker, Inventory, InventorySlotMarker, LoadedInventoryUi, LoadedItemCatalog, PanelKind, PlayerInventory,
+    add_to_slots, GoldLabelMarker, Inventory, InventoryPanelMarker, InventorySlotMarker, LoadedInventoryUi, LoadedItemCatalog, PanelKind, PlayerInventory,
     ShopEntriesContainerMarker, ShopPanelMarker,
 };
 use ironhold_core::runtime::scene_manager::{LoadedStateMachine, LogicState};
@@ -18,6 +18,7 @@ use ironhold_core::runtime::{ActionQueue, GameEvent, SpawnId};
 use ironhold_core::schema::catalog::{MerchantDef, PrefabCatalog, PrefabDef, PrefabKind, ShopEntry};
 use ironhold_core::schema::items::{ItemCatalog, ItemDef};
 use ironhold_core::schema::stats::{LiveStat, LoadedStats, StatDef, StatMap};
+use ironhold_core::capabilities::slot_menu::{spawn_slot_menu, MenuConfirm, MenuRowKind, SlotMenuRow};
 use ironhold_core::schema::Action;
 
 mod support;
@@ -868,24 +869,6 @@ fn slot(app: &mut App, index: usize) -> Entity {
 }
 
 #[test]
-fn a_left_click_on_a_slot_uses_its_item() {
-    let mut app = use_app(&[("potion", 2)]);
-    let s = slot(&mut app, 0);
-    app.update();
-    app.world_mut().resource_mut::<Messages<GameEvent>>().clear();
-    *app.world_mut().get_mut::<Interaction>(s).unwrap() = Interaction::Pressed;
-    app.update();
-    assert!(has(&events(&app), "item.used:potion"), "{:?}", events(&app));
-    assert_eq!(bag_count(&app, "potion"), 1);
-    // The slot is still `Pressed` (the mouse button is held): only the edge counts, so holding it must not drink again.
-    app.world_mut().resource_mut::<Messages<GameEvent>>().clear();
-    app.update();
-    app.update();
-    assert!(!has(&events(&app), "item.used:potion"), "holding the button must not keep using the item: {:?}", events(&app));
-    assert_eq!(bag_count(&app, "potion"), 1);
-}
-
-#[test]
 fn a_right_click_on_a_hovered_slot_uses_its_item() {
     let mut app = use_app(&[("potion", 2)]);
     let s = slot(&mut app, 0);
@@ -1277,7 +1260,7 @@ fn a_payout_past_the_currency_maximum_is_refused_and_keeps_the_items() {
 #[test]
 fn a_missing_currency_stat_refuses_the_sale() {
     let mut app = sell_app(0.0, 99_999.0, &[("potion", 2)]);
-    app.world_mut().resource_mut::<LoadedStats>().0.remove("gold");
+    app.world_mut().resource_mut::<LoadedStats>().0.shift_remove("gold");
     let ev = run(&mut app, vec![sell("potion", 1, false)]);
     assert!(has(&ev, "item.sell_refused:potion") && !has(&ev, "item.sold:potion"), "{ev:?}");
     assert_eq!(bag_count(&app, "potion"), 2);
@@ -1378,4 +1361,290 @@ fn the_sell_and_destroy_actions_parse_from_ron_with_defaults() {
     assert_eq!(e.sell_price, Some(5));
     let d: ItemDef = ron::from_str(r#"(display_name: "Gem")"#).expect("defaults");
     assert!(d.destroyable && d.sell_price.is_none());
+}
+
+// ---- item system S4: the bag slot menu (`planning/features/item_sell_destroy.md`) --------------------------------------------------
+
+/// A shop-open scene (`sell_app`) plus a visible InventoryPanel (3 x 2), the hidden menu overlay and six slot nodes.
+fn menu_app(bag: &[(&str, u32)]) -> (App, Vec<Entity>) {
+    let mut app = sell_app(0.0, 99_999.0, bag);
+    app.world_mut().spawn((InventoryPanelMarker { columns: 3, rows: 2, font_size: 12.0 }, Visibility::Visible));
+    app.world_mut().commands().spawn(Name::new("menu_host")).with_children(|p| spawn_slot_menu(p, 3, 2, 40.0, 12.0));
+    app.world_mut().flush();
+    let slots = (0..6).map(|i| slot(&mut app, i)).collect();
+    app.update();
+    (app, slots)
+}
+
+fn press(app: &mut App, e: Entity) {
+    *app.world_mut().get_mut::<Interaction>(e).unwrap() = Interaction::Pressed;
+    app.update();
+    *app.world_mut().get_mut::<Interaction>(e).unwrap() = Interaction::None;
+    app.update();
+}
+
+fn row_entity(app: &mut App, kind: MenuRowKind) -> Entity {
+    let mut q = app.world_mut().query::<(Entity, &SlotMenuRow)>();
+    q.iter(app.world()).find(|(_, r)| r.0 == kind).map(|(e, _)| e).expect("menu row exists")
+}
+
+fn row_shown(app: &mut App, kind: MenuRowKind) -> bool {
+    let e = row_entity(app, kind);
+    app.world().get::<Node>(e).unwrap().display == Display::Flex
+}
+
+fn menu_state(app: &App) -> Option<ironhold_core::capabilities::slot_menu::SlotMenu> {
+    app.world().resource::<LoadedInventoryUi>().slot_menu.clone()
+}
+
+fn press_row(app: &mut App, kind: MenuRowKind) {
+    let e = row_entity(app, kind);
+    press(app, e);
+}
+
+/// Lets the real clock run past the Yes/No arming delay (a Yes pressed right after the question appeared is ignored).
+fn wait_for_confirm(app: &mut App) {
+    app.world_mut().resource_mut::<Time<Real>>().advance_by(std::time::Duration::from_millis(1000));
+    app.update();
+}
+
+fn gold_now(app: &App) -> f32 {
+    global_gold(app)
+}
+
+#[test]
+fn a_left_click_opens_the_menu_and_uses_nothing() {
+    let (mut app, slots) = menu_app(&[("potion", 3)]);
+    app.world_mut().resource_mut::<Messages<GameEvent>>().clear();
+    press(&mut app, slots[0]);
+    let m = menu_state(&app).expect("the menu opens");
+    assert_eq!((m.slot_index, m.item_key.as_str(), m.count), (0, "potion", 3));
+    assert!(m.merchant.is_some(), "a shop is open");
+    assert_eq!(bag_count(&app, "potion"), 3, "opening the menu changes nothing");
+    assert!(events(&app).iter().all(|e| !e.starts_with("item.")), "{:?}", events(&app));
+    // A potion in this catalog has no `use:` and a price: Sell 1, Sell 3 and Destroy are offered, Use is not.
+    assert!(row_shown(&mut app, MenuRowKind::SellOne) && row_shown(&mut app, MenuRowKind::SellStack) && row_shown(&mut app, MenuRowKind::Destroy));
+    assert!(!row_shown(&mut app, MenuRowKind::Use) && !row_shown(&mut app, MenuRowKind::Yes));
+    // Clicking the open slot again closes it.
+    press(&mut app, slots[0]);
+    assert!(menu_state(&app).is_none());
+}
+
+#[test]
+fn the_menu_rows_follow_the_shop_the_use_block_and_the_stack() {
+    let (mut app, slots) = menu_app(&[("sword", 1)]);
+    // No shop: no sell rows.
+    let _ = run(&mut app, vec![Action::CloseShop]);
+    press(&mut app, slots[0]);
+    assert!(menu_state(&app).is_some());
+    assert!(!row_shown(&mut app, MenuRowKind::SellOne) && !row_shown(&mut app, MenuRowKind::SellStack), "no shop open");
+    assert!(row_shown(&mut app, MenuRowKind::Destroy));
+    // A single unit: Sell, but no Sell N.
+    let _ = run(&mut app, vec![Action::OpenShop("merchant_01".to_string())]);
+    assert!(menu_state(&app).is_none(), "the shop opening closed the menu");
+    press(&mut app, slots[0]);
+    assert!(row_shown(&mut app, MenuRowKind::SellOne) && !row_shown(&mut app, MenuRowKind::SellStack));
+}
+
+#[test]
+fn a_key_item_menu_has_no_verbs() {
+    // old_key is destroyable: false; the merchant of `sell_app` prices it, so use a bag where no shop is open.
+    let (mut app, slots) = menu_app(&[("old_key", 1)]);
+    let _ = run(&mut app, vec![Action::CloseShop]);
+    press(&mut app, slots[0]);
+    assert!(menu_state(&app).is_some());
+    assert!(row_shown(&mut app, MenuRowKind::NoVerbs), "a dimmed 'Cannot be sold or destroyed' line");
+    for kind in [MenuRowKind::Use, MenuRowKind::SellOne, MenuRowKind::SellStack, MenuRowKind::Destroy] {
+        assert!(!row_shown(&mut app, kind), "{kind:?}");
+    }
+}
+
+#[test]
+fn the_sell_row_sells_one_unit_and_closes_the_menu() {
+    let (mut app, slots) = menu_app(&[("potion", 3)]);
+    press(&mut app, slots[0]);
+    press_row(&mut app, MenuRowKind::SellOne);
+    assert_eq!(bag_count(&app, "potion"), 2);
+    assert_eq!(gold_now(&app), 5.0);
+    assert!(menu_state(&app).is_none(), "a verb closes the menu");
+}
+
+#[test]
+fn sell_n_asks_first_and_sells_only_the_clicked_stack() {
+    // 25 potions at 10 per stack = stacks of 10, 10 and 5. Clicking the second stack sells 10, not 25.
+    let (mut app, slots) = menu_app(&[("potion", 25)]);
+    press(&mut app, slots[1]);
+    assert_eq!(menu_state(&app).unwrap().count, 10);
+    press_row(&mut app, MenuRowKind::SellStack);
+    assert_eq!(bag_count(&app, "potion"), 25, "the question comes first, nothing is sold yet");
+    assert_eq!(menu_state(&app).unwrap().confirm, Some(MenuConfirm::SellStack));
+    assert!(row_shown(&mut app, MenuRowKind::Prompt) && row_shown(&mut app, MenuRowKind::Yes) && !row_shown(&mut app, MenuRowKind::SellOne));
+    wait_for_confirm(&mut app);
+    press_row(&mut app, MenuRowKind::Yes);
+    assert_eq!(bag_count(&app, "potion"), 15, "only the clicked stack of 10");
+    assert_eq!(gold_now(&app), 50.0);
+    assert!(menu_state(&app).is_none());
+    assert!(app.world().resource::<LoadedInventoryUi>().menu_action.is_none(), "the quantity was consumed");
+}
+
+#[test]
+fn destroy_needs_a_yes_and_no_backs_out() {
+    let (mut app, slots) = menu_app(&[("pelt", 4)]);
+    let _ = run(&mut app, vec![Action::CloseShop]);
+    press(&mut app, slots[0]);
+    press_row(&mut app, MenuRowKind::Destroy);
+    assert_eq!(bag_count(&app, "pelt"), 4, "Destroy only asks");
+    press_row(&mut app, MenuRowKind::No);
+    assert_eq!(bag_count(&app, "pelt"), 4);
+    let m = menu_state(&app).expect("No goes back to the verbs, the menu stays");
+    assert_eq!(m.confirm, None);
+    assert!(row_shown(&mut app, MenuRowKind::Destroy) && !row_shown(&mut app, MenuRowKind::Yes));
+    press_row(&mut app, MenuRowKind::Destroy);
+    wait_for_confirm(&mut app);
+    press_row(&mut app, MenuRowKind::Yes);
+    assert_eq!(bag_count(&app, "pelt"), 0, "Yes destroys the clicked stack");
+    assert!(menu_state(&app).is_none());
+}
+
+#[test]
+fn a_press_outside_the_menu_closes_it() {
+    let (mut app, slots) = menu_app(&[("potion", 3)]);
+    press(&mut app, slots[0]);
+    assert!(menu_state(&app).is_some());
+    app.world_mut().resource_mut::<ButtonInput<MouseButton>>().press(MouseButton::Left);
+    app.update();
+    app.world_mut().resource_mut::<ButtonInput<MouseButton>>().clear();
+    assert!(menu_state(&app).is_none());
+}
+
+#[test]
+fn the_menu_closes_when_its_state_goes_stale() {
+    use ironhold_core::runtime::sim_clock::{PauseHold, SimClock};
+    // the item is used up elsewhere
+    let (mut app, slots) = menu_app(&[("potion", 3)]);
+    press(&mut app, slots[0]);
+    let _ = run(&mut app, vec![Action::RemoveItem { entity: "player".to_string(), item_key: "potion".to_string(), count: 1, all_or_nothing: false }]);
+    assert!(menu_state(&app).is_none(), "the stack changed");
+    // the shop closes (walking past the merchant)
+    press(&mut app, slots[0]);
+    assert!(menu_state(&app).is_some());
+    let _ = run(&mut app, vec![Action::CloseShop]);
+    assert!(menu_state(&app).is_none(), "a stale Sell row must not survive the shop closing");
+    // the pause menu
+    press(&mut app, slots[0]);
+    assert!(menu_state(&app).is_some());
+    app.world_mut().resource_mut::<SimClock>().hold(PauseHold::Menu);
+    app.update();
+    assert!(menu_state(&app).is_none());
+    app.world_mut().resource_mut::<SimClock>().release(PauseHold::Menu);
+    // the bag panel is hidden
+    app.update();
+    press(&mut app, slots[0]);
+    assert!(menu_state(&app).is_some());
+    let mut q = app.world_mut().query::<&mut Visibility>();
+    for mut v in q.iter_mut(app.world_mut()) {
+        *v = Visibility::Hidden;
+    }
+    app.update();
+    assert!(menu_state(&app).is_none(), "a hidden panel closes the menu");
+}
+
+#[test]
+fn right_click_still_uses_at_once_and_an_empty_slot_opens_nothing() {
+    let (mut app, slots) = menu_app(&[("potion", 2)]);
+    press(&mut app, slots[4]);
+    assert!(menu_state(&app).is_none(), "an empty slot opens no menu");
+    press(&mut app, slots[0]);
+    assert!(menu_state(&app).is_some());
+    *app.world_mut().get_mut::<Interaction>(slots[0]).unwrap() = Interaction::Hovered;
+    app.update();
+    app.world_mut().resource_mut::<ButtonInput<MouseButton>>().press(MouseButton::Right);
+    app.update();
+    app.world_mut().resource_mut::<ButtonInput<MouseButton>>().clear();
+    assert!(menu_state(&app).is_none(), "the shortcut closes the menu");
+}
+
+#[test]
+fn a_rule_that_owns_destroy_item_gets_the_event_and_the_menu_quantity_does_not_leak() {
+    let (mut app, slots) = menu_app(&[("pelt", 4)]);
+    let _ = run(&mut app, vec![Action::CloseShop]);
+    app.world_mut().insert_resource(fsm_with("playing", Some("ui.button_pressed:destroy_item:pelt"), false));
+    app.world_mut().resource_mut::<LogicState>().0 = "playing".to_string();
+    app.update();
+    press(&mut app, slots[0]);
+    press_row(&mut app, MenuRowKind::Destroy);
+    app.world_mut().resource_mut::<Messages<GameEvent>>().clear();
+    wait_for_confirm(&mut app);
+    press_row(&mut app, MenuRowKind::Yes);
+    assert_eq!(bag_count(&app, "pelt"), 4, "the rule owns the event: the built-in did not destroy");
+    assert!(app.world().resource::<LoadedInventoryUi>().menu_action.is_none(), "the quantity was taken even though a rule owned the event");
+}
+
+#[test]
+fn the_menu_opens_towards_the_middle_of_the_panel() {
+    let (mut app, slots) = menu_app(&[("sword", 6)]);
+    let root = app.world_mut().query::<(Entity, &ironhold_core::capabilities::slot_menu::SlotMenuRoot)>().iter(app.world()).next().map(|(e, _)| e).unwrap();
+    // slot 0: top-left -> opens right and down
+    press(&mut app, slots[0]);
+    let n = app.world().get::<Node>(root).unwrap().clone();
+    assert!(n.left != Val::Auto && n.right == Val::Auto && n.top != Val::Auto && n.bottom == Val::Auto, "{n:?}");
+    assert_eq!(app.world().get::<ChildOf>(root).unwrap().parent(), slots[0], "the menu hangs under the clicked slot");
+    // slot 5: bottom-right -> opens left and up
+    press(&mut app, slots[0]);
+    press(&mut app, slots[5]);
+    let n = app.world().get::<Node>(root).unwrap().clone();
+    assert!(n.left == Val::Auto && n.right != Val::Auto && n.top == Val::Auto && n.bottom != Val::Auto, "{n:?}");
+    assert_eq!(app.world().get::<ChildOf>(root).unwrap().parent(), slots[5]);
+}
+
+#[test]
+fn a_yes_pressed_at_once_after_the_question_appears_is_ignored() {
+    // The question replaces the verb rows in the same spot: the second click of a double-click on Destroy must not confirm it.
+    let (mut app, slots) = menu_app(&[("pelt", 4)]);
+    let _ = run(&mut app, vec![Action::CloseShop]);
+    press(&mut app, slots[0]);
+    press_row(&mut app, MenuRowKind::Destroy);
+    press_row(&mut app, MenuRowKind::Yes);
+    assert_eq!(bag_count(&app, "pelt"), 4, "too soon: nothing destroyed");
+    assert_eq!(menu_state(&app).unwrap().confirm, Some(MenuConfirm::Destroy), "the question stays");
+    wait_for_confirm(&mut app);
+    press_row(&mut app, MenuRowKind::Yes);
+    assert_eq!(bag_count(&app, "pelt"), 0);
+}
+
+#[test]
+fn an_authored_button_cannot_take_the_menus_quantity_for_another_verb() {
+    // The menu confirms "Sell 5": quantity 5 belongs to `sell_stack:` only. An authored `destroy_item:x` press the same frame
+    // is a different verb and acts on every unit, and the sell keeps its own quantity.
+    use ironhold_core::capabilities::panel_defaults::{DESTROY_ITEM_PREFIX, SELL_STACK_PREFIX};
+    let (mut app, _slots) = menu_app(&[("potion", 8)]);
+    app.world_mut().resource_mut::<LoadedInventoryUi>().menu_action = Some((SELL_STACK_PREFIX, "potion".to_string(), 5));
+    send_click(&mut app, &format!("{DESTROY_ITEM_PREFIX}potion"));
+    assert_eq!(bag_count(&app, "potion"), 0, "the destroy had no menu quantity: every unit");
+    assert!(app.world().resource::<LoadedInventoryUi>().menu_action.is_some(), "the sell's quantity is still waiting for its own event");
+}
+
+#[test]
+fn an_item_the_catalog_does_not_know_gets_no_destroy_row() {
+    // With no items.ron the executor refuses DestroyItem for every key, so the menu must not offer it.
+    let (mut app, slots) = menu_app(&[("potion", 2)]);
+    let _ = run(&mut app, vec![Action::CloseShop]);
+    app.world_mut().insert_resource(LoadedItemCatalog(None));
+    press(&mut app, slots[0]);
+    assert!(menu_state(&app).is_some());
+    assert!(!row_shown(&mut app, MenuRowKind::Destroy));
+    assert!(row_shown(&mut app, MenuRowKind::NoVerbs));
+}
+
+#[test]
+fn a_sell_n_question_closes_when_the_shop_stops_paying() {
+    // The merchant despawning mid-question must not leave "Sell 3 for 0 gold?" on screen.
+    let (mut app, slots) = menu_app(&[("potion", 3)]);
+    press(&mut app, slots[0]);
+    press_row(&mut app, MenuRowKind::SellStack);
+    assert_eq!(menu_state(&app).unwrap().confirm, Some(MenuConfirm::SellStack));
+    let merchant = app.world().resource::<SpawnRegistry>().entities["merchant_01"];
+    app.world_mut().despawn(merchant);
+    app.update();
+    assert!(menu_state(&app).is_none());
 }

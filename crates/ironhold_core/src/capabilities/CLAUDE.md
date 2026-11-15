@@ -44,6 +44,16 @@ slot's own `owner_player` whichever viewport the cursor is in (the mouse is shar
 `InspectorEnabled`. In tests, write `Interaction::Pressed` once after a warm-up update, never every frame.
 
 <!-- b:323 -->
+## The bag slot menu (`slot_menu.rs`, item system S4)
+
+One hidden overlay node per `InventoryPanel`, re-parented under the clicked slot (so no cursor or window pixel math and no `UiScale` correction),
+`GlobalZIndex(110)`, `FocusPolicy::Block`. `inventory_slot_click_system` (`panel_defaults.rs`) is the **one** owner of opening, outside-click closing, the
+Yes/No step and emitting, so an opening click can never also count as an outside click; `slot_menu_sync_system` (`PostExecute`) derives closing from state
+every frame (panel hidden, `!sim.is_running()`, the open shop changed, the slot's item or count changed), **never from a list of actions that close it**.
+Its rows are plain `Button`s with no `UiAction`. The menu nodes carry no `UiNodeId`, so `SetUiVisible` cannot reach them: `slot_menu.rs` is the only
+writer of their `Node.display` (keep the guarded writes). The row text rules are the pure `menu_view` (unit-tested without Bevy): change a label there, not in the
+systems. Escape deliberately does nothing here (backlog "Escape closes the topmost window before it pauses"): when that lands, register the menu as a closable layer.
+
 ## `target.*` events and selection
 
 Selection is **screen-space proximity** (`camera.world_to_viewport`, nearest to the cursor), not mesh raycasting, which

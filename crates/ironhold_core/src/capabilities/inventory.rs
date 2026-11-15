@@ -73,6 +73,14 @@ pub struct LoadedInventoryUi {
     /// `LoadScene`). Cleared on `LoadScene`. Read through `world_input_blocked()` by
     /// `interactable_system`, `collectible_system` and `tab_targeting_system`.
     pub open_panels: BTreeSet<PanelKind>,
+    /// The bag slot menu that is open, if any (item system S4). Lives here so a Replace-mode scene load, which resets this whole
+    /// resource, closes it. Written by `inventory_slot_click_system`; closed by `slot_menu_sync_system` when it goes stale.
+    pub slot_menu: Option<crate::capabilities::slot_menu::SlotMenu>,
+    /// Event prefix (`sell_stack:` / `destroy_item:`), item key and quantity of the stack a menu row just acted on (Yes on
+    /// "Sell N" or Destroy). `default_panel_actions_system` takes it the same frame to give `SellItem`/`DestroyItem` the clicked
+    /// stack's quantity; a button that fires the same event without a menu has none and acts on every unit. The prefix keeps an
+    /// authored `sell_stack:x` press on the same frame from taking a menu's `destroy_item:x` quantity.
+    pub menu_action: Option<(&'static str, String, u32)>,
 }
 
 /// The UI panels the engine tracks open/closed state for.

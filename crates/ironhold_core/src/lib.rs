@@ -315,7 +315,7 @@ impl Plugin for GamePlugin {
                 unclaimed_gamepad_trigger_system,
                 button_system,
                 icon_button_click_system,
-                // A click or right click on an inventory slot emits `use_item:{key}` (item system S3).
+                // A left click on an inventory slot opens the bag menu, a right click emits `use_item:{key}` (item system S3/S4).
                 crate::capabilities::panel_defaults::inventory_slot_click_system,
             ).chain().in_set(crate::runtime::schedule::EmitSet::Ui))
             // Stat pipeline (GameStreamSet::Stats, last of the game stream): modifier ticks → regen → effective value
@@ -522,6 +522,8 @@ impl Plugin for GamePlugin {
             // frame of stale slot counts/icons on the same frame an item is added or removed.
             .add_systems(Update, crate::capabilities::inventory::inventory_ui_system.in_set(crate::runtime::schedule::GameplaySet::PostExecute))
             .add_systems(Update, crate::capabilities::inventory::container_ui_system.in_set(crate::runtime::schedule::GameplaySet::PostExecute))
+            // The bag menu closes itself when stale and draws its rows from the bag as this frame's actions left it (item system S4).
+            .add_systems(Update, crate::capabilities::slot_menu::slot_menu_sync_system.in_set(crate::runtime::schedule::GameplaySet::PostExecute))
             .add_systems(PostUpdate, update_debug_state);
 
         #[cfg(target_arch = "wasm32")]

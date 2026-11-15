@@ -14,5 +14,25 @@
                 ],
             ),
         ),
+        // two shops: one sells the ring for 100 and pays 70 for it, the other sells it for 30 and does not buy it back:
+        // buying at the second and selling at the first makes 40 gold, though neither shop alone loses anything
+        "jeweller": (
+            kind: Prop,
+            merchant: (
+                currency_stat: "gold",
+                stock: [
+                    ( item_key: "ring", buy_price: 100, sell_price: 70 ),
+                ],
+            ),
+        ),
+        "pedlar": (
+            kind: Prop,
+            merchant: (
+                currency_stat: "gold",
+                stock: [
+                    ( item_key: "ring", buy_price: 30, sell_price: 0 ),
+                ],
+            ),
+        ),
     },
 )

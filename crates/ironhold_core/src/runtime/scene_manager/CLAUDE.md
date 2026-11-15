@@ -341,5 +341,11 @@ click is `default_panel_actions_system` (`GameplaySet::Execute`, after `flush_pe
 for `ui.button_pressed:buy_item:{key}` / `use_item:{key}` unless `BoundPanelEvents` has the event, a lookup-only set rebuilt when `LoadedStateMachine`
 changes from the `global_on` and in-state `on:` bindings only (not transitions, not behaviors). "Bound anywhere" is deliberate: a rule scoped to `playing`
 keeps a click in another state doing nothing, as before S3. `inventory_slot_click_system` (`EmitSet::Ui`, after `icon_button_click_system`, gated on
-`SimClock` in the body) emits `use_item:{key}` from a slot `Button` (no `UiAction`: `button_system` must keep ignoring slots).
+`SimClock` in the body) owns the bag menu (item system S4): a right click on a slot emits `use_item:{key}`, a left click opens the menu
+(`LoadedInventoryUi.slot_menu`, drawn and closed by `slot_menu_sync_system` in `PostExecute`), its rows emit `use_item:` / `sell_item:` /
+`sell_stack:` / `destroy_item:` and nothing else (slots and menu rows are plain `Button`s with no `UiAction`: `button_system` must keep ignoring them).
+`default_panel_actions_system` turns the last three into `SellItem`/`DestroyItem`; `sell_stack:`/`destroy_item:` take the clicked stack's quantity from
+`LoadedInventoryUi.menu_action` (taken even when a rule owns the event; a click with no menu behind it acts on every unit). The prefix list is
+`panel_defaults::DEFAULT_BACKED_PREFIXES`, the one list `ironhold validate` shares: add a new default-backed click there, never in a second place.
+`SellItem`/`DestroyItem` (`item_actions.rs`) use `all: true` resolved at run time with `count_item`, never a count read earlier from the bag.
 The player bag is sized once, in `check_project_loaded`'s tail from `ProjectConfig.player_inventory` (clamped 1..=256), never lazily in an action; `PlayerInventory::default()` is 20 slots (hand-written, never derived).

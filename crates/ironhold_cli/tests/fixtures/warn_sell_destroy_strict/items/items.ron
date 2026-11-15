@@ -6,5 +6,6 @@
         "coin": ( display_name: "Coin", currency_stat: "gold", sell_price: 1 ),
         "ore": ( display_name: "Ore", sell_price: 3 ),
         "old_key": ( display_name: "Old Key", stackable: false, destroyable: false ),
+        "ring": ( display_name: "Ring", stackable: false ),
     },
 )

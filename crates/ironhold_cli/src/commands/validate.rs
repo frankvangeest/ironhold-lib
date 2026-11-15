@@ -1005,7 +1005,7 @@ fn item_sell_warnings(
     // Does any merchant in the project pay for this item?
     let sold_somewhere = |key: &str, def: &ironhold_core::schema::items::ItemDef| {
         merchants.iter().any(|(_, m)| sell_price_for(m, key, def.sell_price).is_some())
-            || (merchants.is_empty() && def.sell_price.is_some_and(|p| p > 0))
+            || (prefab_catalog.is_none() && def.sell_price.is_some_and(|p| p > 0))
     };
     for (key, def) in &items.items {
         if def.currency_stat.is_some() && def.sell_price.is_some_and(|p| p > 0) {
@@ -1064,20 +1064,27 @@ fn item_sell_warnings(
             }
         }
     }
-    for (prefab_key, merchant) in &merchants {
-        for entry in &merchant.stock {
-            let item_price = items.items.get(&entry.item_key).and_then(|d| d.sell_price);
-            if let Some(sell) = sell_price_for(merchant, &entry.item_key, item_price) {
-                if sell > entry.buy_price {
-                    out.push(StrictWarning {
-                        source_file: "prefabs/prefabs.ron".to_string(),
-                        message: format!(
-                            "merchant on prefab {prefab_key:?}: pays {sell} for {:?} but sells it for {}: buying and selling it back makes gold",
-                            entry.item_key, entry.buy_price
-                        ),
-                        kind: "sell_price_above_buy_price",
-                    });
-                }
+    // Gold exploit: the most any merchant pays for an item against the least any merchant charges for it (buy from one, sell to
+    // another, or back to the same one).
+    for key in items.items.keys() {
+        let item_price = items.items.get(key).and_then(|d| d.sell_price);
+        let cheapest = merchants
+            .iter()
+            .filter_map(|(k, m)| m.stock.iter().find(|e| &e.item_key == key).map(|e| (e.buy_price, *k)))
+            .min_by_key(|(price, _)| *price);
+        let best = merchants
+            .iter()
+            .filter_map(|(k, m)| sell_price_for(m, key, item_price).map(|p| (p, *k)))
+            .max_by_key(|(price, _)| *price);
+        if let (Some((buy, seller)), Some((sell, buyer))) = (cheapest, best) {
+            if sell > buy {
+                out.push(StrictWarning {
+                    source_file: "prefabs/prefabs.ron".to_string(),
+                    message: format!(
+                        "item {key:?}: merchant on prefab {buyer:?} pays {sell} for it but merchant on prefab {seller:?} sells it for {buy}: buying and selling it back makes gold; lower that `sell_price` or raise the `buy_price`"
+                    ),
+                    kind: "sell_price_above_buy_price",
+                });
             }
         }
     }
@@ -3395,6 +3402,7 @@ fn collect_reachable_ui_triggers(
     prefab_catalog: Option<&PrefabCatalog>,
     item_catalog: Option<&ItemCatalog>,
 ) -> HashSet<String> {
+    use ironhold_core::capabilities::panel_defaults::{DESTROY_ITEM_PREFIX, SELL_ITEM_PREFIX, SELL_STACK_PREFIX};
     let mut reachable = HashSet::new();
     let mut insert = |trigger: &str| {
         if !trigger.is_empty() {
@@ -3434,9 +3442,9 @@ fn collect_reachable_ui_triggers(
                         for key in items.items.keys() {
                             insert(&format!("use_item:{key}"));
                             // The bag menu (item system S4) fires these for any item, so a rule that overrides one is reachable.
-                            insert(&format!("sell_item:{key}"));
-                            insert(&format!("sell_stack:{key}"));
-                            insert(&format!("destroy_item:{key}"));
+                            for prefix in [SELL_ITEM_PREFIX, SELL_STACK_PREFIX, DESTROY_ITEM_PREFIX] {
+                                insert(&format!("{prefix}{key}"));
+                            }
                         }
                     }
                 }

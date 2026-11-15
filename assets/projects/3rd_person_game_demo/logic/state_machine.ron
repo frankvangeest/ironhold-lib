@@ -175,15 +175,17 @@
                 ( event: "ui.button_pressed:close_shop",   do_actions: [ CloseShop ] ),
                 // These four Buy rules are optional now: with no rule for a click event the engine runs BuyItem itself, and
                 // a rule you write (in any state) replaces that built-in. They stay as the "your rule wins" example. Using a
-                // potion needs no rule either: clicking or right-clicking it in the bag runs UseItem (see items.ron `use:`).
+                // potion needs no rule either: Use in the bag menu or a right click runs UseItem (see items.ron `use:`).
                 ( event: "ui.button_pressed:buy_item:health_potion",      do_actions: [ BuyItem("health_potion") ] ),
                 ( event: "ui.button_pressed:buy_item:mana_potion",        do_actions: [ BuyItem("mana_potion") ] ),
                 ( event: "ui.button_pressed:buy_item:iron_sword",         do_actions: [ BuyItem("iron_sword") ] ),
                 ( event: "ui.button_pressed:buy_item:old_key",            do_actions: [ BuyItem("old_key") ] ),
 
                 // Selling and destroying (the bag menu, or SellItem / DestroyItem from a rule or a bar slot) work with no rule too.
-                // Add one only to react: `item.sold:iron_sword`, `item.sell_refused:old_key`, `item.destroyed:health_potion`. A rule on
-                // `ui.button_pressed:destroy_item:iron_sword` or `sell_item:...` / `sell_stack:...` would replace the built-in (in any state).
+                // Add one only to react. This one adds a line above the built-in "Sold Iron Sword for 35 gold" message (a rule cannot
+                // switch the built-in text off yet). A rule on `ui.button_pressed:destroy_item:iron_sword` or `sell_item:...` /
+                // `sell_stack:...` would replace the built-in (in any state): spell out its count, or `all: true`.
+                ( event: "item.sold:iron_sword", do_actions: [ ShowFloatingText(entity: "player_01", text: "Pleasure doing business", offset: (0.0, 3.0, 0.0)) ] ),
 
                 // Using an item shows no message of its own; this is where to add one for a failed use (UseItem from a rule or the bar).
                 ( event: "item.use_failed", do_actions: [ ShowFloatingText(entity: "player_01", text: "Nothing to use") ] ),

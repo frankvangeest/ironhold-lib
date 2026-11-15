@@ -10,7 +10,9 @@ use std::collections::HashSet;
 
 use bevy::prelude::*;
 
-use crate::capabilities::inventory::{InventorySlotMarker, LoadedItemCatalog, PlayerInventory};
+use crate::capabilities::inventory::{InventorySlotMarker, LoadedInventoryUi, LoadedItemCatalog, PlayerInventory};
+use crate::capabilities::item_txn::count_item;
+use crate::capabilities::slot_menu::{MenuConfirm, MenuRowKind, SlotMenu, SlotMenuRoot, SlotMenuRow, CONFIRM_ARM_MS};
 use crate::runtime::actions::ActionQueue;
 use crate::runtime::messages::UiEvent;
 use crate::runtime::scene_manager::LoadedStateMachine;
@@ -63,6 +65,7 @@ pub fn default_panel_actions_system(
     loaded_fsm: Res<LoadedStateMachine>,
     mut bound: ResMut<BoundPanelEvents>,
     catalog: Res<LoadedItemCatalog>,
+    mut inventory_ui: ResMut<LoadedInventoryUi>,
     mut action_queue: ResMut<ActionQueue>,
 ) {
     if loaded_fsm.is_changed() {
@@ -86,26 +89,53 @@ pub fn default_panel_actions_system(
                 action_queue.push(Action::SellItem { item_key: key.to_string(), count: 1, all: false });
             }
         } else if let Some(key) = trigger.strip_prefix(SELL_STACK_PREFIX) {
+            // Taken even when a rule owns the event, so a stale quantity can never reach a later click.
+            let (count, all) = take_menu_quantity(&mut inventory_ui, SELL_STACK_PREFIX, key);
             if !bound.0.contains(trigger.as_str()) {
-                action_queue.push(Action::SellItem { item_key: key.to_string(), count: 1, all: true });
+                action_queue.push(Action::SellItem { item_key: key.to_string(), count, all });
             }
         } else if let Some(key) = trigger.strip_prefix(DESTROY_ITEM_PREFIX) {
+            let (count, all) = take_menu_quantity(&mut inventory_ui, DESTROY_ITEM_PREFIX, key);
             if !bound.0.contains(trigger.as_str()) {
-                action_queue.push(Action::DestroyItem { item_key: key.to_string(), count: 1, all: true });
+                action_queue.push(Action::DestroyItem { item_key: key.to_string(), count, all });
             }
         }
     }
 }
 
-/// Emits `ui.button_pressed:use_item:{item_key}` for the item in the clicked inventory slot: a left click or tap (the
-/// `Interaction` edge to `Pressed`, like an action bar slot) or a right click while the slot is hovered (bevy_ui only sets
-/// `Pressed` for the left button and touch). Empty slots emit nothing. Keeps running while paused but emits nothing, so the
-/// `Interaction` baseline keeps advancing; ignored while the inspector is on.
+/// The quantity the bag menu chose for this verb (`prefix`) and `key` (the clicked stack), taken once. A click with no menu behind it (an authored
+/// button, a test) has none, and `sell_stack:` / `destroy_item:` then act on every unit of the item.
+fn take_menu_quantity(ui: &mut LoadedInventoryUi, prefix: &str, key: &str) -> (u32, bool) {
+    if ui.menu_action.as_ref().is_some_and(|(p, k, _)| *p == prefix && k == key) {
+        if let Some((_, _, count)) = ui.menu_action.take() {
+            return (count, false);
+        }
+    }
+    (1, true)
+}
+
+/// Owns the bag's click menu (item system S4, `capabilities/slot_menu.rs`): opening it, closing it on a click outside, the Yes/No
+/// step, and emitting the default-backed event a row stands for. Everything in one system so the click that opens the menu can
+/// never also count as an outside click in the same frame.
+///
+/// * Left click or tap on a non-empty slot: opens the menu for it (again on the open slot: closes it).
+/// * Right click on a hovered non-empty slot: emits `use_item:{key}` at once (the shortcut) and closes the menu.
+/// * A row of the open menu: Use / Sell emit `use_item:` / `sell_item:` and close; Sell N and Destroy switch to a Yes/No; Yes emits
+///   `sell_stack:` / `destroy_item:` (with the clicked stack's quantity in `menu_action`) and closes; No goes back.
+/// * A press anywhere else closes it.
+///
+/// Keeps running while paused but does nothing, so the `Interaction` baselines keep advancing (the menu is closed by
+/// `slot_menu_sync_system`); ignored while the inspector is on. Empty slots and cells past the bag emit and open nothing.
 pub fn inventory_slot_click_system(
     slots: Query<(&InventorySlotMarker, Ref<Interaction>)>,
+    rows: Query<(&SlotMenuRow, Ref<Interaction>)>,
+    menu_root: Query<&Interaction, With<SlotMenuRoot>>,
     player_inv: Res<PlayerInventory>,
     mouse: Res<ButtonInput<MouseButton>>,
+    touches: Option<Res<Touches>>,
+    real_time: Option<Res<Time<Real>>>,
     sim: Res<crate::runtime::sim_clock::SimClock>,
+    mut inventory_ui: ResMut<LoadedInventoryUi>,
     mut ui_events: MessageWriter<UiEvent>,
     #[cfg(feature = "inspector")] inspector_enabled: Option<Res<crate::inspector::InspectorEnabled>>,
 ) {
@@ -116,11 +146,68 @@ pub fn inventory_slot_click_system(
     if inspector_enabled.is_some_and(|e| e.0) {
         return;
     }
+    let has_clock = real_time.is_some();
+    let now_ms = real_time.as_ref().map_or(0, |t| t.elapsed().as_millis() as u64);
+    let mut emit = |prefix: &str, key: &str| {
+        ui_events.write(UiEvent::ButtonPressed(format!("{prefix}{key}")));
+    };
+
+    // 1. A row of the open menu.
+    if let Some(menu) = inventory_ui.slot_menu.clone() {
+        for (row, interaction) in &rows {
+            if !(interaction.is_changed() && *interaction == Interaction::Pressed) {
+                continue;
+            }
+            let key = menu.item_key.as_str();
+            match row.0 {
+                MenuRowKind::Use => {
+                    emit(USE_ITEM_PREFIX, key);
+                    inventory_ui.slot_menu = None;
+                }
+                MenuRowKind::SellOne => {
+                    emit(SELL_ITEM_PREFIX, key);
+                    inventory_ui.slot_menu = None;
+                }
+                MenuRowKind::SellStack => {
+                    inventory_ui.slot_menu = Some(SlotMenu { confirm: Some(MenuConfirm::SellStack), confirm_since_ms: now_ms, ..menu.clone() })
+                }
+                MenuRowKind::Destroy => {
+                    inventory_ui.slot_menu = Some(SlotMenu { confirm: Some(MenuConfirm::Destroy), confirm_since_ms: now_ms, ..menu.clone() })
+                }
+                MenuRowKind::Yes => {
+                    // The question replaces the verb rows in the same spot, so the second click of a double-click on Destroy would land on
+                    // Yes: it only counts once the question has been on screen for a moment.
+                    if has_clock && now_ms.saturating_sub(menu.confirm_since_ms) < CONFIRM_ARM_MS {
+                        return;
+                    }
+                    match menu.confirm {
+                        Some(MenuConfirm::SellStack) => {
+                            emit(SELL_STACK_PREFIX, key);
+                            inventory_ui.menu_action = Some((SELL_STACK_PREFIX, menu.item_key.clone(), menu.count));
+                        }
+                        Some(MenuConfirm::Destroy) => {
+                            emit(DESTROY_ITEM_PREFIX, key);
+                            inventory_ui.menu_action = Some((DESTROY_ITEM_PREFIX, menu.item_key.clone(), menu.count));
+                        }
+                        None => {}
+                    }
+                    inventory_ui.slot_menu = None;
+                }
+                MenuRowKind::No => inventory_ui.slot_menu = Some(SlotMenu { confirm: None, confirm_since_ms: 0, ..menu.clone() }),
+                MenuRowKind::Header | MenuRowKind::NoVerbs | MenuRowKind::Prompt => continue,
+            }
+            return;
+        }
+    }
+
+    // 2. A click on a slot: left opens (or closes) the menu, right uses at once.
     let right_pressed = mouse.just_pressed(MouseButton::Right);
+    let mut left_click: Option<(usize, String, u32)> = None;
+    let mut right_click: Option<String> = None;
     for (slot, interaction) in &slots {
-        let left_click = interaction.is_changed() && *interaction == Interaction::Pressed;
-        let right_click = right_pressed && *interaction == Interaction::Hovered;
-        if !(left_click || right_click) {
+        let left = interaction.is_changed() && *interaction == Interaction::Pressed;
+        let right = right_pressed && *interaction == Interaction::Hovered;
+        if !(left || right) {
             continue;
         }
         // A cell past the bag's size is drawn faded and does nothing (`slots.get` is already `None` there; this states the rule).
@@ -128,7 +215,44 @@ pub fn inventory_slot_click_system(
             continue;
         }
         let Some(stack) = player_inv.slots.get(slot.slot_index).and_then(|s| s.as_ref()) else { continue };
-        ui_events.write(UiEvent::ButtonPressed(format!("{USE_ITEM_PREFIX}{}", stack.item_key)));
+        if left {
+            left_click = Some((slot.slot_index, stack.item_key.clone(), stack.count));
+        } else {
+            right_click = Some(stack.item_key.clone());
+        }
+    }
+    if let Some(key) = right_click {
+        emit(USE_ITEM_PREFIX, &key);
+        if inventory_ui.slot_menu.is_some() {
+            inventory_ui.slot_menu = None;
+        }
+        return;
+    }
+    if let Some((slot_index, item_key, count)) = left_click {
+        let same_slot = inventory_ui.slot_menu.as_ref().is_some_and(|m| m.slot_index == slot_index);
+        inventory_ui.slot_menu = if same_slot {
+            None
+        } else {
+            Some(SlotMenu {
+                slot_index,
+                total: count_item(&player_inv.slots, &item_key),
+                item_key,
+                count,
+                merchant: inventory_ui.active_merchant_id.clone(),
+                confirm: None,
+                confirm_since_ms: 0,
+            })
+        };
+        return;
+    }
+
+    // 3. A press anywhere else closes an open menu.
+    if inventory_ui.slot_menu.is_some() {
+        let pressed = mouse.just_pressed(MouseButton::Left) || touches.as_ref().is_some_and(|t| t.any_just_pressed());
+        let over_menu = menu_root.iter().any(|i| *i != Interaction::None) || rows.iter().any(|(_, i)| *i != Interaction::None);
+        if pressed && !over_menu {
+            inventory_ui.slot_menu = None;
+        }
     }
 }
 

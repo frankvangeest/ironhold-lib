@@ -2842,6 +2842,7 @@ fn sell_and_destroy_hygiene_warnings_are_strict_only() {
     for fragment in [
         "`sell_price` on a currency item", "no merchant in this project buys it", "is `destroyable: false`, so it is always refused",
         "can be destroyed by the player", "can be sold to a merchant", "buying and selling it back makes gold",
+        "item \"ring\": merchant on prefab \"jeweller\" pays 70 for it but merchant on prefab \"pedlar\" sells it for 30",
     ] {
         assert!(stdout.contains(fragment), "expected {fragment:?} in output:
 {stdout}");

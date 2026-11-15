@@ -1,6 +1,6 @@
 # Feature: Selling and destroying items (item system S4)
 
-_Status: Ready (plan-reviewed 2026-11-15; Frank's answers to Q3, Q5, Q6 folded in)_
+_Status: In Progress (plan-reviewed 2026-11-15; Frank's answers to Q3, Q5, Q6 folded in)_
 _Planned at: `a65e696` (2026-11-15)_
 
 Slice S4 of `planning/features/item_system_review.md`. Builds on S2a (the item transaction primitive,
@@ -183,3 +183,17 @@ split out of S4 into its own item, so S4 does not bind Escape.
 - Given a rule on `ui.button_pressed:destroy_item:iron_sword` in any state, then only the rule runs.
 - A failed sell or destroy never emits `item.sold` / `item.destroyed` and changes no bag, stat or stock.
 - `ironhold validate` rejects an unknown item key in `SellItem`/`DestroyItem` and `--strict` flags a destroyable or sellable `requires_item` key.
+
+## Implementation notes (2026-11-15, from the step-4 reviews)
+- **`key_item_sellable` is `--strict` only**, not a plain warning as section 5 says: `ironhold validate` has errors and `--strict` warnings, no middle level.
+- **The menu hangs under the clicked slot** (re-parented) instead of being an absolute child of the panel, and `slot_menu_sync_system` runs in `PostExecute`
+  (it sees the bag after the frame's actions). "Flips near the viewport edge" became "opens towards the middle of the panel" (no window maths); a panel at the
+  screen edge can still push it off screen (backlog).
+- **The Yes of a Yes/No is ignored for 350 ms** after the question appears (`CONFIRM_ARM_MS`, real clock): the question replaces the verb rows in the same
+  spot, so the second click of a double-click on Destroy would land on Yes.
+- **`LoadedInventoryUi.menu_action` records the verb** (`sell_stack:` / `destroy_item:`), the item and the clicked stack's quantity, so an authored button on the same frame cannot take it.
+- **The menu offers Destroy only for an item the catalog knows and marks destroyable** (no `items.ron` = no Destroy row), matching what `DestroyItem` accepts.
+- **Which stack `Take` empties is not the clicked one** (`remove_from_slots` walks from the last slot); the quantity is the clicked stack's, the total is right.
+  Making `Take` slot-aware needs a slot on the action or a menu-only op: backlog.
+- The built-in messages name the stat key as it is and cannot be turned off (same open gap as "Bought X!"): backlog items extended.
+- Not covered by a test (needs layout or a real pointer): the double-click geometry, the menu position on screen and touch. Playtest: see the checklist given with the review.
