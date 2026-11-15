@@ -1,5 +1,7 @@
 # Memory Index
 
+- [Bar cost/cooldown burn on executor failure](project_action_bar_cost_spent_on_executor_failure.md) — S5 gate is held==0 not held<consume; failed UseItem still spends cost + cooldown
+
 - [In-place confirm: double-click hits Yes](project_inplace_confirm_double_click.md) — S4 slot menu swaps verb rows for Yes/No in the same node; a top-anchored menu puts Yes under Destroy
 
 - [{self} is not the player's bag](project_self_vs_player_bag_address.md) — item verbs map only literal "player" to the bag; `{self}` -> "player_01" = container lookup, silent fail

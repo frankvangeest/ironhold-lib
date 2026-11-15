@@ -83,4 +83,4 @@
 - [Shadow-map size facts](shadow_map_size_facts.md) — Bevy fixes/clamps directional size but not point (0/oversize = wgpu error); WebGL2 guarantees 2048 not 8192; 8192 = 1-1.5 GiB
 - [Compose layering facts](compose_layering_facts.md) — multi -f paths resolve vs first file, ports append, shared project name = down -v wipes dev DB; no .gitattributes, CRLF
 - [Device id binding facts](device_id_binding_facts.md) — fake-only ?backend= (same predicate as choose_backend); golden vector verified; blake3 zero delta; homelab probe 20-hex
-- [Item system facts](item_system_facts.md) — one-sided item move class; S1 panel set gaps; S3 push_front_all exception, BoundPanelEvents; S2b bag-size loader facts; S4 menu re-parent + menu_action handoff
+- [Item system facts](item_system_facts.md) — one-sided item move class; S1 panel set gaps; S3 push_front_all exception, BoundPanelEvents; S2b bag-size loader facts; S4 menu re-parent + menu_action handoff; S5 item held twice (ActionSlotItem + baked do_actions)

@@ -113,7 +113,7 @@ Non-obvious facts:
   frame, ungated sets so no leak) - keyed by item only, not prefix. `remove_from_slots` takes from the LAST stack first, so
   "Sell N of the clicked stack" may drain a different stack. PlayerInventory has no writer between PostExecute and EmitSet::Ui,
   so the menu snapshot count is always fresh at Yes time. New benign Res/ResMut ambiguities on LoadedInventoryUi
-  (EmitSet::Ui vs Game readers; PostExecute vs inventory_ui_system); nobody reads its is_changed().
+  (EmitSet::Ui vs Game readers; PostExecute vs inventory_ui_system); nobody read its is_changed() until S5 (see below).
 
 - S5 plan review (2026-11-15, at a40dbd7, `action_bar_item_slots.md`): `ActionSlotDef.icon_index` is a bare `u32` default 0
   (scene_v2.rs:1583), so "slot icon_index wins when set" is undetectable (only `icon` non-empty and `icon_color: Option` are).
@@ -121,6 +121,14 @@ Non-obvious facts:
   (S6) has nothing to write to. `ActionSlotUi` has ~37 struct literals in tests, no Default. No CLI check knows any
   `action_bar.*` event and `ironhold query` never lists slots. Validate pushes slot `do_actions` into `all_actions`
   (validate.rs ~4895): synthesizing `UseItem(item)` there gets unknown-item + `use_item_without_use_block` (~1499) for free.
+
+- S5 code review (2026-11-15, `feature/action_bar_item_slots`, uncommitted on fb7684c): the item is held TWICE on an item
+  slot: `ActionSlotItem` AND a baked `ActionSlotUi.do_actions = [UseItem]` (loader); `SlotIcon`/`SlotItemCount` children are
+  spawned only by the loader. So S6 "only inserts/removes ActionSlotItem" is false: it must also rewrite do_actions and spawn
+  the children (or derive the actions from `ActionSlotItem` at fire time). `action_bar_item_slot_system` is now the first
+  reader of `LoadedInventoryUi.is_changed()` (flips on panel toggles, menu clicks, scene loads; cheap). The no-panel icon
+  `warn!` is runtime, once per item key per app lifetime (`Local<BTreeSet>`, never cleared on LoadScene). Panel atlases are
+  filled synchronously in the loader before slot entities flush, so `scene.ui` node order does not matter.
 
 **How to apply:** any new item-moving action must go through the primitive (once built) and emit a failure event
 instead of a success event on failure. See [[inventory-panel-triplication]], [[panel-input-blocking]],
