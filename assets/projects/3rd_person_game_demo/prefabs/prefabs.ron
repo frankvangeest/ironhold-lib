@@ -37,6 +37,9 @@
           // "Tab" is intercepted by browsers for focus management.
           // KeyT is reliable and won't fight the browser.
           target_next:  "KeyT",
+          // Binds controller 1 to this player: stick movement and camera, A jump, B run, X interact, Y target, and the action bar's D-pad potion
+          // slots (6/7). Menus, the bag, pause and the shop buttons stay keyboard/mouse.
+          gamepad_index: 0,
         ),
       ),
     ),
@@ -105,6 +108,9 @@
           right:        "KeyD",
           jump:         "Space",
           target_next:  "KeyT",
+          // Binds controller 1 to this player: stick movement and camera, A jump, B run, X interact, Y target, and the action bar's D-pad potion
+          // slots (6/7). Menus, the bag, pause and the shop buttons stay keyboard/mouse.
+          gamepad_index: 0,
         ),
       ),
     ),
@@ -158,6 +164,9 @@
           right:        "KeyD",
           jump:         "Space",
           target_next:  "KeyT",
+          // Binds controller 1 to this player: stick movement and camera, A jump, B run, X interact, Y target, and the action bar's D-pad potion
+          // slots (6/7). Menus, the bag, pause and the shop buttons stay keyboard/mouse.
+          gamepad_index: 0,
         ),
       ),
     ),

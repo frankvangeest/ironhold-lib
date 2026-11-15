@@ -707,3 +707,46 @@ fn test_set_ui_visible_state_resets_when_a_scene_is_reloaded() {
     load_scene_with_ui(&mut app, SET_VISIBLE_UI);
     assert_eq!(display_by_id(&mut app, "hud_a"), vec![Display::Flex]);
 }
+
+/// Item system S5: a real scene load builds item slots. An item slot fires `UseItem(item)`, carries `ActionSlotItem`, and gets an item icon
+/// child and a count label; a slot with its own `icon:` keeps the static icon (no item icon child); an item next to `do_actions` wins;
+/// a plain slot gets none of it.
+#[test]
+fn test_action_bar_item_slots_spawn_the_item_components() {
+    use ironhold_core::capabilities::action_bar::{ActionSlotItem, ActionSlotUi, SlotIcon, SlotItemCount};
+    let mut app = setup_test_app();
+    app.update();
+    load_scene_with_ui(&mut app, r#"ActionBar((id: "bar", slots: [
+        (key: "6", item: Some("health_potion")),
+        (key: "7", item: Some("mana_potion"), icon: "icons_items", icon_index: 4),
+        (key: "8", item: Some("health_potion"), do_actions: [ Log("ignored") ]),
+        (key: "9", do_actions: [ Log("plain") ]),
+    ])),"#);
+    let mut slots = app.world_mut().query::<(Entity, &ActionSlotUi, Option<&ActionSlotItem>, Option<&Children>)>();
+    let mut by_key = std::collections::BTreeMap::new();
+    for (e, ui, item, children) in slots.iter(app.world()) {
+        let kids: Vec<Entity> = children.map(|c| c.iter().collect()).unwrap_or_default();
+        by_key.insert(ui.slot_key.clone(), (e, ui.do_actions.clone(), item.map(|i| i.0.clone()), kids));
+    }
+    let has_child = |app: &App, kids: &[Entity], f: &dyn Fn(&World, Entity) -> bool| kids.iter().any(|k| f(app.world(), *k));
+    let is_icon = |w: &World, e: Entity| w.get::<SlotIcon>(e).is_some();
+    let is_count = |w: &World, e: Entity| w.get::<SlotItemCount>(e).is_some();
+
+    let (_, actions, item, kids) = &by_key["6"];
+    assert!(actions.is_empty(), "an item slot bakes no actions: ActionSlotItem is the one source (the input system fires UseItem from it)");
+    assert_eq!(item.as_deref(), Some("health_potion"));
+    assert!(has_child(&app, kids, &is_icon) && has_child(&app, kids, &is_count), "the item icon and the count label");
+
+    let (_, _, item, kids) = &by_key["7"];
+    assert_eq!(item.as_deref(), Some("mana_potion"));
+    assert!(!has_child(&app, kids, &is_icon), "an own icon: keeps the static icon, no item icon child");
+    assert!(has_child(&app, kids, &is_count), "the count label is there either way");
+
+    let (_, actions, item, _) = &by_key["8"];
+    assert!(actions.is_empty(), "item wins over do_actions: the dead do_actions are dropped");
+    assert_eq!(item.as_deref(), Some("health_potion"));
+
+    let (_, actions, item, kids) = &by_key["9"];
+    assert_eq!(actions.len(), 1);
+    assert!(item.is_none() && !has_child(&app, kids, &is_icon) && !has_child(&app, kids, &is_count), "a plain slot is unchanged");
+}

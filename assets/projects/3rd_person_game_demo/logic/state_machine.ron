@@ -187,6 +187,10 @@
                 // `sell_stack:...` would replace the built-in (in any state): spell out its count, or `all: true`.
                 ( event: "item.sold:iron_sword", do_actions: [ ShowFloatingText(entity: "player_01", text: "Pleasure doing business", offset: (0.0, 3.0, 0.0)) ] ),
 
+                // An action bar item slot (keys 6 and 7) with none left emits action_bar.no_item:{key} (no cooldown, nothing spent).
+                ( event: "action_bar.no_item:6", do_actions: [ ShowFloatingText(entity: "player_01", text: "No health potions left") ] ),
+                ( event: "action_bar.no_item:7", do_actions: [ ShowFloatingText(entity: "player_01", text: "No mana potions left") ] ),
+
                 // Using an item shows no message of its own; this is where to add one for a failed use (UseItem from a rule or the bar).
                 ( event: "item.use_failed", do_actions: [ ShowFloatingText(entity: "player_01", text: "Nothing to use") ] ),
 

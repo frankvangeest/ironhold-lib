@@ -1,0 +1,8 @@
+(
+    schema_version: 2,
+    name: "main",
+    ui: [
+        ActionBar((id: "bar", position: (10.0, 600.0), slots: [(key: "6", item: "health_potion", do_actions: [ Log("dead") ]), (key: "7", item: "nonsense"), (key: "8", item: "iron_sword")])),
+        InventoryPanel((id: "bag_panel", position: (10.0, 10.0), columns: 5, rows: 4)),
+    ],
+)

@@ -78,6 +78,45 @@ pub struct ActionSlotUi {
     pub owner_player: Option<u32>,
 }
 
+/// Marks an item slot (item system S5): the `items.ron` key it shows and uses. A separate component, not a field of `ActionSlotUi`, so
+/// player-assignable slots (S6) can insert and remove it at runtime. **It is the one source of what the slot does:** `action_bar_input_system`
+/// fires `[UseItem(item)]` from it (the slot's `ActionSlotUi.do_actions` is empty for an item slot). Removing it clears the label and hides the
+/// icon (`action_bar_item_slot_system` watches `RemovedComponents`); the icon and count children must already exist on the slot (S6 spawns them
+/// for an assignable slot, the loader does for an authored one).
+#[derive(Component, Clone, Debug, PartialEq, Eq)]
+pub struct ActionSlotItem(pub String);
+
+/// The icon child of an item slot that uses the item's own icon (a slot with its own `icon:` keeps the static icon child instead).
+/// `tint_override` is the slot's own `icon_color`, which wins over the item's.
+#[derive(Component)]
+pub struct SlotIcon {
+    pub tint_override: Option<Color>,
+}
+
+/// The bag-count label child of an item slot. `count` is the total of the item over every stack as of the last refresh (the dim
+/// reads it); `shown` is what the text currently says, so the text is only rewritten when the number changes.
+#[derive(Component, Default)]
+pub struct SlotItemCount {
+    pub count: u32,
+    /// How many one use takes (the item's `use.consume`, at least 1): the slot is dimmed, greyed and refuses while `count` is below it.
+    pub needed: u32,
+    pub shown: Option<u32>,
+}
+
+/// How many of the item one press of its slot needs in the bag: the item's `use.consume` (at least 1; an unknown item or one with no
+/// `use:` needs 1).
+pub fn item_needed(catalog: Option<&crate::schema::items::ItemCatalog>, item_key: &str) -> u32 {
+    catalog
+        .and_then(|c| c.items.get(item_key))
+        .and_then(|d| d.use_def.as_ref())
+        .map_or(1, |u| u.consume.max(1))
+}
+
+/// The label text for a bag count: `99+` above 99, so it never outgrows a small slot.
+pub fn count_label(count: u32) -> String {
+    if count > 99 { "99+".to_string() } else { count.to_string() }
+}
+
 /// Overlay child that fills from the top to show remaining cooldown.
 /// Height is animated by `action_bar_visual_system`.
 #[derive(Component)]
@@ -111,6 +150,14 @@ impl Plugin for ActionBarPlugin {
                     // before the interpreters, and the targeting chain before it, explicitly (D3; it used to hold only
                     // transitively through this one edge).
                     .in_set(crate::runtime::schedule::GameStreamSet::ActionBar),
+            )
+            // Item slots (S5): icon and bag count are refreshed after the executor, like the bag itself, so the label never lags a use.
+            .add_systems(
+                Update,
+                action_bar_item_slot_system
+                    .in_set(crate::runtime::schedule::GameplaySet::PostExecute)
+                    // Ordered after the bag menu's sync (both write `LoadedInventoryUi`-driven UI in this set), so what it sees is not run-order dependent.
+                    .after(crate::capabilities::slot_menu::slot_menu_sync_system),
             );
     }
 }
@@ -180,9 +227,11 @@ pub fn action_bar_input_system(
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
     cursor_lock: Res<crate::capabilities::cursor_capture::CursorLockState>,
-    slots: Query<(&ActionSlotUi, Option<Ref<Interaction>>)>,
+    slots: Query<(&ActionSlotUi, Option<Ref<Interaction>>, Option<&ActionSlotItem>)>,
     mut game_events: MessageWriter<GameEvent>,
     cooldowns: Res<CooldownMap>,
+    player_inv: Option<Res<crate::capabilities::inventory::PlayerInventory>>,
+    item_catalog: Option<Res<crate::capabilities::inventory::LoadedItemCatalog>>,
     loaded_stats: Option<Res<LoadedStats>>,
     mut pending: ResMut<PendingIntentActions>,
     players: Query<(&SpawnId, &PlayerTarget, Option<&PlayerIndex>, Option<&StatMap>, &CharacterController, Option<&BoundGamepad>)>,
@@ -201,7 +250,7 @@ pub fn action_bar_input_system(
 
     let mut events: Vec<(&str, GameEvent)> = Vec::new();
 
-    for (slot, interaction) in slots.iter() {
+    for (slot, interaction, item) in slots.iter() {
         // Keyboard and mouse are shared hardware: both are "device-independent" fires, gated
         // before the owning player is resolved (the same ordering the keyboard-only path always
         // had, preserved byte-for-byte). Distinct from the gamepad, which needs its owning
@@ -258,6 +307,22 @@ pub fn action_bar_input_system(
             continue;
         }
 
+        // ── Item slot: the bag must hold the item (item system S5) ───────────────
+        // After the owning player is resolved and the cooldown checks, before the cost: cooldown, then no-item, then cost. A refusal
+        // pushes nothing, starts no cooldown, spends no cost and emits neither `action_bar.pressed` nor `intent.slot.*` (so a rule on the
+        // intent never sees a press on an empty slot), like `insufficient_resource`. Reads the bag as the last executor left it.
+        if let Some(item) = item {
+            let held = player_inv.as_ref().map_or(0, |p| crate::capabilities::item_txn::count_item(&p.slots, &item.0));
+            // One use takes `use.consume` (at least 1): fewer held than that would only fail inside `UseItem` after the cost was spent.
+            let needed = item_needed(item_catalog.as_deref().and_then(|c| c.0.as_ref()), &item.0);
+            if held < needed {
+                events.push((key_str, GameEvent::Trigger(
+                    format!("action_bar.no_item:{}", key_str),
+                )));
+                continue;
+            }
+        }
+
         // ── Cost check ────────────────────────────────────────────────────────
         // Resolved once (own StatMap vs. global LoadedStats) and reused below for the deduct —
         // must not be independently re-resolved at each site, or the two could disagree about
@@ -298,9 +363,11 @@ pub fn action_bar_input_system(
         // flush_pending_intent_system unless a rule handled the intent.
         // Cooldown and `action_bar.activated` are also deferred to flush so that a
         // suppressed intent never starts the cooldown or fires the result event.
-        let mut actions: Vec<Action> = slot.do_actions.iter()
-            .map(|a| rewrite_target(a.clone(), target_id))
-            .collect();
+        // An item slot fires `UseItem(item)` from its `ActionSlotItem` (the one source of truth: S6 inserts and removes it at runtime).
+        let mut actions: Vec<Action> = match item {
+            Some(item) => vec![Action::UseItem(item.0.clone())],
+            None => slot.do_actions.iter().map(|a| rewrite_target(a.clone(), target_id)).collect(),
+        };
         if let (Some(cost), Some((_, use_player_pool))) = (&slot.cost, &cost_resolution) {
             let key = if *use_player_pool {
                 format!("{}.{}", spawn_id.0, cost.stat)
@@ -399,11 +466,12 @@ pub fn flush_pending_intent_system(
 pub fn action_bar_visual_system(
     cooldowns: Res<CooldownMap>,
     loaded_stats: Option<Res<LoadedStats>>,
-    slots: Query<(&ActionSlotUi, &Children)>,
+    slots: Query<(&ActionSlotUi, &Children, Option<&ActionSlotItem>)>,
     players: Query<(Option<&PlayerIndex>, Option<&StatMap>), With<CharacterController>>,
     mut overlays: Query<(&CooldownOverlay, &mut BackgroundColor)>,
+    counts: Query<&SlotItemCount>,
 ) {
-    for (slot, children) in &slots {
+    for (slot, children, item) in &slots {
         let cd_frac = cooldowns.0.get(&slot.slot_key)
             .map(|(remaining, total)| (remaining / total).clamp(0.0, 1.0))
             .unwrap_or(0.0);
@@ -419,12 +487,16 @@ pub fn action_bar_visual_system(
             resolve_cost_source(&c.stat, player_stats, loaded_stats.as_deref()).0 >= c.amount
         }).unwrap_or(true);
 
+        // An item slot with none in the bag is dimmed like a slot blocked by cost (the count is what the last refresh stored).
+        // Only item slots look at the count (a plain slot pays nothing for it).
+        let item_ok = item.is_none() || children.iter().find_map(|c| counts.get(c).ok()).map_or(true, |c| c.count >= c.needed.max(1));
+
         // On cooldown: alpha tracks remaining fraction (bright when just used, fades as it clears).
-        // Blocked by cost: constant dim at 0.45.
+        // Blocked by cost, or an item slot with none left: constant dim at 0.45.
         // Ready: transparent.
         let target_alpha: f32 = if cd_frac > 0.0 {
             0.25 + cd_frac * 0.45
-        } else if !cost_ok {
+        } else if !cost_ok || !item_ok {
             0.45
         } else {
             0.0
@@ -438,6 +510,81 @@ pub fn action_bar_visual_system(
                 }
             }
         }
+    }
+}
+
+/// Refreshes every item slot's icon and bag count (item system S5). `GameplaySet::PostExecute`, so it sees the bag after this frame's
+/// actions. Does nothing on an idle frame: it runs only when the bag, the item catalog or the inventory UI (the icon atlases) changed,
+/// or a slot's item was just added or changed (S6 will insert and remove `ActionSlotItem` at runtime). Writes are guarded.
+#[allow(clippy::too_many_arguments)]
+pub fn action_bar_item_slot_system(
+    player_inv: Option<Res<crate::capabilities::inventory::PlayerInventory>>,
+    catalog: Res<crate::capabilities::inventory::LoadedItemCatalog>,
+    inv_ui: Res<crate::capabilities::inventory::LoadedInventoryUi>,
+    // `Added<SlotItemCount>` would conflict with the `&mut SlotItemCount` query; a slot and its children spawn together, so the slot's
+    // `Changed<ActionSlotItem>` (which includes its first insert) covers a new label too.
+    fresh: Query<(), Or<(Changed<ActionSlotItem>, Added<SlotIcon>)>>,
+    mut removed: RemovedComponents<ActionSlotItem>,
+    items: Query<&ActionSlotItem>,
+    mut counts: Query<(&ChildOf, &mut SlotItemCount, &mut Text, &mut TextColor)>,
+    mut icons: Query<(&ChildOf, &SlotIcon, &mut ImageNode, &mut Visibility)>,
+    mut warned: Local<std::collections::BTreeSet<String>>,
+) {
+    let bag_changed = player_inv.as_ref().is_some_and(|p| p.is_changed());
+    // A removed `ActionSlotItem` (S6 clearing a slot) must be noticed too: its label and icon are cleared below.
+    let removed_any = removed.read().count() > 0;
+    if !(bag_changed || removed_any || catalog.is_changed() || inv_ui.is_changed() || !fresh.is_empty()) {
+        return;
+    }
+    for (parent, mut count, mut text, mut color) in counts.iter_mut() {
+        let Ok(item) = items.get(parent.parent()) else {
+            // The slot lost its item: clear the label (the dim only reads item slots).
+            if count.shown.is_some() {
+                text.0.clear();
+                count.shown = None;
+                count.count = 0;
+                count.needed = 0;
+            }
+            continue;
+        };
+        let held = player_inv.as_ref().map_or(0, |p| crate::capabilities::item_txn::count_item(&p.slots, &item.0));
+        let needed = item_needed(catalog.0.as_ref(), &item.0);
+        if count.needed != needed { count.needed = needed; }
+        if count.count != held { count.count = held; }
+        if count.shown != Some(held) {
+            text.0 = count_label(held);
+            count.shown = Some(held);
+        }
+        let want = if held < needed { Color::srgba(0.55, 0.55, 0.55, 0.9) } else { Color::srgba(1.0, 1.0, 1.0, 0.95) };
+        if color.0 != want { color.0 = want; }
+    }
+    for (parent, marker, mut image, mut vis) in icons.iter_mut() {
+        let Ok(item) = items.get(parent.parent()) else {
+            if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
+            continue;
+        };
+        let icon = crate::capabilities::inventory::resolve_item_icon(catalog.0.as_ref(), &inv_ui, &item.0);
+        let Some((tex, layout)) = icon.atlas else {
+            if *vis != Visibility::Hidden { *vis = Visibility::Hidden; }
+            // Once per item: no picture can be found (a scene with no InventoryPanel, or an unknown item).
+            if !warned.contains(&item.0) {
+                warned.insert(item.0.clone());
+                warn!(
+                    "ActionBar item slot '{}': no icon found (needs an InventoryPanel in the scene to read the item's sheet from, or set `icon:` on the slot)",
+                    item.0
+                );
+            }
+            continue;
+        };
+        warned.remove(&item.0); // it resolves now: a later failure warns again
+        if image.image != *tex { image.image = tex.clone(); }
+        if let Some(ta) = image.texture_atlas.as_mut() {
+            if ta.layout != *layout { ta.layout = layout.clone(); }
+            if ta.index != icon.index { ta.index = icon.index; }
+        }
+        let tint = marker.tint_override.unwrap_or(icon.tint);
+        if image.color != tint { image.color = tint; }
+        if *vis != Visibility::Inherited { *vis = Visibility::Inherited; }
     }
 }
 

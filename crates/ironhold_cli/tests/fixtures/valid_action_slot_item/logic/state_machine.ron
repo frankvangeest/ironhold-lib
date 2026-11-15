@@ -1,0 +1,7 @@
+(
+    schema_version: 1,
+    global_on: [
+        ( event: "ui.button_pressed:close_inventory", do_actions: [ CloseInventory ] ),
+        ( event: "action_bar.no_item:6", do_actions: [ Log("none left") ] ),
+    ],
+)

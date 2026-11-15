@@ -1717,3 +1717,295 @@ fn the_all_events_run_the_built_in_unless_a_rule_owns_them() {
     assert!(has(&events(&app), "rule.ran"));
     assert_eq!(bag_count(&app, "sword"), 3, "the rule owns the event: the built-in did not sell");
 }
+
+// ---- item system S5: item slots on the action bar (`planning/features/action_bar_item_slots.md`) ---------------------------------------
+
+use ironhold_core::capabilities::action_bar::{
+    ActionSlotItem, ActionSlotUi, CooldownMap, CooldownOverlay, SlotIcon, SlotItemCount,
+};
+
+fn bar_player() -> CharacterController {
+    CharacterController {
+        walk_speed: 5.0, run_speed: 8.0, rot_speed: 2.0,
+        inputs: InputMap { gamepad_deadzone: 0.15, ..InputMap::default() },
+        is_running: false, jump_velocity: 5.94, double_jump_enabled: false,
+        double_jump_velocity: 5.94, jumps_used: 0, max_jumps: 1,
+        collider_radius: 0.4, ground_cast_length: 0.3, max_walkable_slope_deg: 45.0, coyote_time_secs: 0.1,
+        coyote_ticks_remaining: 0, idle_drag: 0.8, jump_air_grace: 0, jump_liftoff_y: None,
+    }
+}
+
+struct BarItem {
+    app: App,
+    slot: Entity,
+    count: Entity,
+    icon: Entity,
+    overlay: Entity,
+}
+
+/// A scene with a player, the use catalog, a bag holding `bag` and one item slot "6" for a potion (cooldown 5 s), with its count,
+/// icon and cooldown-overlay children as the loader builds them.
+fn bar_item_app(bag: &[(&str, u32)]) -> BarItem {
+    let mut app = use_app(bag);
+    app.world_mut().spawn((
+        SpawnId("player_01".to_string()),
+        bar_player(),
+        ironhold_core::capabilities::player::PlayerTarget::default(),
+    ));
+    let slot = app.world_mut().spawn((
+        ActionSlotUi {
+            slot_key: "6".to_string(),
+            resolved_key: Some(KeyCode::Digit6),
+            resolved_gamepad_button: None,
+            resolved_mouse_button: None,
+            do_actions: vec![], // the item component is the one source of what the slot does
+            cooldown_secs: Some(5.0),
+            cost: None,
+            owner_player: None,
+        },
+        ActionSlotItem("potion".to_string()),
+        Interaction::None,
+    )).id();
+    let count = app.world_mut().spawn((Text::new(""), TextColor(Color::WHITE), SlotItemCount::default(), ChildOf(slot))).id();
+    let icon = app.world_mut().spawn((
+        ImageNode { texture_atlas: Some(TextureAtlas { layout: Handle::default(), index: 0 }), ..default() },
+        Visibility::Hidden,
+        SlotIcon { tint_override: None },
+        ChildOf(slot),
+    )).id();
+    let overlay = app.world_mut().spawn((
+        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.0)),
+        CooldownOverlay { slot_key: "6".to_string() },
+        ChildOf(slot),
+    )).id();
+    app.update();
+    BarItem { app, slot, count, icon, overlay }
+}
+
+/// Presses the slot once (the `Interaction` edge) and returns the events that frame emitted.
+fn press_bar_slot(b: &mut BarItem) -> Vec<String> {
+    b.app.world_mut().resource_mut::<Messages<GameEvent>>().clear();
+    *b.app.world_mut().get_mut::<Interaction>(b.slot).unwrap() = Interaction::Pressed;
+    b.app.update();
+    let ev = events(&b.app);
+    *b.app.world_mut().get_mut::<Interaction>(b.slot).unwrap() = Interaction::None;
+    b.app.update();
+    ev
+}
+
+fn count_text(b: &BarItem) -> String {
+    b.app.world().get::<Text>(b.count).unwrap().0.clone()
+}
+
+fn overlay_alpha(b: &BarItem) -> f32 {
+    b.app.world().get::<BackgroundColor>(b.overlay).unwrap().0.alpha()
+}
+
+#[test]
+fn pressing_an_item_slot_uses_the_item_through_the_intent_path() {
+    let mut b = bar_item_app(&[("potion", 3)]);
+    let ev = press_bar_slot(&mut b);
+    assert!(has(&ev, "action_bar.pressed:6"), "{ev:?}");
+    assert!(has(&ev, "intent.slot.6:player_01"), "the usual intent event: {ev:?}");
+    assert!(has(&ev, "item.used:potion"), "{ev:?}");
+    assert_eq!(bag_count(&b.app, "potion"), 2);
+    assert!(b.app.world().resource::<CooldownMap>().0.contains_key("6"), "the slot's cooldown started");
+}
+
+#[test]
+fn an_empty_bag_refuses_with_no_item_and_starts_nothing() {
+    let mut b = bar_item_app(&[("sword", 1)]);
+    let ev = press_bar_slot(&mut b);
+    assert!(has(&ev, "action_bar.no_item:6"), "{ev:?}");
+    for not in ["action_bar.pressed:6", "intent.slot.6:player_01", "action_bar.activated:6", "item.used:potion", "item.use_failed"] {
+        assert!(!has(&ev, not), "{not} must not fire on a refusal: {ev:?}");
+    }
+    assert!(!b.app.world().resource::<CooldownMap>().0.contains_key("6"), "a refusal must not start the cooldown");
+}
+
+#[test]
+fn the_no_item_gate_sits_between_the_cooldown_and_the_cost() {
+    // cooldown first: an empty slot that is cooling down says on_cooldown
+    let mut b = bar_item_app(&[]);
+    b.app.world_mut().resource_mut::<CooldownMap>().0.insert("6".to_string(), (3.0, 5.0));
+    let ev = press_bar_slot(&mut b);
+    assert!(has(&ev, "action_bar.on_cooldown:6") && !has(&ev, "action_bar.no_item:6"), "{ev:?}");
+    // then no-item, then cost: an empty slot with an unaffordable cost says no_item
+    let mut b = bar_item_app(&[]);
+    b.app.world_mut().get_mut::<ActionSlotUi>(b.slot).unwrap().cost =
+        Some(ironhold_core::schema::scene_v2::SlotCost { stat: "mana".to_string(), amount: 20.0 });
+    let ev = press_bar_slot(&mut b);
+    assert!(has(&ev, "action_bar.no_item:6") && !has(&ev, "action_bar.insufficient_resource:6"), "{ev:?}");
+    // with the item held the cost gate speaks
+    let mut b = bar_item_app(&[("potion", 1)]);
+    b.app.world_mut().get_mut::<ActionSlotUi>(b.slot).unwrap().cost =
+        Some(ironhold_core::schema::scene_v2::SlotCost { stat: "mana".to_string(), amount: 20.0 });
+    let ev = press_bar_slot(&mut b);
+    assert!(has(&ev, "action_bar.insufficient_resource:6") && !has(&ev, "item.used:potion"), "{ev:?}");
+    assert_eq!(bag_count(&b.app, "potion"), 1, "a blocked slot spends nothing");
+}
+
+#[test]
+fn a_rule_on_the_intent_replaces_an_item_slot_like_any_slot() {
+    let mut b = bar_item_app(&[("potion", 3)]);
+    b.app.world_mut().insert_resource(fsm_with("playing", Some("intent.slot.6:player_01"), false));
+    b.app.world_mut().resource_mut::<LogicState>().0 = "playing".to_string();
+    b.app.update();
+    let ev = press_bar_slot(&mut b);
+    assert!(has(&ev, "rule.ran"), "{ev:?}");
+    assert!(!has(&ev, "item.used:potion"), "the rule replaced the built-in use: {ev:?}");
+    assert_eq!(bag_count(&b.app, "potion"), 3);
+}
+
+#[test]
+fn the_count_label_shows_the_total_over_every_stack_and_follows_the_bag_at_once() {
+    // 25 potions at 99 per stack is one stack in this catalog-less bag; use two items' worth: 3 + 12
+    let mut b = bar_item_app(&[("potion", 15)]);
+    assert_eq!(count_text(&b), "15");
+    let _ = press_bar_slot(&mut b);
+    assert_eq!(count_text(&b), "14", "the label follows a use the same frame");
+    let _ = run(&mut b.app, vec![Action::AddItem { entity: "player".to_string(), item_key: "potion".to_string(), count: 200 }]);
+    assert_eq!(count_text(&b), "99+", "capped so it never outgrows the slot");
+    let color = b.app.world().get::<TextColor>(b.count).unwrap().0;
+    assert_ne!(color, Color::srgba(0.55, 0.55, 0.55, 0.9), "not grey while held");
+}
+
+#[test]
+fn an_empty_item_slot_is_dimmed_with_a_grey_zero_and_a_cooldown_still_wins() {
+    let mut b = bar_item_app(&[("potion", 1)]);
+    b.app.update(); // the first frame draws before the count is first read
+    assert!(overlay_alpha(&b) < 0.01, "one held: not dimmed");
+    let _ = press_bar_slot(&mut b); // uses the last potion, starts the cooldown
+    assert_eq!(count_text(&b), "0");
+    assert_eq!(b.app.world().get::<TextColor>(b.count).unwrap().0, Color::srgba(0.55, 0.55, 0.55, 0.9), "a grey 0");
+    // the cooldown (alpha 0.25 + 0.45 * fraction) wins while it runs
+    assert!(overlay_alpha(&b) > 0.6, "cooldown overlay while cooling down: {}", overlay_alpha(&b));
+    b.app.world_mut().resource_mut::<CooldownMap>().0.clear();
+    b.app.update();
+    assert!((overlay_alpha(&b) - 0.45).abs() < 0.01, "empty and ready: the 0.45 dim, got {}", overlay_alpha(&b));
+    // buying one more un-dims it
+    let _ = run(&mut b.app, vec![Action::AddItem { entity: "player".to_string(), item_key: "potion".to_string(), count: 1 }]);
+    b.app.update();
+    assert!(overlay_alpha(&b) < 0.01);
+}
+
+#[test]
+fn the_icon_comes_from_the_item_and_the_inventory_sheet_and_a_slot_tint_wins() {
+    let mut b = bar_item_app(&[("potion", 2)]);
+    // no InventoryPanel has loaded a sheet: nothing to show
+    assert_eq!(*b.app.world().get::<Visibility>(b.icon).unwrap(), Visibility::Hidden);
+    // the panel's sheet and the item's icon index and colour
+    let mut catalog = use_catalog();
+    {
+        let d = catalog.items.get_mut("potion").unwrap();
+        d.icon_index = 7;
+        d.icon_color = Some((1.0, 0.0, 0.0, 1.0));
+    }
+    b.app.world_mut().insert_resource(LoadedItemCatalog(Some(catalog)));
+    {
+        let mut ui = b.app.world_mut().resource_mut::<LoadedInventoryUi>();
+        ui.panel_icon_sheet = Some("icons_items".to_string());
+        ui.icon_atlases.insert("icons_items".to_string(), (Handle::<Image>::default(), Handle::<TextureAtlasLayout>::default()));
+    }
+    b.app.update();
+    let img = b.app.world().get::<ImageNode>(b.icon).unwrap();
+    assert_eq!(img.texture_atlas.as_ref().unwrap().index, 7, "the item's own icon index");
+    assert_eq!(img.color, Color::srgba(1.0, 0.0, 0.0, 1.0), "the item's tint");
+    assert_eq!(*b.app.world().get::<Visibility>(b.icon).unwrap(), Visibility::Inherited);
+    // a slot's own icon_color overrides the item's tint
+    b.app.world_mut().get_mut::<SlotIcon>(b.icon).unwrap().tint_override = Some(Color::srgba(0.0, 0.0, 1.0, 1.0));
+    b.app.world_mut().resource_mut::<LoadedItemCatalog>().set_changed();
+    b.app.update();
+    assert_eq!(b.app.world().get::<ImageNode>(b.icon).unwrap().color, Color::srgba(0.0, 0.0, 1.0, 1.0));
+}
+
+#[test]
+fn a_plain_slot_is_untouched_by_the_bag() {
+    // A slot with no ActionSlotItem never emits no_item and fires its own do_actions even with an empty bag.
+    let mut b = bar_item_app(&[]);
+    b.app.world_mut().entity_mut(b.slot).remove::<ActionSlotItem>();
+    b.app.world_mut().get_mut::<ActionSlotUi>(b.slot).unwrap().do_actions = vec![emit_action("plain.fired")];
+    let ev = press_bar_slot(&mut b);
+    assert!(has(&ev, "plain.fired") && !has(&ev, "action_bar.no_item:6"), "{ev:?}");
+}
+
+#[test]
+fn an_item_slot_parses_from_ron_without_do_actions() {
+    use ironhold_core::schema::scene_v2::ActionSlotDef;
+    // The project's RON loader enables `implicit_some`, so `item: "x"` and `cooldown_secs: 2.0` are valid `Option`s.
+    let opts = ron::Options::default().with_default_extension(ron::extensions::Extensions::IMPLICIT_SOME);
+    let d: ActionSlotDef = opts.from_str(r#"(key: "6", item: "health_potion", cooldown_secs: 2.0)"#).expect("an item slot needs no do_actions");
+    assert_eq!(d.item.as_deref(), Some("health_potion"));
+    assert!(d.do_actions.is_empty());
+    let d: ActionSlotDef = opts.from_str(r#"(key: "1", do_actions: [])"#).expect("an old slot still parses");
+    assert!(d.item.is_none());
+    let d: ActionSlotDef = opts.from_str(r#"(key: "6")"#).expect("an empty slot (the shape S6 wants)");
+    assert!(d.do_actions.is_empty() && d.item.is_none());
+}
+
+#[test]
+fn an_item_that_needs_more_than_is_held_is_refused_before_the_cost_and_the_cooldown() {
+    // `elixir` consumes 2: with one held, the press must not spend the cost or start the cooldown only for `UseItem` to fail.
+    let mut b = bar_item_app(&[("elixir", 1)]);
+    b.app.world_mut().entity_mut(b.slot).insert(ActionSlotItem("elixir".to_string()));
+    b.app.world_mut().get_mut::<ActionSlotUi>(b.slot).unwrap().cost =
+        Some(ironhold_core::schema::scene_v2::SlotCost { stat: "gold".to_string(), amount: 5.0 });
+    b.app.world_mut().resource_mut::<LoadedStats>().0.insert("gold".to_string(), gold(50.0, 99_999.0));
+    b.app.update();
+    let ev = press_bar_slot(&mut b);
+    assert!(has(&ev, "action_bar.no_item:6"), "fewer held than one use takes: {ev:?}");
+    assert!(!has(&ev, "item.use_failed") && !has(&ev, "action_bar.pressed:6"), "{ev:?}");
+    assert!(!b.app.world().resource::<CooldownMap>().0.contains_key("6"));
+    assert_eq!(global_gold(&b.app), 50.0, "no cost spent");
+    assert!(overlay_alpha(&b) > 0.4, "dimmed: one held is not enough");
+    // with two held it works and the cost is spent
+    let _ = run(&mut b.app, vec![Action::AddItem { entity: "player".to_string(), item_key: "elixir".to_string(), count: 1 }]);
+    let ev = press_bar_slot(&mut b);
+    assert!(has(&ev, "item.used:elixir"), "{ev:?}");
+    assert_eq!(global_gold(&b.app), 45.0);
+}
+
+#[test]
+fn removing_the_item_clears_the_label_and_the_icon_and_the_dim() {
+    let mut b = bar_item_app(&[]);
+    let mut catalog = use_catalog();
+    catalog.items.get_mut("potion").unwrap().icon_index = 7;
+    b.app.world_mut().insert_resource(LoadedItemCatalog(Some(catalog)));
+    {
+        let mut ui = b.app.world_mut().resource_mut::<LoadedInventoryUi>();
+        ui.panel_icon_sheet = Some("icons_items".to_string());
+        ui.icon_atlases.insert("icons_items".to_string(), (Handle::<Image>::default(), Handle::<TextureAtlasLayout>::default()));
+    }
+    b.app.update();
+    b.app.update();
+    assert_eq!(count_text(&b), "0");
+    assert!(overlay_alpha(&b) > 0.4, "an empty item slot is dimmed");
+    assert_eq!(*b.app.world().get::<Visibility>(b.icon).unwrap(), Visibility::Inherited);
+    // S6 clears the slot: no `ActionSlotItem` any more
+    b.app.world_mut().entity_mut(b.slot).remove::<ActionSlotItem>();
+    b.app.update();
+    b.app.update();
+    assert_eq!(count_text(&b), "", "the label is cleared");
+    assert_eq!(*b.app.world().get::<Visibility>(b.icon).unwrap(), Visibility::Hidden, "the icon is hidden");
+    assert!(overlay_alpha(&b) < 0.01, "no dim on a slot with no item");
+    let ev = press_bar_slot(&mut b);
+    assert!(!has(&ev, "action_bar.no_item:6") && !has(&ev, "item.used:potion"), "a slot with no item and no do_actions does nothing: {ev:?}");
+}
+
+#[test]
+fn with_no_item_catalog_the_slot_reads_zero_has_no_icon_and_refuses() {
+    let mut b = bar_item_app(&[("potion", 3)]);
+    b.app.world_mut().insert_resource(LoadedItemCatalog(None));
+    b.app.update();
+    b.app.update();
+    // the bag still holds three, the slot counts what the bag holds
+    assert_eq!(count_text(&b), "3");
+    assert_eq!(*b.app.world().get::<Visibility>(b.icon).unwrap(), Visibility::Hidden, "no catalog, no icon");
+    // an item the catalog does not know
+    b.app.world_mut().entity_mut(b.slot).insert(ActionSlotItem("nonsense".to_string()));
+    b.app.update();
+    b.app.update();
+    assert_eq!(count_text(&b), "0");
+    let ev = press_bar_slot(&mut b);
+    assert!(has(&ev, "action_bar.no_item:6"), "{ev:?}");
+}

@@ -12,7 +12,7 @@
             tags: ["consumable"],
             // What a shop pays per unit (this merchant's own price in prefabs.ron overrides it). No sell_price = cannot be sold.
             sell_price: 5,
-            // Use it from the bag menu (left click) or right-click it to drink at once. {self} is the player.
+            // Use it from the bag menu (left click), right-click it to drink at once, or press 6 on the action bar. {self} is the player.
             use: (
                 do_actions: [
                     ModifyStat(key: "player_health", delta: 40.0),

@@ -521,6 +521,21 @@
           label: "Heal",
         ),
         (
+          // Item slots (item system S5): `item:` shows the item's icon and the number held (a grey 0 and dimmed when none) and uses it
+          // like UseItem. The icon comes from the bag's sheet. Press 6 / 7, click, or the gamepad D-pad (needs `gamepad_index` on the
+          // player prefab). With none left the press emits action_bar.no_item:6 (rule in logic/state_machine.ron), no cooldown.
+          key: "6",
+          item: "health_potion",
+          cooldown_secs: 2.0,
+          gamepad_key: "DPadUp",
+        ),
+        (
+          key: "7",
+          item: "mana_potion",
+          cooldown_secs: 2.0,
+          gamepad_key: "DPadDown",
+        ),
+        (
           // Non-digit hotkey reference slot — demonstrates key/key_hint/label together.
           // key_hint is what actually renders in the slot's corner; label is reserved for a
           // future hover tooltip and isn't displayed anywhere yet (see docs/20_data_formats.md).

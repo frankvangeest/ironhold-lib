@@ -2289,7 +2289,7 @@ fn spawn_ui_element_node(
                 });
         }
         UiNodeDef::ActionBar(bar) => {
-            use crate::capabilities::action_bar::{ActionSlotUi, CooldownOverlay};
+            use crate::capabilities::action_bar::{ActionSlotItem, ActionSlotUi, CooldownOverlay, SlotIcon, SlotItemCount};
             let (br, bg_c, bb, ba) = bar.background_color;
             let slot_size = bar.slot_size;
             let slot_gap = bar.slot_gap;
@@ -2311,6 +2311,10 @@ fn spawn_ui_element_node(
             // Pre-resolve (texture, layout) for every slot before entering the with_children closure.
             let slot_atlases: Vec<Option<(Handle<Image>, Handle<TextureAtlasLayout>)>> =
                 bar.slots.iter().map(|slot| {
+                    // An item slot without its own `icon:` shows the item's icon (resolved at runtime like the bag's), not the bar's sheet.
+                    if slot.item.is_some() && slot.icon.is_empty() {
+                        return None;
+                    }
                     let sheet_key = if !slot.icon.is_empty() {
                         Some(slot.icon.as_str())
                     } else {
@@ -2379,7 +2383,34 @@ fn spawn_ui_element_node(
                         let hint_text = slot.key_hint.clone().unwrap_or_else(|| {
                             key.strip_prefix("Key").map(str::to_string).unwrap_or_else(|| key.clone())
                         });
-                        parent
+                        // An item slot fires `UseItem(item)`. Load-time diagnostics for designers without the CLI (`validate` is the real net).
+                        let slot_actions: Vec<Action> = match &slot.item {
+                            Some(item) => {
+                                if !slot.do_actions.is_empty() {
+                                    warn!(
+                                        "ActionBar '{}': slot \"{}\" has both item: and do_actions: - use one (item: uses the item's use: block); the item wins",
+                                        bar.id, key
+                                    );
+                                }
+                                match item_catalog.and_then(|c| c.items.get(item)) {
+                                    None => warn!(
+                                        "ActionBar '{}': slot \"{}\" names item {:?}, which is not in the item catalog (no items.ron, or a typo): the slot has no icon, reads 0 and every press only reports action_bar.no_item",
+                                        bar.id, key, item
+                                    ),
+                                    Some(def) if def.use_def.is_none() => warn!(
+                                        "ActionBar '{}': slot \"{}\" item {:?} has no use: block, so pressing it only fails with item.use_failed (its cost and cooldown are still spent)",
+                                        bar.id, key, item
+                                    ),
+                                    Some(_) => {}
+                                }
+                                // The item slot's actions come from `ActionSlotItem` (the input system builds `UseItem`): nothing is baked in here.
+                                Vec::new()
+                            }
+                            None => slot.do_actions.clone(),
+                        };
+                        let own_icon = !slot.icon.is_empty();
+                        let count_font = (slot_size * 0.3).max(10.0);
+                        let mut slot_cmd = parent
                             .spawn((
                                 Name::new(format!("Slot:{}", key)),
                                 Button,
@@ -2400,13 +2431,16 @@ fn spawn_ui_element_node(
                                     resolved_key,
                                     resolved_gamepad_button,
                                     resolved_mouse_button,
-                                    do_actions: slot.do_actions.clone(),
+                                    do_actions: slot_actions,
                                     cooldown_secs: slot.cooldown_secs,
                                     cost: slot.cost.clone(),
                                     owner_player: bar.owner_player,
                                 },
-                            ))
-                            .with_children(|parent| {
+                            ));
+                        if let Some(item) = &slot.item {
+                            slot_cmd.insert(ActionSlotItem(item.clone()));
+                        }
+                        slot_cmd.with_children(|parent| {
                                 // Icon — rendered first (bottom z-layer).
                                 // icon_color is applied as a multiplicative sRGB tint via ImageNode.color.
                                 if let Some((tex, layout)) = resolved_atlas {
@@ -2429,6 +2463,27 @@ fn spawn_ui_element_node(
                                             color: icon_tint,
                                             ..default()
                                         },
+                                    ));
+                                }
+                                // Item slot (S5): the item's own icon, written at runtime by `action_bar_item_slot_system` (hidden until
+                                // a sheet resolves), and the bag-count label (bottom-left; the key hint stays bottom-right).
+                                if slot.item.is_some() && !own_icon {
+                                    parent.spawn((
+                                        Name::new("ItemIcon"),
+                                        Node {
+                                            position_type: PositionType::Absolute,
+                                            top: Val::Px(0.0),
+                                            left: Val::Px(0.0),
+                                            right: Val::Px(0.0),
+                                            bottom: Val::Px(0.0),
+                                            ..default()
+                                        },
+                                        ImageNode {
+                                            texture_atlas: Some(TextureAtlas { layout: Handle::default(), index: 0 }),
+                                            ..default()
+                                        },
+                                        Visibility::Hidden,
+                                        SlotIcon { tint_override: slot.icon_color.map(|(r, g, b, a)| Color::srgba(r, g, b, a)) },
                                     ));
                                 }
                                 // Full-slot overlay — alpha-fade only; no Node height writes
@@ -2460,6 +2515,21 @@ fn spawn_ui_element_node(
                                     TextFont { font_size: 13.0, ..default() },
                                     TextColor(Color::srgba(0.85, 0.85, 0.85, 0.75)),
                                 ));
+                                if slot.item.is_some() {
+                                    parent.spawn((
+                                        Name::new(format!("Count:{}", key)),
+                                        Node {
+                                            position_type: PositionType::Absolute,
+                                            bottom: Val::Px(3.0),
+                                            left: Val::Px(4.0),
+                                            ..default()
+                                        },
+                                        Text::new(""),
+                                        TextFont { font_size: count_font, ..default() },
+                                        TextColor(Color::srgba(1.0, 1.0, 1.0, 0.95)),
+                                        SlotItemCount::default(),
+                                    ));
+                                }
                             });
                     }
                 });

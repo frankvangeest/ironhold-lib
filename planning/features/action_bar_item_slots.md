@@ -1,6 +1,6 @@
 # Feature: Item slots on the action bar (item system S5)
 
-_Status: Ready (plan-reviewed 2026-11-15; system-architect and ux-gamedesigner-reviewer findings folded in, Q1-Q4 settled)_
+_Status: In Progress (plan-reviewed 2026-11-15; system-architect and ux-gamedesigner-reviewer findings folded in, Q1-Q4 settled)_
 _Planned at: `a40dbd7` (2026-11-15)_
 
 Slice S5 of `planning/features/item_system_review.md`. Builds on S3 (`UseItem`, `planning/features/done/item_use.md`) and the action bar's intent
@@ -132,3 +132,15 @@ None blocking.
 - Given a rule on `intent.slot.6:{player}` then only the rule runs when the bag holds the item (as for every slot).
 - Given `icon: "icons_status_effects"` on an item slot, the slot shows that sheet's `icon_index`, not the item's icon.
 - `ironhold validate` rejects an item slot that also has `do_actions`, an unknown item and an item with no `use:`.
+
+## Implementation notes (2026-11-15, from the step-4 reviews)
+- **The gate refuses when fewer are held than one use takes** (`item_needed` = `use.consume`, at least 1), not only at 0: an elixir that consumes 2 with one in the
+  bag would otherwise spend the cost and start the cooldown and then fail inside `UseItem`. The count turns grey and the slot dims below that threshold.
+- **`ActionSlotItem` is the one source of what the slot does.** The input system fires `UseItem(item)` from it; the loader bakes nothing into `do_actions` for an item
+  slot (the plan said `do_actions` would be `[UseItem]`; two copies could drift, and S6 inserting the component would not have worked). Removing the component
+  clears the label and hides the icon. The icon and count children are still spawned only by the loader: **S6 must spawn them for an assignable slot.**
+- The refresh system is ordered after `slot_menu_sync_system`. The no-icon warning repeats if an item's icon stops resolving after having resolved; it is silent
+  again for the rest of the run otherwise (`validate --strict` is the real check, which now counts a panel in any scene of the project).
+- Not changed: `ironhold validate` is silent for an item slot when the project has no `items.ron` (the same gap as every `UseItem`); an `icon_index` beyond the
+  panel's grid shows the whole sheet (also true in the bag); the `validate` messages for an unknown item or one with no `use:` name `UseItem(...)` (the slot's
+  `item:`), documented in `docs/15`.

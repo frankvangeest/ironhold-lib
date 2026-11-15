@@ -149,6 +149,7 @@ The name is used as-is in the rules pipeline — the caller is responsible for n
 - `"action_bar.on_cooldown:{key}"` — slot activated (key, `gamepad_key` or click) while on cooldown ✅
 - `"action_bar.insufficient_resource:{key}"` — slot activated (key, `gamepad_key` or click) but cost stat too low ✅
 - `"action_bar.no_target:{key}"` — `{target}` used in `do_actions` but no target is selected ✅
+- `"action_bar.no_item:{key}"` — an item slot (`item:` on the slot) was activated with none of its item in the bag; no cooldown, no cost, and `action_bar.pressed` / `intent.slot.*` / `action_bar.activated` do not fire ✅
 
 **Why:** drive scripted logic without bespoke code; keeps capabilities decoupled from the rules they trigger.
 
