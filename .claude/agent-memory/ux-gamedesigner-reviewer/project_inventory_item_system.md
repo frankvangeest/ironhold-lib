@@ -22,4 +22,14 @@ Designer footguns / scope:
 reference to copy. And `prefabs.ron`'s `merchant_vendor` now uses unquoted `kind: Actor` (the
 correct enum convention), not a quoted string. Do not re-flag either.
 
+**Bag size (S2b plan `player_inventory_slots.md`, reviewed 2026-11-15):** project-level
+`player_inventory: (max_slots: N)`, default 20 (= InventoryPanel default 5x4). Before S2b the docs
+NEVER stated the bag holds 20 slots anywhere. Only `3rd_person_game_demo` has an InventoryPanel /
+items_path, so panel-vs-bag checks touch no other shipped project. Naming trap: the docs example
+and the demo both give the panel `id: "player_inventory"`, same string as the new project field.
+Container `inventory.max_slots` silently clamps to >=4; the player bag plan errors on 0 instead
+(asymmetry to document). I flagged: invalid value "fails to load" may mean a stuck loading screen
+for web-only designers (see [[ron-parse-failure-diagnostics]]); smaller-panel case needs a runtime
+console warning too, since the CLI is optional.
+
 **Why:** designers copy examples verbatim with no source/error feedback; the player-vs-spawn-id routing and the dead `gold` stat are the two things most likely to waste their time.

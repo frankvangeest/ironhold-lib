@@ -80,6 +80,16 @@ Non-obvious facts:
   panel root under the cursor; harmless (targeting checks ANY Pressed). items.ron use actions are added to validate's
   all_actions AFTER discover_extra_scenes (a LoadScene in a use list doesn't load that scene for validation).
 
+- S2b plan review (2026-11-15, at 29cce26, `player_inventory_slots.md`): nothing resets `PlayerInventory` on LoadScene
+  (persists) or project load; exactly one ProjectConfig loads per app lifetime (`project_loader.rs` tail comment), so a
+  project-load insert = boot sizing, no "project switch". `check_project_loaded` has TWO resource-insert branches
+  (no-external-files phase 1 and phase 2) plus a shared tail (where `max_frame_delta` applies): new per-project
+  resources go in the tail. `ProjectConfig` is `derive(Default)` and ~45 test literals use `..Default::default()`,
+  so a nested def's Default must be hand-written to the serde default (else 0 slots in tests). Dead slots already
+  ignore clicks structurally (`slots.get(idx)` is None past `len`); no system styles slot hover (vacuous "no
+  highlight"). `ironhold query` has no project-config subcommand. Only `3rd_person_game_demo` has an InventoryPanel
+  (5x4 = `default_inv_columns`*`rows` = DEFAULT_PLAYER_SLOTS, an unpinned coincidence).
+
 **How to apply:** any new item-moving action must go through the primitive (once built) and emit a failure event
 instead of a success event on failure. See [[inventory-panel-triplication]], [[panel-input-blocking]],
 [[event-pipeline-intent-layer]], [[stat-ownership-global-vs-instance]].
