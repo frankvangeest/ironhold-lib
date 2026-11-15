@@ -1,4 +1,4 @@
-//! Item system S4 (`planning/features/item_sell_destroy.md`): the click menu on a bag slot.
+//! Item system S4 (`planning/features/done/item_sell_destroy.md`): the click menu on a bag slot.
 //!
 //! A left click or tap on an item in the `InventoryPanel` opens a small menu next to it: **Use** (the item has a `use:`
 //! block), **Sell** and **Sell N** (a shop is open and pays for the item), **Destroy**. Sell N and Destroy ask Yes/No first.

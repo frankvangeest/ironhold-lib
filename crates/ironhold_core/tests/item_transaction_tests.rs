@@ -1098,7 +1098,7 @@ fn the_footer_shows_used_slots_over_the_bag_size_and_turns_orange_when_full() {
     assert_eq!(app.world().get::<TextColor>(label).unwrap().0, SLOT_COUNT_COLOR, "no longer full");
 }
 
-// ---- item system S4: selling and destroying (`planning/features/item_sell_destroy.md`) ------------------------------------
+// ---- item system S4: selling and destroying (`planning/features/done/item_sell_destroy.md`) ------------------------------------
 
 fn priced(name: &str, stackable: bool, max_stack: u32, sell_price: Option<u32>, destroyable: bool) -> ItemDef {
     let mut d = item(name, stackable, None);
@@ -1363,7 +1363,7 @@ fn the_sell_and_destroy_actions_parse_from_ron_with_defaults() {
     assert!(d.destroyable && d.sell_price.is_none());
 }
 
-// ---- item system S4: the bag slot menu (`planning/features/item_sell_destroy.md`) --------------------------------------------------
+// ---- item system S4: the bag slot menu (`planning/features/done/item_sell_destroy.md`) --------------------------------------------------
 
 /// A shop-open scene (`sell_app`) plus a visible InventoryPanel (3 x 2), the hidden menu overlay and six slot nodes.
 fn menu_app(bag: &[(&str, u32)]) -> (App, Vec<Entity>) {

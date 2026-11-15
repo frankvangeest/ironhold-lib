@@ -1,6 +1,6 @@
 # Feature: Selling and destroying items (item system S4)
 
-_Status: In Progress (plan-reviewed 2026-11-15; Frank's answers to Q3, Q5, Q6 folded in)_
+_Status: Done (2026-11-15)_
 _Planned at: `a65e696` (2026-11-15)_
 
 Slice S4 of `planning/features/item_system_review.md`. Builds on S2a (the item transaction primitive,
