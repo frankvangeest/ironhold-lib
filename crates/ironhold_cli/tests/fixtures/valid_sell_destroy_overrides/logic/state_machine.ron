@@ -1,0 +1,13 @@
+(
+    schema_version: 1,
+    global_on: [
+        ( event: "scene.ready:main", do_actions: [ Spawn(prefab: "seal_door", id: "door_01"), Spawn(prefab: "shopkeeper", id: "shop_01") ] ),
+        ( event: "ui.button_pressed:close_inventory", do_actions: [ CloseInventory ] ),
+        ( event: "ui.button_pressed:destroy_item:iron_sword", do_actions: [ DestroyItem(item_key: "iron_sword", all: true) ] ),
+        ( event: "ui.button_pressed:sell_item:iron_sword", do_actions: [ SellItem(item_key: "iron_sword") ] ),
+        ( event: "ui.button_pressed:sell_stack:iron_sword", do_actions: [ SellItem(item_key: "iron_sword", all: true) ] ),
+        ( event: "ui.button_pressed:sell_all:iron_sword", do_actions: [ SellItem(item_key: "iron_sword", all: true) ] ),
+        ( event: "ui.button_pressed:destroy_all:iron_sword", do_actions: [ DestroyItem(item_key: "iron_sword", all: true) ] ),
+        ( event: "item.sold:iron_sword", do_actions: [ Log("sold") ] ),
+    ],
+)

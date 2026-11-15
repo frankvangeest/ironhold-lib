@@ -82,7 +82,7 @@ fn the_documented_systems_are_in_the_documented_sets() {
         (
             "GameplaySet::PostExecute",
             &[
-                "npc_hit_relay_system", "inventory_ui_system", "container_ui_system", "audio_volume_var_system",
+                "npc_hit_relay_system", "inventory_ui_system", "container_ui_system", "slot_menu_sync_system", "audio_volume_var_system",
                 "preload_audio_system", "preload_decals_system", "clear_pool_on_scene_unload_system",
             ],
         ),

@@ -284,7 +284,7 @@
 
     Label((
       id: "bag_hint_label",
-      text: "I: bag - right-click a potion to drink it",
+      text: "I: bag - click an item for Use / Sell / Destroy",
       position: (256.0, 56.0),
       size: (500.0, 22.0),
       align: Left,

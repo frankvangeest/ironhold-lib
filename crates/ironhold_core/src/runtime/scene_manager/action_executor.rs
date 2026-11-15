@@ -1386,6 +1386,12 @@ pub fn action_executor_system(
             Action::UseItem(item_key) => {
                 super::item_actions::use_item(item_key, &mut scene_state, &mut game_events, &mut action_queue);
             }
+            Action::SellItem { item_key, count, all } => {
+                super::item_actions::sell_item(item_key, count, all, &mut scene_state, &spawn_params, &mut game_events, &mut action_queue);
+            }
+            Action::DestroyItem { item_key, count, all } => {
+                super::item_actions::destroy_item(item_key, count, all, &mut scene_state, &mut game_events, &mut action_queue);
+            }
             Action::OpenContainer(entity_id) => {
                 // Verify a ContainerPanel exists in the scene.
                 if scene_state.container_panel_q.iter().next().is_none() {

@@ -1,0 +1,10 @@
+(
+    schema_version: 2,
+    name: "main",
+    ui: [
+        InventoryPanel((id: "bag_panel", position: (10.0, 10.0), columns: 5, rows: 4)),
+        Button((id: "btn_sell", text: "Sell", action: "ui.sell_item:iron_sword", position: (0.0, 300.0), size: (100.0, 40.0))),
+        Button((id: "btn_stack", text: "Sell all", action: "ui.sell_stack:iron_sword", position: (0.0, 350.0), size: (100.0, 40.0))),
+        Button((id: "btn_destroy", text: "Destroy", action: "ui.destroy_item:iron_sword", position: (0.0, 400.0), size: (100.0, 40.0))),
+    ],
+)

@@ -611,7 +611,7 @@
         stock: [
           (item_key: "health_potion", buy_price: 10,  sell_price: 5),
           (item_key: "mana_potion",   buy_price: 10,  sell_price: 5),
-          (item_key: "iron_sword",    buy_price: 80,  sell_price: 30),
+          (item_key: "iron_sword",    buy_price: 80,  sell_price: 35),  // this merchant pays 35 for a sword (items.ron says 30)
           (item_key: "old_key",       buy_price: 150, sell_price: 0, stock_count: 1),
         ],
       ),

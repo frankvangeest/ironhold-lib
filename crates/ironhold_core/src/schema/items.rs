@@ -66,6 +66,14 @@ pub struct ItemDef {
     /// placing it in the player's inventory slots. Use for currency items (e.g. "gold").
     #[serde(default)]
     pub currency_stat: Option<String>,
+    /// What a shop pays per unit when the player sells this item (`Action::SellItem`, the bag menu). Omit (or `0`) and the item
+    /// cannot be sold. A merchant's own `ShopEntry.sell_price` for the item overrides it for that merchant.
+    #[serde(default)]
+    pub sell_price: Option<u32>,
+    /// When false the player cannot destroy this item (`Action::DestroyItem`, the bag menu's Destroy). Default: true. Set it
+    /// to false for quest and key items.
+    #[serde(default = "default_destroyable")]
+    pub destroyable: bool,
     /// What using this item does (`Action::UseItem`, a click or right-click on it in the inventory). Omit for items that
     /// cannot be used. RON field name is `use` (a Rust keyword, hence the rename).
     #[serde(default, rename = "use")]
@@ -87,6 +95,7 @@ pub struct ItemUseDef {
 fn default_consume() -> u32 { 1 }
 
 fn default_stackable() -> bool { true }
+fn default_destroyable() -> bool { true }
 fn default_max_stack() -> u32 { 99 }
 fn default_weight() -> f32 { 1.0 }
 

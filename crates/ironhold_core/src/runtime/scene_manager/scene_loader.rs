@@ -2715,6 +2715,8 @@ fn spawn_ui_element_node(
                             },
                         ));
                     });
+                    // The bag menu: hidden until a slot is clicked, then re-parented under that slot (capabilities/slot_menu.rs).
+                    crate::capabilities::slot_menu::spawn_slot_menu(p, columns, rows, slot_size, font_size);
                 })
                 .id();
             inventory_ui.inventory_panel = Some(entity);

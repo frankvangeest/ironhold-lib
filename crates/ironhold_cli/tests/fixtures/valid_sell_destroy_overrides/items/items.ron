@@ -1,0 +1,7 @@
+(
+    schema_version: 1,
+    items: {
+        "iron_sword": ( display_name: "Iron Sword", stackable: false, sell_price: 30 ),
+        "old_key": ( display_name: "Old Key", stackable: false, destroyable: false ),
+    },
+)

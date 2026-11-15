@@ -4,7 +4,7 @@ use std::path::Path;
 use ironhold_core::capabilities::camera::MAX_SPLIT_PLAYERS;
 use ironhold_core::schema::camera::CameraModeDef;
 use ironhold_core::schema::catalog::{
-    AssetCatalog, FlyCamDef, PrefabCatalog, PrefabDef, PrefabKind, WorldStatBarStyle,
+    AssetCatalog, FlyCamDef, MerchantDef, PrefabCatalog, PrefabDef, PrefabKind, WorldStatBarStyle,
 };
 use ironhold_core::schema::backend::BackendConfig;
 use ironhold_core::schema::items::ItemCatalog;
@@ -986,6 +986,111 @@ fn item_use_warnings(item_catalog: Option<&ItemCatalog>, source: &str) -> Vec<St
     out
 }
 
+/// `--strict` hygiene for selling and destroying (item system S4): a `sell_price` on a currency item can never be used (it
+/// becomes its stat and never sits in the bag); `SellItem` on an item no merchant would ever buy, and `DestroyItem` on a
+/// `destroyable: false` item, can only ever be refused; an item named by an interactable's `requires_item` that the player can
+/// sell or destroy soft-locks its quest; a merchant that pays more for an item than it charges for it is a gold exploit.
+fn item_sell_warnings(
+    item_catalog: Option<&ItemCatalog>,
+    prefab_catalog: Option<&PrefabCatalog>,
+    actions: &[(String, Action)],
+    items_source: &str,
+) -> Vec<StrictWarning> {
+    use ironhold_core::capabilities::item_txn::sell_price_for;
+    let mut out = Vec::new();
+    let Some(items) = item_catalog else { return out };
+    let merchants: Vec<(&String, &MerchantDef)> = prefab_catalog
+        .map(|c| c.prefabs.iter().filter_map(|(k, p)| p.merchant.as_ref().map(|m| (k, m))).collect())
+        .unwrap_or_default();
+    // Does any merchant in the project pay for this item?
+    let sold_somewhere = |key: &str, def: &ironhold_core::schema::items::ItemDef| {
+        merchants.iter().any(|(_, m)| sell_price_for(m, key, def.sell_price).is_some())
+            || (prefab_catalog.is_none() && def.sell_price.is_some_and(|p| p > 0))
+    };
+    for (key, def) in &items.items {
+        if def.currency_stat.is_some() && def.sell_price.is_some_and(|p| p > 0) {
+            out.push(StrictWarning {
+                source_file: items_source.to_string(),
+                message: format!("item {key:?}: `sell_price` on a currency item can never be used (it becomes its stat and never sits in the bag)"),
+                kind: "sell_price_on_currency_item",
+            });
+        }
+    }
+    for (source, action) in actions {
+        match action {
+            Action::SellItem { item_key, .. } => {
+                if let Some(def) = items.items.get(item_key) {
+                    if !sold_somewhere(item_key, def) {
+                        out.push(StrictWarning {
+                            source_file: source.clone(),
+                            message: format!("SellItem({item_key:?}): no merchant in this project buys it (no `sell_price` on the item or on any ShopEntry), so it is always refused"),
+                            kind: "sell_item_never_succeeds",
+                        });
+                    }
+                }
+            }
+            Action::DestroyItem { item_key, .. } => {
+                if items.items.get(item_key).is_some_and(|d| !d.destroyable) {
+                    out.push(StrictWarning {
+                        source_file: source.clone(),
+                        message: format!("DestroyItem({item_key:?}): the item is `destroyable: false`, so it is always refused"),
+                        kind: "destroy_item_not_destroyable",
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut prefab_keys: Vec<&String> = prefab_catalog.map(|c| c.prefabs.keys().collect()).unwrap_or_default();
+    prefab_keys.sort();
+    for prefab_key in prefab_keys {
+        let prefab = &prefab_catalog.expect("keys came from it").prefabs[prefab_key];
+        if let Some(required) = prefab.interactable.as_ref().and_then(|i| i.requires_item.as_ref()) {
+            if let Some(def) = items.items.get(required) {
+                if def.destroyable {
+                    out.push(StrictWarning {
+                        source_file: "prefabs/prefabs.ron".to_string(),
+                        message: format!("prefab {prefab_key:?}: requires_item {required:?} can be destroyed by the player (set `destroyable: false` on it in items.ron), which soft-locks the interaction"),
+                        kind: "key_item_destroyable",
+                    });
+                }
+                if sold_somewhere(required, def) {
+                    out.push(StrictWarning {
+                        source_file: "prefabs/prefabs.ron".to_string(),
+                        message: format!("prefab {prefab_key:?}: requires_item {required:?} can be sold to a merchant (remove its `sell_price`, or set the merchant's ShopEntry `sell_price: 0`), which soft-locks the interaction"),
+                        kind: "key_item_sellable",
+                    });
+                }
+            }
+        }
+    }
+    // Gold exploit: the most any merchant pays for an item against the least any merchant charges for it (buy from one, sell to
+    // another, or back to the same one).
+    for key in items.items.keys() {
+        let item_price = items.items.get(key).and_then(|d| d.sell_price);
+        let cheapest = merchants
+            .iter()
+            .filter_map(|(k, m)| m.stock.iter().find(|e| &e.item_key == key).map(|e| (e.buy_price, *k)))
+            .min_by_key(|(price, _)| *price);
+        let best = merchants
+            .iter()
+            .filter_map(|(k, m)| sell_price_for(m, key, item_price).map(|p| (p, *k)))
+            .max_by_key(|(price, _)| *price);
+        if let (Some((buy, seller)), Some((sell, buyer))) = (cheapest, best) {
+            if sell > buy {
+                out.push(StrictWarning {
+                    source_file: "prefabs/prefabs.ron".to_string(),
+                    message: format!(
+                        "item {key:?}: merchant on prefab {buyer:?} pays {sell} for it but merchant on prefab {seller:?} sells it for {buy}: buying and selling it back makes gold; lower that `sell_price` or raise the `buy_price`"
+                    ),
+                    kind: "sell_price_above_buy_price",
+                });
+            }
+        }
+    }
+    out
+}
+
 /// `--strict` hygiene for item events in rules: a rule on `item.used:{k}` that runs `UseItem(k)` re-uses the item every frame
 /// (with `consume: 0` forever; it never freezes a frame because the event is read next frame), and a `buy_item:` / `use_item:`
 /// click bound in a transition or a behavior file does not stop the built-in action, so the click does the built-in action AND
@@ -997,7 +1102,7 @@ fn item_event_rule_warnings(
     fn is_panel_click(event: &str) -> bool {
         event
             .strip_prefix("ui.button_pressed:")
-            .is_some_and(|t| t.starts_with("buy_item:") || t.starts_with("use_item:"))
+            .is_some_and(ironhold_core::capabilities::panel_defaults::is_default_backed_trigger)
     }
     fn scan(out: &mut Vec<StrictWarning>, source: &str, fsm: &StateMachineAsset, is_behavior: bool) {
         for b in fsm.global_on.iter().chain(fsm.states.iter().flat_map(|s| s.on.iter())) {
@@ -1411,6 +1516,25 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
                         }
                         Some(_) => {}
                     }
+                }
+            }
+            Action::SellItem { item_key, count, all } | Action::DestroyItem { item_key, count, all } => {
+                let verb = if matches!(action, Action::SellItem { .. }) { "SellItem" } else { "DestroyItem" };
+                if let Some(c) = item_catalog {
+                    if !c.items.contains_key(item_key) {
+                        errors.push(CrossFileError {
+                            source_file: source.clone(),
+                            message: format!("item_key {:?} not found in items.ron", item_key),
+                            error_type: "missing_reference",
+                        });
+                    }
+                }
+                if *count == 0 && !*all {
+                    errors.push(CrossFileError {
+                        source_file: source.clone(),
+                        message: format!("{verb}({item_key:?}): `count: 0` without `all: true` does nothing and is always refused"),
+                        error_type: "item_count_zero",
+                    });
                 }
             }
             Action::PlayAnimationOn { start_at_fraction: Some(fraction), .. } => {
@@ -3139,10 +3263,12 @@ fn check_ui_trigger_reachability(project: LoadedProject) -> Vec<CrossFileError> 
         // `buy_item:{key}` and `use_item:{key}` are default-backed (item system S3): the engine runs `BuyItem` / `UseItem` itself
         // for them unless a rule binds the event, so an authored Button/key/gamepad binding with such a trigger works with no
         // rule. `use_item:{key}` only does something for an item that has a `use:` block.
-        let default_backed = trigger.starts_with("buy_item:")
-            || trigger.strip_prefix("use_item:").is_some_and(|k| {
-                item_catalog.map_or(true, |c| c.items.get(k).is_some_and(|d| d.use_def.is_some()))
-            });
+        // `sell_item:`, `sell_stack:` and `destroy_item:` (item system S4) are default-backed the same way.
+        use ironhold_core::capabilities::panel_defaults::{is_default_backed_trigger, USE_ITEM_PREFIX};
+        let default_backed = match trigger.strip_prefix(USE_ITEM_PREFIX) {
+            Some(k) => item_catalog.map_or(true, |c| c.items.get(k).is_some_and(|d| d.use_def.is_some())),
+            None => is_default_backed_trigger(trigger),
+        };
         if default_backed {
             return;
         }
@@ -3276,6 +3402,9 @@ fn collect_reachable_ui_triggers(
     prefab_catalog: Option<&PrefabCatalog>,
     item_catalog: Option<&ItemCatalog>,
 ) -> HashSet<String> {
+    use ironhold_core::capabilities::panel_defaults::{
+        DESTROY_ALL_PREFIX, DESTROY_ITEM_PREFIX, SELL_ALL_PREFIX, SELL_ITEM_PREFIX, SELL_STACK_PREFIX,
+    };
     let mut reachable = HashSet::new();
     let mut insert = |trigger: &str| {
         if !trigger.is_empty() {
@@ -3314,6 +3443,10 @@ fn collect_reachable_ui_triggers(
                         // rule on `use_item:iron_sword` is reachable (over-approximating only suppresses a --strict warning).
                         for key in items.items.keys() {
                             insert(&format!("use_item:{key}"));
+                            // The bag menu (item system S4) fires these for any item, so a rule that overrides one is reachable.
+                            for prefix in [SELL_ITEM_PREFIX, SELL_STACK_PREFIX, SELL_ALL_PREFIX, DESTROY_ITEM_PREFIX, DESTROY_ALL_PREFIX] {
+                                insert(&format!("{prefix}{key}"));
+                            }
                         }
                     }
                 }
@@ -4578,6 +4711,7 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
     warnings.extend(pause_checks(project));
     warnings.extend(item_event_rule_warnings(state_machine, behaviors));
     warnings.extend(inventory_bag_warnings(project.project_dir, project.project_config, project.scenes));
+    warnings.extend(item_sell_warnings(project.item_catalog, project.prefab_catalog, actions, project.project_config.and_then(|c| c.items_path.as_deref()).unwrap_or("items/items.ron")));
     warnings.extend(item_use_warnings(project.item_catalog, project.project_config.and_then(|c| c.items_path.as_deref()).unwrap_or("items/items.ron")));
 
     warnings.extend(

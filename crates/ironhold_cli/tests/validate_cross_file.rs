@@ -2817,3 +2817,42 @@ fn a_project_config_typo_does_not_also_report_the_panel_vs_bag_error() {
     assert!(stdout.contains("max_slot"), "the parse error names the typo: {stdout}");
     assert!(!stdout.contains("inventory_panel_smaller_than_bag"), "no made-up bag size: {stdout}");
 }
+
+// ── Selling and destroying (item system S4) ─────────────────────────────────────
+
+/// `SellItem`/`DestroyItem` naming an item that is not in items.ron, and `count: 0` without `all: true` (always refused), are errors.
+#[test]
+fn sell_and_destroy_actions_with_a_bad_item_or_zero_count_exit_1() {
+    let (code, stdout) = validate("bad_sell_destroy_actions");
+    assert_eq!(code, 1, "expected exit 1, got {code}:\n{stdout}");
+    assert!(stdout.contains("nonsense") && stdout.contains("not found in items.ron"), "{stdout}");
+    assert!(stdout.contains("DestroyItem(\"iron_sword\")") && stdout.contains("count: 0"), "{stdout}");
+    // `count: 0, all: true` is fine: only the DestroyItem is a zero-count error, the SellItem with `all: true` is not.
+    assert_eq!(stdout.matches("always refused").count(), 1, "count 0 with all: true is allowed: {stdout}");
+}
+
+/// --strict: a sell price on a currency item, SellItem on an item no merchant buys, DestroyItem on a key item, a `requires_item`
+/// key the player can sell or destroy, and a merchant that pays more than it charges. Not reported without --strict.
+#[test]
+fn sell_and_destroy_hygiene_warnings_are_strict_only() {
+    let (code, stdout) = validate("warn_sell_destroy_strict");
+    assert_eq!(code, 0, "expected exit 0 without --strict, got {code}:\n{stdout}");
+    let (code, stdout) = validate_strict("warn_sell_destroy_strict");
+    assert_eq!(code, 1, "expected exit 1 under --strict, got {code}:\n{stdout}");
+    for fragment in [
+        "`sell_price` on a currency item", "no merchant in this project buys it", "is `destroyable: false`, so it is always refused",
+        "can be destroyed by the player", "can be sold to a merchant", "buying and selling it back makes gold",
+        "item \"ring\": merchant on prefab \"jeweller\" pays 70 for it but merchant on prefab \"pedlar\" sells it for 30",
+    ] {
+        assert!(stdout.contains(fragment), "expected {fragment:?} in output:
+{stdout}");
+    }
+}
+
+/// Rules that override the three bag-menu events are reachable (not orphans), authored buttons with those triggers need no rule,
+/// a key item with no price that is `destroyable: false` is clean, and a merchant `sell_price: 0` does not trip the exploit check.
+#[test]
+fn sell_and_destroy_overrides_and_buttons_are_clean_under_strict() {
+    let (code, stdout) = validate_strict("valid_sell_destroy_overrides");
+    assert_eq!(code, 0, "expected exit 0 under --strict, got {code}:\n{stdout}");
+}
