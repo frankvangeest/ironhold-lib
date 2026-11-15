@@ -1648,3 +1648,72 @@ fn a_sell_n_question_closes_when_the_shop_stops_paying() {
     app.update();
     assert!(menu_state(&app).is_none());
 }
+
+#[test]
+fn selling_one_of_several_non_stackable_swords_sells_exactly_one() {
+    // Three swords over three slots (a non-stackable item is one per slot). Clicking one sword and choosing Sell must sell one.
+    let (mut app, slots) = menu_app(&[("sword", 3)]);
+    assert_eq!(app.world().resource::<PlayerInventory>().slots.iter().flatten().count(), 3, "one sword per slot");
+    press(&mut app, slots[1]);
+    let m = menu_state(&app).expect("menu");
+    assert_eq!((m.count, m.total), (1, 3));
+    assert!(row_shown(&mut app, MenuRowKind::SellOne));
+    press_row(&mut app, MenuRowKind::SellOne);
+    assert_eq!(bag_count(&app, "sword"), 2, "only one sword sold");
+    assert_eq!(gold_now(&app), 30.0);
+}
+
+#[test]
+fn several_swords_offer_sell_all_and_it_asks_first() {
+    // Three non-stackable swords over three slots: Sell sells one, Sell all (3) sells them all after a Yes.
+    let (mut app, slots) = menu_app(&[("sword", 3)]);
+    press(&mut app, slots[0]);
+    assert!(row_shown(&mut app, MenuRowKind::SellOne) && row_shown(&mut app, MenuRowKind::SellAll));
+    assert!(!row_shown(&mut app, MenuRowKind::SellStack), "the clicked stack is a single sword: no Sell N");
+    press_row(&mut app, MenuRowKind::SellAll);
+    assert_eq!(bag_count(&app, "sword"), 3, "the question comes first");
+    assert_eq!(menu_state(&app).unwrap().confirm, Some(MenuConfirm::SellAll));
+    wait_for_confirm(&mut app);
+    press_row(&mut app, MenuRowKind::Yes);
+    assert_eq!(bag_count(&app, "sword"), 0, "every sword sold");
+    assert_eq!(gold_now(&app), 90.0, "3 x 30");
+    assert!(menu_state(&app).is_none());
+}
+
+#[test]
+fn destroy_all_removes_every_unit_over_every_stack() {
+    let (mut app, slots) = menu_app(&[("potion", 25)]);
+    let _ = run(&mut app, vec![Action::CloseShop]);
+    press(&mut app, slots[0]);
+    assert!(row_shown(&mut app, MenuRowKind::Destroy) && row_shown(&mut app, MenuRowKind::DestroyAll));
+    press_row(&mut app, MenuRowKind::DestroyAll);
+    assert_eq!(bag_count(&app, "potion"), 25);
+    wait_for_confirm(&mut app);
+    press_row(&mut app, MenuRowKind::Yes);
+    assert_eq!(bag_count(&app, "potion"), 0, "all 25, over three stacks");
+}
+
+#[test]
+fn a_single_stack_offers_no_all_rows() {
+    let (mut app, slots) = menu_app(&[("potion", 3)]);
+    press(&mut app, slots[0]);
+    assert!(!row_shown(&mut app, MenuRowKind::SellAll) && !row_shown(&mut app, MenuRowKind::DestroyAll));
+}
+
+#[test]
+fn the_all_events_run_the_built_in_unless_a_rule_owns_them() {
+    let (mut app, _slots) = menu_app(&[("sword", 3), ("pelt", 2)]);
+    send_click(&mut app, "sell_all:sword");
+    assert_eq!(bag_count(&app, "sword"), 0);
+    assert_eq!(gold_now(&app), 90.0);
+    send_click(&mut app, "destroy_all:pelt");
+    assert_eq!(bag_count(&app, "pelt"), 0);
+
+    let (mut app, _slots) = menu_app(&[("sword", 3)]);
+    app.world_mut().insert_resource(fsm_with("playing", Some("ui.button_pressed:sell_all:sword"), false));
+    app.world_mut().resource_mut::<LogicState>().0 = "playing".to_string();
+    app.update();
+    send_click(&mut app, "sell_all:sword");
+    assert!(has(&events(&app), "rule.ran"));
+    assert_eq!(bag_count(&app, "sword"), 3, "the rule owns the event: the built-in did not sell");
+}

@@ -3402,7 +3402,9 @@ fn collect_reachable_ui_triggers(
     prefab_catalog: Option<&PrefabCatalog>,
     item_catalog: Option<&ItemCatalog>,
 ) -> HashSet<String> {
-    use ironhold_core::capabilities::panel_defaults::{DESTROY_ITEM_PREFIX, SELL_ITEM_PREFIX, SELL_STACK_PREFIX};
+    use ironhold_core::capabilities::panel_defaults::{
+        DESTROY_ALL_PREFIX, DESTROY_ITEM_PREFIX, SELL_ALL_PREFIX, SELL_ITEM_PREFIX, SELL_STACK_PREFIX,
+    };
     let mut reachable = HashSet::new();
     let mut insert = |trigger: &str| {
         if !trigger.is_empty() {
@@ -3442,7 +3444,7 @@ fn collect_reachable_ui_triggers(
                         for key in items.items.keys() {
                             insert(&format!("use_item:{key}"));
                             // The bag menu (item system S4) fires these for any item, so a rule that overrides one is reachable.
-                            for prefix in [SELL_ITEM_PREFIX, SELL_STACK_PREFIX, DESTROY_ITEM_PREFIX] {
+                            for prefix in [SELL_ITEM_PREFIX, SELL_STACK_PREFIX, SELL_ALL_PREFIX, DESTROY_ITEM_PREFIX, DESTROY_ALL_PREFIX] {
                                 insert(&format!("{prefix}{key}"));
                             }
                         }

@@ -197,3 +197,6 @@ split out of S4 into its own item, so S4 does not bind Escape.
   Making `Take` slot-aware needs a slot on the action or a menu-only op: backlog.
 - The built-in messages name the stat key as it is and cannot be turned off (same open gap as "Bought X!"): backlog items extended.
 - Not covered by a test (needs layout or a real pointer): the double-click geometry, the menu position on screen and touch. Playtest: see the checklist given with the review.
+- **Added at the playtest (Frank, 2026-11-15): "Sell all N" and "Destroy all N"** for an item the bag holds more of than the clicked stack (a non-stackable
+  sword over several slots, or a second stack). New default-backed events `sell_all:{key}` and `destroy_all:{key}` (plain `all: true`, no menu quantity); both ask
+  Yes/No with the total. This replaces the "whole-item selling across stacks as its own verb" follow-up.

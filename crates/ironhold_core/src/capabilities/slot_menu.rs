@@ -35,8 +35,12 @@ use crate::runtime::sim_clock::SimClock;
 pub enum MenuConfirm {
     /// "Destroy N Item?" then `destroy_item:{key}`.
     Destroy,
-    /// "Sell N Item for P gold?" then `sell_stack:{key}`.
+    /// "Sell N for P gold?" then `sell_stack:{key}`.
     SellStack,
+    /// "Sell all T for P gold?" then `sell_all:{key}`: every unit of the item, over all its stacks.
+    SellAll,
+    /// "Destroy all T?" then `destroy_all:{key}`: every unit of the item, over all its stacks.
+    DestroyAll,
 }
 
 /// The open menu: which slot, and what the bag looked like when it opened (the menu closes when any of it changes).
@@ -75,7 +79,9 @@ pub enum MenuRowKind {
     Use,
     SellOne,
     SellStack,
+    SellAll,
     Destroy,
+    DestroyAll,
     NoVerbs,
     Prompt,
     Yes,
@@ -83,14 +89,17 @@ pub enum MenuRowKind {
 }
 
 impl MenuRowKind {
-    pub const ALL: [MenuRowKind; 9] = [
-        MenuRowKind::Header, MenuRowKind::Use, MenuRowKind::SellOne, MenuRowKind::SellStack, MenuRowKind::Destroy,
-        MenuRowKind::NoVerbs, MenuRowKind::Prompt, MenuRowKind::Yes, MenuRowKind::No,
+    pub const ALL: [MenuRowKind; 11] = [
+        MenuRowKind::Header, MenuRowKind::Use, MenuRowKind::SellOne, MenuRowKind::SellStack, MenuRowKind::SellAll,
+        MenuRowKind::Destroy, MenuRowKind::DestroyAll, MenuRowKind::NoVerbs, MenuRowKind::Prompt, MenuRowKind::Yes, MenuRowKind::No,
     ];
 
     /// Rows the player can press (spawned as `Button`s).
     pub fn is_button(self) -> bool {
-        matches!(self, Self::Use | Self::SellOne | Self::SellStack | Self::Destroy | Self::Yes | Self::No)
+        matches!(
+            self,
+            Self::Use | Self::SellOne | Self::SellStack | Self::SellAll | Self::Destroy | Self::DestroyAll | Self::Yes | Self::No
+        )
     }
 }
 
@@ -121,7 +130,11 @@ pub struct MenuView {
     pub use_row: bool,
     pub sell_one: Option<String>,
     pub sell_stack: Option<String>,
+    /// "Sell all T": every unit over every stack. Only offered when the bag holds more of the item than the clicked stack.
+    pub sell_all: Option<String>,
     pub destroy: Option<String>,
+    /// "Destroy all T": as `sell_all`.
+    pub destroy_all: Option<String>,
     /// Nothing can be done with the item (a key item): one dimmed line says so.
     pub no_verbs: bool,
     /// Confirm mode: the question, with Yes and No rows; every verb row is hidden.
@@ -136,7 +149,9 @@ impl MenuView {
             MenuRowKind::Use => !confirming && self.use_row,
             MenuRowKind::SellOne => !confirming && self.sell_one.is_some(),
             MenuRowKind::SellStack => !confirming && self.sell_stack.is_some(),
+            MenuRowKind::SellAll => !confirming && self.sell_all.is_some(),
             MenuRowKind::Destroy => !confirming && self.destroy.is_some(),
+            MenuRowKind::DestroyAll => !confirming && self.destroy_all.is_some(),
             MenuRowKind::NoVerbs => !confirming && self.no_verbs,
             MenuRowKind::Prompt | MenuRowKind::Yes | MenuRowKind::No => confirming,
         }
@@ -148,7 +163,9 @@ impl MenuView {
             MenuRowKind::Use => "Use",
             MenuRowKind::SellOne => self.sell_one.as_deref().unwrap_or(""),
             MenuRowKind::SellStack => self.sell_stack.as_deref().unwrap_or(""),
+            MenuRowKind::SellAll => self.sell_all.as_deref().unwrap_or(""),
             MenuRowKind::Destroy => self.destroy.as_deref().unwrap_or(""),
+            MenuRowKind::DestroyAll => self.destroy_all.as_deref().unwrap_or(""),
             MenuRowKind::NoVerbs => "Cannot be sold or destroyed",
             MenuRowKind::Prompt => self.prompt.as_deref().unwrap_or(""),
             MenuRowKind::Yes => "Yes",
@@ -157,9 +174,10 @@ impl MenuView {
     }
 }
 
-/// Builds the menu text for `count` units in the clicked stack. A single unit sells at once; a stack of more offers "Sell 1" and
+/// Builds the menu text for `count` units in the clicked stack and `total` units over every stack of the item ("Sell all" and
+/// "Destroy all" are only offered when `total` is more than `count`). A single unit sells at once; a stack of more offers "Sell 1" and
 /// "Sell N" (with a Yes/No); Destroy always asks.
-pub fn menu_view(facts: &MenuFacts, count: u32, confirm: Option<MenuConfirm>) -> MenuView {
+pub fn menu_view(facts: &MenuFacts, count: u32, total: u32, confirm: Option<MenuConfirm>) -> MenuView {
     let name = facts.display_name;
     let cur = facts.currency;
     let total_price = |n: u32| facts.unit_price.map(|p| p as u64 * n as u64);
@@ -173,6 +191,13 @@ pub fn menu_view(facts: &MenuFacts, count: u32, confirm: Option<MenuConfirm>) ->
             let paid = total_price(count).unwrap_or(0);
             view.prompt = Some(format!("Sell {count} for {paid} {cur}?"));
         }
+        Some(MenuConfirm::SellAll) => {
+            let paid = total_price(total).unwrap_or(0);
+            view.prompt = Some(format!("Sell all {total} for {paid} {cur}?"));
+        }
+        Some(MenuConfirm::DestroyAll) => {
+            view.prompt = Some(format!("Destroy all {total}?"));
+        }
         None => {
             view.use_row = facts.usable;
             if let Some(p) = facts.unit_price {
@@ -183,6 +208,15 @@ pub fn menu_view(facts: &MenuFacts, count: u32, confirm: Option<MenuConfirm>) ->
             }
             if facts.destroyable {
                 view.destroy = Some(if count > 1 { format!("Destroy {count}") } else { "Destroy".to_string() });
+            }
+            // More of the item elsewhere in the bag (another stack, or a non-stackable item over several slots): offer all of it.
+            if total > count {
+                if facts.unit_price.is_some() {
+                    view.sell_all = Some(format!("Sell all {total} ({} {cur})", total_price(total).unwrap_or(0)));
+                }
+                if facts.destroyable {
+                    view.destroy_all = Some(format!("Destroy all {total}"));
+                }
             }
             view.no_verbs = !view.use_row && view.sell_one.is_none() && view.destroy.is_none();
         }
@@ -240,7 +274,7 @@ pub fn spawn_slot_menu(panel: &mut ChildSpawnerCommands, columns: u32, rows: u32
                 if kind.is_button() {
                     row.insert((
                         Button,
-                        BackgroundColor(if kind == MenuRowKind::Destroy { ROW_BG_DANGER } else { ROW_BG }),
+                        BackgroundColor(if matches!(kind, MenuRowKind::Destroy | MenuRowKind::DestroyAll) { ROW_BG_DANGER } else { ROW_BG }),
                     ));
                 }
                 row.with_children(|r| {
@@ -320,7 +354,7 @@ pub fn slot_menu_sync_system(
         || inventory_ui.active_merchant_id != menu.merchant
         || !slot_same
         || count_item(&player_inv.slots, &menu.item_key) != menu.total
-        || (menu.confirm == Some(MenuConfirm::SellStack) && unit_price.is_none());
+        || (matches!(menu.confirm, Some(MenuConfirm::SellStack | MenuConfirm::SellAll)) && unit_price.is_none());
     if stale {
         inventory_ui.slot_menu = None;
         hide(&mut root);
@@ -335,7 +369,7 @@ pub fn slot_menu_sync_system(
         unit_price,
         currency: merchant_def.map_or("", |m| m.currency_stat.as_str()),
     };
-    let view = menu_view(&facts, menu.count, menu.confirm);
+    let view = menu_view(&facts, menu.count, menu.total, menu.confirm);
 
     let slot_entity = slots.iter().find(|(_, m)| m.slot_index == menu.slot_index).map(|(e, _)| e);
     for (entity, mut node, cfg, parent) in root.iter_mut() {
@@ -391,7 +425,7 @@ mod tests {
 
     #[test]
     fn a_single_unit_sells_at_once_and_destroy_asks() {
-        let v = menu_view(&facts(true, true, Some(5)), 1, None);
+        let v = menu_view(&facts(true, true, Some(5)), 1, 1, None);
         assert_eq!(v.header, "Health Potion");
         assert!(v.use_row);
         assert_eq!(v.sell_one.as_deref(), Some("Sell (5 gold)"));
@@ -402,7 +436,7 @@ mod tests {
 
     #[test]
     fn a_stack_offers_one_or_the_clicked_stack_with_its_quantity() {
-        let v = menu_view(&facts(true, true, Some(5)), 10, None);
+        let v = menu_view(&facts(true, true, Some(5)), 10, 10, None);
         assert_eq!(v.header, "Health Potion x10");
         assert_eq!(v.sell_one.as_deref(), Some("Sell 1 (5 gold)"));
         assert_eq!(v.sell_stack.as_deref(), Some("Sell 10 (50 gold)"));
@@ -411,37 +445,61 @@ mod tests {
 
     #[test]
     fn no_shop_or_an_unbought_item_has_no_sell_rows() {
-        let v = menu_view(&facts(true, true, None), 10, None);
+        let v = menu_view(&facts(true, true, None), 10, 10, None);
         assert!(v.sell_one.is_none() && v.sell_stack.is_none());
         assert!(v.use_row && v.destroy.is_some());
     }
 
     #[test]
     fn a_key_item_says_so_instead_of_an_empty_menu() {
-        let v = menu_view(&facts(false, false, None), 1, None);
+        let v = menu_view(&facts(false, false, None), 1, 1, None);
         assert!(v.no_verbs);
         assert!(v.visible(MenuRowKind::NoVerbs) && !v.visible(MenuRowKind::Use) && !v.visible(MenuRowKind::Destroy));
         // an item that can only be used is not a "no verbs" item
-        assert!(!menu_view(&facts(true, false, None), 1, None).no_verbs);
+        assert!(!menu_view(&facts(true, false, None), 1, 1, None).no_verbs);
     }
 
     #[test]
     fn confirm_mode_shows_only_the_question_with_yes_and_no() {
-        let v = menu_view(&facts(true, true, Some(5)), 10, Some(MenuConfirm::Destroy));
+        let v = menu_view(&facts(true, true, Some(5)), 10, 10, Some(MenuConfirm::Destroy));
         assert_eq!(v.prompt.as_deref(), Some("Destroy 10?"));
         for kind in [MenuRowKind::Use, MenuRowKind::SellOne, MenuRowKind::SellStack, MenuRowKind::Destroy, MenuRowKind::NoVerbs] {
             assert!(!v.visible(kind), "{kind:?} hidden while confirming");
         }
         assert!(v.visible(MenuRowKind::Header) && v.visible(MenuRowKind::Prompt) && v.visible(MenuRowKind::Yes) && v.visible(MenuRowKind::No));
-        let v = menu_view(&facts(true, true, Some(5)), 10, Some(MenuConfirm::SellStack));
+        let v = menu_view(&facts(true, true, Some(5)), 10, 10, Some(MenuConfirm::SellStack));
         assert_eq!(v.prompt.as_deref(), Some("Sell 10 for 50 gold?"));
-        let v = menu_view(&facts(true, true, Some(5)), 1, Some(MenuConfirm::Destroy));
+        let v = menu_view(&facts(true, true, Some(5)), 1, 1, Some(MenuConfirm::Destroy));
         assert_eq!(v.prompt.as_deref(), Some("Destroy?"), "no quantity for a single unit");
     }
 
     #[test]
     fn a_huge_stack_price_does_not_overflow() {
-        let v = menu_view(&facts(false, false, Some(u32::MAX)), 99, None);
+        let v = menu_view(&facts(false, false, Some(u32::MAX)), 99, 99, None);
         assert_eq!(v.sell_stack.as_deref(), Some(format!("Sell 99 ({} gold)", u32::MAX as u64 * 99).as_str()));
+    }
+
+    #[test]
+    fn items_spread_over_several_stacks_offer_all_of_them() {
+        // 3 non-stackable swords, one per slot: the clicked slot holds 1, the bag holds 3.
+        let v = menu_view(&facts(false, true, Some(30)), 1, 3, None);
+        assert_eq!(v.sell_one.as_deref(), Some("Sell (30 gold)"));
+        assert_eq!(v.sell_all.as_deref(), Some("Sell all 3 (90 gold)"));
+        assert_eq!(v.destroy_all.as_deref(), Some("Destroy all 3"));
+        // nothing extra when the clicked stack is all there is
+        let v = menu_view(&facts(false, true, Some(30)), 3, 3, None);
+        assert!(v.sell_all.is_none() && v.destroy_all.is_none());
+        // no price: no Sell all; not destroyable: no Destroy all
+        let v = menu_view(&facts(false, false, None), 1, 3, None);
+        assert!(v.sell_all.is_none() && v.destroy_all.is_none() && v.no_verbs);
+    }
+
+    #[test]
+    fn the_all_questions_name_the_total() {
+        let v = menu_view(&facts(false, true, Some(30)), 1, 3, Some(MenuConfirm::SellAll));
+        assert_eq!(v.prompt.as_deref(), Some("Sell all 3 for 90 gold?"));
+        let v = menu_view(&facts(false, true, Some(30)), 1, 3, Some(MenuConfirm::DestroyAll));
+        assert_eq!(v.prompt.as_deref(), Some("Destroy all 3?"));
+        assert!(!v.visible(MenuRowKind::SellAll) && !v.visible(MenuRowKind::DestroyAll) && v.visible(MenuRowKind::Yes));
     }
 }

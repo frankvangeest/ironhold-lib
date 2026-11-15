@@ -6,6 +6,8 @@
         ( event: "ui.button_pressed:destroy_item:iron_sword", do_actions: [ DestroyItem(item_key: "iron_sword", all: true) ] ),
         ( event: "ui.button_pressed:sell_item:iron_sword", do_actions: [ SellItem(item_key: "iron_sword") ] ),
         ( event: "ui.button_pressed:sell_stack:iron_sword", do_actions: [ SellItem(item_key: "iron_sword", all: true) ] ),
+        ( event: "ui.button_pressed:sell_all:iron_sword", do_actions: [ SellItem(item_key: "iron_sword", all: true) ] ),
+        ( event: "ui.button_pressed:destroy_all:iron_sword", do_actions: [ DestroyItem(item_key: "iron_sword", all: true) ] ),
         ( event: "item.sold:iron_sword", do_actions: [ Log("sold") ] ),
     ],
 )

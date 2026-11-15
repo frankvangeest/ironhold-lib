@@ -26,11 +26,16 @@ pub const SELL_ITEM_PREFIX: &str = "sell_item:";
 pub const SELL_STACK_PREFIX: &str = "sell_stack:";
 /// Destroy the clicked stack (the bag menu's Destroy row, after its confirm).
 pub const DESTROY_ITEM_PREFIX: &str = "destroy_item:";
+/// Sell every unit of the item over all its stacks (the bag menu's "Sell all", after its confirm).
+pub const SELL_ALL_PREFIX: &str = "sell_all:";
+/// Destroy every unit of the item over all its stacks (the bag menu's "Destroy all", after its confirm).
+pub const DESTROY_ALL_PREFIX: &str = "destroy_all:";
 
 /// Every default-backed click trigger prefix. The one list the runtime (`BoundPanelEvents`, the default pusher) and
 /// `ironhold validate` (reachability, the "bound in a transition runs both" warning) all read, so they cannot drift.
-pub const DEFAULT_BACKED_PREFIXES: [&str; 5] =
-    [BUY_ITEM_PREFIX, USE_ITEM_PREFIX, SELL_ITEM_PREFIX, SELL_STACK_PREFIX, DESTROY_ITEM_PREFIX];
+pub const DEFAULT_BACKED_PREFIXES: [&str; 7] = [
+    BUY_ITEM_PREFIX, USE_ITEM_PREFIX, SELL_ITEM_PREFIX, SELL_STACK_PREFIX, DESTROY_ITEM_PREFIX, SELL_ALL_PREFIX, DESTROY_ALL_PREFIX,
+];
 
 /// True when `trigger` (without the `ui.button_pressed:` prefix) is one of the default-backed panel clicks.
 pub fn is_default_backed_trigger(trigger: &str) -> bool {
@@ -94,6 +99,14 @@ pub fn default_panel_actions_system(
             if !bound.0.contains(trigger.as_str()) {
                 action_queue.push(Action::SellItem { item_key: key.to_string(), count, all });
             }
+        } else if let Some(key) = trigger.strip_prefix(SELL_ALL_PREFIX) {
+            if !bound.0.contains(trigger.as_str()) {
+                action_queue.push(Action::SellItem { item_key: key.to_string(), count: 1, all: true });
+            }
+        } else if let Some(key) = trigger.strip_prefix(DESTROY_ALL_PREFIX) {
+            if !bound.0.contains(trigger.as_str()) {
+                action_queue.push(Action::DestroyItem { item_key: key.to_string(), count: 1, all: true });
+            }
         } else if let Some(key) = trigger.strip_prefix(DESTROY_ITEM_PREFIX) {
             let (count, all) = take_menu_quantity(&mut inventory_ui, DESTROY_ITEM_PREFIX, key);
             if !bound.0.contains(trigger.as_str()) {
@@ -120,8 +133,9 @@ fn take_menu_quantity(ui: &mut LoadedInventoryUi, prefix: &str, key: &str) -> (u
 ///
 /// * Left click or tap on a non-empty slot: opens the menu for it (again on the open slot: closes it).
 /// * Right click on a hovered non-empty slot: emits `use_item:{key}` at once (the shortcut) and closes the menu.
-/// * A row of the open menu: Use / Sell emit `use_item:` / `sell_item:` and close; Sell N and Destroy switch to a Yes/No; Yes emits
-///   `sell_stack:` / `destroy_item:` (with the clicked stack's quantity in `menu_action`) and closes; No goes back.
+/// * A row of the open menu: Use / Sell emit `use_item:` / `sell_item:` and close; Sell N, Sell all, Destroy and Destroy all switch to a
+///   Yes/No; Yes emits `sell_stack:` / `destroy_item:` (with the clicked stack's quantity in `menu_action`) or `sell_all:` / `destroy_all:`
+///   and closes; No goes back.
 /// * A press anywhere else closes it.
 ///
 /// Keeps running while paused but does nothing, so the `Interaction` baselines keep advancing (the menu is closed by
@@ -174,6 +188,12 @@ pub fn inventory_slot_click_system(
                 MenuRowKind::Destroy => {
                     inventory_ui.slot_menu = Some(SlotMenu { confirm: Some(MenuConfirm::Destroy), confirm_since_ms: now_ms, ..menu.clone() })
                 }
+                MenuRowKind::SellAll => {
+                    inventory_ui.slot_menu = Some(SlotMenu { confirm: Some(MenuConfirm::SellAll), confirm_since_ms: now_ms, ..menu.clone() })
+                }
+                MenuRowKind::DestroyAll => {
+                    inventory_ui.slot_menu = Some(SlotMenu { confirm: Some(MenuConfirm::DestroyAll), confirm_since_ms: now_ms, ..menu.clone() })
+                }
                 MenuRowKind::Yes => {
                     // The question replaces the verb rows in the same spot, so the second click of a double-click on Destroy would land on
                     // Yes: it only counts once the question has been on screen for a moment.
@@ -189,6 +209,9 @@ pub fn inventory_slot_click_system(
                             emit(DESTROY_ITEM_PREFIX, key);
                             inventory_ui.menu_action = Some((DESTROY_ITEM_PREFIX, menu.item_key.clone(), menu.count));
                         }
+                        // Every unit over every stack: the action's own `all: true`, no menu quantity to carry.
+                        Some(MenuConfirm::SellAll) => emit(SELL_ALL_PREFIX, key),
+                        Some(MenuConfirm::DestroyAll) => emit(DESTROY_ALL_PREFIX, key),
                         None => {}
                     }
                     inventory_ui.slot_menu = None;
