@@ -130,6 +130,14 @@ Non-obvious facts:
   `warn!` is runtime, once per item key per app lifetime (`Local<BTreeSet>`, never cleared on LoadScene). Panel atlases are
   filled synchronously in the loader before slot entities flush, so `scene.ui` node order does not matter.
 
+- S6 plan review (2026-11-15, at 8c6e254, `action_bar_assignable_slots.md`): `inventory_slot_click_system` (EmitSet::Ui) and
+  `action_bar_input_system` (GameStreamSet::ActionBar, in EmitSet::Game) are UNORDERED (Ui/Game independent): any assign-mode flag
+  one writes and the other reads in Emit races; end the mode in Execute (default pusher, like `menu_action`) instead. An EMPTY
+  slot (no item, no do_actions) still fires: pending inserted with `[]`, flush starts cooldown + emits `activated` (action_bar.rs
+  ~367-379). Loader gives a slot with empty `icon:` the bar's `icon_sheet` at index 0 unless `item.is_some()` (~2315): an
+  assignable empty slot would show a stray static icon. `ActionBarDef.id` required but never uniqueness-checked. Camera orbit is
+  not UI-aware but needs drag (delta), so a bare right click on the bar does not orbit.
+
 **How to apply:** any new item-moving action must go through the primitive (once built) and emit a failure event
 instead of a success event on failure. See [[inventory-panel-triplication]], [[panel-input-blocking]],
 [[event-pipeline-intent-layer]], [[stat-ownership-global-vs-instance]].
