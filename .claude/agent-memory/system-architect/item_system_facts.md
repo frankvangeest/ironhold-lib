@@ -138,6 +138,15 @@ Non-obvious facts:
   assignable empty slot would show a stray static icon. `ActionBarDef.id` required but never uniqueness-checked. Camera orbit is
   not UI-aware but needs drag (delta), so a bare right click on the bar does not orbit.
 
+- S6 code review (2026-11-16, `feature/action_bar_assignable_slots`, uncommitted on 7bbed7d): all plan findings honoured. The
+  ONLY edge ordering `bar_assign_click_system` (EmitSet::Ui) before `action_bar_input_system` (EmitSet::Game) is the `.after` in
+  ActionBarPlugin; `schedule_order_tests` does not pin it (single-threaded topo order can hide its loss in behaviour tests).
+  S5's double-held item is gone (input builds `UseItem` from `ActionSlotItem` at fire time), but an assignable slot WITHOUT a
+  default keeps its authored do_actions (loader bakes `Vec::new()` only when `item:` is set) and fires them while empty.
+  Assign/Clear handoff is keyed by slot key only; safe because slot keys are unique across bars (validate). Right click in
+  assign mode on a bag slot also `use_item:`s it (inventory_slot_click_system runs first). New PostExecute ResMut
+  `LoadedInventoryUi` writer `bar_assign_sync_system` is unordered vs `slot_menu_sync_system`/`action_bar_item_slot_system`.
+
 **How to apply:** any new item-moving action must go through the primitive (once built) and emit a failure event
 instead of a success event on failure. See [[inventory-panel-triplication]], [[panel-input-blocking]],
 [[event-pipeline-intent-layer]], [[stat-ownership-global-vs-instance]].
