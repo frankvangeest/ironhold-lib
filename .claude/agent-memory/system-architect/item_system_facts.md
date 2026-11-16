@@ -147,6 +147,16 @@ Non-obvious facts:
   assign mode on a bag slot also `use_item:`s it (inventory_slot_click_system runs first). New PostExecute ResMut
   `LoadedInventoryUi` writer `bar_assign_sync_system` is unordered vs `slot_menu_sync_system`/`action_bar_item_slot_system`.
 
+- Container paging plan review (2026-11-16, at 7bddcbd, `container_panel_paging.md`): `ContainerSlotMarker` sits on the slot's
+  LABEL child, not the slot node (no marker/Button on the cell itself). Runtime container size is `max_slots.max(4)`
+  (entity_spawner.rs:75) and `Inventory.slots.len()` never shrinks, so page_count is constant per container. `TransferItem`
+  (item_actions.rs:277) already is "partial by design" done right: compute what fits (`room_for`/`stat_room`), then `plan` the
+  exact amount; the Take All exception is NOT the pattern to copy. `TxnOp::Take` drains the LAST stack first (no slot address).
+  `active_container` has 5 writers (Open/Close/Despawn arm/LoadScene arm/loader Default): derive per-container UI state from it.
+  Cursor over a child `Button` (FocusPolicy::Block) leaves the panel ROOT's Interaction None. `camera_orbit_system`/
+  `party_camera_follow_system` read `MouseWheel` with no UI awareness (wheel over a panel also zooms). Reading `SimClock` forces
+  set membership (schedule_order_tests SimClock-reader test). No zero columns/rows check exists for any panel.
+
 **How to apply:** any new item-moving action must go through the primitive (once built) and emit a failure event
 instead of a success event on failure. See [[inventory-panel-triplication]], [[panel-input-blocking]],
 [[event-pipeline-intent-layer]], [[stat-ownership-global-vs-instance]].

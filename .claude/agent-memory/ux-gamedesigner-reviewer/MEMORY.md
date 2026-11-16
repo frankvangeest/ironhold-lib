@@ -5,6 +5,7 @@
 - [Item sell/destroy S4 plan+impl review](project_item_sell_destroy_s4_plan_review.md) — plan honoured; stale docs/20 lines, red No button, gold-max msg, prompt width
 - [Item bar slots S5 plan+impl review](project_action_bar_item_slots_s5_plan_review.md) — plan traps honoured; open: icon rows stale, validate names UseItem not slot, pad side effects
 - [Assignable bar slots S6 plan+impl review](project_action_bar_assignable_slots_s6_plan_review.md) — plan honoured; open: scene.ready example clobbers layout, move fires slot_cleared, no swap
+- [Container paging plan review](project_container_panel_paging_plan_review.md) — take must empty clicked slot; page_count basis unstated; footer height; wheel vs zoom
 - [Panel world-blocking](project_panel_world_blocking.md) — shop/container block interact/pickup/Tab, inventory not; rule only in docs/30 corpse notes; ui.panel_* unnamed+undocumented
 
 - [backend_abstraction plan+v1+v2 review](project_backend_abstraction_plan_review.md) — v2 Nakama: no-key says "no adapter", config regen drops games, no key source/troubleshooting
