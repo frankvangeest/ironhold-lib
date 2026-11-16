@@ -1,0 +1,12 @@
+(
+    schema_version: 2,
+    name: "main",
+    ui: [
+        ActionBar((id: "main", position: (10.0, 600.0), slots: [
+            (key: "6", item: "health_potion"),
+            (key: "7", assignable: true),
+            (key: "8", item: "health_potion", assignable: true),
+        ])),
+        InventoryPanel((id: "bag_panel", position: (10.0, 10.0), columns: 5, rows: 4)),
+    ],
+)

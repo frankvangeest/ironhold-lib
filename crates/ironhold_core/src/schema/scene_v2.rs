@@ -1594,6 +1594,14 @@ pub struct ActionSlotDef {
     /// Do not combine with `do_actions` (`ironhold validate` errors; at load the item wins). The item needs a `use:` block.
     #[serde(default)]
     pub item: Option<String>,
+    /// Makes this a slot the player fills from the bag (item system S6): with the bag open the player picks an item and puts it on the
+    /// slot (menu row "Put on bar"), moves it to another assignable slot or removes it again; `AssignBarSlot` / `ClearBarSlot` do the
+    /// same from a rule. It behaves like an `item:` slot while it holds an item (icon, bag count, dim, uses it) and shows a faint `+`
+    /// when empty (pressing an empty one emits `action_bar.empty_slot:{key}`, no cooldown). `item:` next to `assignable: true` is the
+    /// replaceable default. What the player assigned is kept across scenes (keyed by the bar's `id` and the slot's `key`) and lost on a
+    /// page reload. Not with `do_actions` or an own `icon:` (`ironhold validate` errors).
+    #[serde(default)]
+    pub assignable: bool,
     /// Seconds before this slot can be used again. Omit for no cooldown.
     #[serde(default)]
     pub cooldown_secs: Option<f32>,

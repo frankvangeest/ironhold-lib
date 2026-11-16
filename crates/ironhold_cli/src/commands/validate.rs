@@ -948,10 +948,34 @@ fn action_slot_item_warnings(item_catalog: Option<&ItemCatalog>, scenes: &[(Stri
     let mut out = Vec::new();
     // Any scene's panel counts: a bar in a HUD overlay reads the icon atlases a base scene's panel loaded (and the reverse).
     let has_panel = scenes.iter().any(|(_, sc)| walk_ui_nodes(&sc.ui).any(|n| matches!(n, UiNodeDef::InventoryPanel(_))));
+    // A bag that is always on screen is always edit mode for assignable slots: a click picks the item up instead of using it.
+    let bag_always_open = scenes.iter().any(|(_, sc)| walk_ui_nodes(&sc.ui).any(|n| matches!(n, UiNodeDef::InventoryPanel(p) if !p.initially_hidden)));
     for (scene_path, scene) in scenes {
         for node in walk_ui_nodes(&scene.ui) {
             let UiNodeDef::ActionBar(bar) = node else { continue };
             for slot in &bar.slots {
+                // An assignable slot needs a way to be filled (item system S6): the bag menu (an InventoryPanel) or an action.
+                if slot.assignable && !has_panel {
+                    out.push(StrictWarning {
+                        source_file: scene_path.clone(),
+                        message: format!("slot {:?} on bar {:?} is assignable, and no scene of this project has an InventoryPanel: the player has no way to fill it except an AssignBarSlot action", slot.key, bar.id),
+                        kind: "assignable_slot_no_panel",
+                    });
+                }
+                if slot.assignable && bag_always_open {
+                    out.push(StrictWarning {
+                        source_file: scene_path.clone(),
+                        message: format!("slot {:?} on bar {:?} is assignable, and an InventoryPanel is always on screen (`initially_hidden: false`): with the bag open a click on an assignable slot picks its item up instead of using it, so the mouse can never use it (keys and the gamepad still do)", slot.key, bar.id),
+                        kind: "assignable_slot_bag_always_open",
+                    });
+                }
+                if slot.assignable && bar.owner_player.is_some_and(|p| p > 0) {
+                    out.push(StrictWarning {
+                        source_file: scene_path.clone(),
+                        message: format!("slot {:?} on bar {:?} (owner_player {}) is assignable: using an item always acts on player 1 (`{{self}}` in its `use:` is the primary player)", slot.key, bar.id, bar.owner_player.unwrap_or(0)),
+                        kind: "assignable_slot_other_player",
+                    });
+                }
                 let Some(item) = &slot.item else { continue };
                 if item_catalog.and_then(|c| c.items.get(item)).is_some_and(|d| d.currency_stat.is_some()) {
                     out.push(StrictWarning {
@@ -978,6 +1002,100 @@ fn action_slot_item_warnings(item_catalog: Option<&ItemCatalog>, scenes: &[(Stri
         }
     }
     out
+}
+
+// ── Assignable action bar slots (item system S6) ───────────────────────────────
+
+/// `assignable: true` slots and `AssignBarSlot` / `ClearBarSlot`: an assignable slot fires the item it holds, so `do_actions` next to it never run
+/// and an own `icon:` would cover every assigned item; two bars of one scene sharing an `id` collide in the assignment map (keyed by bar id and slot
+/// key) when either has an assignable slot; the two actions must name a bar and slot that some scene has as an assignable slot, and `AssignBarSlot` an
+/// item that can be used.
+fn assignable_slot_errors(
+    scenes: &[(String, GameSceneV2)],
+    actions: &[(String, Action)],
+    item_catalog: Option<&ItemCatalog>,
+    errors: &mut Vec<CrossFileError>,
+) {
+    let mut assignable: std::collections::BTreeSet<(String, String)> = std::collections::BTreeSet::new();
+    for (scene_path, scene) in scenes {
+        let mut seen_ids: std::collections::BTreeMap<&str, bool> = std::collections::BTreeMap::new();
+        for node in walk_ui_nodes(&scene.ui) {
+            let UiNodeDef::ActionBar(bar) = node else { continue };
+            let bar_has_assignable = bar.slots.iter().any(|s| s.assignable);
+            match seen_ids.get(bar.id.as_str()) {
+                Some(&prev_assignable) if prev_assignable || bar_has_assignable => errors.push(CrossFileError {
+                    source_file: scene_path.clone(),
+                    message: format!(
+                        "two ActionBars in this scene share the id {:?}, and one has an assignable slot: the player's assignments are kept per bar id and slot key, so they would collide; give each bar its own id",
+                        bar.id
+                    ),
+                    error_type: "action_bar_duplicate_id",
+                }),
+                _ => {}
+            }
+            seen_ids.entry(bar.id.as_str()).and_modify(|a| *a |= bar_has_assignable).or_insert(bar_has_assignable);
+            for slot in &bar.slots {
+                if !slot.assignable {
+                    continue;
+                }
+                assignable.insert((bar.id.clone(), slot.key.clone()));
+                if !slot.do_actions.is_empty() {
+                    errors.push(CrossFileError {
+                        source_file: scene_path.clone(),
+                        message: format!(
+                            "slot {:?} on bar {:?} is assignable and has do_actions: an assignable slot fires the item it holds, so the do_actions never run",
+                            slot.key, bar.id
+                        ),
+                        error_type: "action_slot_assignable_and_actions",
+                    });
+                }
+                if !slot.icon.is_empty() {
+                    errors.push(CrossFileError {
+                        source_file: scene_path.clone(),
+                        message: format!(
+                            "slot {:?} on bar {:?} is assignable and has its own icon:, which would cover every item assigned to it: remove icon: (the item's own icon is shown)",
+                            slot.key, bar.id
+                        ),
+                        error_type: "action_slot_assignable_with_icon",
+                    });
+                }
+            }
+        }
+    }
+    for (source, action) in actions {
+        let (bar, slot, item) = match action {
+            Action::AssignBarSlot { bar, slot, item_key } => (bar, slot, Some(item_key)),
+            Action::ClearBarSlot { bar, slot } => (bar, slot, None),
+            _ => continue,
+        };
+        let verb = if item.is_some() { "AssignBarSlot" } else { "ClearBarSlot" };
+        if !assignable.contains(&(bar.clone(), slot.clone())) {
+            errors.push(CrossFileError {
+                source_file: source.clone(),
+                message: format!("{verb}(bar: {bar:?}, slot: {slot:?}): no scene has an assignable slot with that bar id and key (assignable: true), so it is always refused"),
+                error_type: "assign_unknown_slot",
+            });
+        }
+        let (Some(item), Some(catalog)) = (item, item_catalog) else { continue };
+        match catalog.items.get(item) {
+            None => errors.push(CrossFileError {
+                source_file: source.clone(),
+                message: format!("item_key {:?} not found in items.ron", item),
+                error_type: "missing_reference",
+            }),
+            Some(def) if def.use_def.is_none() => errors.push(CrossFileError {
+                source_file: source.clone(),
+                message: format!("AssignBarSlot(item_key: {item:?}): the item has no `use:` block, so it is always refused"),
+                error_type: "assign_item_without_use_block",
+            }),
+            Some(def) if def.currency_stat.is_some() => errors.push(CrossFileError {
+                source_file: source.clone(),
+                message: format!("AssignBarSlot(item_key: {item:?}): a currency item never sits in the bag, so it is always refused"),
+                error_type: "assign_currency_item",
+            }),
+            Some(_) => {}
+        }
+    }
 }
 
 // ── Item `use:` checks (item system S3) ─────────────────────────────────────────
@@ -1363,6 +1481,7 @@ fn cross_file_checks(project: LoadedProject) -> Vec<CrossFileError> {
     item_use_errors(item_catalog, project_config.and_then(|c| c.items_path.as_deref()).unwrap_or("items/items.ron"), &mut errors);
     inventory_bag_errors(project_dir, project_config, scenes, &mut errors);
     action_slot_item_errors(scenes, &mut errors);
+    assignable_slot_errors(scenes, actions, item_catalog, &mut errors);
 
     // All four catalog types have real schema-level invariants their own `.validate()` enforces
     // (e.g. `AssetCatalog::validate()` rejects an empty `models[]`/`decals[]` path,
@@ -3467,7 +3586,8 @@ fn collect_reachable_ui_triggers(
     item_catalog: Option<&ItemCatalog>,
 ) -> HashSet<String> {
     use ironhold_core::capabilities::panel_defaults::{
-        DESTROY_ALL_PREFIX, DESTROY_ITEM_PREFIX, SELL_ALL_PREFIX, SELL_ITEM_PREFIX, SELL_STACK_PREFIX,
+        ASSIGN_SLOT_PREFIX, CLEAR_SLOT_PREFIX, DESTROY_ALL_PREFIX, DESTROY_ITEM_PREFIX, SELL_ALL_PREFIX, SELL_ITEM_PREFIX,
+        SELL_STACK_PREFIX,
     };
     let mut reachable = HashSet::new();
     let mut insert = |trigger: &str| {
@@ -3529,6 +3649,13 @@ fn collect_reachable_ui_triggers(
                 UiNodeDef::ContainerPanel(_) => {
                     insert("close_container");
                     insert("take_all_from_container");
+                }
+                UiNodeDef::ActionBar(bar) => {
+                    // The bag's "Put on bar" / pick-up gestures fire these for an assignable slot (item system S6).
+                    for slot in bar.slots.iter().filter(|s| s.assignable) {
+                        insert(&format!("{ASSIGN_SLOT_PREFIX}{}", slot.key));
+                        insert(&format!("{CLEAR_SLOT_PREFIX}{}", slot.key));
+                    }
                 }
                 _ => {}
             }

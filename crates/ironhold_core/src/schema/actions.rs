@@ -466,6 +466,23 @@ pub enum Action {
         #[serde(default)]
         all: bool,
     },
+    /// Puts `item_key` on an `assignable` action bar slot (item system S6): `bar` is the bar's `id`, `slot` the slot's `key`. What was there is
+    /// replaced; the assignment is kept across scenes. The item does not have to be in the bag (a tutorial may pre-assign); the player's own
+    /// gesture only offers items the bag holds. Refused (changes nothing, `action_bar.assign_failed:{slot}`) when no slot of the scene
+    /// that is loaded now has that bar and key, the slot is not `assignable`, or the item is not in `items.ron`, has no `use:` block or is a
+    /// currency item (a slot of a scene that is not loaded yet cannot be pre-assigned). Success: `action_bar.slot_assigned:{slot}` and
+    /// `action_bar.slot_assigned:{slot}:{item_key}`.
+    AssignBarSlot {
+        bar: String,
+        slot: String,
+        item_key: String,
+    },
+    /// Empties an `assignable` action bar slot (item system S6), even one that has an authored default (it stays empty until `AssignBarSlot`
+    /// puts something back). Same refusal rules as `AssignBarSlot` for the bar and slot. Success: `action_bar.slot_cleared:{slot}`.
+    ClearBarSlot {
+        bar: String,
+        slot: String,
+    },
     /// Show the `ContainerPanel` UI node populated with the given entity's inventory.
     /// The argument is the container entity's spawn ID (e.g. `"chest_01"`).
     /// Emits `container.opened:{entity_id}` on success.
@@ -573,6 +590,7 @@ impl Action {
             | Action::PauseGame | Action::ResumeGame | Action::TogglePause
             | Action::OpenShop(_) | Action::CloseShop | Action::BuyItem(_) | Action::UseItem(_)
             | Action::SellItem { .. } | Action::DestroyItem { .. }
+            | Action::AssignBarSlot { .. } | Action::ClearBarSlot { .. }
             | Action::OpenContainer(_) | Action::CloseContainer | Action::TakeAllFromContainer
             | Action::ToggleOwnNameplate | Action::JoinPlayer
             | Action::SignIn | Action::SignOut | Action::SubmitScore { .. } | Action::FetchLeaderboard { .. }

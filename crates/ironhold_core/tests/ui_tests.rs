@@ -750,3 +750,43 @@ fn test_action_bar_item_slots_spawn_the_item_components() {
     assert_eq!(actions.len(), 1);
     assert!(item.is_none() && !has_child(&app, kids, &is_icon) && !has_child(&app, kids, &is_count), "a plain slot is unchanged");
 }
+
+/// Item system S6: a rebuilt bar starts from what the player assigned: an assignment wins over the authored default, a cleared default stays off,
+/// no entry uses the default, a non-assignable slot ignores the resource; every assignable slot gets the icon and count children.
+#[test]
+fn test_assignable_slots_start_from_the_assignments_resource() {
+    use ironhold_core::capabilities::action_bar::{ActionSlotItem, ActionSlotUi, SlotIcon, SlotItemCount};
+    use ironhold_core::capabilities::bar_assign::{ActionBarAssignments, AssignableSlot};
+    let mut app = setup_test_app();
+    app.update();
+    {
+        let mut a = app.world_mut().resource_mut::<ActionBarAssignments>();
+        a.assign("bar", "6", "health_potion");   // replaces the default mana potion
+        a.clear("bar", "7");                      // the default stays off
+        a.assign("bar", "9", "health_potion");   // a plain slot ignores the resource
+    }
+    load_scene_with_ui(&mut app, r#"ActionBar((id: "bar", slots: [
+        (key: "6", item: Some("mana_potion"), assignable: true),
+        (key: "7", item: Some("mana_potion"), assignable: true),
+        (key: "8", item: Some("mana_potion"), assignable: true),
+        (key: "5", assignable: true),
+        (key: "9", do_actions: [ Log("plain") ]),
+    ])),"#);
+    let mut q = app.world_mut().query::<(Entity, &ActionSlotUi, Option<&ActionSlotItem>, Option<&AssignableSlot>, Option<&Children>)>();
+    let mut by_key = std::collections::BTreeMap::new();
+    for (e, ui, item, a, kids) in q.iter(app.world()) {
+        let kids: Vec<Entity> = kids.map(|c| c.iter().collect()).unwrap_or_default();
+        by_key.insert(ui.slot_key.clone(), (e, item.map(|i| i.0.clone()), a.is_some(), kids));
+    }
+    assert_eq!(by_key["6"].1.as_deref(), Some("health_potion"), "an assignment replaces the default");
+    assert_eq!(by_key["7"].1, None, "a cleared default stays off");
+    assert_eq!(by_key["8"].1.as_deref(), Some("mana_potion"), "no entry: the authored default");
+    assert_eq!(by_key["5"].1, None, "an empty assignable slot");
+    assert!(by_key["9"].1.is_none() && !by_key["9"].2, "a plain slot ignores the resource");
+    for key in ["5", "6", "7", "8"] {
+        let (_, _, assignable, kids) = &by_key[key];
+        assert!(*assignable, "{key} is assignable");
+        let has = |f: &dyn Fn(&World, Entity) -> bool| kids.iter().any(|k| f(app.world(), *k));
+        assert!(has(&|w, e| w.get::<SlotIcon>(e).is_some()) && has(&|w, e| w.get::<SlotItemCount>(e).is_some()), "{key}: the icon and count children are always there");
+    }
+}

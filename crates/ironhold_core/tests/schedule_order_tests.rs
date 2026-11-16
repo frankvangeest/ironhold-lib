@@ -61,7 +61,7 @@ fn the_documented_systems_are_in_the_documented_sets() {
     let r = report();
     let expect: &[(&str, &[&str])] = &[
         ("EmitSet::Scene", &["check_project_loaded", "spawn_scene_v2"]),
-        ("EmitSet::Ui", &["global_input_system", "unclaimed_gamepad_trigger_system", "button_system", "icon_button_click_system", "inventory_slot_click_system"]),
+        ("EmitSet::Ui", &["global_input_system", "unclaimed_gamepad_trigger_system", "button_system", "icon_button_click_system", "inventory_slot_click_system", "bar_assign_click_system"]),
         ("EmitSet::DirectActions", &["resolve_pending_behaviors_system", "despawn_timer_system"]),
         ("EmitSet::Dialogue", &["dialogue_tick_system"]),
         ("GameStreamSet::Targeting", &["click_select_system", "tab_targeting_system", "target_auto_clear_system", "aim_target_system"]),
@@ -82,7 +82,7 @@ fn the_documented_systems_are_in_the_documented_sets() {
         (
             "GameplaySet::PostExecute",
             &[
-                "npc_hit_relay_system", "inventory_ui_system", "container_ui_system", "slot_menu_sync_system", "action_bar_item_slot_system", "audio_volume_var_system",
+                "npc_hit_relay_system", "inventory_ui_system", "container_ui_system", "slot_menu_sync_system", "action_bar_item_slot_system", "apply_bar_assignments_system", "bar_assign_sync_system", "audio_volume_var_system",
                 "preload_audio_system", "preload_decals_system", "clear_pool_on_scene_unload_system",
             ],
         ),
@@ -120,7 +120,7 @@ fn the_pipeline_phases_and_streams_run_in_the_documented_order() {
     assert_set_before(&r, "GameStreamSet::Backend", "GameStreamSet::Stats");
     // Chains inside the sets.
     assert_chain(&r, &["check_project_loaded", "spawn_scene_v2"]);
-    assert_chain(&r, &["global_input_system", "unclaimed_gamepad_trigger_system", "button_system", "icon_button_click_system", "inventory_slot_click_system"]);
+    assert_chain(&r, &["global_input_system", "unclaimed_gamepad_trigger_system", "button_system", "icon_button_click_system", "inventory_slot_click_system", "bar_assign_click_system"]);
     assert_chain(&r, &["resolve_pending_behaviors_system", "despawn_timer_system"]);
     assert_chain(&r, &["fsm_interpreter_system", "entity_fsm_interpreter_system"]);
     assert_chain(&r, &["flush_pending_intent_system", "default_panel_actions_system", "action_executor_system", "apply_sim_clock_system", "stat_threshold_system"]);
@@ -128,6 +128,13 @@ fn the_pipeline_phases_and_streams_run_in_the_documented_order() {
     // The old transitive guarantee, now explicit: targeting runs before the action bar, and both before the interpreters.
     assert_chain(&r, &["target_auto_clear_system", "cooldown_tick_system"]);
     assert!(r.last_pos("action_bar_visual_system") < r.first_pos("fsm_interpreter_system"));
+    // Item system S6: the bar-slot click owner runs before the action bar's input, or a click consumed by assign mode could also use the slot
+    // (`EmitSet::Ui` and `EmitSet::Game` are unordered siblings: only this explicit edge guarantees it).
+    assert!(r.last_pos("bar_assign_click_system") < r.first_pos("action_bar_input_system"));
+    // and the assign mode's derived cancels settle before the refresh that draws the slots
+    assert!(r.last_pos("bar_assign_sync_system") < r.first_pos("action_bar_item_slot_system"));
+    assert!(r.last_pos("slot_menu_sync_system") < r.first_pos("bar_assign_sync_system"));
+    assert!(r.last_pos("apply_bar_assignments_system") < r.first_pos("action_bar_item_slot_system"));
     // apply_sim_clock_system runs after both writers of SimClock: spawn_scene_v2 (EmitSet::Scene) and the executor.
     assert!(r.last_pos("spawn_scene_v2") < r.first_pos("apply_sim_clock_system"));
     assert!(r.last_pos("action_executor_system") < r.first_pos("apply_sim_clock_system"));
@@ -296,7 +303,7 @@ fn every_edge_triggered_input_system_reads_the_pause_clock() {
     let r = report();
     let gated = [
         "interactable_system", "click_select_system", "tab_targeting_system", "action_bar_input_system",
-        "cursor_capture_system", "aim_target_system", "first_person_camera_system", "fly_camera_system", "dialogue_tick_system", "inventory_slot_click_system",
+        "cursor_capture_system", "aim_target_system", "first_person_camera_system", "fly_camera_system", "dialogue_tick_system", "inventory_slot_click_system", "bar_assign_click_system",
     ];
     for name in gated {
         let s = r.system(name);

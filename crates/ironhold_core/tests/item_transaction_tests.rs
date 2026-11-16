@@ -2009,3 +2009,430 @@ fn with_no_item_catalog_the_slot_reads_zero_has_no_icon_and_refuses() {
     let ev = press_bar_slot(&mut b);
     assert!(has(&ev, "action_bar.no_item:6"), "{ev:?}");
 }
+
+// ---- item system S6: assignable action bar slots (`planning/features/done/action_bar_assignable_slots.md`) ------------------------------------
+
+use ironhold_core::capabilities::bar_assign::{
+    spawn_assign_strip, ActionBarAssignments, AssignMode, AssignStripButton, AssignStripRoot, AssignableSlot, Assignment,
+};
+
+struct AssignApp {
+    app: App,
+    bag: Vec<Entity>,
+    s7: Entity, // assignable, starts empty
+    s8: Entity, // assignable, starts empty
+    s1: Entity, // a plain slot with do_actions
+    panel: Entity,
+}
+
+fn spawn_bar_slot(app: &mut App, key: &str, code: KeyCode, assignable: bool, do_actions: Vec<Action>) -> Entity {
+    let mut e = app.world_mut().spawn((
+        ActionSlotUi {
+            slot_key: key.to_string(),
+            resolved_key: Some(code),
+            resolved_gamepad_button: None,
+            resolved_mouse_button: None,
+            do_actions,
+            cooldown_secs: Some(5.0),
+            cost: None,
+            owner_player: None,
+        },
+        Interaction::None,
+    ));
+    if assignable {
+        e.insert(AssignableSlot { bar: "main".to_string(), key: key.to_string(), default: None });
+    }
+    let slot = e.id();
+    app.world_mut().spawn((Text::new(""), TextColor(Color::WHITE), SlotItemCount::default(), ChildOf(slot)));
+    app.world_mut().spawn((
+        ImageNode { texture_atlas: Some(TextureAtlas { layout: Handle::default(), index: 0 }), ..default() },
+        Visibility::Hidden,
+        SlotIcon { tint_override: None },
+        ChildOf(slot),
+    ));
+    app.world_mut().spawn((
+        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.0)),
+        CooldownOverlay { slot_key: key.to_string() },
+        ChildOf(slot),
+    ));
+    slot
+}
+
+/// A scene with a player, the use catalog, a bag of `bag`, a visible bag panel (with the bag menu and the assign strip), six bag slot nodes,
+/// two empty assignable bar slots "7" and "8" on bar "main", and a plain bar slot "1" that emits `plain.fired`.
+fn assign_app(bag: &[(&str, u32)]) -> AssignApp {
+    let mut app = use_app(bag);
+    app.world_mut().spawn((
+        SpawnId("player_01".to_string()),
+        bar_player(),
+        ironhold_core::capabilities::player::PlayerTarget::default(),
+    ));
+    let panel = app.world_mut().spawn((InventoryPanelMarker { columns: 3, rows: 2, font_size: 12.0 }, Visibility::Visible)).id();
+    app.world_mut().commands().spawn(Name::new("menu_host")).with_children(|p| {
+        spawn_slot_menu(p, 3, 2, 40.0, 12.0);
+        spawn_assign_strip(p, 12.0);
+    });
+    app.world_mut().flush();
+    let bag_nodes = (0..6).map(|i| slot(&mut app, i)).collect();
+    let s7 = spawn_bar_slot(&mut app, "7", KeyCode::Digit7, true, vec![]);
+    let s8 = spawn_bar_slot(&mut app, "8", KeyCode::Digit8, true, vec![]);
+    let s1 = spawn_bar_slot(&mut app, "1", KeyCode::Digit1, false, vec![emit_action("plain.fired")]);
+    app.update();
+    app.update();
+    AssignApp { app, bag: bag_nodes, s7, s8, s1, panel }
+}
+
+fn settle(a: &mut AssignApp) {
+    a.app.update();
+    a.app.update();
+}
+
+fn mode(a: &AssignApp) -> Option<AssignMode> {
+    a.app.world().resource::<LoadedInventoryUi>().assign_mode.clone()
+}
+
+fn slot_item(a: &AssignApp, slot: Entity) -> Option<String> {
+    a.app.world().get::<ActionSlotItem>(slot).map(|i| i.0.clone())
+}
+
+fn assignment(a: &AssignApp, key: &str) -> Option<Assignment> {
+    a.app.world().resource::<ActionBarAssignments>().get("main", key).cloned()
+}
+
+/// Presses an entity once (the `Interaction` edge), returns the events of that frame, then lets the world settle.
+fn press_entity(a: &mut AssignApp, e: Entity) -> Vec<String> {
+    a.app.world_mut().resource_mut::<Messages<GameEvent>>().clear();
+    *a.app.world_mut().get_mut::<Interaction>(e).unwrap() = Interaction::Pressed;
+    a.app.update();
+    let ev = events(&a.app);
+    *a.app.world_mut().get_mut::<Interaction>(e).unwrap() = Interaction::None;
+    a.app.update();
+    ev
+}
+
+fn strip_button(a: &mut AssignApp, kind: AssignStripButton) -> Entity {
+    let mut q = a.app.world_mut().query::<(Entity, &AssignStripButton)>();
+    q.iter(a.app.world()).find(|(_, b)| **b == kind).map(|(e, _)| e).expect("strip button")
+}
+
+fn strip_shown(a: &mut AssignApp) -> bool {
+    let mut q = a.app.world_mut().query_filtered::<&Node, With<AssignStripRoot>>();
+    q.iter(a.app.world()).next().is_some_and(|n| n.display == Display::Flex)
+}
+
+/// Opens the bag menu on the first bag slot and chooses Put on bar.
+fn put_on_bar(a: &mut AssignApp) {
+    let first = a.bag[0];
+    let _ = press_entity(a, first);
+    let row = row_entity(&mut a.app, MenuRowKind::PutOnBar);
+    let _ = press_entity(a, row);
+}
+
+#[test]
+fn put_on_bar_starts_the_mode_and_a_click_on_an_assignable_slot_assigns_without_using_it() {
+    let mut a = assign_app(&[("potion", 3)]);
+    let first = a.bag[0];
+    let _ = press_entity(&mut a, first);
+    assert!(row_shown(&mut a.app, MenuRowKind::PutOnBar), "a usable item and an assignable slot in the scene: the row is offered");
+    let row = row_entity(&mut a.app, MenuRowKind::PutOnBar);
+    let _ = press_entity(&mut a, row);
+    assert_eq!(mode(&a), Some(AssignMode { item: "potion".to_string(), from: None }));
+    assert!(strip_shown(&mut a), "the strip is shown in the mode");
+    assert!(menu_state(&a.app).is_none(), "the menu closed");
+
+    let s7 = a.s7;
+    let ev = press_entity(&mut a, s7);
+    assert!(has(&ev, "action_bar.slot_assigned:7") && has(&ev, "action_bar.slot_assigned:7:potion"), "{ev:?}");
+    assert!(!has(&ev, "action_bar.empty_slot:7") && !has(&ev, "item.used:potion"), "the click assigned, it did not use the slot: {ev:?}");
+    settle(&mut a);
+    assert_eq!(slot_item(&a, a.s7), Some("potion".to_string()));
+    assert_eq!(assignment(&a, "7"), Some(Assignment::Assigned("potion".to_string())));
+    assert_eq!(mode(&a), None, "the mode ended (in Execute)");
+    assert!(!strip_shown(&mut a));
+    assert_eq!(bag_count(&a.app, "potion"), 3, "nothing was used");
+}
+
+#[test]
+fn an_item_with_no_use_block_or_no_assignable_slot_gets_no_put_on_bar_row() {
+    let mut a = assign_app(&[("sword", 1)]);
+    let first = a.bag[0];
+    let _ = press_entity(&mut a, first);
+    assert!(!row_shown(&mut a.app, MenuRowKind::PutOnBar), "a sword has no use: block");
+}
+
+#[test]
+fn the_assign_actions_write_the_resource_and_the_slot_follows() {
+    let mut a = assign_app(&[]);
+    let ev = run(&mut a.app, vec![Action::AssignBarSlot { bar: "main".to_string(), slot: "8".to_string(), item_key: "potion".to_string() }]);
+    assert!(has(&ev, "action_bar.slot_assigned:8") && has(&ev, "action_bar.slot_assigned:8:potion"), "{ev:?}");
+    settle(&mut a);
+    assert_eq!(slot_item(&a, a.s8), Some("potion".to_string()), "the item need not be in the bag for the action");
+    let ev = run(&mut a.app, vec![Action::ClearBarSlot { bar: "main".to_string(), slot: "8".to_string() }]);
+    assert!(has(&ev, "action_bar.slot_cleared:8"), "{ev:?}");
+    settle(&mut a);
+    assert_eq!(slot_item(&a, a.s8), None);
+    assert_eq!(assignment(&a, "8"), Some(Assignment::Cleared));
+}
+
+#[test]
+fn the_assign_action_refuses_what_it_cannot_do_and_changes_nothing() {
+    let mut a = assign_app(&[]);
+    for (bar, slot, item) in [
+        ("main", "9", "potion"),      // no such slot
+        ("other", "7", "potion"),     // no such bar
+        ("main", "1", "potion"),      // a plain slot is not assignable (it has no AssignableSlot)
+        ("main", "7", "sword"),       // no use: block
+        ("main", "7", "gold_coin"),   // a currency item
+        ("main", "7", "nonsense"),    // not in the catalog
+    ] {
+        let ev = run(&mut a.app, vec![Action::AssignBarSlot { bar: bar.to_string(), slot: slot.to_string(), item_key: item.to_string() }]);
+        assert!(has(&ev, &format!("action_bar.assign_failed:{slot}")), "{bar}/{slot}/{item}: {ev:?}");
+        assert!(!ev.iter().any(|e| e.starts_with("action_bar.slot_assigned")), "{bar}/{slot}/{item}: {ev:?}");
+    }
+    assert!(a.app.world().resource::<ActionBarAssignments>().is_empty(), "nothing was written");
+    let ev = run(&mut a.app, vec![Action::ClearBarSlot { bar: "main".to_string(), slot: "9".to_string() }]);
+    assert!(has(&ev, "action_bar.assign_failed:9"), "{ev:?}");
+}
+
+#[test]
+fn an_empty_assignable_slot_refuses_with_empty_slot_and_starts_nothing() {
+    let mut a = assign_app(&[("potion", 1)]);
+    let s7 = a.s7;
+    let ev = press_entity(&mut a, s7);
+    assert!(has(&ev, "action_bar.empty_slot:7"), "{ev:?}");
+    for not in ["action_bar.pressed:7", "intent.slot.7:player_01", "action_bar.activated:7"] {
+        assert!(!has(&ev, not), "{not}: {ev:?}");
+    }
+    assert!(!a.app.world().resource::<CooldownMap>().0.contains_key("7"), "an empty slot must not start a cooldown");
+    // an empty assignable slot shows a faint +, a plain slot shows nothing
+    let plus = {
+        let mut q = a.app.world_mut().query::<(&ChildOf, &Text, &SlotItemCount)>();
+        q.iter(a.app.world()).filter(|(p, t, _)| p.parent() == a.s7 && t.0 == "+").count()
+    };
+    assert_eq!(plus, 1, "a faint + marks the empty assignable slot");
+}
+
+#[test]
+fn with_the_bag_open_a_filled_slot_is_picked_up_to_move_remove_or_put_back() {
+    let mut a = assign_app(&[("potion", 3)]);
+    let _ = run(&mut a.app, vec![Action::AssignBarSlot { bar: "main".to_string(), slot: "8".to_string(), item_key: "potion".to_string() }]);
+    settle(&mut a);
+    // click the filled slot with the bag open: it is picked up, not used
+    let s8 = a.s8;
+    let ev = press_entity(&mut a, s8);
+    assert!(!has(&ev, "item.used:potion"), "{ev:?}");
+    assert_eq!(mode(&a), Some(AssignMode { item: "potion".to_string(), from: Some(("main".to_string(), "8".to_string())) }));
+    assert!(strip_shown(&mut a));
+    // move it to slot 7
+    let s7 = a.s7;
+    let _ = press_entity(&mut a, s7);
+    settle(&mut a);
+    assert_eq!(slot_item(&a, a.s7), Some("potion".to_string()), "moved to 7");
+    assert_eq!(slot_item(&a, a.s8), None, "and gone from 8");
+    assert_eq!(mode(&a), None);
+    // pick 7 up again and remove it from the bar
+    let s7 = a.s7;
+    let _ = press_entity(&mut a, s7);
+    assert!(mode(&a).is_some());
+    let remove = strip_button(&mut a, AssignStripButton::Remove);
+    let _ = press_entity(&mut a, remove);
+    settle(&mut a);
+    assert_eq!(slot_item(&a, a.s7), None, "removed");
+    assert_eq!(mode(&a), None);
+    // pick up and put back on the same slot: nothing changes
+    let _ = run(&mut a.app, vec![Action::AssignBarSlot { bar: "main".to_string(), slot: "8".to_string(), item_key: "potion".to_string() }]);
+    settle(&mut a);
+    let s8 = a.s8;
+    let _ = press_entity(&mut a, s8);
+    let _ = press_entity(&mut a, s8);
+    settle(&mut a);
+    assert_eq!(slot_item(&a, a.s8), Some("potion".to_string()));
+    assert_eq!(mode(&a), None);
+}
+
+#[test]
+fn a_slot_of_an_item_that_left_the_bag_can_still_be_picked_up_and_removed() {
+    let mut a = assign_app(&[]);
+    let _ = run(&mut a.app, vec![Action::AssignBarSlot { bar: "main".to_string(), slot: "8".to_string(), item_key: "potion".to_string() }]);
+    settle(&mut a);
+    let s8 = a.s8;
+    let _ = press_entity(&mut a, s8);
+    assert!(mode(&a).is_some(), "a grey-0 slot is picked up too");
+    settle(&mut a);
+    assert!(mode(&a).is_some(), "an item picked up from a slot does not cancel just because the bag has none");
+    let remove = strip_button(&mut a, AssignStripButton::Remove);
+    let _ = press_entity(&mut a, remove);
+    settle(&mut a);
+    assert_eq!(slot_item(&a, a.s8), None);
+}
+
+#[test]
+fn with_the_bag_closed_a_click_uses_the_slot_and_a_key_always_does() {
+    let mut a = assign_app(&[("potion", 5)]);
+    let _ = run(&mut a.app, vec![Action::AssignBarSlot { bar: "main".to_string(), slot: "8".to_string(), item_key: "potion".to_string() }]);
+    settle(&mut a);
+    *a.app.world_mut().get_mut::<Visibility>(a.panel).unwrap() = Visibility::Hidden;
+    settle(&mut a);
+    let s8 = a.s8;
+    let ev = press_entity(&mut a, s8);
+    assert!(has(&ev, "item.used:potion"), "bag closed: a click uses it: {ev:?}");
+    assert_eq!(mode(&a), None);
+    // with the mode on, a key press still uses the slot
+    *a.app.world_mut().get_mut::<Visibility>(a.panel).unwrap() = Visibility::Visible;
+    settle(&mut a);
+    a.app.world_mut().resource_mut::<CooldownMap>().0.clear();
+    put_on_bar_state(&mut a);
+    a.app.world_mut().resource_mut::<Messages<GameEvent>>().clear();
+    a.app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Digit8);
+    a.app.update();
+    a.app.world_mut().resource_mut::<ButtonInput<KeyCode>>().clear();
+    assert!(has(&events(&a.app), "item.used:potion"), "a hotkey fires in the mode: {:?}", events(&a.app));
+    assert!(mode(&a).is_some(), "and the mode stays on");
+}
+
+fn put_on_bar_state(a: &mut AssignApp) {
+    a.app.world_mut().resource_mut::<LoadedInventoryUi>().assign_mode = Some(AssignMode { item: "potion".to_string(), from: None });
+    settle(a);
+}
+
+#[test]
+fn the_mode_cancels_from_state_and_from_the_gestures_that_cancel_it() {
+    use ironhold_core::runtime::sim_clock::{PauseHold, SimClock};
+    // a right click anywhere
+    let mut a = assign_app(&[("potion", 3)]);
+    put_on_bar(&mut a);
+    assert!(mode(&a).is_some());
+    a.app.world_mut().resource_mut::<ButtonInput<MouseButton>>().press(MouseButton::Right);
+    a.app.update();
+    a.app.world_mut().resource_mut::<ButtonInput<MouseButton>>().clear();
+    settle(&mut a);
+    assert_eq!(mode(&a), None, "right click cancels");
+    assert!(a.app.world().resource::<ActionBarAssignments>().is_empty());
+    // [Cancel]
+    put_on_bar(&mut a);
+    let cancel = strip_button(&mut a, AssignStripButton::Cancel);
+    let _ = press_entity(&mut a, cancel);
+    settle(&mut a);
+    assert_eq!(mode(&a), None, "Cancel cancels");
+    // choosing Put on bar again cancels
+    put_on_bar(&mut a);
+    assert!(mode(&a).is_some());
+    put_on_bar(&mut a);
+    settle(&mut a);
+    assert_eq!(mode(&a), None, "choosing the row again cancels");
+    // closing the bag
+    put_on_bar(&mut a);
+    *a.app.world_mut().get_mut::<Visibility>(a.panel).unwrap() = Visibility::Hidden;
+    settle(&mut a);
+    assert_eq!(mode(&a), None, "closing the bag cancels");
+    *a.app.world_mut().get_mut::<Visibility>(a.panel).unwrap() = Visibility::Visible;
+    settle(&mut a);
+    // the pause menu
+    put_on_bar(&mut a);
+    a.app.world_mut().resource_mut::<SimClock>().hold(PauseHold::Menu);
+    settle(&mut a);
+    assert_eq!(mode(&a), None, "a pause cancels");
+    a.app.world_mut().resource_mut::<SimClock>().release(PauseHold::Menu);
+    settle(&mut a);
+    // the item leaves the bag
+    put_on_bar(&mut a);
+    let _ = run(&mut a.app, vec![Action::RemoveItem { entity: "player".to_string(), item_key: "potion".to_string(), count: 3, all_or_nothing: false }]);
+    settle(&mut a);
+    assert_eq!(mode(&a), None, "an item put on the bar from the bag cancels when it leaves the bag");
+}
+
+#[test]
+fn a_click_on_another_slot_cancels_without_firing_it_and_a_world_click_does_not_cancel() {
+    let mut a = assign_app(&[("potion", 3)]);
+    put_on_bar(&mut a);
+    let s1 = a.s1;
+    let ev = press_entity(&mut a, s1);
+    assert!(!has(&ev, "plain.fired"), "the click was swallowed by the mode: {ev:?}");
+    settle(&mut a);
+    assert_eq!(mode(&a), None, "and it cancelled");
+    // a press that lands on nothing (the world) does not cancel
+    put_on_bar(&mut a);
+    a.app.world_mut().resource_mut::<ButtonInput<MouseButton>>().press(MouseButton::Left);
+    a.app.update();
+    a.app.world_mut().resource_mut::<ButtonInput<MouseButton>>().clear();
+    settle(&mut a);
+    assert!(mode(&a).is_some(), "a world click is not a cancel");
+}
+
+#[test]
+fn a_rule_on_assign_slot_replaces_the_built_in_but_still_ends_the_mode() {
+    let mut a = assign_app(&[("potion", 3)]);
+    a.app.world_mut().insert_resource(fsm_with("playing", Some("ui.button_pressed:assign_slot:7"), false));
+    a.app.world_mut().resource_mut::<LogicState>().0 = "playing".to_string();
+    a.app.update();
+    put_on_bar(&mut a);
+    let s7 = a.s7;
+    let ev = press_entity(&mut a, s7);
+    assert!(has(&ev, "rule.ran"), "{ev:?}");
+    settle(&mut a);
+    assert_eq!(slot_item(&a, a.s7), None, "the rule owns the event: nothing was assigned");
+    assert_eq!(mode(&a), None, "the mode ended anyway");
+    assert!(a.app.world().resource::<LoadedInventoryUi>().assign_handoff.is_empty(), "no stale handoff");
+}
+
+#[test]
+fn remove_from_bar_in_the_bag_menu_empties_every_slot_holding_the_item() {
+    let mut a = assign_app(&[("potion", 3)]);
+    for slot in ["7", "8"] {
+        let _ = run(&mut a.app, vec![Action::AssignBarSlot { bar: "main".to_string(), slot: slot.to_string(), item_key: "potion".to_string() }]);
+    }
+    settle(&mut a);
+    let first = a.bag[0];
+    let _ = press_entity(&mut a, first);
+    assert!(row_shown(&mut a.app, MenuRowKind::RemoveFromBar), "the item is on two slots");
+    let text = {
+        let mut q = a.app.world_mut().query::<(&ironhold_core::capabilities::slot_menu::SlotMenuRowText, &Text)>();
+        q.iter(a.app.world()).find(|(m, _)| m.0 == MenuRowKind::RemoveFromBar).map(|(_, t)| t.0.clone()).unwrap()
+    };
+    assert_eq!(text, "Remove from bar (2 slots)");
+    let row = row_entity(&mut a.app, MenuRowKind::RemoveFromBar);
+    let _ = press_entity(&mut a, row);
+    settle(&mut a);
+    assert_eq!(slot_item(&a, a.s7), None);
+    assert_eq!(slot_item(&a, a.s8), None);
+}
+
+#[test]
+fn a_right_click_on_a_hovered_bag_item_in_assign_mode_cancels_without_using_it() {
+    let mut a = assign_app(&[("potion", 3)]);
+    put_on_bar(&mut a);
+    assert!(mode(&a).is_some());
+    *a.app.world_mut().get_mut::<Interaction>(a.bag[0]).unwrap() = Interaction::Hovered;
+    a.app.update();
+    a.app.world_mut().resource_mut::<Messages<GameEvent>>().clear();
+    a.app.world_mut().resource_mut::<ButtonInput<MouseButton>>().press(MouseButton::Right);
+    a.app.update();
+    let ev = events(&a.app);
+    a.app.world_mut().resource_mut::<ButtonInput<MouseButton>>().clear();
+    assert!(!has(&ev, "item.used:potion"), "the right click only cancels: {ev:?}");
+    settle(&mut a);
+    assert_eq!(mode(&a), None);
+    assert_eq!(bag_count(&a.app, "potion"), 3, "nothing was drunk");
+}
+
+#[test]
+fn a_no_item_press_also_names_the_item_on_an_assignable_slot() {
+    let mut a = assign_app(&[]);
+    let _ = run(&mut a.app, vec![Action::AssignBarSlot { bar: "main".to_string(), slot: "8".to_string(), item_key: "potion".to_string() }]);
+    settle(&mut a);
+    *a.app.world_mut().get_mut::<Visibility>(a.panel).unwrap() = Visibility::Hidden;
+    settle(&mut a);
+    let s8 = a.s8;
+    let ev = press_entity(&mut a, s8);
+    assert!(has(&ev, "action_bar.no_item:8") && has(&ev, "action_bar.no_item:8:potion"), "both forms: {ev:?}");
+}
+
+#[test]
+fn an_assignable_slot_with_authored_do_actions_never_runs_them_while_empty() {
+    // The loader bakes none into an assignable slot: even if a slot entity somehow carries do_actions, emptiness refuses before the intent.
+    let mut a = assign_app(&[]);
+    a.app.world_mut().get_mut::<ActionSlotUi>(a.s7).unwrap().do_actions = vec![emit_action("dead.code")];
+    let s7 = a.s7;
+    let ev = press_entity(&mut a, s7);
+    assert!(has(&ev, "action_bar.empty_slot:7") && !has(&ev, "dead.code"), "{ev:?}");
+}

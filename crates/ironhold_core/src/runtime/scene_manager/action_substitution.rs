@@ -120,6 +120,9 @@ pub(crate) fn rewrite_self(action: Action, spawn_id: &str) -> Action {
         Action::UseItem(item_key) => Action::UseItem(item_key),
         Action::SellItem { item_key, count, all } => Action::SellItem { item_key, count, all },
         Action::DestroyItem { item_key, count, all } => Action::DestroyItem { item_key, count, all },
+        // Bar ids, slot keys and item keys are literal ids.
+        Action::AssignBarSlot { bar, slot, item_key } => Action::AssignBarSlot { bar, slot, item_key },
+        Action::ClearBarSlot { bar, slot } => Action::ClearBarSlot { bar, slot },
         // UI node ids are literal scene-authored ids, never entity spawn ids.
         Action::SetUiVisible { id, visible } => Action::SetUiVisible { id, visible },
         // Backend leaderboard names and variable names are literal ids declared in `backend.ron`.
@@ -258,6 +261,9 @@ pub(crate) fn rewrite_target(action: Action, target_id: &str) -> Action {
         Action::UseItem(item_key) => Action::UseItem(item_key),
         Action::SellItem { item_key, count, all } => Action::SellItem { item_key, count, all },
         Action::DestroyItem { item_key, count, all } => Action::DestroyItem { item_key, count, all },
+        // Bar ids, slot keys and item keys are literal ids.
+        Action::AssignBarSlot { bar, slot, item_key } => Action::AssignBarSlot { bar, slot, item_key },
+        Action::ClearBarSlot { bar, slot } => Action::ClearBarSlot { bar, slot },
         // UI node ids are literal scene-authored ids, never entity spawn ids.
         Action::SetUiVisible { id, visible } => Action::SetUiVisible { id, visible },
         // Backend leaderboard names and variable names are literal ids declared in `backend.ron`.

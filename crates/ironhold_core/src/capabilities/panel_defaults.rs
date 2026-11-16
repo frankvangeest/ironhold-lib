@@ -12,6 +12,8 @@ use bevy::prelude::*;
 
 use crate::capabilities::inventory::{InventorySlotMarker, LoadedInventoryUi, LoadedItemCatalog, PlayerInventory};
 use crate::capabilities::item_txn::count_item;
+use crate::capabilities::bar_assign::{AssignHandoff, AssignMode, AssignableSlot};
+use crate::capabilities::action_bar::ActionSlotItem;
 use crate::capabilities::slot_menu::{MenuConfirm, MenuRowKind, SlotMenu, SlotMenuRoot, SlotMenuRow, CONFIRM_ARM_MS};
 use crate::runtime::actions::ActionQueue;
 use crate::runtime::messages::UiEvent;
@@ -30,11 +32,16 @@ pub const DESTROY_ITEM_PREFIX: &str = "destroy_item:";
 pub const SELL_ALL_PREFIX: &str = "sell_all:";
 /// Destroy every unit of the item over all its stacks (the bag menu's "Destroy all", after its confirm).
 pub const DESTROY_ALL_PREFIX: &str = "destroy_all:";
+/// Put the picked item on an assignable action bar slot (item system S6). Carries the slot key only; the bar and the item travel in `assign_handoff`.
+pub const ASSIGN_SLOT_PREFIX: &str = "assign_slot:";
+/// Empty an assignable action bar slot (item system S6). Carries the slot key only; the bar travels in `assign_handoff`.
+pub const CLEAR_SLOT_PREFIX: &str = "clear_slot:";
 
 /// Every default-backed click trigger prefix. The one list the runtime (`BoundPanelEvents`, the default pusher) and
 /// `ironhold validate` (reachability, the "bound in a transition runs both" warning) all read, so they cannot drift.
-pub const DEFAULT_BACKED_PREFIXES: [&str; 7] = [
+pub const DEFAULT_BACKED_PREFIXES: [&str; 9] = [
     BUY_ITEM_PREFIX, USE_ITEM_PREFIX, SELL_ITEM_PREFIX, SELL_STACK_PREFIX, DESTROY_ITEM_PREFIX, SELL_ALL_PREFIX, DESTROY_ALL_PREFIX,
+    ASSIGN_SLOT_PREFIX, CLEAR_SLOT_PREFIX,
 ];
 
 /// True when `trigger` (without the `ui.button_pressed:` prefix) is one of the default-backed panel clicks.
@@ -99,6 +106,25 @@ pub fn default_panel_actions_system(
             if !bound.0.contains(trigger.as_str()) {
                 action_queue.push(Action::SellItem { item_key: key.to_string(), count, all });
             }
+        } else if let Some(key) = trigger.strip_prefix(ASSIGN_SLOT_PREFIX) {
+            // The handoff is taken even when a rule owns the event (like the menu quantity), so a stale one never reaches a later click.
+            let handoff = take_handoff(&mut inventory_ui, key, true);
+            if !bound.0.contains(trigger.as_str()) {
+                if let Some(AssignHandoff::Assign { bar, key, item, from }) = handoff {
+                    // Assign first, clear the origin after: if the assign were refused the item must not drop off the bar.
+                    action_queue.push(Action::AssignBarSlot { bar, slot: key, item_key: item });
+                    if let Some((from_bar, from_key)) = from {
+                        action_queue.push(Action::ClearBarSlot { bar: from_bar, slot: from_key });
+                    }
+                }
+            }
+        } else if let Some(key) = trigger.strip_prefix(CLEAR_SLOT_PREFIX) {
+            let handoff = take_handoff(&mut inventory_ui, key, false);
+            if !bound.0.contains(trigger.as_str()) {
+                if let Some(AssignHandoff::Clear { bar, key }) = handoff {
+                    action_queue.push(Action::ClearBarSlot { bar, slot: key });
+                }
+            }
         } else if let Some(key) = trigger.strip_prefix(SELL_ALL_PREFIX) {
             if !bound.0.contains(trigger.as_str()) {
                 action_queue.push(Action::SellItem { item_key: key.to_string(), count: 1, all: true });
@@ -114,6 +140,24 @@ pub fn default_panel_actions_system(
             }
         }
     }
+    // Assign mode ends here, in Execute, never during Emit (a click in the mode must still look consumed to `action_bar_input_system`). Handoffs
+    // always travel with an event of the same frame, so anything left over is stale.
+    if inventory_ui.assign_end || !inventory_ui.assign_handoff.is_empty() {
+        if inventory_ui.assign_end {
+            inventory_ui.assign_mode = None;
+            inventory_ui.assign_end = false;
+        }
+        inventory_ui.assign_handoff.clear();
+    }
+}
+
+/// Takes the handoff `bar_assign_click_system` left for the slot `key` (an assign or a clear): one gesture, one handoff.
+fn take_handoff(ui: &mut LoadedInventoryUi, key: &str, assign: bool) -> Option<AssignHandoff> {
+    let at = ui.assign_handoff.iter().position(|h| match h {
+        AssignHandoff::Assign { key: k, .. } => assign && k == key,
+        AssignHandoff::Clear { key: k, .. } => !assign && k == key,
+    })?;
+    Some(ui.assign_handoff.remove(at))
 }
 
 /// The quantity the bag menu chose for this verb (`prefix`) and `key` (the clicked stack), taken once. A click with no menu behind it (an authored
@@ -150,6 +194,7 @@ pub fn inventory_slot_click_system(
     real_time: Option<Res<Time<Real>>>,
     sim: Res<crate::runtime::sim_clock::SimClock>,
     mut inventory_ui: ResMut<LoadedInventoryUi>,
+    assignable: Query<(&AssignableSlot, Option<&ActionSlotItem>)>,
     mut ui_events: MessageWriter<UiEvent>,
     #[cfg(feature = "inspector")] inspector_enabled: Option<Res<crate::inspector::InspectorEnabled>>,
 ) {
@@ -180,6 +225,31 @@ pub fn inventory_slot_click_system(
                 }
                 MenuRowKind::SellOne => {
                     emit(SELL_ITEM_PREFIX, key);
+                    inventory_ui.slot_menu = None;
+                }
+                MenuRowKind::PutOnBar => {
+                    // Choosing it again while the mode is on for this item cancels it.
+                    let already = inventory_ui.assign_mode.as_ref().is_some_and(|m| m.from.is_none() && m.item == menu.item_key);
+                    if already {
+                        inventory_ui.assign_end = true;
+                    } else {
+                        inventory_ui.assign_mode = Some(AssignMode { item: menu.item_key.clone(), from: None });
+                    }
+                    inventory_ui.slot_menu = None;
+                }
+                MenuRowKind::RemoveFromBar => {
+                    // One `clear_slot:` per slot holding this item (the default pusher turns each into a `ClearBarSlot`), in a stable order
+                    // (query order is not: the events and the `slot_cleared` events they cause must not depend on it).
+                    let mut holding: Vec<(String, String)> = assignable
+                        .iter()
+                        .filter(|(_, held)| held.is_some_and(|h| h.0 == menu.item_key))
+                        .map(|(slot, _)| (slot.bar.clone(), slot.key.clone()))
+                        .collect();
+                    holding.sort();
+                    for (bar, key) in holding {
+                        emit(CLEAR_SLOT_PREFIX, &key);
+                        inventory_ui.assign_handoff.push(AssignHandoff::Clear { bar, key });
+                    }
                     inventory_ui.slot_menu = None;
                 }
                 MenuRowKind::SellStack => {
@@ -224,7 +294,8 @@ pub fn inventory_slot_click_system(
     }
 
     // 2. A click on a slot: left opens (or closes) the menu, right uses at once.
-    let right_pressed = mouse.just_pressed(MouseButton::Right);
+    // A right click while assign mode is on only cancels it (`bar_assign_click_system`): it must not also use the bag item under the cursor.
+    let right_pressed = mouse.just_pressed(MouseButton::Right) && inventory_ui.assign_mode.is_none();
     let mut left_click: Option<(usize, String, u32)> = None;
     let mut right_click: Option<String> = None;
     for (slot, interaction) in &slots {

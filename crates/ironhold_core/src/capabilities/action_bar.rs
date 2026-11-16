@@ -78,6 +78,10 @@ pub struct ActionSlotUi {
     pub owner_player: Option<u32>,
 }
 
+/// The border colour of an action bar slot at rest (the loader spawns every slot with it; `bar_assign_sync_system` puts it back after the
+/// assign-mode highlight). One constant, so the two can never drift.
+pub const ACTION_SLOT_BORDER: Color = Color::srgba(0.45, 0.45, 0.55, 0.8);
+
 /// Marks an item slot (item system S5): the `items.ron` key it shows and uses. A separate component, not a field of `ActionSlotUi`, so
 /// player-assignable slots (S6) can insert and remove it at runtime. **It is the one source of what the slot does:** `action_bar_input_system`
 /// fires `[UseItem(item)]` from it (the slot's `ActionSlotUi.do_actions` is empty for an item slot). Removing it clears the label and hides the
@@ -135,6 +139,7 @@ fn any_action_slots(slots: Query<&ActionSlotUi>) -> bool {
 impl Plugin for ActionBarPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CooldownMap>()
+            .init_resource::<crate::capabilities::bar_assign::ActionBarAssignments>()
             .init_resource::<CurrentTarget>()
             .init_resource::<PendingIntentActions>()
             .init_resource::<HandledIntentSlots>()
@@ -146,12 +151,26 @@ impl Plugin for ActionBarPlugin {
                     action_bar_visual_system.run_if(any_action_slots),
                 )
                     .chain()
+                    // After the bar-slot click owner (item system S6): a click consumed by assign mode must look consumed here.
+                    .after(crate::capabilities::bar_assign::bar_assign_click_system)
                     // GameStreamSet::ActionBar (inside EmitSet::Game, after Targeting): this is what orders the action bar
                     // before the interpreters, and the targeting chain before it, explicitly (D3; it used to hold only
                     // transitively through this one edge).
                     .in_set(crate::runtime::schedule::GameStreamSet::ActionBar),
             )
             // Item slots (S5): icon and bag count are refreshed after the executor, like the bag itself, so the label never lags a use.
+            // Assignable slots (S6): reconcile what each holds (before the refresh that draws it), and derive the assign mode's cancels.
+            .add_systems(
+                Update,
+                (
+                    crate::capabilities::bar_assign::apply_bar_assignments_system.before(action_bar_item_slot_system),
+                    // After the bag menu's sync and before the refresh that reads what it changes, so the result is not run-order dependent.
+                    crate::capabilities::bar_assign::bar_assign_sync_system
+                        .after(crate::capabilities::slot_menu::slot_menu_sync_system)
+                        .before(action_bar_item_slot_system),
+                )
+                    .in_set(crate::runtime::schedule::GameplaySet::PostExecute),
+            )
             .add_systems(
                 Update,
                 action_bar_item_slot_system
@@ -227,7 +246,8 @@ pub fn action_bar_input_system(
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
     cursor_lock: Res<crate::capabilities::cursor_capture::CursorLockState>,
-    slots: Query<(&ActionSlotUi, Option<Ref<Interaction>>, Option<&ActionSlotItem>)>,
+    slots: Query<(&ActionSlotUi, Option<Ref<Interaction>>, Option<&ActionSlotItem>, Option<&crate::capabilities::bar_assign::AssignableSlot>)>,
+    inventory_ui: Option<Res<crate::capabilities::inventory::LoadedInventoryUi>>,
     mut game_events: MessageWriter<GameEvent>,
     cooldowns: Res<CooldownMap>,
     player_inv: Option<Res<crate::capabilities::inventory::PlayerInventory>>,
@@ -250,7 +270,11 @@ pub fn action_bar_input_system(
 
     let mut events: Vec<(&str, GameEvent)> = Vec::new();
 
-    for (slot, interaction, item) in slots.iter() {
+    // Assign mode (item system S6) consumes a bar-slot click: `bar_assign_click_system` ran just before (ordered), so a click in the mode
+    // neither uses a slot nor reaches the cooldown check. Key and gamepad presses still fire.
+    let assign_active = inventory_ui.as_ref().is_some_and(|u| u.assign_mode.is_some());
+
+    for (slot, interaction, item, assignable) in slots.iter() {
         // Keyboard and mouse are shared hardware: both are "device-independent" fires, gated
         // before the owning player is resolved (the same ordering the keyboard-only path always
         // had, preserved byte-for-byte). Distinct from the gamepad, which needs its owning
@@ -260,6 +284,7 @@ pub fn action_bar_input_system(
         // on-screen box must not fire it as well (the click that captures the mouse could land on the box, and
         // with a free cursor a click on the HUD would shoot), so such a slot ignores UI clicks entirely.
         let click_fired = clicks_enabled
+            && !assign_active
             && slot.resolved_mouse_button.is_none()
             && interaction.is_some_and(|i| i.is_changed() && *i == Interaction::Pressed);
         // A mouse-button slot fires only while the cursor is captured: with a free cursor a click is aimed at
@@ -307,6 +332,16 @@ pub fn action_bar_input_system(
             continue;
         }
 
+        // ── An empty assignable slot (item system S6) does nothing: no cooldown, no `intent.slot.*`, no `activated` ───
+        // Without this an empty slot would still build an empty intent and the flush would start its cooldown.
+        // The loader bakes no `do_actions` into an assignable slot, so "no item" is all the gate needs.
+        if assignable.is_some() && item.is_none() {
+            events.push((key_str, GameEvent::Trigger(
+                format!("action_bar.empty_slot:{}", key_str),
+            )));
+            continue;
+        }
+
         // ── Item slot: the bag must hold the item (item system S5) ───────────────
         // After the owning player is resolved and the cooldown checks, before the cost: cooldown, then no-item, then cost. A refusal
         // pushes nothing, starts no cooldown, spends no cost and emits neither `action_bar.pressed` nor `intent.slot.*` (so a rule on the
@@ -318,6 +353,10 @@ pub fn action_bar_input_system(
             if held < needed {
                 events.push((key_str, GameEvent::Trigger(
                     format!("action_bar.no_item:{}", key_str),
+                )));
+                // Also the form that names the item: an assignable slot holds whatever the player put there.
+                events.push((key_str, GameEvent::Trigger(
+                    format!("action_bar.no_item:{}:{}", key_str, item.0),
                 )));
                 continue;
             }
@@ -526,6 +565,7 @@ pub fn action_bar_item_slot_system(
     fresh: Query<(), Or<(Changed<ActionSlotItem>, Added<SlotIcon>)>>,
     mut removed: RemovedComponents<ActionSlotItem>,
     items: Query<&ActionSlotItem>,
+    assignables: Query<(), With<crate::capabilities::bar_assign::AssignableSlot>>,
     mut counts: Query<(&ChildOf, &mut SlotItemCount, &mut Text, &mut TextColor)>,
     mut icons: Query<(&ChildOf, &SlotIcon, &mut ImageNode, &mut Visibility)>,
     mut warned: Local<std::collections::BTreeSet<String>>,
@@ -538,9 +578,15 @@ pub fn action_bar_item_slot_system(
     }
     for (parent, mut count, mut text, mut color) in counts.iter_mut() {
         let Ok(item) = items.get(parent.parent()) else {
-            // The slot lost its item: clear the label (the dim only reads item slots).
-            if count.shown.is_some() {
-                text.0.clear();
+            // No item: an empty assignable slot shows a faint `+`, any other slot an empty label (the dim only reads item slots).
+            let (mark, mark_color) = if assignables.get(parent.parent()).is_ok() {
+                ("+", Color::srgba(0.6, 0.6, 0.6, 0.6))
+            } else {
+                ("", Color::srgba(1.0, 1.0, 1.0, 0.95))
+            };
+            if text.0 != mark { text.0 = mark.to_string(); }
+            if color.0 != mark_color { color.0 = mark_color; }
+            if count.shown.is_some() || count.count != 0 || count.needed != 0 {
                 count.shown = None;
                 count.count = 0;
                 count.needed = 0;

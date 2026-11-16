@@ -1,0 +1,12 @@
+(
+    schema_version: 2,
+    name: "main",
+    ui: [
+        ActionBar((id: "main", position: (10.0, 600.0), slots: [
+            (key: "6", assignable: true, do_actions: [ Log("dead") ]),
+            (key: "7", assignable: true),
+            (key: "8", assignable: true, icon: "icons_items"),
+        ])),
+        ActionBar((id: "main", position: (10.0, 500.0), slots: [ (key: "1", do_actions: [ Log("x") ]) ])),
+    ],
+)
