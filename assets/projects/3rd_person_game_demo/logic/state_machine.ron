@@ -189,7 +189,12 @@
 
                 // An action bar item slot (keys 6 and 7) with none left emits action_bar.no_item:{key} (no cooldown, nothing spent).
                 ( event: "action_bar.no_item:6", do_actions: [ ShowFloatingText(entity: "player_01", text: "No health potions left") ] ),
-                ( event: "action_bar.no_item:7", do_actions: [ ShowFloatingText(entity: "player_01", text: "No mana potions left") ] ),
+                // Slot 7 is assignable (the player may have put anything on it): a generic message. `action_bar.no_item:7:mana_potion` names the item.
+                ( event: "action_bar.no_item:7", do_actions: [ ShowFloatingText(entity: "player_01", text: "None left") ] ),
+                ( event: "action_bar.no_item:8", do_actions: [ ShowFloatingText(entity: "player_01", text: "None left") ] ),
+                // Assignable slots (key 7 holds a replaceable default, key 8 starts empty): a hint for the empty one, and a reaction to a new assignment.
+                ( event: "action_bar.empty_slot:8", do_actions: [ ShowFloatingText(entity: "player_01", text: "Empty: open the bag (I) and use Put on bar") ] ),
+                ( event: "action_bar.slot_assigned:8", do_actions: [ ShowFloatingText(entity: "player_01", text: "Slot 8 set", offset: (0.0, 3.0, 0.0)) ] ),
 
                 // Using an item shows no message of its own; this is where to add one for a failed use (UseItem from a rule or the bar).
                 ( event: "item.use_failed", do_actions: [ ShowFloatingText(entity: "player_01", text: "Nothing to use") ] ),

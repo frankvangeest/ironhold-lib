@@ -2892,3 +2892,56 @@ fn well_formed_action_bar_item_slots_are_clean_under_strict() {
     assert_eq!(code, 0, "expected exit 0 under --strict, got {code}:
 {stdout}");
 }
+
+// -- Assignable action bar slots (item system S6) ---------------------------------
+
+/// An assignable slot with `do_actions` or its own `icon:`, two bars of one scene sharing an id, and AssignBarSlot / ClearBarSlot naming an unknown slot,
+/// an item with no `use:` block, an unknown item or an unknown bar are errors.
+#[test]
+fn bad_assignable_slots_exit_1() {
+    let (code, stdout) = validate("bad_assignable_slots");
+    assert_eq!(code, 1, "expected exit 1, got {code}:
+{stdout}");
+    assert!(stdout.contains("is assignable and has do_actions") && stdout.contains("\"6\""), "{stdout}");
+    assert!(stdout.contains("is assignable and has its own icon:") && stdout.contains("\"8\""), "{stdout}");
+    assert!(stdout.contains("share the id") && stdout.contains("\"main\""), "{stdout}");
+    assert!(stdout.contains("slot: \"9\"") && stdout.contains("no scene has an assignable slot"), "{stdout}");
+    assert!(stdout.contains("bar: \"nope\"") && stdout.contains("ClearBarSlot"), "{stdout}");
+    assert!(stdout.contains("iron_sword") && stdout.contains("no `use:` block"), "{stdout}");
+    assert!(stdout.contains("nonsense") && stdout.contains("not found in items.ron"), "{stdout}");
+}
+
+/// --strict: an assignable slot in a project with no InventoryPanel, and one on a player-2 bar. Clean without --strict.
+#[test]
+fn assignable_slot_hygiene_warnings_are_strict_only() {
+    let (code, stdout) = validate("warn_assignable_slots_strict");
+    assert_eq!(code, 0, "expected exit 0 without --strict, got {code}:
+{stdout}");
+    let (code, stdout) = validate_strict("warn_assignable_slots_strict");
+    assert_eq!(code, 1, "expected exit 1 under --strict, got {code}:
+{stdout}");
+    for fragment in ["no scene of this project has an InventoryPanel", "always acts on player 1"] {
+        assert!(stdout.contains(fragment), "expected {fragment:?} in output:
+{stdout}");
+    }
+}
+
+/// A well-formed assignable bar is clean under --strict: rules on assign_slot:/clear_slot: are reachable (not orphans), AssignBarSlot names a real slot.
+#[test]
+fn well_formed_assignable_slots_are_clean_under_strict() {
+    let (code, stdout) = validate_strict("valid_assignable_slots");
+    assert_eq!(code, 0, "expected exit 0 under --strict, got {code}:
+{stdout}");
+}
+
+/// --strict: a bag that is always on screen (`initially_hidden: false`) is always edit mode, so a click on an assignable slot only ever picks its item up.
+#[test]
+fn an_always_open_bag_with_assignable_slots_is_a_strict_warning() {
+    let (code, stdout) = validate("warn_assignable_slot_bag_always_open");
+    assert_eq!(code, 0, "expected exit 0 without --strict, got {code}:
+{stdout}");
+    let (code, stdout) = validate_strict("warn_assignable_slot_bag_always_open");
+    assert_eq!(code, 1, "expected exit 1 under --strict, got {code}:
+{stdout}");
+    assert!(stdout.contains("always on screen") && stdout.contains("picks its item up"), "{stdout}");
+}

@@ -663,6 +663,8 @@ pub struct SceneV2Params<'w> {
     pub project_root: Res<'w, ProjectRoot>,
     pub inventory_ui: ResMut<'w, crate::capabilities::inventory::LoadedInventoryUi>,
     pub container_ui: ResMut<'w, crate::capabilities::inventory::LoadedContainerUi>,
+    /// What the player assigned to assignable action bar slots (item system S6): a rebuilt bar starts from it.
+    pub bar_assignments: Res<'w, crate::capabilities::bar_assign::ActionBarAssignments>,
     /// The bag's size (panel slots past it are spawned faded; a panel smaller than the bag logs a warning).
     pub player_inventory: Res<'w, crate::capabilities::inventory::PlayerInventory>,
     pub loaded_item_catalog: Res<'w, crate::capabilities::inventory::LoadedItemCatalog>,
@@ -683,6 +685,10 @@ pub struct SceneV2Params<'w> {
 /// Bundles scene-load state resources to keep `action_executor_system` under Bevy's 16-param limit.
 #[derive(bevy::ecs::system::SystemParam)]
 pub struct SceneStateParams<'w, 's> {
+    /// The player's layout of assignable action bar slots (item system S6): `AssignBarSlot` / `ClearBarSlot` write it.
+    pub bar_assignments: ResMut<'w, crate::capabilities::bar_assign::ActionBarAssignments>,
+    /// The assignable slots of the scenes that are loaded now: the two actions refuse a bar and slot that none of them is.
+    pub assignable_slots: Query<'w, 's, &'static crate::capabilities::bar_assign::AssignableSlot>,
     pub load_mode: ResMut<'w, PendingSceneLoadMode>,
     /// The online actions (`SignIn`, `SubmitScore`, ...) push their requests onto this hub's outbox (`runtime/backend.rs`);
     /// `action_executor_system` is at the 16-param ceiling, so it reaches the hub through this bundle.

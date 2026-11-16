@@ -113,3 +113,9 @@ A slot with `item:` is an ordinary slot whose actions are `[UseItem(item)]` plus
 the gates is: cooldown, owning player resolved, gamepad cooldown, **no-item** (the shared bag holds none of the item: `action_bar.no_item:{key}`, `continue`),
 cost, `{target}`, then the intent. A no-item refusal emits neither `action_bar.pressed` nor `intent.slot.*` and starts no cooldown. Planned in
 `planning/features/done/action_bar_item_slots.md`.
+
+## Assignable slots (S6)
+
+`action_bar_input_system` runs after `bar_assign_click_system` and treats a click as consumed while `LoadedInventoryUi.assign_mode` is on (`click_fired` is false, so no
+`on_cooldown` either); key and gamepad presses still fire. An assignable slot with no item emits `action_bar.empty_slot:{key}` and `continue`s before the intent is built (the
+gate order is cooldown, empty-slot, no-item, cost). Planned in `planning/features/done/action_bar_assignable_slots.md`.

@@ -77,6 +77,8 @@ pub struct SlotMenuRoot {
 pub enum MenuRowKind {
     Header,
     Use,
+    PutOnBar,
+    RemoveFromBar,
     SellOne,
     SellStack,
     SellAll,
@@ -89,8 +91,8 @@ pub enum MenuRowKind {
 }
 
 impl MenuRowKind {
-    pub const ALL: [MenuRowKind; 11] = [
-        MenuRowKind::Header, MenuRowKind::Use, MenuRowKind::SellOne, MenuRowKind::SellStack, MenuRowKind::SellAll,
+    pub const ALL: [MenuRowKind; 13] = [
+        MenuRowKind::Header, MenuRowKind::Use, MenuRowKind::PutOnBar, MenuRowKind::RemoveFromBar, MenuRowKind::SellOne, MenuRowKind::SellStack, MenuRowKind::SellAll,
         MenuRowKind::Destroy, MenuRowKind::DestroyAll, MenuRowKind::NoVerbs, MenuRowKind::Prompt, MenuRowKind::Yes, MenuRowKind::No,
     ];
 
@@ -98,7 +100,7 @@ impl MenuRowKind {
     pub fn is_button(self) -> bool {
         matches!(
             self,
-            Self::Use | Self::SellOne | Self::SellStack | Self::SellAll | Self::Destroy | Self::DestroyAll | Self::Yes | Self::No
+            Self::Use | Self::PutOnBar | Self::RemoveFromBar | Self::SellOne | Self::SellStack | Self::SellAll | Self::Destroy | Self::DestroyAll | Self::Yes | Self::No
         )
     }
 }
@@ -121,6 +123,12 @@ pub struct MenuFacts<'a> {
     pub unit_price: Option<u32>,
     /// Name of the currency, for the labels ("gold").
     pub currency: &'a str,
+    /// The item can be put on a bar slot (`bar_assign::item_can_be_assigned`: a `use:` block, not a currency item).
+    pub can_assign: bool,
+    /// The current scene has a visible assignable action bar slot (item system S6): "Put on bar" is only offered then.
+    pub assignable_exists: bool,
+    /// How many assignable slots hold this item now: "Remove from bar" is offered when it is more than 0.
+    pub on_slots: u32,
 }
 
 /// The text of every row and which are shown.
@@ -128,6 +136,10 @@ pub struct MenuFacts<'a> {
 pub struct MenuView {
     pub header: String,
     pub use_row: bool,
+    /// "Put on bar": starts assign mode (item system S6).
+    pub put_on_bar: Option<String>,
+    /// "Remove from bar" / "Remove from bar (N slots)": empties every assignable slot holding the item.
+    pub remove_from_bar: Option<String>,
     pub sell_one: Option<String>,
     pub sell_stack: Option<String>,
     /// "Sell all T": every unit over every stack. Only offered when the bag holds more of the item than the clicked stack.
@@ -147,6 +159,8 @@ impl MenuView {
         match kind {
             MenuRowKind::Header => true,
             MenuRowKind::Use => !confirming && self.use_row,
+            MenuRowKind::PutOnBar => !confirming && self.put_on_bar.is_some(),
+            MenuRowKind::RemoveFromBar => !confirming && self.remove_from_bar.is_some(),
             MenuRowKind::SellOne => !confirming && self.sell_one.is_some(),
             MenuRowKind::SellStack => !confirming && self.sell_stack.is_some(),
             MenuRowKind::SellAll => !confirming && self.sell_all.is_some(),
@@ -161,6 +175,8 @@ impl MenuView {
         match kind {
             MenuRowKind::Header => &self.header,
             MenuRowKind::Use => "Use",
+            MenuRowKind::PutOnBar => self.put_on_bar.as_deref().unwrap_or(""),
+            MenuRowKind::RemoveFromBar => self.remove_from_bar.as_deref().unwrap_or(""),
             MenuRowKind::SellOne => self.sell_one.as_deref().unwrap_or(""),
             MenuRowKind::SellStack => self.sell_stack.as_deref().unwrap_or(""),
             MenuRowKind::SellAll => self.sell_all.as_deref().unwrap_or(""),
@@ -200,6 +216,12 @@ pub fn menu_view(facts: &MenuFacts, count: u32, total: u32, confirm: Option<Menu
         }
         None => {
             view.use_row = facts.usable;
+            if facts.can_assign && facts.assignable_exists {
+                view.put_on_bar = Some("Put on bar".to_string());
+            }
+            if facts.on_slots > 0 {
+                view.remove_from_bar = Some(if facts.on_slots == 1 { "Remove from bar".to_string() } else { format!("Remove from bar ({} slots)", facts.on_slots) });
+            }
             if let Some(p) = facts.unit_price {
                 view.sell_one = Some(if count > 1 { format!("Sell 1 ({p} {cur})") } else { format!("Sell ({p} {cur})") });
                 if count > 1 {
@@ -218,7 +240,7 @@ pub fn menu_view(facts: &MenuFacts, count: u32, total: u32, confirm: Option<Menu
                     view.destroy_all = Some(format!("Destroy all {total}"));
                 }
             }
-            view.no_verbs = !view.use_row && view.sell_one.is_none() && view.destroy.is_none();
+            view.no_verbs = !view.use_row && view.put_on_bar.is_none() && view.remove_from_bar.is_none() && view.sell_one.is_none() && view.destroy.is_none();
         }
     }
     view
@@ -314,6 +336,7 @@ pub fn slot_menu_sync_system(
     mut root: Query<(Entity, &mut Node, &SlotMenuRoot, Option<&ChildOf>)>,
     mut rows: Query<(&SlotMenuRow, &mut Node), Without<SlotMenuRoot>>,
     mut texts: Query<(&SlotMenuRowText, &mut Text)>,
+    assignable: Query<(&crate::capabilities::bar_assign::AssignableSlot, Option<&crate::capabilities::action_bar::ActionSlotItem>, Option<&InheritedVisibility>)>,
 ) {
     fn hide(root: &mut Query<(Entity, &mut Node, &SlotMenuRoot, Option<&ChildOf>)>) {
         for (_, mut node, _, _) in root.iter_mut() {
@@ -368,6 +391,9 @@ pub fn slot_menu_sync_system(
         destroyable: def.is_some_and(|d| d.destroyable),
         unit_price,
         currency: merchant_def.map_or("", |m| m.currency_stat.as_str()),
+        can_assign: def.is_some_and(crate::capabilities::bar_assign::item_can_be_assigned),
+        assignable_exists: assignable.iter().any(|(_, _, vis)| vis.map_or(true, |v| v.get())),
+        on_slots: assignable.iter().filter(|(_, held, _)| held.is_some_and(|h| h.0 == menu.item_key)).count() as u32,
     };
     let view = menu_view(&facts, menu.count, menu.total, menu.confirm);
 
@@ -420,7 +446,7 @@ mod tests {
     use super::*;
 
     fn facts<'a>(usable: bool, destroyable: bool, unit_price: Option<u32>) -> MenuFacts<'a> {
-        MenuFacts { display_name: "Health Potion", usable, destroyable, unit_price, currency: "gold" }
+        MenuFacts { display_name: "Health Potion", usable, destroyable, unit_price, currency: "gold", can_assign: usable, assignable_exists: false, on_slots: 0 }
     }
 
     #[test]
@@ -501,5 +527,23 @@ mod tests {
         let v = menu_view(&facts(false, true, Some(30)), 1, 3, Some(MenuConfirm::DestroyAll));
         assert_eq!(v.prompt.as_deref(), Some("Destroy all 3?"));
         assert!(!v.visible(MenuRowKind::SellAll) && !v.visible(MenuRowKind::DestroyAll) && v.visible(MenuRowKind::Yes));
+    }
+
+    #[test]
+    fn put_on_bar_needs_a_usable_item_and_an_assignable_slot_and_remove_needs_the_item_on_one() {
+        let mut f = facts(true, true, None);
+        assert!(menu_view(&f, 1, 1, None).put_on_bar.is_none(), "no assignable slot in the scene: no row");
+        f.assignable_exists = true;
+        assert_eq!(menu_view(&f, 1, 1, None).put_on_bar.as_deref(), Some("Put on bar"));
+        assert!(menu_view(&facts(false, true, None), 1, 1, None).put_on_bar.is_none(), "an item with no use: cannot be put on a bar");
+        assert!(menu_view(&f, 1, 1, None).remove_from_bar.is_none());
+        f.on_slots = 1;
+        assert_eq!(menu_view(&f, 1, 1, None).remove_from_bar.as_deref(), Some("Remove from bar"));
+        f.on_slots = 3;
+        assert_eq!(menu_view(&f, 1, 1, None).remove_from_bar.as_deref(), Some("Remove from bar (3 slots)"));
+        // an item that can only be put on the bar is not a "no verbs" item
+        let mut g = facts(false, false, None);
+        g.on_slots = 1;
+        assert!(!menu_view(&g, 1, 1, None).no_verbs);
     }
 }

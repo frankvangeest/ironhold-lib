@@ -1,0 +1,11 @@
+(
+    schema_version: 1,
+    global_on: [
+        ( event: "ui.button_pressed:close_inventory", do_actions: [ CloseInventory ] ),
+        ( event: "scene.ready:main", do_actions: [ AssignBarSlot(bar: "main", slot: "8", item_key: "health_potion") ] ),
+        ( event: "ui.button_pressed:assign_slot:7", do_actions: [ Log("custom assign") ] ),
+        ( event: "ui.button_pressed:clear_slot:7", do_actions: [ ClearBarSlot(bar: "main", slot: "7") ] ),
+        ( event: "action_bar.slot_assigned:8", do_actions: [ Log("assigned") ] ),
+        ( event: "action_bar.empty_slot:7", do_actions: [ Log("empty") ] ),
+    ],
+)

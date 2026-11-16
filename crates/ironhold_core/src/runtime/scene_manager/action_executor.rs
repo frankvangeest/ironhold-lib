@@ -1392,6 +1392,12 @@ pub fn action_executor_system(
             Action::DestroyItem { item_key, count, all } => {
                 super::item_actions::destroy_item(item_key, count, all, &mut scene_state, &mut game_events, &mut action_queue);
             }
+            Action::AssignBarSlot { bar, slot, item_key } => {
+                super::item_actions::assign_bar_slot(bar, slot, item_key, &mut scene_state, &mut game_events);
+            }
+            Action::ClearBarSlot { bar, slot } => {
+                super::item_actions::clear_bar_slot(bar, slot, &mut scene_state, &mut game_events);
+            }
             Action::OpenContainer(entity_id) => {
                 // Verify a ContainerPanel exists in the scene.
                 if scene_state.container_panel_q.iter().next().is_none() {

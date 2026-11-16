@@ -66,6 +66,19 @@ cooldown and emits neither `action_bar.pressed` nor `intent.slot.*`. The icon an
 `inventory::resolve_item_icon`, the same function as the bag's (the item's sheet, else the `InventoryPanel`'s, against the panel's grid): never against
 the bar's own sheet.** Do not add `Added<SlotItemCount>` to a filter next to the `&mut SlotItemCount` query (it conflicts and panics every test).
 
+## Assignable action bar slots (`bar_assign.rs`, item system S6)
+
+A slot with `assignable: true` carries `AssignableSlot { bar, key, default }`; what it holds is its `ActionSlotItem`, set by one **reconcile**
+(`apply_bar_assignments_system`, `PostExecute`, `.before(action_bar_item_slot_system)`): the `ActionBarAssignments` entry (`Assigned` / `Cleared`) if there is one, else the
+authored default. The resource is `init_resource`'d by `ActionBarPlugin` and **never reset by `LoadScene`**; the loader reads it (through `SceneV2Params`) so a rebuilt
+bar starts from it. **Assign mode lives in `LoadedInventoryUi`** (a Replace load resets it whole). **One owner of bar-slot clicks:** `bar_assign_click_system`
+(`EmitSet::Ui`, after `inventory_slot_click_system`; `action_bar_input_system` is ordered `.after` it) only *writes* the mode, `assign_handoff` and `assign_end` in Emit;
+`default_panel_actions_system` (Execute) turns the handoff into `AssignBarSlot` / `ClearBarSlot` and ends the mode, even when a rule owns `assign_slot:` /
+`clear_slot:`. **Never end the mode during Emit** (a click in the mode must still look consumed to the action bar: it folds `assign_mode.is_some()` into `click_fired`).
+State-dependent cancels (bag hidden, pause, no assignable slot, the item left the bag) are derived every frame in `bar_assign_sync_system`, never from a list of
+actions. A right click never clears a slot (it cancels the mode; `inventory_slot_click_system` skips its right-click Use while the mode is on). A move pushes `AssignBarSlot` before `ClearBarSlot` (a refused assign must not drop the item off the bar); `bar_assign::item_can_be_assigned` is the one "can this item go on a slot" predicate (executor and the bag menu row). An empty assignable slot refuses (`action_bar.empty_slot`) before the intent is built. The bar's
+bag-menu rows and the strip are part of the `InventoryPanel` (spawned by `spawn_slot_menu` / `spawn_assign_strip`).
+
 ## `target.*` events and selection
 
 Selection is **screen-space proximity** (`camera.world_to_viewport`, nearest to the cursor), not mesh raycasting, which

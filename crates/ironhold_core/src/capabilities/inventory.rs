@@ -81,6 +81,14 @@ pub struct LoadedInventoryUi {
     /// stack's quantity; a button that fires the same event without a menu has none and acts on every unit. The prefix keeps an
     /// authored `sell_stack:x` press on the same frame from taking a menu's `destroy_item:x` quantity.
     pub menu_action: Option<(&'static str, String, u32)>,
+    /// Assign mode (item system S6): an item waiting for a click on an assignable action bar slot. Here so a Replace-mode scene load, which
+    /// resets this whole resource, cancels it. Started by the bag menu's "Put on bar" or by picking a filled assignable slot up; ended in
+    /// Execute by `default_panel_actions_system` (`assign_end`) or derived-cancelled by `bar_assign_sync_system`.
+    pub assign_mode: Option<crate::capabilities::bar_assign::AssignMode>,
+    /// Gestures `bar_assign_click_system` wrote in Emit that `default_panel_actions_system` turns into `AssignBarSlot` / `ClearBarSlot` in Execute.
+    pub assign_handoff: Vec<crate::capabilities::bar_assign::AssignHandoff>,
+    /// Set in Emit to end the assign mode in Execute (never cleared during Emit: a click in the mode must still look consumed to the action bar).
+    pub assign_end: bool,
 }
 
 /// The UI panels the engine tracks open/closed state for.

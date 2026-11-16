@@ -1,0 +1,7 @@
+(
+    schema_version: 1,
+    items: {
+        "health_potion": ( display_name: "Health Potion", use: ( do_actions: [ ModifyStat(key: "player_health", delta: 40.0) ] ) ),
+        "iron_sword": ( display_name: "Iron Sword", stackable: false ),
+    },
+)

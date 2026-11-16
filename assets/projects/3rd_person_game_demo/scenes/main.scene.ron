@@ -284,9 +284,9 @@
 
     Label((
       id: "bag_hint_label",
-      text: "I: bag - click an item for Use / Sell / Destroy",
+      text: "I: bag - click an item for Use / Sell / Destroy / Put on bar",
       position: (256.0, 56.0),
-      size: (500.0, 22.0),
+      size: (700.0, 22.0),
       align: Left,
     )),
 
@@ -530,10 +530,20 @@
           gamepad_key: "DPadUp",
         ),
         (
+          // A replaceable default (item system S6): starts as the mana potion; the player can put another consumable here from the bag
+          // (open it with I, click an item, "Put on bar"), move it with the bag open, or remove it.
           key: "7",
           item: "mana_potion",
+          assignable: true,
           cooldown_secs: 2.0,
           gamepad_key: "DPadDown",
+        ),
+        (
+          // An empty assignable slot: shows a faint + until the player puts something on it.
+          key: "8",
+          assignable: true,
+          cooldown_secs: 2.0,
+          gamepad_key: "DPadLeft",
         ),
         (
           // Non-digit hotkey reference slot — demonstrates key/key_hint/label together.

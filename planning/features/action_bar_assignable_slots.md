@@ -1,6 +1,6 @@
 # Feature: Player-assignable action bar slots (item system S6)
 
-_Status: Ready (plan-reviewed 2026-11-15; system-architect and ux-gamedesigner-reviewer findings folded in, Q-A..Q-F settled)_
+_Status: In Progress (plan-reviewed 2026-11-15; system-architect and ux-gamedesigner-reviewer findings folded in, Q-A..Q-F settled)_
 _Planned at: `8c6e254` (2026-11-15)_
 
 Slice S6 of `planning/features/item_system_review.md`. Builds on S5 (item slots, `planning/features/done/action_bar_item_slots.md`) and S4 (the bag menu,
@@ -133,3 +133,11 @@ None blocking.
 - Given assign mode, when the player closes the bag or right-clicks, then nothing is assigned and the mode ends; a click on the world does not end it; a hotkey still uses its slot.
 - An empty assignable slot pressed emits `action_bar.empty_slot:{key}` and starts no cooldown.
 - `AssignBarSlot` for a non-assignable slot or an item with no `use:` is refused with `action_bar.assign_failed:{key}` and `ironhold validate` rejects it.
+
+## Implementation notes (2026-11-16, from the step-4 reviews)
+- **A right click in assign mode skips the bag's right-click Use** (`inventory_slot_click_system` runs first in the chain and would drink the potion under the cursor before the mode cancels).
+- **An assignable slot bakes no `do_actions`** and the empty-slot refusal needs only "no item"; **a move assigns first, then clears the origin**; the executor and the menu share `item_can_be_assigned`.
+- **`action_bar.no_item` also has the form `:{key}:{item_key}`** (an assignable slot holds whatever the player put there); the demo's rules for slots 7 and 8 are generic.
+- Ordering pinned in `schedule_order_tests`: `bar_assign_click_system` before `action_bar_input_system` (the only edge between `EmitSet::Ui` and `EmitSet::Game`), the menu sync before `bar_assign_sync_system` before the item-slot refresh; the reconcile before the refresh. The Remove-from-bar events are emitted in sorted (bar, key) order.
+- A bag that is always on screen is always edit mode (`--strict` warns); the pick-up and "Put on bar" use the root `Visibility`/visible `AssignableSlot`s, not `Display`.
+- Not changed: overlay bars sharing an id with a base bar are not flagged by `validate` (per scene), and a slot spawned by an overlay while the mode is on is highlighted from the next frame; cooldowns stay per slot key; `action_bar.*` event names are not validated; the `+` is small. See the backlog item.

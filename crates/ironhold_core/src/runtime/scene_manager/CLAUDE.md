@@ -348,4 +348,5 @@ keeps a click in another state doing nothing, as before S3. `inventory_slot_clic
 `LoadedInventoryUi.menu_action` (taken even when a rule owns the event; a click with no menu behind it acts on every unit). The prefix list is
 `panel_defaults::DEFAULT_BACKED_PREFIXES`, the one list `ironhold validate` shares: add a new default-backed click there, never in a second place.
 `SellItem`/`DestroyItem` (`item_actions.rs`) use `all: true` resolved at run time with `count_item`, never a count read earlier from the bag.
+`assign_slot:{key}` / `clear_slot:{key}` (item system S6) carry only the slot key: the bar and the picked item travel in `LoadedInventoryUi.assign_handoff`, taken by the pusher even when a rule owns the event. `AssignBarSlot` / `ClearBarSlot` check the live `AssignableSlot`s and only write `ActionBarAssignments`; the reconcile updates the slots.
 The player bag is sized once, in `check_project_loaded`'s tail from `ProjectConfig.player_inventory` (clamped 1..=256), never lazily in an action; `PlayerInventory::default()` is 20 slots (hand-written, never derived).

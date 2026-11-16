@@ -771,3 +771,53 @@ pub(super) fn destroy_item(
         Err(_) => refuse(game_events, action_queue, "You don't have that many to destroy"),
     }
 }
+
+// ─── AssignBarSlot / ClearBarSlot (item system S6) ────────────────────────────
+
+/// Puts `item_key` on the assignable action bar slot `bar`/`slot`. See `Action::AssignBarSlot`: only the resource is written here; the reconcile
+/// (`apply_bar_assignments_system`) updates the live slot. Refused when no loaded slot matches, the slot is not assignable, or the item cannot be used.
+pub(super) fn assign_bar_slot(
+    bar: String,
+    slot: String,
+    item_key: String,
+    scene_state: &mut SceneStateParams,
+    game_events: &mut MessageWriter<GameEvent>,
+) {
+    let refuse = |game_events: &mut MessageWriter<GameEvent>, why: &str| {
+        info!("Action::AssignBarSlot({:?}, {:?}, {:?}): {}", bar, slot, item_key, why);
+        emit(game_events, format!("action_bar.assign_failed:{}", slot));
+    };
+    if !scene_state.assignable_slots.iter().any(|a| a.bar == bar && a.key == slot) {
+        refuse(game_events, "no assignable slot with that bar and key in the loaded scenes");
+        return;
+    }
+    let usable = scene_state
+        .loaded_item_catalog
+        .0
+        .as_ref()
+        .and_then(|c| c.items.get(&item_key))
+        .is_some_and(crate::capabilities::bar_assign::item_can_be_assigned);
+    if !usable {
+        refuse(game_events, "the item is not in the catalog, has no use: block, or is a currency item");
+        return;
+    }
+    scene_state.bar_assignments.assign(&bar, &slot, &item_key);
+    emit(game_events, format!("action_bar.slot_assigned:{}", slot));
+    emit(game_events, format!("action_bar.slot_assigned:{}:{}", slot, item_key));
+}
+
+/// Empties the assignable action bar slot `bar`/`slot` (a cleared authored default stays off). See `Action::ClearBarSlot`.
+pub(super) fn clear_bar_slot(
+    bar: String,
+    slot: String,
+    scene_state: &mut SceneStateParams,
+    game_events: &mut MessageWriter<GameEvent>,
+) {
+    if !scene_state.assignable_slots.iter().any(|a| a.bar == bar && a.key == slot) {
+        info!("Action::ClearBarSlot({:?}, {:?}): no assignable slot with that bar and key in the loaded scenes", bar, slot);
+        emit(game_events, format!("action_bar.assign_failed:{}", slot));
+        return;
+    }
+    scene_state.bar_assignments.clear(&bar, &slot);
+    emit(game_events, format!("action_bar.slot_cleared:{}", slot));
+}

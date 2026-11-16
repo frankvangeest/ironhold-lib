@@ -1,0 +1,7 @@
+(
+    schema_version: 2,
+    name: "main",
+    ui: [
+        ActionBar((id: "p2_bar", owner_player: 1, position: (10.0, 600.0), slots: [ (key: "7", assignable: true) ])),
+    ],
+)

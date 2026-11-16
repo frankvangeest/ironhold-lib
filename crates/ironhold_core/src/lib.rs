@@ -317,6 +317,8 @@ impl Plugin for GamePlugin {
                 icon_button_click_system,
                 // A left click on an inventory slot opens the bag menu, a right click emits `use_item:{key}` (item system S3/S4).
                 crate::capabilities::panel_defaults::inventory_slot_click_system,
+                // The bar-slot click owner while the bag is open or assign mode is on (item system S6); the action bar input runs after it.
+                crate::capabilities::bar_assign::bar_assign_click_system,
             ).chain().in_set(crate::runtime::schedule::EmitSet::Ui))
             // Stat pipeline (GameStreamSet::Stats, last of the game stream): modifier ticks → regen → effective value
             // recompute, all before the interpreter chain. Threshold CROSSINGS are NOT visible in the same frame: they are

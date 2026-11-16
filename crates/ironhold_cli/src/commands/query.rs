@@ -690,6 +690,8 @@ fn action_kind(a: &Action) -> &'static str {
         Action::UseItem(_) => "UseItem",
         Action::SellItem { .. } => "SellItem",
         Action::DestroyItem { .. } => "DestroyItem",
+        Action::AssignBarSlot { .. } => "AssignBarSlot",
+        Action::ClearBarSlot { .. } => "ClearBarSlot",
         Action::OpenContainer(_) => "OpenContainer",
         Action::CloseContainer => "CloseContainer",
         Action::TakeAllFromContainer => "TakeAllFromContainer",

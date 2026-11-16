@@ -1309,6 +1309,7 @@ pub fn spawn_scene_v2(
                                 item_catalog: params.loaded_item_catalog.0.as_ref(),
                                 inventory_ui: &mut params.inventory_ui,
                                 container_ui: &mut params.container_ui,
+                                assignments: &params.bar_assignments,
                                 bag_slots: params.player_inventory.max_slots,
                                 depth: 1,
                             };
@@ -1343,6 +1344,7 @@ pub fn spawn_scene_v2(
                         item_catalog: params.loaded_item_catalog.0.as_ref(),
                         inventory_ui: &mut params.inventory_ui,
                         container_ui: &mut params.container_ui,
+                        assignments: &params.bar_assignments,
                         bag_slots: params.player_inventory.max_slots,
                         depth: 1,
                     };
@@ -1780,6 +1782,8 @@ struct UiSpawnCtx<'a> {
     item_catalog: Option<&'a crate::schema::items::ItemCatalog>,
     inventory_ui: &'a mut crate::capabilities::inventory::LoadedInventoryUi,
     container_ui: &'a mut crate::capabilities::inventory::LoadedContainerUi,
+    /// What the player assigned to assignable action bar slots (item system S6): a rebuilt bar starts from it.
+    assignments: &'a crate::capabilities::bar_assign::ActionBarAssignments,
     /// Slots in the player's bag (`PlayerInventory.max_slots`): panel cells past it spawn faded.
     bag_slots: usize,
     /// Nesting depth of the node being spawned; a top-level node is depth 1 (matches
@@ -1829,6 +1833,7 @@ fn spawn_ui_element_node(
     let atlas_layouts = &mut ctx.atlas_layouts;
     let inventory_ui = &mut *ctx.inventory_ui;
     let container_ui = &mut *ctx.container_ui;
+    let assignments = ctx.assignments;
     let ctx_bag_slots = ctx.bag_slots;
     use crate::schema::scene_v2::UiNodeDef;
     match el {
@@ -2290,6 +2295,7 @@ fn spawn_ui_element_node(
         }
         UiNodeDef::ActionBar(bar) => {
             use crate::capabilities::action_bar::{ActionSlotItem, ActionSlotUi, CooldownOverlay, SlotIcon, SlotItemCount};
+            use crate::capabilities::bar_assign::{desired_item, AssignableSlot};
             let (br, bg_c, bb, ba) = bar.background_color;
             let slot_size = bar.slot_size;
             let slot_gap = bar.slot_gap;
@@ -2311,8 +2317,9 @@ fn spawn_ui_element_node(
             // Pre-resolve (texture, layout) for every slot before entering the with_children closure.
             let slot_atlases: Vec<Option<(Handle<Image>, Handle<TextureAtlasLayout>)>> =
                 bar.slots.iter().map(|slot| {
-                    // An item slot without its own `icon:` shows the item's icon (resolved at runtime like the bag's), not the bar's sheet.
-                    if slot.item.is_some() && slot.icon.is_empty() {
+                    // An item slot (or an assignable one: it may hold an item) without its own `icon:` shows the item's icon (resolved at
+                    // runtime like the bag's), not the bar's sheet.
+                    if (slot.item.is_some() || slot.assignable) && slot.icon.is_empty() {
                         return None;
                     }
                     let sheet_key = if !slot.icon.is_empty() {
@@ -2406,9 +2413,25 @@ fn spawn_ui_element_node(
                                 // The item slot's actions come from `ActionSlotItem` (the input system builds `UseItem`): nothing is baked in here.
                                 Vec::new()
                             }
+                            // An assignable slot fires the item it holds (from `ActionSlotItem`), never authored `do_actions`.
+                            None if slot.assignable => Vec::new(),
                             None => slot.do_actions.clone(),
                         };
                         let own_icon = !slot.icon.is_empty();
+                        if slot.assignable && !slot.do_actions.is_empty() {
+                            warn!(
+                                "ActionBar '{}': slot \"{}\" is assignable and has do_actions: they are ignored (an assignable slot fires the item it holds; ironhold validate errors)",
+                                bar.id, key
+                            );
+                        }
+                        // An assignable slot's item: the player's assignment if there is one, else the authored default.
+                        let assignable_info = AssignableSlot { bar: bar.id.clone(), key: key.clone(), default: slot.item.clone() };
+                        let initial_item: Option<String> = if slot.assignable {
+                            desired_item(assignments, &assignable_info).map(str::to_string)
+                        } else {
+                            slot.item.clone()
+                        };
+                        let is_item_slot = slot.item.is_some() || slot.assignable;
                         let count_font = (slot_size * 0.3).max(10.0);
                         let mut slot_cmd = parent
                             .spawn((
@@ -2425,7 +2448,7 @@ fn spawn_ui_element_node(
                                     ..default()
                                 },
                                 BackgroundColor(Color::srgba(0.18, 0.18, 0.22, 0.95)),
-                                BorderColor::from(Color::srgba(0.45, 0.45, 0.55, 0.8)),
+                                BorderColor::from(crate::capabilities::action_bar::ACTION_SLOT_BORDER),
                                 ActionSlotUi {
                                     slot_key: key.clone(),
                                     resolved_key,
@@ -2437,8 +2460,11 @@ fn spawn_ui_element_node(
                                     owner_player: bar.owner_player,
                                 },
                             ));
-                        if let Some(item) = &slot.item {
+                        if let Some(item) = &initial_item {
                             slot_cmd.insert(ActionSlotItem(item.clone()));
+                        }
+                        if slot.assignable {
+                            slot_cmd.insert(assignable_info);
                         }
                         slot_cmd.with_children(|parent| {
                                 // Icon — rendered first (bottom z-layer).
@@ -2467,7 +2493,7 @@ fn spawn_ui_element_node(
                                 }
                                 // Item slot (S5): the item's own icon, written at runtime by `action_bar_item_slot_system` (hidden until
                                 // a sheet resolves), and the bag-count label (bottom-left; the key hint stays bottom-right).
-                                if slot.item.is_some() && !own_icon {
+                                if is_item_slot && !own_icon {
                                     parent.spawn((
                                         Name::new("ItemIcon"),
                                         Node {
@@ -2515,7 +2541,7 @@ fn spawn_ui_element_node(
                                     TextFont { font_size: 13.0, ..default() },
                                     TextColor(Color::srgba(0.85, 0.85, 0.85, 0.75)),
                                 ));
-                                if slot.item.is_some() {
+                                if is_item_slot {
                                     parent.spawn((
                                         Name::new(format!("Count:{}", key)),
                                         Node {
@@ -2787,6 +2813,8 @@ fn spawn_ui_element_node(
                     });
                     // The bag menu: hidden until a slot is clicked, then re-parented under that slot (capabilities/slot_menu.rs).
                     crate::capabilities::slot_menu::spawn_slot_menu(p, columns, rows, slot_size, font_size);
+                    // The strip shown while the player is putting an item on the action bar (item system S6).
+                    crate::capabilities::bar_assign::spawn_assign_strip(p, font_size);
                 })
                 .id();
             inventory_ui.inventory_panel = Some(entity);
