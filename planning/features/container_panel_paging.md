@@ -11,8 +11,10 @@ dragging items out of a container, a container UI that resizes itself, per-playe
 ## What
 A container panel with fewer cells than the container has slots gets **pages**: a footer `<  1/3  >` and the mouse wheel over the panel flip between pages of
 `columns * rows` cells, so every slot can be seen. A click or tap on a filled slot **takes that stack** into the bag (what fits; the rest stays), so the player no longer
-has to take everything. Take All still moves every slot (every page), and now also works with no rule written for it, like Buy. A designer sees no change to a container that fits
-its panel, except that cells past the last slot are drawn faded.
+has to take everything. Take All still moves every slot (every page), and now also works with no rule written for it, like Buy. Every container panel (chests, corpses, any container) also **says in text how many items are in it** (Frank, 2026-11-16: "all loot chest should also indicate in text how many items there are in it"):
+the footer's left side reads `12 items` (`1 item`, `Empty` when nothing is left), always shown, whether or not there is more than one page, and it follows what the player takes, in the same frame. The number is the total of units over every
+stack (5 potions and 2 swords = `7 items`; a coin item counts as its units, so a purse of 500 coins reads `500 items`: a designer who dislikes that can keep gold out of containers or see the backlog note). A designer sees no other change
+to a container that fits its panel, except that cells past the last slot are drawn faded.
 
 ## Why
 Hidden loot is a real UX bug (the demo's own test aid, `chest_swords`, shows it). Once every slot can be seen, "I can see it but only Take All works" is the next complaint.
@@ -23,7 +25,7 @@ Hidden loot is a real UX bug (the demo's own test aid, `chest_swords`, shows it)
   empty cells, and taking the last items of page 3 keeps the player on page 3. Only cells past the last slot (on the last page) are drawn faded and inert.
 - **A click empties exactly the clicked slot**, never "the last stack first" (the demo's chest of 20 swords would otherwise lose a hidden slot 19 when cell 0 is clicked, and the page count could change under the player).
   The handoff carries `(item_key, slot_index, count)`; the action's `slot: Option<u32>` takes from that slot if it still holds the item, else from the last stack (a designer's `TakeFromContainer` with no slot).
-- **The panel keeps one height:** the footer row is always reserved (a fixed minimum height); its contents are hidden with `Visibility`, not `Display`, when there is one page. docs/20 can then give one panel height,
+- **The footer always shows the item count** (`N items` / `1 item` / `Empty`, left side, plain ASCII, a guarded write from the open container's stacks each frame, only while a container is open). **The panel keeps one height:** the footer row is always reserved (a fixed minimum height); the page controls (`<`, `1/3`, `>`) are hidden with `Visibility`, not `Display`, when there is one page, while the count stays visible. docs/20 can then give one panel height,
   and no second engine writer of `Node.display` is added.
 - **The wheel must not also zoom the camera.** Both camera systems read every `MouseWheel` message and never check the UI, so a marker `CapturesWheel` on the container panel root and on each of its buttons makes
   `camera_orbit_system` and `party_camera_follow_system` skip zoom while any marked node has an `Interaction` other than `None`. The same check (any marked node, not the root: the cells, arrows and Take All are `Button`s and
@@ -70,7 +72,7 @@ action and events, clicking the last stack of a corpse loots it and closes the p
 No new RON fields. New: `Action::TakeFromContainer`, `container.take_failed:{item_key}`, default-backed `take_item:{item_key}` (and `take_all_from_container` default-backed).
 
 ## Tasks
-- [ ] Failing tests first: `page_slot` and the dead cells on the last page; the page count follows capacity and the player stays on page 3 after taking its last items; the footer reserved and hidden at one page; `<`/`>` and the wheel
+- [ ] Failing tests first: the footer count text (`Empty`, `1 item`, `7 items` over several stacks, a coin stack counts its units) follows the container the same frame an item is taken, and stays visible at one page; `page_slot` and the dead cells on the last page; the page count follows capacity and the player stays on page 3 after taking its last items; the footer reserved and hidden at one page; `<`/`>` and the wheel
       (one notch = one page, only while a marked node is hovered, never while paused/inspector/assign mode); the camera does not zoom while a marked node is hovered and still zooms elsewhere; the page resets from state (open another
       container, close, `LoadScene`, despawn); a click takes exactly the clicked slot (slot 0 while slot 18 holds the same item: slot 18 unchanged), partial when the bag is nearly full ("Bag is full!", `inventory.full:player`), a coin item
       credits its stat, `container.looted` when it empties and the corpse flow still closes the panel, `container.take_failed`, the executor re-check after a Take All in the same drain; Take All moves hidden pages and is default-backed
@@ -88,6 +90,7 @@ None blocking.
 
 ## Acceptance criteria
 - Given `chest_swords` (20 slots) in a 3x3 panel, then the footer shows `1/3`; `>` shows slots 9-17, `>` again slots 18-19 with the remaining cells faded; the wheel pages one page per notch and the camera does not zoom; `chest_01` (9 slots) shows the same panel height with the footer contents hidden.
+- Given any container, then its panel footer reads the number of items in it (`20 items` for `chest_swords`, `8 items` for 5 potions and 3 mana potions, `Empty` when nothing is left) and updates as the player takes stacks.
 - Given slots 0 and 18 both holding iron swords, when the player clicks cell 0, then only slot 0 is emptied; taking the last items on page 3 keeps the player on page 3.
 - Given a nearly full bag, when the player clicks a stack, then what fits moves, the rest stays, "Bag is full!" shows and `inventory.full:player` fires; `container.looted:{id}` fires when the container becomes empty.
 - Given a rule on `ui.button_pressed:take_item:iron_sword`, then only the rule runs; Take All works with no rule.
