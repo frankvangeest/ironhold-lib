@@ -1,4 +1,4 @@
-//! Item system S6 (`planning/features/action_bar_assignable_slots.md`): action bar slots the player fills from the bag.
+//! Item system S6 (`planning/features/done/action_bar_assignable_slots.md`): action bar slots the player fills from the bag.
 //!
 //! A slot marked `assignable: true` carries [`AssignableSlot`]. What it holds is the item's own [`ActionSlotItem`] (S5), decided by one
 //! reconcile: the entry in [`ActionBarAssignments`] if there is one (`Assigned(item)` or `Cleared`), else the slot's authored `item:` default.

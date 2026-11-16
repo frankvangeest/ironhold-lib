@@ -2010,7 +2010,7 @@ fn with_no_item_catalog_the_slot_reads_zero_has_no_icon_and_refuses() {
     assert!(has(&ev, "action_bar.no_item:6"), "{ev:?}");
 }
 
-// ---- item system S6: assignable action bar slots (`planning/features/action_bar_assignable_slots.md`) ------------------------------------
+// ---- item system S6: assignable action bar slots (`planning/features/done/action_bar_assignable_slots.md`) ------------------------------------
 
 use ironhold_core::capabilities::bar_assign::{
     spawn_assign_strip, ActionBarAssignments, AssignMode, AssignStripButton, AssignStripRoot, AssignableSlot, Assignment,

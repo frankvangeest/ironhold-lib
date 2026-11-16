@@ -1,6 +1,6 @@
 # Feature: Player-assignable action bar slots (item system S6)
 
-_Status: In Progress (plan-reviewed 2026-11-15; system-architect and ux-gamedesigner-reviewer findings folded in, Q-A..Q-F settled)_
+_Status: Done (2026-11-16)_
 _Planned at: `8c6e254` (2026-11-15)_
 
 Slice S6 of `planning/features/item_system_review.md`. Builds on S5 (item slots, `planning/features/done/action_bar_item_slots.md`) and S4 (the bag menu,
