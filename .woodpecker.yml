@@ -1,5 +1,14 @@
 when:
+  event: [push, manual]
   branch: [main, integration]
+
+# git.services.home uses the homelab's self-signed certificate, so the clone step must skip TLS verification
+# (without this the clone fails with exit code 128 before any step runs).
+clone:
+  git:
+    image: woodpeckerci/plugin-git
+    settings:
+      skip_verify: true
 
 steps:
   build-wasm:
