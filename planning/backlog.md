@@ -11,6 +11,7 @@
 
 ## Active
 
+- [ ] **Fixed tick Phase 1: timers onto `FixedUpdate`** _(Active 2026-11-19, branch `feature/fixed_tick_timers`; first step of the Multiplayer critical path)_ - `FIXED_DT`, `SimTick` in `FixedFirst` and `DebugState`, then `tick_delayed_events`, `cooldown_tick` and the stat modifier/regen/effective chain into the `FixedUpdate` chain between `npc_behavior` and `motion`; `despawn_timer` and dialogue stay in `Update`. Plan: `planning/features/gameplay_fixed_tick_pipeline.md` (revision 4, Phase 1 Ready after plan-review round 3). Phases 2-5 stay Queued under "Move the gameplay-logic pipeline and its timers onto the fixed tick" (Beta 0.5).
 - [ ] **Backend abstraction (`ironhold_backend` + Nakama adapter)** _(2026-10-25, Frank)_ - RON-declared online features (`backend.ron`), online Actions and `backend.*` events in core, a fake in-memory backend, then the Nakama adapter (sign-in, cloud saves, leaderboards, lobbies, matchmaker, relay transport), namespaced by `game_id` so one Nakama can serve several games. Phases v1-v5 and open questions: `planning/features/backend_abstraction.md` (Status: In progress, v1 Done (8745ef9, 2026-10-27; contract, FakeBackend, sign-in and leaderboard actions, `backend_demo`), v2 Done (e97da79, 2026-10-28; Nakama adapter on native and web, server module, `ironhold backend config`, deployed to the homelab and playtested), v3 (lobbies, matchmaker) next, split into v3a (lobbies over REST) and v3b (realtime socket + matchmaker) after the 2026-11-05 plan-review: see the Queued items "Backend v3a" and "Backend v3b"; plan-review round 1 done 2026-10-25, seven decisions answered 2026-10-27).
 
 
@@ -189,6 +190,25 @@ Goal: a fully designer-controllable ocean scene where every environmental variab
 - [ ] Animated texture support in `CustomMaterial` (frame index via time uniform)
 - [ ] Water / reflective plane primitive with animated normal map — WASM-BLOCKED: reflection passes require multi-pass rendering or screen-space sampling; not performantly supported in Bevy's WebGPU backend yet. Parked until WASM support matures.
 - [ ] Post-process pass authoring — expose WGSL post-process shader slot per scene — WASM-BLOCKED: same root cause as Bloom and water; HDR and multi-pass post-process break or perform poorly on WebGPU. Parked until Bevy's WebGPU backend matures.
+
+### Multiplayer critical path (read this first; written 2026-11-16 at `2e869aa`)
+This is an index, not a second backlog: each step names the item (or plan file) that owns it. Update the status here when a step ships.
+
+| # | Step | Owner (item or plan) | Needs | Status |
+|---|---|---|---|---|
+| 1 | **Gameplay-logic pipeline and timers on the fixed tick.** ROOT BLOCKER: the interpreter/executor chain, delayed events, cooldowns, despawn timers and stat ticks still run at render-frame rate | "Move the gameplay-logic pipeline and its timers onto the fixed tick" (Beta 0.5); plan `planning/features/gameplay_fixed_tick_pipeline.md` | nothing | Plan is a Draft that plan-review (2026-10-02) sent back for more design; not started |
+| 2 | D4 tie-break simulation loops by `SpawnId`; deterministic RNG resource (guardrail, no `rand` use today) | "D4" and "Deterministic RNG resource" (Beta 0.5) | D3 (shipped); D4 shares ordering work with step 1 | Queued |
+| 3 | D5 in-process two-`App` determinism smoke test | "D5" (Beta 0.5) | D1, D3 (shipped), D4 | Queued |
+| 4 | **Cross-platform determinism harness** (native / WASM Chrome / WASM Firefox, per-tick state hashes). Its result decides lockstep vs server-authoritative for Form 1 | "Cross-platform determinism harness" (Beta 0.5); plan `planning/features/deterministic_fixed_timestep.md` (v2) | step 1 (a variable timestep makes the result meaningless); D5 | Queued |
+| 5 | Replay: input stream capture, playback, snapshot/restore stub | three items at the end of Beta 0.5 | steps 1 and 4 | Queued; the Beta 0.5 gate in `networking_multiplayer.md` is "replay demo works" |
+| 6 | **Sync library and WASM transport decision** (Lightyear / replicon / matchbox; a browser cannot open raw sockets) | "Library spike" (Beta 0.6); checklist in `planning/features/networking_multiplayer.md` | step 4 for lockstep vs authoritative; the spike itself can be prepared earlier | Not started |
+| 7 | `HostGame` / `JoinGame` / `DisconnectGame` and input replication (Form 1, LAN co-op) | Beta 0.6 items; `networking_multiplayer.md` Form 1 | steps 5 and 6 | Not started; `networking_multiplayer.md` is a Draft from 2026-05-31 and its checklist is all unchecked |
+| 8 | **Relay transport** (Form 2, internet) | `planning/features/backend_abstraction.md` "Relay seam" (phase "later", Icebox) | step 6 | Icebox |
+| 9 | Backend v3b: realtime socket and matchmaker (`FindMatch`) | "Backend v3b" (Beta 0.6) | lobbies (done); must not reach the public demo until step 8 exists (players would be matched into nothing) | Queued |
+| 10 | Backend v4: `wss://` from an https page, tunnel latency, half-open drop | `planning/features/backend_abstraction.md` v4 and "Nakama spike follow-ups" | step 9 | Queued |
+
+Independent of the chain (can be done any time): "Enable lobbies on the first public project" (needs a decision on the rate limit and a per-account lobby cap first), the v3a lobby review follow-ups, and "Attacker identity on hit events" (needed before any networked combat: an `entity.attacked:{victim}` event has no attacker today).
+Done and not blocking: sign-in, leaderboards, lobbies on the Nakama server (v3a-1/v3a-2), device-id binding (production cutover 2026-11-16), fixed-timestep Rapier (v1), D1, D2, D3.
 
 ### Beta 0.5 — Deterministic Tick + Replay
 - [ ] **Cross-platform determinism harness** _(promoted 2026-09-15, same investigation)_ — scripted-input, per-tick state-hash comparison across native / WASM-Chrome / WASM-Firefox / dev / release, to verify with evidence (not assumption) whether Rapier's `enhanced-determinism` feature — already enabled in `crates/ironhold_core/Cargo.toml:16` — actually holds cross-platform for this engine's usage, before `networking_multiplayer.md`'s Form 1 commits to lockstep. Doubles as Milestone B (replay tooling / tick-level state hashing) below. Depends on the fixed-timestep item above (a variable timestep guarantees divergence and would tell us nothing). See `planning/features/deterministic_fixed_timestep.md` (v2).
