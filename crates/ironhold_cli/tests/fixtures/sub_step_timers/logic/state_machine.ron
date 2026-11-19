@@ -1,0 +1,13 @@
+(
+    schema_version: 1,
+    global_on: [
+        (
+            event: "scene.ready:main",
+            do_actions: [
+                EmitEventAfterDelay(event: "too.soon", delay_secs: 0.005),
+                EmitEventAfterDelay(event: "fine.delay", delay_secs: 0.5),
+                EmitEventAfterDelay(event: "next.step", delay_secs: 0.0),
+            ],
+        ),
+    ],
+)
