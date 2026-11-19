@@ -2945,3 +2945,26 @@ fn an_always_open_bag_with_assignable_slots_is_a_strict_warning() {
 {stdout}");
     assert!(stdout.contains("always on screen") && stdout.contains("picks its item up"), "{stdout}");
 }
+
+// ── Sub-step timers (fixed-tick plan, Phase 1) ──────────────
+
+/// A `delay_secs` or `cooldown_secs` above 0 and below one simulation step (1/64 s) is rounded up to one step: a `--strict`-only note, since
+/// it still works. `0.0` and ordinary values stay quiet.
+#[test]
+fn sub_step_timers_without_strict_exit_0() {
+    let (code, _) = validate("sub_step_timers");
+    assert_eq!(code, 0, "a sub-step timer is only a --strict note");
+}
+
+#[test]
+fn sub_step_timers_strict_flags_the_short_delay_and_the_short_cooldown_only() {
+    let (code, stdout) = validate_strict("sub_step_timers");
+    assert_eq!(code, 1, "expected exit 1 under --strict, got {code}:\n{stdout}");
+    assert_eq!(stdout.matches("shorter than one simulation step").count(), 2, "exactly the delayed event and the slot cooldown:
+{stdout}");
+    assert!(stdout.contains("too.soon") && stdout.contains("0.005"), "the 0.005 s delayed event must be named:\n{stdout}");
+    assert!(stdout.contains("cooldown_secs 0.005"), "the 0.005 s slot cooldown must be named:\n{stdout}");
+    assert!(!stdout.contains("fine.delay"), "a 0.5 s delay must not be flagged:\n{stdout}");
+    assert!(!stdout.contains("next.step"), "a 0.0 delay means \"next step\" and must not be flagged:\n{stdout}");
+    assert!(!stdout.contains("cooldown_secs 2"), "a 2 s cooldown must not be flagged:\n{stdout}");
+}

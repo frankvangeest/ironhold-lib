@@ -107,7 +107,7 @@ _Last updated: 2026‑10‑11_
 - `Action::ShowDamagePopup { entity: String, amount: f32 }` — spawns a floating `+N` / `-N` world-space label above the entity identified by spawn ID; positive amounts show in heal colour, negative in damage colour; style (font size, duration, rise speed, colours) is configured via `damage_popup_style` in `.project.ron`; `{self}` is substituted in behavior files
 - `Action::SetEntityVisible { entity: String, visible: bool }` — shows or hides a spawned entity by its spawn ID; the entity stays in the ECS (stats, colliders, and behavior FSM keep running); world labels (stat bar, stat label, and per-entity `label:`) tracking the entity auto-hide; `{self}` substituted in behavior files
 - `Action::SetUiVisible { id: String, visible: bool }` — shows or hides a scene `ui:` node (a `Group` hides its subtree) by `id` (hidden nodes take no space); every matching node (base scene and overlay), silent no-op when absent, resets on `LoadScene`; rejected by `ironhold validate` for unknown ids and for panel/`ActionBar` targets
-- `Action::EmitEventAfterDelay { event: String, delay_secs: f32 }` — fires a `GameEvent::Trigger` after `delay_secs` seconds have elapsed; cleared on `Action::LoadScene` so events do not leak across scene transitions; `{self}` substituted in behavior files
+- `Action::EmitEventAfterDelay { event: String, delay_secs: f32 }` — fires a `GameEvent::Trigger` after `delay_secs` seconds have elapsed (counted in 1/64 s steps, rounded up); cleared on `Action::LoadScene` so events do not leak across scene transitions; `{self}` substituted in behavior files
 - `Action::SpawnEffect { key: String, position: Option<(f32,f32,f32)>, entity: Option<String> }` — bursts a particle effect from `AssetCatalog.effects`; `entity` wins over `position`; `EffectDef.offset` added to origin; additive blending; `{self}` substituted in behavior files
 
 ### Entity messages (Beta 0.4)
@@ -121,10 +121,10 @@ _Last updated: 2026‑10‑11_
 
 ### Debug / Test Surface
 - Responsive UI scale: optional `ui_scale` block in `.project.ron` (reference resolution, `Fit`/`FitWidth`/`FitHeight`, `min_scale`/`max_scale`/`snap`) drives Bevy's `UiScale`; see docs/20 "Responsive UI: `ui_scale`".
-- `DebugState` resource — updated every `PostUpdate` frame; exposes `frame`, `app_state`, `last_action`, `scene`, `logic_state`, `score`, `window_size`, `ui_scale`.
+- `DebugState` resource — updated every `PostUpdate` frame; exposes `frame`, `app_state`, `last_action`, `scene`, `logic_state`, `score`, `window_size`, `ui_scale`, `sim_tick`.
 - On WASM, `DebugState` is serialised as JSON into `<div id="debug-state">` by `sync_debug_state_to_dom`, making it readable by browser automation tools.
   ```json
-  {"frame": 42, "app_state": "InGame", "last_action": "SetVariable(\"score\", \"10\")", "scene": "...", "logic_state": "playing", "score": 10, "window_size": [1280, 720], "ui_scale": 1}
+  {"frame": 42, "app_state": "InGame", "last_action": "SetVariable(\"score\", \"10\")", "scene": "...", "logic_state": "playing", "score": 10, "window_size": [1280, 720], "ui_scale": 1, "sim_tick": 2688}
   ```
 
 ---

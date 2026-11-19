@@ -5,6 +5,7 @@ pub mod scene_manager;
 pub mod input;
 pub mod schedule;
 pub mod sim_clock;
+pub mod sim_tick;
 pub mod model_spawner;
 pub mod material_factory;
 

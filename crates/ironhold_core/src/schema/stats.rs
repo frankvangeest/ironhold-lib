@@ -160,7 +160,7 @@ impl ThresholdCondition {
 pub struct LiveStat {
     pub def: StatDef,
     pub current: f32,
-    /// Computed each frame by `stat_effective_value_system`. Equals `current` when no
+    /// Computed each fixed tick, and again after the executor, by `stat_effective_value_system`. Equals `current` when no
     /// modifiers are active. Display systems and threshold checks use this value.
     pub effective: f32,
     /// Seconds remaining before regen resumes. Counts down to 0.

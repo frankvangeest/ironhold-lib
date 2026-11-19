@@ -145,8 +145,9 @@ impl Plugin for ActionBarPlugin {
             .init_resource::<HandledIntentSlots>()
             .add_systems(
                 Update,
+                // `cooldown_tick_system` is not here any more: it runs in the `FixedUpdate` chain (`lib.rs`, fixed-tick plan Phase 1),
+                // ahead of this chain in every frame that has a tick.
                 (
-                    cooldown_tick_system.run_if(|c: Res<CooldownMap>| !c.0.is_empty()),
                     action_bar_input_system.run_if(any_action_slots),
                     action_bar_visual_system.run_if(any_action_slots),
                 )
@@ -183,7 +184,7 @@ impl Plugin for ActionBarPlugin {
 
 // ─── Systems ──────────────────────────────────────────────────────────────────
 
-/// Drains all `CooldownMap` entries by the elapsed frame time; removes expired ones.
+/// Drains all `CooldownMap` entries by one fixed tick (`Res<Time>` is `Time<Fixed>` in `FixedUpdate`); removes expired ones.
 /// Skips entirely when the map is empty to avoid a pointless `ResMut` DerefMut every frame.
 pub fn cooldown_tick_system(time: Res<Time>, mut cooldowns: ResMut<CooldownMap>) {
     if cooldowns.0.is_empty() { return; }
@@ -366,8 +367,8 @@ pub fn action_bar_input_system(
         // Resolved once (own StatMap vs. global LoadedStats) and reused below for the deduct —
         // must not be independently re-resolved at each site, or the two could disagree about
         // which pool to hit (system-architect finding, per_player_stat_pools.md).
-        // The cost gate reads `.current` (not `effective`) from the previous frame's stat pass: `GameStreamSet::Stats` runs
-        // after the action bar in the same frame, so a gate decision sees last frame's regen (one frame, ~16 ms, deterministic).
+        // The cost gate reads `.current` (not `effective`), which the fixed-tick stat pass (`lib.rs`, before `Update`) has already
+        // regenerated this frame, so a gate decision sees this frame's regen (counted in 1/64 s ticks, deterministic).
         let cost_resolution = slot.cost.as_ref().map(|cost| {
             resolve_cost_source(&cost.stat, player_stats, loaded_stats.as_deref())
         });
@@ -489,7 +490,9 @@ pub fn flush_pending_intent_system(
             for action in actions {
                 action_queue.push(action);
             }
-            if let Some(cd) = cooldown {
+            // A zero-length cooldown starts nothing: stored, it would block the slot until the next tick (frames with no tick, a held
+            // clock) and make the overlay divide 0 by 0.
+            if let Some(cd) = cooldown.filter(|cd| *cd > 0.0) {
                 cooldowns.0.insert(slot_key.clone(), (cd, cd));
             }
             game_events.write(GameEvent::Trigger(format!("action_bar.activated:{}", slot_key)));

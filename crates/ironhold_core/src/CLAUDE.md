@@ -62,8 +62,8 @@ an ordering). **The message → interpreter → executor order is declared in `r
 Execute → PostExecute, with the `EmitSet`/`GameStreamSet` streams inside Emit): a system that writes `UiEvent`/`GameEvent`/`SceneEvent`,
 pushes `ActionQueue` or writes `SimClock` (or reads those messages) joins the right set with `.in_set(...)`, never a bare
 `.before(fsm_interpreter_system)`; `tests/schedule_order_tests.rs` fails if it is in no set or leaves an unordered conflict on those
-resources. **Never write `.before/.after(stat_effective_value_system)`:** it is registered twice (Stats and Execute), so order against
-`GameStreamSet::Stats` / `GameplaySet::Execute`. The other edges that cross folders: `gamepad_bind_system` before `input_translator_system`;
+resources. **Never write `.before/.after(stat_effective_value_system)`:** it is registered twice (the fixed-tick stat chain in `lib.rs`, and Execute in `Update`), so order against
+`GameplaySet::Execute` or the neighbours in the fixed chain (`GameStreamSet::Stats` is empty in `Update` now). The other edges that cross folders: `gamepad_bind_system` before `input_translator_system`;
 `camera_blend_system` last of the camera systems and `world_label_screen_pos_system` after it; `nameplate_visibility_system`
 after `world_label_screen_pos_system`; `target_hud_update_system` after `split_screen_viewport_system`; the audio-volume
 mirror after `action_executor_system` and before `update_dynamic_labels_system`.
@@ -74,7 +74,7 @@ the projected point, and stashes that camera's distance in `NameplateCameraDista
 that stash and never re-select a camera**. Rank-duplication rules for new widgets: `capabilities/CLAUDE.md`.
 
 <!-- b:575.rule -->
-`tick_delayed_events_system` (`lib.rs`) reads the virtual `Res<Time>`, so a real pause freezes it, but a delayed event (a
+`tick_delayed_events_system` (`lib.rs`, in the `FixedUpdate` chain with the stat pipeline and `cooldown_tick_system`; fixed-tick plan Phase 1) counts `Time<Fixed>` ticks, so a real pause (zero ticks) freezes it, but a delayed event (a
 monster respawn timer) can still fire while the FSM is in any non-`"playing"` state; RON rules that must catch such an event
 belong in the top-level `global_on:`, never in a state-scoped `on:` list.
 

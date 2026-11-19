@@ -10,6 +10,8 @@
 //! Emit:    Scene  -> { Ui, Game } -> DirectActions -> Dialogue
 //!          Ui   = global_input -> unclaimed/claimed gamepad -> button -> icon_button
 //!          Game = Targeting -> ActionBar -> Interact -> DelayedEvents -> Backend -> Stats   (GameStreamSet, chained)
+//!          (`DelayedEvents` and `Stats` are empty in `Update` since the fixed-tick plan's Phase 1: the delayed events, the stat
+//!          pipeline and the cooldowns run in the `FixedUpdate` chain in `lib.rs`; the sets stay configured so edges pass through.)
 //! ```
 //!
 //! # Why
@@ -23,9 +25,11 @@
 //!   (or reads those messages) belongs to exactly one of these sets** (the most specific one, never also directly to
 //!   `GameplaySet::Emit`). `tests/schedule_order_tests.rs` checks this from each system's real access, so writers hidden
 //!   inside `SystemParam` bundles are seen too, and fails on any unordered conflict on those resources.
-//! - **Never write `.before/.after(stat_effective_value_system)`.** It is registered twice (once in `GameStreamSet::Stats`,
-//!   once in `GameplaySet::Execute`) and Bevy refuses to build a schedule that orders against a function that has two
-//!   instances (`SystemTypeSetAmbiguity`). Order against `GameStreamSet::Stats` or `GameplaySet::Execute` instead.
+//! - **Never write `.before/.after(stat_effective_value_system)`.** It is registered twice (in the `FixedUpdate` stat chain, and
+//!   once in `GameplaySet::Execute` of `Update`; each schedule holds one instance) and Bevy refuses to build a schedule that
+//!   orders against a function that has two instances (`SystemTypeSetAmbiguity`). Order against `GameplaySet::Execute`, or
+//!   against the neighbours in the fixed chain, instead (`GameStreamSet::Stats` is empty in `Update`: an edge on it would only
+//!   order after `Backend`).
 //! - Run conditions (`sim_running`, `any_action_slots`, `resource_changed::<SimClock>`) stay on their systems: Bevy
 //!   evaluates a *set* condition once, at the first member's turn, and skips every member, which would change behaviour.
 //! - `keep_messages_flowing_while_held` stays in `Last`, outside every gameplay set: it must run after every `Update`
@@ -45,9 +49,11 @@
 //!   `state_machine.ron` reaction, and dialogue actions run *before* them.
 //! - The game stream the interpreters read in frame N: (1) the carry-over from frame N-1's `Execute` (action-bar
 //!   `activated`, executor events, then `game.paused`/`game.resumed`, then stat-threshold crossings), (2) events from the
-//!   `FixedUpdate` tick(s), (3) `EmitSet::Game` in its chain order. Stat thresholds and the pause events are always
-//!   interpreted one frame after the action that caused them.
-//! - Accepted consequences: the action-bar cost gate sees the previous frame's regen (`.current`); a behaviour that
+//!   `FixedUpdate` tick(s): the world events (movement, pickups, trigger zones, NPCs), then the delayed events, then the
+//!   modifier expiries (**these now come before** the `EmitSet::Game` input events, interim until the interpreters move into the
+//!   tick), (3) `EmitSet::Game` in its chain order (targeting, action bar, interact, backend). Stat thresholds and the pause
+//!   events are always interpreted one frame after the action that caused them.
+//! - Accepted consequences: the action-bar cost gate sees this frame's regen (`.current`, counted by the fixed tick); a behaviour that
 //!   finishes loading reacts to this frame's events; on a Replace-load frame every input system sees the new scene's
 //!   bindings and the released clock, while **time resumes the frame after** (`Time<Virtual>` is unpaused in `Execute`).
 //!

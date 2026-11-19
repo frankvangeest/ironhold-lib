@@ -941,6 +941,49 @@ fn action_slot_item_errors(scenes: &[(String, GameSceneV2)], errors: &mut Vec<Cr
     }
 }
 
+/// One fixed simulation step in seconds (`FIXED_TICK_RATE` is 64 Hz). Delayed events, cooldowns, regeneration and modifier durations
+/// are counted in whole steps and rounded up (`docs/20_data_formats.md`, "Timing resolution").
+const SIM_STEP_SECS: f32 = 1.0 / 64.0;
+
+/// `--strict` note for a timer shorter than one step: `delay_secs` / `cooldown_secs` above `0` and below 1/64 s is rounded up to one step
+/// (15.6 ms), so the author's 5 ms is really 15.6 ms. Not an error: it still works. `0.0` is left alone (it means "next step").
+fn sub_step_duration_warnings(actions: &[(String, Action)], scenes: &[(String, GameSceneV2)]) -> Vec<StrictWarning> {
+    let mut out = Vec::new();
+    for (source, action) in actions {
+        if let Action::EmitEventAfterDelay { event, delay_secs } = action {
+            if *delay_secs > 0.0 && *delay_secs < SIM_STEP_SECS {
+                out.push(StrictWarning {
+                    source_file: source.clone(),
+                    message: format!(
+                        "EmitEventAfterDelay {event:?}: delay_secs {delay_secs} is shorter than one simulation step (1/64 s = 0.0156 s) and is rounded up to one step; use 0.0 for \"next step\", or a delay of at least 0.016"
+                    ),
+                    kind: "sub_step_duration",
+                });
+            }
+        }
+    }
+    for (scene_path, scene) in scenes {
+        for node in walk_ui_nodes(&scene.ui) {
+            let UiNodeDef::ActionBar(bar) = node else { continue };
+            for slot in &bar.slots {
+                if let Some(cd) = slot.cooldown_secs {
+                    if cd > 0.0 && cd < SIM_STEP_SECS {
+                        out.push(StrictWarning {
+                            source_file: scene_path.clone(),
+                            message: format!(
+                                "slot {:?} on bar {:?}: cooldown_secs {cd} is shorter than one simulation step (1/64 s = 0.0156 s) and is rounded up to one step; omit it for no cooldown, or use at least 0.016",
+                                slot.key, bar.id
+                            ),
+                            kind: "sub_step_duration",
+                        });
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
 /// `--strict` hygiene for item slots: a currency item never sits in the bag (the slot always reads 0); the item's icon is read from the
 /// scene's `InventoryPanel`, so an item slot with no own `icon:` in a scene with no panel has no picture; `{self}` in the item's `use:`
 /// is always the primary player, so an item slot on a player-2+ bar acts on player 1.
@@ -4903,6 +4946,7 @@ fn strict_checks(project: LoadedProject) -> Vec<StrictWarning> {
     warnings.extend(item_event_rule_warnings(state_machine, behaviors));
     warnings.extend(inventory_bag_warnings(project.project_dir, project.project_config, project.scenes));
     warnings.extend(action_slot_item_warnings(project.item_catalog, project.scenes));
+    warnings.extend(sub_step_duration_warnings(actions, project.scenes));
     warnings.extend(item_sell_warnings(project.item_catalog, project.prefab_catalog, actions, project.project_config.and_then(|c| c.items_path.as_deref()).unwrap_or("items/items.ron")));
     warnings.extend(item_use_warnings(project.item_catalog, project.project_config.and_then(|c| c.items_path.as_deref()).unwrap_or("items/items.ron")));
 

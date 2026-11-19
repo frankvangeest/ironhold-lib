@@ -1037,7 +1037,7 @@ A row of skill slots, each bound to a keyboard key and, optionally, a gamepad bu
 | `do_actions` | `Vec<Action>` | `[]` | Actions fired through the pipeline on activation. Leave it out on an `item:` slot |
 | `item` | `Option<String>` | `None` | An `items.ron` key: makes this an [item slot](#item-slots-on-the-action-bar). The slot shows the item's icon and the number held (a grey `0` and dimmed when none) and fires `UseItem` when pressed. Do not combine with `do_actions` (`ironhold validate` errors; at load the item wins and the console says so) |
 | `assignable` | `bool` | `false` | The player fills this slot from the bag ([assignable slots](#assignable-slots)): with the bag open they put an item on it, move it or remove it; `AssignBarSlot` / `ClearBarSlot` do the same from a rule. It acts like an item slot while it holds an item, shows a faint `+` when empty (pressing it emits `action_bar.empty_slot:{key}`, no cooldown). `item:` next to it is a replaceable default. Not with `do_actions` or an own `icon:` (`ironhold validate` errors). What the player assigned is kept across scenes, keyed by the bar's `id` and the slot's `key`, and lost on a page reload |
-| `cooldown_secs` | `Option<f32>` | `None` | Seconds before the slot can activate again |
+| `cooldown_secs` | `Option<f32>` | `None` | Seconds before the slot can activate again (counted in 1/64 s steps, see [Timing resolution](#timing-resolution)) |
 | `cost` | `Option<SlotCost>` | `None` | Stat cost checked and deducted at activation time |
 | `label` | `Option<String>` | `None` | Ability/tooltip name (e.g. `"Heavy Strike"`) — **reserved for a future hover tooltip, not yet rendered anywhere.** Does **not** affect the on-screen corner glyph — see `key_hint` |
 | `key_hint` | `Option<String>` | `None` | Overrides the on-screen corner key glyph. Omit to pretty-print `key` (strips the `"Key"` prefix, so `"KeyQ"` → `"Q"`; digits and `"F2"`-style names render as-is — but modifier/arrow keys render their full raw name, e.g. `"ShiftLeft"`/`"ArrowUp"`, since only the `"Key"` prefix is stripped; set `key_hint` to a short glyph for those). Distinct from `label` — set both when you want a named ability with a custom glyph |
@@ -4046,7 +4046,7 @@ column.
 | `SetEntityVisible(entity: "id", visible: bool)` | Shows (`true`) or hides (`false`) a spawned entity by its spawn ID. The entity stays in the ECS — colliders and behavior FSM keep running. World-space labels tracking that entity (stat bar, stat label, and per-entity `label:`) auto-hide automatically — all three spawn as the same underlying `WorldLabel` component, which `world_label_screen_pos_system` hides whenever its tracked entity's own `Visibility` is `Hidden`. Uses `{self}` in behavior files. For `ui:` nodes use [`SetUiVisible`](#setuivisible). |
 | `SetUiVisible(id: "ui_id", visible: bool)` | Shows (`true`) or hides (`false`) a scene `ui:` node by its `id`; a `Group` hides its whole subtree and its siblings close the gap. See [SetUiVisible](#setuivisible) below for start-hidden, overlays and what it cannot hide. Example: `SetUiVisible(id: "station_b", visible: false)` (`assets/projects/ui_demo`, the Hide B / Show B buttons). |
 | `PauseGame` / `ResumeGame` / `TogglePause` | Hold / release / flip the simulation (physics, NPCs, the player, timers, particles, animations and gameplay input freeze; the UI, your rules and audio keep running). `PauseGame` is a **request** — `game.paused` / `game.resumed` fire only when your pause takes effect or ends. No-ops if already in that state (no counting). A Replace-mode `LoadScene` automatically resumes; overlay actions never do. Put `PauseGame` in a state's `entry_actions` and `ResumeGame` in the same state's `exit_actions`. See [Pausing the game](30_runtime_events_and_logic.md#pausing-the-game). |
-| `EmitEventAfterDelay(event: "name", delay_secs: f32)` | Fires a `GameEvent::Trigger("name")` after `delay_secs` seconds. One-shot — fires once then is removed. Cleared on `Action::LoadScene` so delayed events do not leak across scene transitions. Uses `{self}` substitution in behavior files. The delay is frozen while the game is paused (see [Pausing the game](30_runtime_events_and_logic.md#pausing-the-game)) but keeps counting in any other FSM state, so a rule that must catch it belongs in the top-level `global_on:`, not a state's `on:` list (a state-scoped rule silently misses an event that lands while that state is not active). A delayed event cannot be cancelled; for a per-entity despawn timer prefer `SetDespawnTimer`. |
+| `EmitEventAfterDelay(event: "name", delay_secs: f32)` | Fires a `GameEvent::Trigger("name")` after `delay_secs` seconds (counted in 1/64 s steps, see [Timing resolution](#timing-resolution)). One-shot — fires once then is removed. Cleared on `Action::LoadScene` so delayed events do not leak across scene transitions. Uses `{self}` substitution in behavior files. The delay is frozen while the game is paused (see [Pausing the game](30_runtime_events_and_logic.md#pausing-the-game)) but keeps counting in any other FSM state, so a rule that must catch it belongs in the top-level `global_on:`, not a state's `on:` list (a state-scoped rule silently misses an event that lands while that state is not active). A delayed event cannot be cancelled; for a per-entity despawn timer prefer `SetDespawnTimer`. |
 | `SpawnEffect(key: "key", position/entity)` | Spawn a particle burst from `assets.ron effects`. Quality multiplier and budget gating are applied at spawn time. See the Particle System section. |
 | `ProjectDecal(key: "key", …)` | Spawn a flat ground-projected texture quad. See the Ground Decals section. |
 | `SetParticleQuality(Level)` | Set the global quality tier (`High`, `Medium`, `Low`, `Minimal`). Persists across scene transitions. Affects all subsequent `SpawnEffect` calls. |
@@ -4433,8 +4433,8 @@ Stats persist across scene transitions (the `LoadedStats` resource is not cleare
 | `base` | `f32` | ✅ | Starting value (must be within `[min, max]`) |
 | `min` | `f32` | `0.0` | Minimum allowed value |
 | `max` | `f32` | ✅ | Maximum allowed value |
-| `regen_rate` | `f32` | `0.0` | Units per second added when regen is active. `0` = no regen |
-| `regen_delay` | `f32` | `0.0` | Seconds after a decrease before regen resumes |
+| `regen_rate` | `f32` | `0.0` | Units per second added when regen is active. `0` = no regen (counted in 1/64 s steps, see [Timing resolution](#timing-resolution)) |
+| `regen_delay` | `f32` | `0.0` | Seconds after a decrease before regen resumes (counted in 1/64 s steps, see [Timing resolution](#timing-resolution)) |
 | `thresholds` | `Vec<StatThreshold>` | `[]` | Events to emit when a threshold is crossed |
 
 **`StatThreshold` fields:**
@@ -4550,8 +4550,8 @@ While `stats.ron` holds **global** stats that persist across scene transitions (
 | `base` | `f32` | — | Starting value |
 | `min` | `f32` | `0.0` | Minimum allowed value |
 | `max` | `f32` | — | Maximum allowed value |
-| `regen_rate` | `f32` | `0.0` | Units per second added when regen is active |
-| `regen_delay` | `f32` | `0.0` | Seconds after a decrease before regen resumes |
+| `regen_rate` | `f32` | `0.0` | Units per second added when regen is active (counted in 1/64 s steps, see [Timing resolution](#timing-resolution)) |
+| `regen_delay` | `f32` | `0.0` | Seconds after a decrease before regen resumes (counted in 1/64 s steps, see [Timing resolution](#timing-resolution)) |
 | `thresholds` | `Vec<StatThreshold>` | `[]` | Events to emit on threshold crossings (same schema as `stats.ron`; `{self}` is substituted) |
 
 ### Addressing instance stats in rules
@@ -4897,6 +4897,22 @@ Write the block exactly like the other optional blocks: no `Some(...)` around it
 - On phones in portrait, one global scale cannot reflow a wide HUD into a narrow screen (a 390px-wide phone needs about 0.30, below the default floor); a portrait layout is a separate feature.
 
 ---
+## Timing resolution
+
+Delayed events (`EmitEventAfterDelay`), action-bar cooldowns, stat regeneration and stat modifier durations are counted in **steps of
+1/64 s** (about 0.016 s), the same step the physics runs at, whatever the frame rate: the same duration takes the same number of
+steps on a 30 fps laptop and a 144 Hz monitor.
+
+- A duration is **rounded up to a whole step** (a `delay_secs` of `0.01` fires after one step). A timer fires on the first step at or
+  after its deadline, so it can be up to one step (15.6 ms) late.
+- A timer started by an action begins counting at the next step.
+- A timer that re-arms itself from its own event can run up to one step (15.6 ms) long per cycle on a slow machine, because the rule that
+  re-arms it runs after that frame's last step. That is far less than before, when a whole frame could be lost.
+- Regeneration and the dark cooldown overlay on a slot update 64 times a second, so a stat bar or cooldown overlay moves in 64 Hz steps on a faster screen.
+- Despawn timers (`SetDespawnTimer`), dialogue auto-advance, camera shake and camera blend `duration_secs`, floating text and damage popups, decal
+  `duration_secs`, fades and particles still count per rendered frame for now.
+
+---
 ## `max_frame_delta_secs`
 
 Optional field in `{name}.project.ron` that caps `Time<Virtual>::max_delta` — the largest delta the *whole* game clock reports for a single frame. Omit to use Bevy's default (`0.25`, ≈16 ticks at this engine's 64Hz tick rate).
@@ -4911,6 +4927,10 @@ Optional field in `{name}.project.ron` that caps `Time<Virtual>::max_delta` — 
 ```
 
 This is not `FixedUpdate`-only: it also clamps `Time::delta_secs()` for ordinary `Update`-schedule systems (camera smoothing, animation blending), so a value picked purely for physics catch-up will also visibly slow those down. `capabilities::motion` itself now runs in `FixedUpdate`, so it's bounded by this cap via the tick budget instead.
+
+Delayed events, cooldowns, stat regeneration and stat modifier durations count fixed steps too (see [Timing resolution](#timing-resolution)),
+so a stall that makes the game fall behind real time (the slow-motion described below) slows them as well: a cooldown or a delayed event
+takes longer in real time while the game is catching up, exactly like movement.
 
 A stall longer than this cap (a slow asset load, a GC pause, a shader-pipeline-compile hitch) does **not** make the recovery frame run more ticks than this allows — the game falls further behind real time instead (graceful slow-motion), rather than paying one very expensive catch-up frame.
 

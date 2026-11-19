@@ -116,6 +116,8 @@ pub struct DebugState {
     /// Current `UiScale` multiplier (`1.0` unless a project sets one; `0.0` when the resource
     /// does not exist, e.g. a headless test app without `UiPlugin`).
     pub ui_scale: f32,
+    /// Fixed ticks run so far (`runtime::sim_tick::SimTick`), as of this frame's `Update`. A snapshot taken in `PostUpdate`, not a log: a frame with no tick leaves it unchanged.
+    pub sim_tick: u64,
 }
 
 /// Runtime-writable named values exposed to data-bound UI labels.
@@ -270,6 +272,8 @@ impl Plugin for GamePlugin {
             .add_plugins(capabilities::foliage::FoliagePlugin)
             // Defines GameplaySet/EmitSet/GameStreamSet and their order (D3). Before the plugins whose systems join the sets.
             .add_plugins(crate::runtime::schedule::GameplaySchedulePlugin)
+            // `SimTick`, advanced in `FixedFirst` (fixed-tick plan, Phase 1).
+            .add_plugins(crate::runtime::sim_tick::SimTickPlugin)
             .add_plugins(crate::runtime::backend::BackendPlugin)
             .add_plugins(capabilities::action_bar::ActionBarPlugin)
             .add_plugins(capabilities::targeting::TargetingPlugin)
@@ -320,15 +324,11 @@ impl Plugin for GamePlugin {
                 // The bar-slot click owner while the bag is open or assign mode is on (item system S6); the action bar input runs after it.
                 crate::capabilities::bar_assign::bar_assign_click_system,
             ).chain().in_set(crate::runtime::schedule::EmitSet::Ui))
-            // Stat pipeline (GameStreamSet::Stats, last of the game stream): modifier ticks → regen → effective value
-            // recompute, all before the interpreter chain. Threshold CROSSINGS are NOT visible in the same frame: they are
-            // detected after the executor (`stat_threshold_system`) and interpreted at the head of the next frame.
-            // (`stat_effective_value_system` is registered twice; never order against it by name, see `runtime/schedule.rs`.)
-            .add_systems(Update, (
-                stat_modifier_system,
-                stat_regen_system,
-                stat_effective_value_system,
-            ).chain().in_set(crate::runtime::schedule::GameStreamSet::Stats))
+            // The stat pipeline (modifier ticks → regen → effective value) and the delayed-event and cooldown timers moved to the
+            // `FixedUpdate` chain below (fixed-tick plan, Phase 1); `GameStreamSet::DelayedEvents` and `::Stats` stay configured
+            // in `Update` (empty) so edges against them keep resolving. Threshold CROSSINGS are NOT visible in the same frame: they
+            // are detected after the executor (`stat_threshold_system`) and interpreted at the head of the next frame.
+            // (`stat_effective_value_system` is registered once per schedule now: here in Execute, and in the fixed chain.)
             // Apply AudioState changes (mute_on_start, ToggleMute, SetVolume) to GlobalVolume
             // before any actions fire so mute_on_start is respected before PlayMusicLoop runs.
             .add_systems(Update, audio_state_system.before(crate::runtime::schedule::GameplaySet::Interpret))
@@ -414,7 +414,8 @@ impl Plugin for GamePlugin {
             // physics step, not this tick's (see `planning/features/
             // deterministic_fixed_timestep.md`'s Approach section).
             // load-bearing: order inside this FixedUpdate group matters: gamepad_bind_system before input_translator_system,
-            // player_view_box_clamp_system after player_movement_system, mark_dirty_trees last, all before Rapier's SyncBackend.
+            // player_view_box_clamp_system after player_movement_system, the world events (collectible, trigger_zone, npc_behavior)
+            // before the timers (delayed events, then stats, then cooldowns), mark_dirty_trees last, all before Rapier's SyncBackend.
             .add_systems(FixedUpdate, (
                 gamepad_bind_system,
                 input_translator_system,
@@ -423,6 +424,19 @@ impl Plugin for GamePlugin {
                 collectible_system,
                 trigger_zone_system,
                 npc_behavior_system,
+                // Timers (fixed-tick plan, Phase 1), in D3's stream order: world events (`collectible`, `trigger_zone`,
+                // `npc_behavior`), then delayed events, then the stat pipeline. `Res<Time>` is `Time<Fixed>` here, so every one
+                // counts a constant 1/64 s per tick whatever the frame rate. A held clock runs zero ticks, which freezes them
+                // exactly as before. They fire in any non-`playing` FSM state, so rules that must catch a delayed event or a
+                // modifier expiry live in `global_on`. None of them reads a `MessageReader` (no gated-reader hazard).
+                // Delayed events and stat events now reach the interpreters *ahead of* same-frame `Update` input events
+                // (targeting, action bar, interact) until the interpreters move into the tick (Phase 4): see the plan.
+                tick_delayed_events_system,
+                stat_modifier_system,
+                stat_regen_system,
+                stat_effective_value_system,
+                crate::capabilities::action_bar::cooldown_tick_system
+                    .run_if(|c: Res<crate::capabilities::action_bar::CooldownMap>| !c.0.is_empty()),
                 motion_system,
                 bevy::transform::systems::mark_dirty_trees,
             ).chain().before(PhysicsSet::SyncBackend))
@@ -450,11 +464,6 @@ impl Plugin for GamePlugin {
                 .in_set(crate::runtime::schedule::EmitSet::Dialogue)
                 .after(button_system)
                 .after(interactable_system))
-            // Delayed events tick down each frame; emitted GameEvents are visible to both
-            // interpreter systems in the same frame they fire.
-            // load-bearing: tick_delayed_events_system before the interpreters. It reads the (virtual) `Res<Time>`, so a real
-            // pause freezes it with no gate; it still fires in any non-`playing` FSM state, so rules that must catch it live in `global_on`.
-            .add_systems(Update, tick_delayed_events_system.in_set(crate::runtime::schedule::GameStreamSet::DelayedEvents))
             // Visual/animation pipeline stays in Update (rendering cadence, not physics)
             // load-bearing: the order inside this .chain() is the camera pipeline: animation_resolver_system first and
             // animation_playback_system last; dynamic_split_screen_system after party_camera_follow_system and before
@@ -914,8 +923,10 @@ fn update_debug_state(
     windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
     ui_scale: Option<Res<bevy::ui::UiScale>>,
     run_mode: Option<Res<RunMode>>,
+    sim_tick: Res<crate::runtime::sim_tick::SimTick>,
 ) {
     debug.frame += 1;
+    debug.sim_tick = sim_tick.0;
     debug.run_mode = run_mode.map(|m| m.as_str()).unwrap_or("live");
     debug.app_state = format!("{:?}", state.get());
     debug.logic_state = logic_state.0.clone();
@@ -964,7 +975,7 @@ fn json_escape(s: &str) -> String {
 /// is escaped: `last_action` is a `{:?}` of an authored `Action`, so a `Log("say \"hi\"")` already contains `\"`.
 pub fn debug_state_json(debug: &DebugState) -> String {
     format!(
-        r#"{{"frame":{},"app_state":"{}","last_action":"{}","scene":"{}","logic_state":"{}","score":{},"window_size":[{},{}],"ui_scale":{},"run_mode":"{}"}}"#,
+        r#"{{"frame":{},"app_state":"{}","last_action":"{}","scene":"{}","logic_state":"{}","score":{},"window_size":[{},{}],"ui_scale":{},"run_mode":"{}","sim_tick":{}}}"#,
         debug.frame,
         json_escape(&debug.app_state),
         json_escape(&debug.last_action),
@@ -975,6 +986,7 @@ pub fn debug_state_json(debug: &DebugState) -> String {
         json_f32(debug.window_size.1),
         json_f32(debug.ui_scale),
         debug.run_mode, // always "live" or "static": nothing to escape
+        debug.sim_tick,
     )
 }
 
