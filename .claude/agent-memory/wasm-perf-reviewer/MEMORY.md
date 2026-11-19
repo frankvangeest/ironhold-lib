@@ -54,3 +54,4 @@
 - [Bag slot menu (item S4)](project_slot_menu_system.md) — slot_menu_sync_system closed path free; open path per-frame MerchantDef clone + 9 text() Strings (guarded writes); no is_changed readers of LoadedInventoryUi (until S5)
 - [Action bar item slots (item S5)](project_action_bar_item_slots.md) — refresh change-gated, idle-free; first is_changed reader of LoadedInventoryUi; visual find_map lookup negligible; S6 removal not in gate
 - [Assignable bar slots (item S6)](project_bar_assign_s6.md) — 2 always-on systems idle-free, never flip LoadedInventoryUi change flag on idle; mode-on clones/frame; no run_if on click system
+- [Fixed-tick timers (Phase 1)](project_fixed_tick_timers.md) — delayed/cooldown/stat chain now per 1/64 tick; no new sync points; keys Vec<String> clone per entity per tick is the hot spot

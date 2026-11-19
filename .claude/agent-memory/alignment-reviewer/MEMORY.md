@@ -60,4 +60,5 @@
 - [FPS control scheme + cursor capture](fps_control_scheme_cursor_capture_pattern.md) — InputMapDef serde(from) layering, live-camera stick owner, web-only cursor.lock_lost; Escape double-bind + hide_own_body widget traps
 - [Aim target + mouse slot (FPS v2)](aim_target_mouse_slot_pattern.md) — SelectAimHeight only inserted with click_selectable (targetable-only aim height dead); target_name = prefab key; slot do_actions now in validate all_actions
 - [Online backend v1+v2 pattern](backend_abstraction_pattern.md) — request-Action/outbox/glue shape, runner-vs-RON split, v2 Nakama traps; server_key in backend.ron (2026-10-30) + device-id-at-load trap; P3 friendly-msg recipe traps; v3a-1 lobby traps; device_id_binding (hashed wire id)
+- [Fixed-tick timers Phase 1](fixed_tick_timers_phase1_pattern.md) — timers/SimTick on FixedUpdate: RON-neutral code, but the order inversion, 1/64 rounding and stale "each frame" doc sites are designer-visible
 - [Restriction-lift doc sweep](restriction_lift_doc_sweep.md) — a fix that lifts a "don't combine X+Y" rule must purge every copy; docs/20 field row is the usual miss (trigger_zone mass)

@@ -1,5 +1,7 @@
 # Memory Index
 
+- [Fixed-tick timer edge semantics](project_fixed_tick_timer_semantics.md) — Fixed timers fire <=1 tick before Update ones; 0-length timers no longer fire while paused; expiry dedupe per tick
+
 - [S6 assign-mode click hazards](project_bar_assign_click_ownership_hazards.md) — right click over bag slot still uses item in mode; visible-by-default bag = permanent pick-up
 
 - [Bar cost/cooldown burn on executor failure](project_action_bar_cost_spent_on_executor_failure.md) — S5 gate is held==0 not held<consume; failed UseItem still spends cost + cooldown
