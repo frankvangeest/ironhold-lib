@@ -3,8 +3,10 @@ use crate::runtime::messages::GameEvent;
 use crate::schema::stats::{LiveStat, LoadedStats, LoadedModifiers, StatMap};
 
 /// Ticks all active modifier durations and removes expired ones.
-/// Emits `stat.modifier.expired:{key}` for each unique modifier key that expired this frame.
-/// Must run before `stat_regen_system` so expiry is visible in the same frame.
+/// Emits `stat.modifier.expired:{key}` for each unique modifier key that expired this **tick** (de-duplicated per tick, not per
+/// frame: two stacks of one modifier that expire on different ticks of a two-tick frame emit twice).
+/// Runs in the `FixedUpdate` chain (`lib.rs`, fixed-tick plan Phase 1), so `Res<Time>` is `Time<Fixed>` and `dt` is 1/64 s.
+/// Must run before `stat_regen_system` so expiry is visible in the same tick.
 pub fn stat_modifier_system(
     mut loaded_stats: ResMut<LoadedStats>,
     mut stat_map_query: Query<&mut StatMap>,
@@ -16,11 +18,8 @@ pub fn stat_modifier_system(
         tick_modifiers(stat_key, stat, dt, &mut game_events);
     }
     for mut stat_map in stat_map_query.iter_mut() {
-        let keys: Vec<String> = stat_map.0.keys().cloned().collect();
-        for stat_key in &keys {
-            if let Some(stat) = stat_map.0.get_mut(stat_key) {
-                tick_modifiers(stat_key, stat, dt, &mut game_events);
-            }
+        for (stat_key, stat) in stat_map.0.iter_mut() {
+            tick_modifiers(stat_key, stat, dt, &mut game_events);
         }
     }
 }
@@ -73,9 +72,9 @@ pub fn stat_effective_value_system(
     }
 }
 
-/// Ticks the regen cooldown and applies regen_rate each frame for both global and instance stats.
-/// Runs before the interpreter chain so regen-triggered threshold crossings
-/// are detected by `stat_threshold_system` in the same frame.
+/// Ticks the regen cooldown and applies regen_rate each fixed tick (1/64 s) for both global and instance stats.
+/// Runs in the `FixedUpdate` chain, ahead of the interpreters and of the executor-side `stat_threshold_system`, so
+/// regen-triggered threshold crossings are detected in the same frame.
 pub fn stat_regen_system(
     mut loaded_stats: ResMut<LoadedStats>,
     mut stat_map_query: Query<&mut StatMap>,
@@ -115,11 +114,8 @@ pub fn stat_threshold_system(
         fire_threshold_crossings(stat_key, stat, &mut game_events);
     }
     for mut stat_map in stat_map_query.iter_mut() {
-        let keys: Vec<String> = stat_map.0.keys().cloned().collect();
-        for stat_key in &keys {
-            if let Some(stat) = stat_map.0.get_mut(stat_key) {
-                fire_threshold_crossings(stat_key, stat, &mut game_events);
-            }
+        for (stat_key, stat) in stat_map.0.iter_mut() {
+            fire_threshold_crossings(stat_key, stat, &mut game_events);
         }
     }
 }

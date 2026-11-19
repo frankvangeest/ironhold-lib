@@ -11,6 +11,10 @@ use bevy_rapier3d::prelude::*;
 /// actually derive from this constant rather than merely coincide with it.
 pub const FIXED_TICK_RATE: f32 = 64.0;
 
+/// One fixed tick in seconds (`1 / FIXED_TICK_RATE`, exactly `0.015625`: a power of two, so decrementing a timer by it is exact in f32).
+/// `Res<Time>` inside `FixedUpdate` is `Time<Fixed>` and its `delta_secs()` equals this, so a timer system moved there needs no body change.
+pub const FIXED_DT: f32 = 1.0 / FIXED_TICK_RATE;
+
 pub struct PhysicsPlugin;
 
 impl Plugin for PhysicsPlugin {
@@ -39,7 +43,7 @@ impl Plugin for PhysicsPlugin {
         // wall-clock step, it was never the schedule's own tick rate).
         #[cfg(not(test))]
         app.insert_resource(TimestepMode::Fixed {
-            dt: 1.0 / FIXED_TICK_RATE,
+            dt: FIXED_DT,
             substeps: 1,
         });
         // `in_fixed_schedule()`: runs Rapier's PhysicsSet::{SyncBackend, StepSimulation,

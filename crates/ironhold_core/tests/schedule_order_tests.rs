@@ -65,11 +65,9 @@ fn the_documented_systems_are_in_the_documented_sets() {
         ("EmitSet::DirectActions", &["resolve_pending_behaviors_system", "despawn_timer_system"]),
         ("EmitSet::Dialogue", &["dialogue_tick_system"]),
         ("GameStreamSet::Targeting", &["click_select_system", "tab_targeting_system", "target_auto_clear_system", "aim_target_system"]),
-        ("GameStreamSet::ActionBar", &["cooldown_tick_system", "action_bar_input_system", "action_bar_visual_system"]),
+        ("GameStreamSet::ActionBar", &["action_bar_input_system", "action_bar_visual_system"]),
         ("GameStreamSet::Interact", &["interactable_system", "cursor_capture_system"]),
-        ("GameStreamSet::DelayedEvents", &["tick_delayed_events_system"]),
         ("GameStreamSet::Backend", &["load_backend_config_system", "backend_glue_system"]),
-        ("GameStreamSet::Stats", &["stat_modifier_system", "stat_regen_system", "stat_effective_value_system"]),
         ("GameplaySet::Interpret", &["fsm_interpreter_system", "entity_fsm_interpreter_system"]),
         (
             "GameplaySet::Execute",
@@ -112,21 +110,20 @@ fn the_pipeline_phases_and_streams_run_in_the_documented_order() {
     assert_set_before(&r, "EmitSet::Ui", "EmitSet::DirectActions");
     assert_set_before(&r, "EmitSet::Game", "EmitSet::DirectActions");
     assert_set_before(&r, "EmitSet::DirectActions", "EmitSet::Dialogue");
-    // The game stream: input first, then delayed events, then stat events.
+    // The game stream in `Update`: input, then the backend's online replies. The delayed events and the stat pipeline left it for the
+    // `FixedUpdate` chain (fixed-tick plan, Phase 1): `the_fixed_tick_timers_...` below pins their order there.
     assert_set_before(&r, "GameStreamSet::Targeting", "GameStreamSet::ActionBar");
     assert_set_before(&r, "GameStreamSet::ActionBar", "GameStreamSet::Interact");
-    assert_set_before(&r, "GameStreamSet::Interact", "GameStreamSet::DelayedEvents");
-    assert_set_before(&r, "GameStreamSet::DelayedEvents", "GameStreamSet::Backend");
-    assert_set_before(&r, "GameStreamSet::Backend", "GameStreamSet::Stats");
+    assert_set_before(&r, "GameStreamSet::Interact", "GameStreamSet::Backend");
     // Chains inside the sets.
     assert_chain(&r, &["check_project_loaded", "spawn_scene_v2"]);
     assert_chain(&r, &["global_input_system", "unclaimed_gamepad_trigger_system", "button_system", "icon_button_click_system", "inventory_slot_click_system", "bar_assign_click_system"]);
     assert_chain(&r, &["resolve_pending_behaviors_system", "despawn_timer_system"]);
     assert_chain(&r, &["fsm_interpreter_system", "entity_fsm_interpreter_system"]);
     assert_chain(&r, &["flush_pending_intent_system", "default_panel_actions_system", "action_executor_system", "apply_sim_clock_system", "stat_threshold_system"]);
-    assert_chain(&r, &["cooldown_tick_system", "action_bar_input_system", "action_bar_visual_system"]);
+    assert_chain(&r, &["action_bar_input_system", "action_bar_visual_system"]);
     // The old transitive guarantee, now explicit: targeting runs before the action bar, and both before the interpreters.
-    assert_chain(&r, &["target_auto_clear_system", "cooldown_tick_system"]);
+    assert_chain(&r, &["target_auto_clear_system", "action_bar_input_system"]);
     assert!(r.last_pos("action_bar_visual_system") < r.first_pos("fsm_interpreter_system"));
     // Item system S6: the bar-slot click owner runs before the action bar's input, or a click consumed by assign mode could also use the slot
     // (`EmitSet::Ui` and `EmitSet::Game` are unordered siblings: only this explicit edge guarantees it).
@@ -141,13 +138,41 @@ fn the_pipeline_phases_and_streams_run_in_the_documented_order() {
 }
 
 #[test]
-fn stat_effective_value_system_is_registered_twice_and_never_ordered_by_name() {
-    // Legal as long as nothing orders against the function by name (`SystemTypeSetAmbiguity`): order against
-    // `GameStreamSet::Stats` / `GameplaySet::Execute` instead. The schedule building at all proves no by-name edge exists.
+fn stat_effective_value_system_is_registered_once_per_schedule_and_never_ordered_by_name() {
+    // Two instances overall (the fixed-tick stat pipeline, and the recompute after the executor in `Update`), one per schedule. Keep the
+    // rule that nothing orders against the function by name (`SystemTypeSetAmbiguity` would return the moment both sat in one schedule):
+    // order against `GameplaySet::Execute` or the fixed chain's neighbours instead.
     let r = report();
-    assert_eq!(r.count("stat_effective_value_system"), 2, "once in GameStreamSet::Stats, once in GameplaySet::Execute");
-    assert!(r.in_set("GameStreamSet::Stats", "stat_effective_value_system"));
+    assert_eq!(r.count("stat_effective_value_system"), 1, "once in GameplaySet::Execute (the fixed-tick instance is checked below)");
     assert!(r.in_set("GameplaySet::Execute", "stat_effective_value_system"));
+    let mut app = setup_test_app();
+    let fixed = support::inspect_schedule(&mut app, FixedUpdate);
+    assert_eq!(fixed.count("stat_effective_value_system"), 1, "once in the FixedUpdate chain");
+}
+
+/// Fixed-tick plan, Phase 1: the delayed events, the stat pipeline and the cooldowns run in the `FixedUpdate` chain, after the
+/// world events (D3's stream order: world, delayed, stats) and before `motion`, and are no longer in `Update`.
+#[test]
+fn the_fixed_tick_timers_run_after_the_world_events_and_before_motion() {
+    let mut app = setup_test_app();
+    let fixed = support::inspect_schedule(&mut app, FixedUpdate);
+    assert_chain(&fixed, &["collectible_system", "trigger_zone_system", "npc_behavior_system"]);
+    assert_chain(
+        &fixed,
+        &[
+            "npc_behavior_system", "tick_delayed_events_system", "stat_modifier_system", "stat_regen_system",
+            "stat_effective_value_system", "cooldown_tick_system", "motion_system",
+        ],
+    );
+    let update = report();
+    for moved in ["tick_delayed_events_system", "stat_modifier_system", "stat_regen_system", "cooldown_tick_system"] {
+        assert!(!update.systems.iter().any(|s| s.short == moved), "`{moved}` must not also run in Update");
+    }
+    // despawn timers and dialogue stay in `Update` until Phase 4 (moving only the timer would invert D3's ActionQueue push order).
+    for stays in ["despawn_timer_system", "dialogue_tick_system"] {
+        assert!(update.systems.iter().any(|s| s.short == stays), "`{stays}` stays in Update in Phase 1");
+        assert!(!fixed.systems.iter().any(|s| s.short == stays), "`{stays}` must not be in FixedUpdate yet");
+    }
 }
 
 #[test]
@@ -381,8 +406,7 @@ fn the_gameplay_sets_carry_no_run_conditions() {
 fn every_game_stream_set_is_inside_emit() {
     let r = report();
     for sub in [
-        "GameStreamSet::Targeting", "GameStreamSet::ActionBar", "GameStreamSet::Interact", "GameStreamSet::DelayedEvents",
-        "GameStreamSet::Backend", "GameStreamSet::Stats", "EmitSet::Game",
+        "GameStreamSet::Targeting", "GameStreamSet::ActionBar", "GameStreamSet::Interact", "GameStreamSet::Backend", "EmitSet::Game",
     ] {
         for sys in r.members.get(sub).unwrap_or_else(|| panic!("{sub} is empty")) {
             assert!(r.in_set("GameplaySet::Emit", sys), "`{sys}` ({sub}) must also be inside GameplaySet::Emit");
@@ -394,12 +418,12 @@ fn every_game_stream_set_is_inside_emit() {
 #[test]
 fn update_system_short_names_are_unique_except_the_documented_double() {
     // The tests match systems by the last path segment; two different functions with the same short name in different
-    // modules would be conflated. `stat_effective_value_system` is registered twice on purpose (one function).
+    // modules would be conflated.
     let r = report();
     let mut seen = std::collections::HashMap::<&str, usize>::new();
     for s in &r.systems {
         *seen.entry(s.short.as_str()).or_default() += 1;
     }
-    let dupes: Vec<_> = seen.into_iter().filter(|(n, c)| *c > 1 && *n != "stat_effective_value_system").collect();
+    let dupes: Vec<_> = seen.into_iter().filter(|(_, c)| *c > 1).collect();
     assert!(dupes.is_empty(), "duplicate Update system short names (key the tests by full name): {dupes:?}");
 }
