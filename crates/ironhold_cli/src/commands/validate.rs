@@ -955,7 +955,7 @@ fn sub_step_duration_warnings(actions: &[(String, Action)], scenes: &[(String, G
                 out.push(StrictWarning {
                     source_file: source.clone(),
                     message: format!(
-                        "EmitEventAfterDelay {event:?}: delay_secs {delay_secs} is shorter than one simulation step (1/64 s = 0.0156 s) and is rounded up to one step; use 0.0 for \"next step\", or a delay of at least 0.0156"
+                        "EmitEventAfterDelay {event:?}: delay_secs {delay_secs} is shorter than one simulation step (1/64 s = 0.0156 s) and is rounded up to one step; use 0.0 for \"next step\", or a delay of at least 0.016"
                     ),
                     kind: "sub_step_duration",
                 });
@@ -971,7 +971,7 @@ fn sub_step_duration_warnings(actions: &[(String, Action)], scenes: &[(String, G
                         out.push(StrictWarning {
                             source_file: scene_path.clone(),
                             message: format!(
-                                "slot {:?} on bar {:?}: cooldown_secs {cd} is shorter than one simulation step (1/64 s = 0.0156 s) and is rounded up to one step; omit it for no cooldown, or use at least 0.0156",
+                                "slot {:?} on bar {:?}: cooldown_secs {cd} is shorter than one simulation step (1/64 s = 0.0156 s) and is rounded up to one step; omit it for no cooldown, or use at least 0.016",
                                 slot.key, bar.id
                             ),
                             kind: "sub_step_duration",

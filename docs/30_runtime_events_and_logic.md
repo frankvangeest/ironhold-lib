@@ -214,7 +214,7 @@ See `docs/20_data_formats.md` — `stats.ron` and `Instance stats (stat_template
 #### Entity visibility / timing actions ✅
 - `ShowDamagePopup { entity, amount }` ✅ — spawns a floating `+N` / `-N` world-space label above the entity with the given spawn ID; style (font size, duration, rise speed, colours) configured via `damage_popup_style` in `.project.ron`; `{self}` is substituted in behavior contexts
 - `SetEntityVisible { entity, visible }` ✅ — shows or hides a spawned entity by spawn ID; entity stays in ECS (stats and behavior FSM keep running); world-space labels tracking the entity auto-hide; `{self}` substituted in behavior contexts
-- `EmitEventAfterDelay { event, delay_secs }` ✅ — fires `GameEvent::Trigger(event)` after `delay_secs` seconds; cleared on `LoadScene`; `{self}` substituted in behavior contexts
+- `EmitEventAfterDelay { event, delay_secs }` ✅ — fires `GameEvent::Trigger(event)` after `delay_secs` seconds (counted in 1/64 s steps, rounded up; see `docs/20_data_formats.md`, "Timing resolution"); cleared on `LoadScene`; `{self}` substituted in behavior contexts
 
 #### UI actions
 - `SetUiVisible { id, visible }` ✅ — shows or hides a scene `ui:` node by its `id` (a `Group` hides its subtree and takes no space while hidden); every node with that id, base scene and overlay alike; no match is a silent no-op; resets on `LoadScene`; not for panels or the `ActionBar` (validate rejects them). See `docs/20_data_formats.md#setuivisible`
@@ -384,16 +384,15 @@ reacting in the same frame or two coins collected in the same physics tick, stil
       crossings (`stat.*.depleted`, `.low`, ...). Thresholds and the pause events are always read one frame after the action
       that caused them;
    2. *the steps of this frame* (the game advances in steps of 1/64 s: a fast screen shows several frames per step, a slow one
-      runs two steps in a frame; none while paused): player movement, collectibles, trigger zones, NPC reactions, then delayed
+      runs two or more steps in a frame, up to 16 after a stall; none while paused): player movement, collectibles, trigger zones, NPC reactions, then delayed
       events (`EmitEventAfterDelay`), then a modifier expiring (regeneration emits no event of its own; a threshold it crosses
       is read next frame, see 2.1). When a frame runs two steps their events arrive together, in step order;
    3. *this frame*: clicking an entity to target it and Tab, the action bar, the interact key, then the backend's replies.
 
-   **Changed in this release (interim):** delayed events and modifier expiries are now read *before* that frame's targeting, action
+   **Changed (interim):** delayed events and modifier expiries are now read *before* that frame's targeting, action
    bar and interact events (they used to come after them). Key presses, gamepad buttons and UI buttons are UI events and are still
    read first. A rule that depended on "the interact key wins over a delayed event in the same frame" can now see the opposite
-   order. The order is restored to one defined sequence when the interpreters move into the step (see
-   `planning/features/gameplay_fixed_tick_pipeline.md`).
+   order. A later update restores one fixed order; until then, do not write rules that depend on which of the two comes first.
 3. **Scene events** last: last frame's `scene.requested` / `scene.unloading`, then this frame's `scene.loaded` / `scene.ready`.
 
 **A scene load runs first in the frame.** Keys and buttons work on the very first frame of the new scene (they use the new scene's
@@ -430,7 +429,7 @@ actions were queued, and the input gate only closes the next frame.
 
 **Rules that follow:** timers, stat thresholds, NPC and physics events arrive in *any* state (the menu, game over, a dialogue
 state, and `paused` for events produced just before the pause), so handle them in `global_on` or author the transition from
-every state they can land in. The action bar's resource check sees the current step's stat regeneration (regeneration is counted in 1/64 s steps). An NPC's AI sees its own `stat.*.health.depleted` in the same frame your rules do, and the AI goes first. Particle
+every state they can land in. The action bar's resource check sees the regeneration up to the latest step (regeneration is counted in 1/64 s steps). An NPC's AI sees its own `stat.*.health.depleted` in the same frame your rules do, and the AI goes first. Particle
 effects are cleared once, when a scene is requested; an old scene's emitters may keep spawning until the new scene appears, so do
 not `SpawnEffect` in the same list as `LoadScene`: use the new scene's `scene.ready:<scene>` rule.
 
@@ -662,7 +661,7 @@ Applies actions to the world. Key design points:
 - `ShowFloatingText { entity, text, offset? }` — spawns a floating text label (warm yellow) above the entity; rises and fades like `ShowDamagePopup`; use for status messages, selection feedback, etc.; `{self}` and `{target}` substituted in both `entity` and `text`. Optional `offset: (x, y, z)` overrides the default spawn height from `damage_popup_style.spawn_offset` — set a different Y to prevent two simultaneous texts from stacking at the same position (e.g. ability name fires at default height, kill confirmation fires at `offset: (0.0, -0.02, 0.0)`)
 - `SetEntityVisible { entity, visible }` — shows or hides a spawned entity by spawn ID; entity stays in ECS (stats and behavior FSM keep running); world-space labels tracking the entity auto-hide; `{self}` substituted in behavior contexts
 - `SetUiVisible { id, visible }` — shows or hides a scene `ui:` node (or `Group` subtree) by its `id`; every node with that id, base scene and overlay alike; unknown id is a silent no-op; not for panels or the `ActionBar` (validate rejects them); no `{self}`/`{target}` substitution
-- `EmitEventAfterDelay { event, delay_secs }` — fires `GameEvent::Trigger(event)` after `delay_secs` seconds; cleared on `LoadScene` so no delayed events survive scene transitions; `{self}` substituted in behavior contexts
+- `EmitEventAfterDelay { event, delay_secs }` — fires `GameEvent::Trigger(event)` after `delay_secs` seconds (counted in 1/64 s steps, rounded up); cleared on `LoadScene` so no delayed events survive scene transitions; `{self}` substituted in behavior contexts
 - `SpawnEffect { key, position, entity }` — bursts a particle effect from `AssetCatalog.effects`; `entity` (spawn ID) takes precedence over `position` (world coords); the effect def `offset` is added to the resolved position; `{self}` substituted in behavior contexts; silently skips on unknown key or unresolvable entity; see `docs/20_data_formats.md` for `EffectDef` fields. **WASM:** sphere particles and flame sprite particles (`uv_distort > 0` or `uv_scroll_speed > 0`) compile separate WebGPU pipelines — fire one warmup burst per variant on `scene.ready` at `position: Some((0.0, -100.0, 0.0))` to pre-compile both pipelines before the player can interact.
 - `SetTarget(String)` — sets `CurrentTarget` to the given spawn ID; emits `target.changed:{id}` and `target.changed`; `{target}` in subsequent rule actions resolves to this ID
 - `ClearTarget` — clears `CurrentTarget`; emits `target.cleared`; also cleared automatically on `LoadScene`
