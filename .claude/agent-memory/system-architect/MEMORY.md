@@ -16,7 +16,7 @@
 - [Time & animation advance](time_and_animation_advance.md) — Bevy (not our system) advances AnimationPlayer off Time<Virtual>; freeze/pause/slow features act on the clock, not by skipping our systems
 - [Real pause review facts](real_pause_review_facts.md) — what a Virtual pause misses (FirstPerson/flycam mouse look), resume at Replace teardown, hold-set owner; no message flips while paused; [LoadScene,PauseGame] ends unpaused
 - [Determinism & networking](determinism_networking.md) — enhanced-determinism already ON; real blockers are variable timestep + no snapshot layer
-- [Fixed-tick pipeline facts](fixed_tick_pipeline_facts.md) — verified Bevy 0.18 message-flip/deferred/first-update-0-ticks facts; pause control-tick whitelist; dead cross-schedule edges
+- [Fixed-tick pipeline facts](fixed_tick_pipeline_facts.md) — Bevy 0.18 flip/0-tick facts; round 2: control-tick deadlock on Replace-load, Rapier ignores dt, empty-set edges, PendingJoinGamepad
 - [Update vs FixedUpdate schedule](schedule_update_vs_fixedupdate.md) — interpreter chain + action_executor in Update; NPC/physics AI in FixedUpdate; cross-schedule GameEvent timing hazard + combat damage flow
 - [Schedule ordering mechanism](schedule_ordering_mechanism.md) — pre-D3 bare `.before(fn)`; D3 sets via in-place `.in_set`; set run_if once/skips all; UiEvents read before carry-over GameEvents
 - [Flaky-test trust gate](flaky_test_trust_gate.md) — stakeholder item #4: TargetingPlugin race fixed 2026-09-14 but its canary was removed; schedule-graph assertion + ambiguity detection still unbuilt and unlogged
