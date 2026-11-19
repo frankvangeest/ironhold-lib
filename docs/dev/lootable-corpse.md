@@ -43,7 +43,7 @@ reappear at its original patrol spot, not wherever the previous instance happene
 These six rules **must live in `state_machine.ron`'s top-level `global_on:` block, not inside
 `"playing"`'s own state-scoped `on:` list** (found by both `alignment-reviewer` and
 `system-architect`, independently, during the final review pass — a critical bug, not a style
-preference). `tick_delayed_events_system` reads the virtual `Res<Time>` (a real pause freezes it), so a monster's
+preference). `tick_delayed_events_system` counts fixed ticks (`Time<Fixed>`; a real pause runs no ticks, so it freezes it), so a monster's
 30s respawn timer can still fire while the game is in any non-`"playing"` state (the menu, a scene swap); a
 state-scoped `on:` handler simply never matches in that case, silently and permanently losing that
 monster's respawn for the rest of the session. `global_on` fires "regardless of state, no state

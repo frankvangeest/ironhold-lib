@@ -56,7 +56,7 @@ This section is factual and reflects what exists right now.
   - `PreloadScene(path)` / `PreloadPrefab(key)` warm the asset cache for scenes and prefab GLBs respectively.
   - `Log(msg)` emits an `info!` log line.
 - ✅ `LogicState` resource tracks the current named state (default `""`). A state's own `on:` bindings only fire while `LogicState` matches that state's name; `global_on` bindings fire regardless. FSM transitions update `LogicState` directly in the interpreter — there is no separate action to force a state change; see `docs/20_data_formats.md`'s "Removed: rules.ron" callout for why and what to use instead (`EmitEvent` + a transition).
-- ✅ `DebugState` resource exposes `last_action`, `app_state`, `scene`, `frame`, `logic_state`, `score`, `window_size`, and `ui_scale` for observability and browser-based testing.
+- ✅ `DebugState` resource exposes `last_action`, `app_state`, `scene`, `frame`, `logic_state`, `score`, `window_size`, `ui_scale`, and `sim_tick` (the number of 1/64 s steps the simulation has run) for observability and browser-based testing.
 
 ## Event model (planned)
 We standardize runtime messages so content can bind to them consistently.
@@ -383,15 +383,22 @@ reacting in the same frame or two coins collected in the same physics tick, stil
       `container.*`, `inventory.*`, `dialogue.*`, `audio.*`), then `game.paused` / `game.resumed`, then stat **threshold**
       crossings (`stat.*.depleted`, `.low`, ...). Thresholds and the pause events are always read one frame after the action
       that caused them;
-   2. *physics-tick events*: player movement, collectibles, trigger zones, NPC reactions (none while paused);
-   3. *this frame*: clicking an entity to target it and Tab, the action bar, the interact key, delayed events
-      (`EmitEventAfterDelay`), and last a modifier expiring (regeneration emits no event of its own; a threshold it crosses
-      is read next frame, see 2.1).
+   2. *the steps of this frame* (the game advances in steps of 1/64 s: a fast screen shows several frames per step, a slow one
+      runs two steps in a frame; none while paused): player movement, collectibles, trigger zones, NPC reactions, then delayed
+      events (`EmitEventAfterDelay`), then a modifier expiring (regeneration emits no event of its own; a threshold it crosses
+      is read next frame, see 2.1). When a frame runs two steps their events arrive together, in step order;
+   3. *this frame*: clicking an entity to target it and Tab, the action bar, the interact key, then the backend's replies.
+
+   **Changed in this release (interim):** delayed events and modifier expiries are now read *before* that frame's targeting, action
+   bar and interact events (they used to come after them). Key presses, gamepad buttons and UI buttons are UI events and are still
+   read first. A rule that depended on "the interact key wins over a delayed event in the same frame" can now see the opposite
+   order. The order is restored to one defined sequence when the interpreters move into the step (see
+   `planning/features/gameplay_fixed_tick_pipeline.md`).
 3. **Scene events** last: last frame's `scene.requested` / `scene.unloading`, then this frame's `scene.loaded` / `scene.ready`.
 
 **A scene load runs first in the frame.** Keys and buttons work on the very first frame of the new scene (they use the new scene's
 key bindings and UI, and a pause you left open is already released; a Replace-mode `LoadScene` does this, an overlay never
-does), but timers, regeneration, cooldowns and camera smoothing start counting one frame later. A key pressed on the load frame
+does), but timers, regeneration and cooldowns start counting at the next step (1/64 s) and camera smoothing one frame later. A key pressed on the load frame
 is read *before* that frame's `scene.ready`, so it is matched against the old state.
 
 **What order your actions run in** (the order actions are queued is the order they execute; one exception: a `UseItem`'s own effects run right after it, see 5):
@@ -423,8 +430,7 @@ actions were queued, and the input gate only closes the next frame.
 
 **Rules that follow:** timers, stat thresholds, NPC and physics events arrive in *any* state (the menu, game over, a dialogue
 state, and `paused` for events produced just before the pause), so handle them in `global_on` or author the transition from
-every state they can land in. The action bar's resource check sees the previous frame's stat regeneration (one frame, about
-16 ms). An NPC's AI sees its own `stat.*.health.depleted` in the same frame your rules do, and the AI goes first. Particle
+every state they can land in. The action bar's resource check sees the current step's stat regeneration (regeneration is counted in 1/64 s steps). An NPC's AI sees its own `stat.*.health.depleted` in the same frame your rules do, and the AI goes first. Particle
 effects are cleared once, when a scene is requested; an old scene's emitters may keep spawning until the new scene appears, so do
 not `SpawnEffect` in the same list as `LoadScene`: use the new scene's `scene.ready:<scene>` rule.
 
@@ -461,8 +467,8 @@ Rules that matter when you wire them:
 - Leaderboard and score events carry the id you wrote (`score.submitted:best`), and the reason for a failure goes to the variable
   `backend.last_error`, which a `Label` can show. **Lobby failures work the other way round:** the suffix *is* the reason
   (`lobby.join_failed:full`, a fixed set of words), the reason is also in `lobby.last_error`, and they do not write `backend.last_error`.
-- A real reply is visible the **same frame** it is produced: the backend runs after the delayed events and before the stat events in the
-  game stream (item 2.3 of the frame order above), so a rule on `leaderboard.listed:best` already sees the new `leaderboard.best.*`
+- A real reply is visible the **same frame** it is produced: the backend runs after the action bar and the interact key in the game stream
+  (item 2.3 of the frame order above; delayed events and stat events of the same frame were read earlier, item 2.2), so a rule on `leaderboard.listed:best` already sees the new `leaderboard.best.*`
   variables. A **refusal** (`backend.offline`, `backend.busy`, `score.submit_failed:{lb}` for "not signed in") is emitted by the action
   itself, so it counts as an event your actions emitted (item 2.1) and rules read it one frame later.
 - Replies are per-player input from outside the game. They never change shared game state by themselves; a rule that reacts to
@@ -600,7 +606,7 @@ Applies actions to the world. Key design points:
   - ✅ `InputAction` abstraction (`Move`, `Turn`, `Look`, `Jump`, `Run`)
   - ✅ Scene lifecycle events: `SceneEvent::{Requested, Loaded, Ready, Unloading}`
   - ✅ Data-defined project logic wired to interpreter + executor (originally two dialects, later consolidated onto `logic/state_machine.ron` alone — see `docs/20_data_formats.md`'s migration callout)
-  - ✅ `DebugState` resource for runtime observability (`frame`, `app_state`, `last_action`, `scene`, `logic_state`, `score`, `window_size`, `ui_scale`)
+  - ✅ `DebugState` resource for runtime observability (`frame`, `app_state`, `last_action`, `scene`, `logic_state`, `score`, `window_size`, `ui_scale`, `sim_tick`)
   - ✅ `GameEvent::Trigger(String)` for physics sensors and gameplay capabilities
 
 - **Milestone: Rule bindings v2** 🧭
@@ -685,7 +691,7 @@ Applies actions to the world. Key design points:
 ### Infrastructure ✅
 - `ActionQueue` — FIFO queue processed each frame by `action_executor_system` (push order equals execution order; the only exception is `UseItem`'s effects, which the executor inserts at the front)
 - `LogicState` resource — tracks the current named state (default `""`); checked by `fsm_interpreter_system` (the per-entity `entity_fsm_interpreter_system` tracks its own state independently, via `EntityFsmState`)
-- `DebugState` resource — tracks `frame`, `app_state`, `last_action`, `scene`, `logic_state`, `score`, `window_size`, `ui_scale`; serialised to DOM on WASM for browser testing
+- `DebugState` resource — tracks `frame`, `app_state`, `last_action`, `scene`, `logic_state`, `score`, `window_size`, `ui_scale`, `sim_tick`; serialised to DOM on WASM for browser testing
 - `StateMachineAsset` loaded from `logic/state_machine.ron` via `fsm_interpreter_system`; every project uses this — `state_machine_path` in the project config points to it
 
 ### FSM asset schema (`logic/state_machine.ron`) ✅

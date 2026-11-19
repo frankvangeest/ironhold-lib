@@ -4897,6 +4897,20 @@ Write the block exactly like the other optional blocks: no `Some(...)` around it
 - On phones in portrait, one global scale cannot reflow a wide HUD into a narrow screen (a 390px-wide phone needs about 0.30, below the default floor); a portrait layout is a separate feature.
 
 ---
+## Timing resolution
+
+Delayed events (`EmitEventAfterDelay`), action-bar cooldowns, stat regeneration and stat modifier durations are counted in **steps of
+1/64 s** (0.0156 s), the same step the physics runs at, whatever the frame rate: the same duration takes the same number of
+steps on a 30 fps laptop and a 144 Hz monitor.
+
+- A duration is **rounded up to a whole step** (a `delay_secs` of `0.01` fires after one step). A timer fires on the first step at or
+  after its deadline, so it can be up to one step (15.6 ms) late.
+- A timer started by an action begins counting at the next step.
+- A timer that re-arms itself from its own event gets the full duration each time; it does not drift with the frame rate.
+- Regeneration and the cooldown sweep update 64 times a second, so a stat bar or cooldown overlay moves in 64 Hz steps on a faster screen.
+- Despawn timers (`SetDespawnTimer`), dialogue auto-advance, camera shake, fades and particles still count per rendered frame for now.
+
+---
 ## `max_frame_delta_secs`
 
 Optional field in `{name}.project.ron` that caps `Time<Virtual>::max_delta` — the largest delta the *whole* game clock reports for a single frame. Omit to use Bevy's default (`0.25`, ≈16 ticks at this engine's 64Hz tick rate).
@@ -4911,6 +4925,10 @@ Optional field in `{name}.project.ron` that caps `Time<Virtual>::max_delta` — 
 ```
 
 This is not `FixedUpdate`-only: it also clamps `Time::delta_secs()` for ordinary `Update`-schedule systems (camera smoothing, animation blending), so a value picked purely for physics catch-up will also visibly slow those down. `capabilities::motion` itself now runs in `FixedUpdate`, so it's bounded by this cap via the tick budget instead.
+
+Delayed events, cooldowns, stat regeneration and stat modifier durations count fixed steps too (see [Timing resolution](#timing-resolution)),
+so a stall that makes the game fall behind real time (the slow-motion described below) slows them as well: a cooldown or a delayed event
+takes longer in real time while the game is catching up, exactly like movement.
 
 A stall longer than this cap (a slow asset load, a GC pause, a shader-pipeline-compile hitch) does **not** make the recovery frame run more ticks than this allows — the game falls further behind real time instead (graceful slow-motion), rather than paying one very expensive catch-up frame.
 
