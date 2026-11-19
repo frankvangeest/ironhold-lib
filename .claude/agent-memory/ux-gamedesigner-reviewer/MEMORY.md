@@ -36,7 +36,7 @@
 
 - [Action bar click activation](project_action_bar_click_activation.md) — slots clickable, owner_player not viewport; 4 key-only wording hotspots to grep on slot-input changes
 
-- [Fixed-tick pipeline review](project_fixed_tick_pipeline_review.md) — r2: pause contract+validate already shipped; per-phase doc surfaces; spawn cap still fps-visible
+- [Fixed-tick pipeline review](project_fixed_tick_pipeline_review.md) — r3: backend replies stall paused in Ph3; World order flips in Ph4; diagnostics HUD not shipped
 - [Same-frame event order](project_same_frame_event_order.md) — real order: UI > carry-over > FixedUpdate > Emit chain > Scene; D3 doc listed UI input after carry-over (wrong)
 - [FSM designer traps](project_fsm_designer_traps.md) — `on` x3; initial_state entry skip; transitions carry no actions; struct-variant actions miswritten; stale old-syntax grep recipe
 
