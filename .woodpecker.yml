@@ -57,6 +57,8 @@ steps:
       - apk add --no-cache rsync openssh-client
       - mkdir -p ~/.ssh && echo "$DEMO_DEPLOY_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
       - ssh-keyscan -H 192.168.178.105 >> ~/.ssh/known_hosts 2>/dev/null
+      # rsync creates only the last path component, so make the whole target path first (a missing ironhold-lib/ gave exit code 11)
+      - ssh root@192.168.178.105 "mkdir -p /var/www/pages/ironhold-lib/integration"
       - rsync -avz index.html play.html assets.html favicon.ico assets/ root@192.168.178.105:/var/www/pages/ironhold-lib/integration/
     when:
       branch: integration
@@ -70,6 +72,7 @@ steps:
       - apk add --no-cache rsync openssh-client
       - mkdir -p ~/.ssh && echo "$DEMO_DEPLOY_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
       - ssh-keyscan -H 192.168.178.105 >> ~/.ssh/known_hosts 2>/dev/null
+      - ssh root@192.168.178.105 "mkdir -p /var/www/pages/ironhold-lib/integration/pkg"
       - rsync -avz pkg/ root@192.168.178.105:/var/www/pages/ironhold-lib/integration/pkg/
     when:
       branch: integration
